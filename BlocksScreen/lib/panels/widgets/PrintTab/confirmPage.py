@@ -28,7 +28,7 @@ class ConfirmWidget(QtWidgets.QWidget):
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
-        self._setupUI()
+        self._setup_ui()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = self._blocksthumbnail
@@ -171,7 +171,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             self.cf_thumbnail.hide()
         return super().showEvent(a0)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Setup widget ui"""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

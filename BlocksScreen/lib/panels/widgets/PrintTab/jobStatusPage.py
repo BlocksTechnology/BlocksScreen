@@ -8,7 +8,7 @@ from helper_methods import (
     calculate_max_layers,
     estimate_print_time,
 )
-from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
@@ -96,7 +96,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._layer_frozen = False
         self._awaiting_resume = False
         self._resume_baseline = 0.0
-        self._setupUI()
+        self._setup_ui()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.js_file_name_icon.clicked.connect(self._on_file_info_clicked)
@@ -508,7 +508,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             return (self._file_position - start) / (end - start)
         return self._raw_progress
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Setup widget ui"""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,

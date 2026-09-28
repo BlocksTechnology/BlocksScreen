@@ -5,63 +5,63 @@ from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
-class Popup(QtWidgets.QDialog):
+class BannerPopup(QtWidgets.QWidget):
     class MessageType(enum.Enum):
         """Popup Message type (level)"""
 
-        INFO = enum.auto()
-        WARNING = enum.auto()
-        ERROR = enum.auto()
+        CONNECT = enum.auto()
+        DISCONNECT = enum.auto()
+        CORRUPTED = enum.auto()
         UNKNOWN = enum.auto()
 
-    class ColorCode(enum.Enum):
-        """Popup message-color code"""
-
-        INFO = QtGui.QColor("#446CDB")
-        WARNING = QtGui.QColor("#E7E147")
-        ERROR = QtGui.QColor("#CA4949")
-
-    def __init__(self, parent) -> None:
-        super().__init__(parent)
+    def __init__(self, parent=None) -> None:
+        if parent:
+            super().__init__(parent)
+        else:
+            super().__init__()
         self.timeout_timer = QtCore.QTimer(self)
         self.timeout_timer.setSingleShot(True)
         self.messages: deque = deque()
         self.isShown = False
-        self.persistent_notifications: deque = deque()
-        self.message_type: Popup.MessageType = Popup.MessageType.INFO
         self.default_background_color = QtGui.QColor(164, 164, 164)
-        self.info_icon = QtGui.QPixmap(":ui/media/btn_icons/info.svg")
-        self.warning_icon = QtGui.QPixmap(":ui/media/btn_icons/warning.svg")
-        self.error_icon = QtGui.QPixmap(":ui/media/btn_icons/error.svg")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setMouseTracking(True)
         self.setWindowFlags(
-            QtCore.Qt.WindowType.Popup
-            | QtCore.Qt.WindowType.FramelessWindowHint
+            QtCore.Qt.WindowType.FramelessWindowHint
+            | QtCore.Qt.WindowType.Tool
             | QtCore.Qt.WindowType.X11BypassWindowManagerHint
         )
-        self._setupUI()
+        self._setup_ui()
         self.slide_in_animation = QtCore.QPropertyAnimation(self, b"geometry")
         self.slide_in_animation.setDuration(1000)
         self.slide_in_animation.setEasingCurve(QtCore.QEasingCurve.Type.OutCubic)
         self.slide_out_animation = QtCore.QPropertyAnimation(self, b"geometry")
         self.slide_out_animation.setDuration(200)
         self.slide_out_animation.setEasingCurve(QtCore.QEasingCurve.Type.InCubic)
-
-        self.SingleTime = QtCore.QTimer(self)
-        self.SingleTime.setInterval(5000)
-        self.SingleTime.setSingleShot(True)
-        self.SingleTime.timeout.connect(self._add_popup)
-
+        self.oneshot = QtCore.QTimer(self)
+        self.oneshot.setInterval(5000)
+        self.oneshot.setSingleShot(True)
+        self.oneshot.timeout.connect(self._add_popup)
+        self.timeout_timer.setInterval(4000)
         self.slide_out_animation.finished.connect(self.on_slide_out_finished)
         self.slide_in_animation.finished.connect(self.on_slide_in_finished)
         self.timeout_timer.timeout.connect(lambda: self.slide_out_animation.start())
         self.actionbtn.clicked.connect(self.slide_out_animation.start)
 
+    def event(self, a0):
+        if a0.type() in (QtCore.QEvent.Type.MouseButtonPress,):
+            if self.rect().contains(a0.position().toPoint()):
+                self.timeout_timer.stop()
+                self.slide_out_animation.setStartValue(
+                    self.slide_in_animation.currentValue()
+                )
+                self.slide_in_animation.stop()
+                self.slide_out_animation.start()
+
+        return super().event(a0)
+
     def on_slide_in_finished(self):
         """Handle slide in animation finished"""
-        if self.userInput:
-            return
         self.timeout_timer.start()
 
     def on_slide_out_finished(self):
@@ -83,50 +83,31 @@ class Popup(QtWidgets.QDialog):
         if main_window is None:
             return QtCore.QRect()
         parent_rect = main_window.geometry()
-
-        width = int(parent_rect.width() * 0.85)
-        height = (
-            max(
-                self.text_label.height(),
-                self.icon_label.height(),
-            )
-            + 10
-        )
-
-        x = parent_rect.x() + (parent_rect.width() - width) // 2
-        y = parent_rect.y() + 20
-
+        width = int(parent_rect.width() * 0.35)
+        height = 80
+        x = parent_rect.x() + parent_rect.width() - width + 50
+        y = parent_rect.y() + 30
         return QtCore.QRect(x, y, width, height)
 
     def updateMask(self) -> None:
         """Update widget mask properties"""
         path = QtGui.QPainterPath()
-        path.addRoundedRect(self.rect().toRectF(), 10, 10)
+        path.addRoundedRect(self.rect().toRectF(), 50, 70)
         region = QtGui.QRegion(path.toFillPolygon(QtGui.QTransform()).toPolygon())
         self.setMask(region)
 
-    def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
+    def mousePressEvent(self, a0: QtGui.QMouseEvent | None) -> None:
         """Re-implemented method, handle mouse press events"""
-        self.timeout_timer.stop()
-        self.slide_out_animation.setStartValue(self.slide_in_animation.currentValue())
-        self.slide_in_animation.stop()
-        self.slide_out_animation.start()
+        return
 
     def new_message(
         self,
-        message_type: MessageType = MessageType.INFO,
-        message: str = "",
-        timeout: int = 6000,
-        userInput: bool = False,
+        message_type: MessageType = MessageType.CONNECT,
     ):
         """Create new popup message
 
         Args:
-            message_type (MessageType, optional): Message Level, See `MessageType` Types. Defaults to MessageType.INFO.
-            message (str, optional): The message. Defaults to "".
-            timeout (int, optional): How long the message stays for, in milliseconds. Defaults to 0.
-            userInput (bool,optional): If the user is required to click to make the popup disappear. Defaults to False.
-
+            message_type (MessageType, optional): Message Level, See `MessageType` Types. Defaults to MessageType.CONNECT .
         Returns:
             _type_: _description_
         """
@@ -135,10 +116,7 @@ class Popup(QtWidgets.QDialog):
 
         self.messages.append(
             {
-                "message": message,
                 "type": message_type,
-                "timeout": timeout,
-                "userInput": userInput,
             }
         )
         return self._add_popup()
@@ -146,11 +124,10 @@ class Popup(QtWidgets.QDialog):
     def _add_popup(self) -> None:
         """Add popup to queue"""
         if self.isShown:
-            if self.SingleTime.isActive():
+            if self.oneshot.isActive():
                 return
-            self.SingleTime.start()
+            self.oneshot.start()
             return
-
         if (
             self.messages
             and self.slide_in_animation.state()
@@ -159,45 +136,36 @@ class Popup(QtWidgets.QDialog):
             == QtCore.QPropertyAnimation.State.Stopped
         ):
             message_entry = self.messages.popleft()
-            self.message_type = message_entry.get("type")
-            message = message_entry.get("message")
-            timeout = message_entry.get("timeout")
-            self.timeout_timer.setInterval(timeout)
-            if message == self.text_label.text():
-                self.messages = deque(
-                    m for m in self.messages if m.get("message") != message
-                )
-                return
-            self.userInput = message_entry.get("userInput")
-            self.text_label.setFixedHeight(60)
-            self.text_label.setFixedWidth(500)
+            message_type = message_entry.get("type")
 
-            match self.message_type:
-                case Popup.MessageType.INFO:
-                    self.icon_label.setPixmap(self.info_icon)
-                case Popup.MessageType.WARNING:
-                    self.icon_label.setPixmap(self.warning_icon)
-                case Popup.MessageType.ERROR:
-                    self.icon_label.setPixmap(self.error_icon)
+            message = "Unknown Event"
+            icon = ":ui/media/btn_icons/info.svg"
 
+            # TODO: missing usb icons
+            match message_type:
+                case BannerPopup.MessageType.CONNECT:
+                    message = "Usb Connected"
+                    # icon = ""
+                case BannerPopup.MessageType.DISCONNECT:
+                    message = "Usb Disconnected"
+                    # icon = ""
+                case BannerPopup.MessageType.CORRUPTED:
+                    message = "Usb Corrupted"
+                    icon = ":/ui/media/btn_icons/troubleshoot.svg"
             end_rect = self._calculate_target_geometry()
-            start_rect = end_rect.translated(0, -end_rect.height() * 2)
+            start_rect = end_rect.translated(end_rect.width() * 2, 0)
+
+            self.icon_label.setPixmap(QtGui.QPixmap(icon))
 
             self.slide_in_animation.setStartValue(start_rect)
             self.slide_in_animation.setEndValue(end_rect)
             self.slide_out_animation.setStartValue(end_rect)
             self.slide_out_animation.setEndValue(start_rect)
-            self.actionbtn.setPixmap(
-                QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-            )
             self.setGeometry(end_rect)
             self.text_label.setText(message)
-            self.text_label.setFixedHeight(
-                int(self.text_label.sizeHint().height() * 1.2)
-            )
             self.show()
 
-    def showEvent(self, a0: QtGui.QShowEvent) -> None:
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """Re-implementation, widget show"""
         self.slide_in_animation.start()
         self.isShown = True
@@ -214,24 +182,18 @@ class Popup(QtWidgets.QDialog):
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
         _base_color = self.default_background_color
-        if self.message_type == Popup.MessageType.INFO:
-            _base_color = Popup.ColorCode.INFO.value
-        elif self.message_type == Popup.MessageType.ERROR:
-            _base_color = Popup.ColorCode.ERROR.value
-        elif self.message_type == Popup.MessageType.WARNING:
-            _base_color = Popup.ColorCode.WARNING.value
 
         center_point = QtCore.QPointF(self.rect().center())
         gradient = QtGui.QRadialGradient(center_point, self.rect().width() / 2.0)
 
-        gradient.setColorAt(0, _base_color)
-        gradient.setColorAt(1.0, _base_color.darker(160))
+        gradient.setColorAt(0, _base_color.darker(160))
+        gradient.setColorAt(1.0, _base_color.darker(200))
 
         painter.setBrush(gradient)
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(self.rect(), 10, 10)
+        painter.drawRoundedRect(self.rect(), 50, 70)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         self.horizontal_layout = QtWidgets.QHBoxLayout(self)
         self.horizontal_layout.setContentsMargins(5, 5, 5, 5)
 

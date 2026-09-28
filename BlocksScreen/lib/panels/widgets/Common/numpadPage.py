@@ -16,7 +16,7 @@ class CustomNumpad(QtWidgets.QWidget):
         parent,
     ) -> None:
         super().__init__(parent)
-        self._setupUI()
+        self._setup_ui()
         self.current_value: str = "0"
         self.name: str = ""
         self.min_value: int = 0
@@ -118,7 +118,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.enforce_range = True
         self.min_max_label.setText(f"Range: {self.min_value} - {self.max_value}")
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)

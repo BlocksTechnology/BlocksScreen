@@ -17,7 +17,7 @@ class TroubleshootPage(QtWidgets.QDialog):
         self.setWindowFlags(
             QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
         )
-        self._setupUI()
+        self._setup_ui()
         self.label_4.setText(
             "For more information check our website \n www.blockstec.com \n or \nsupport@blockstec.com"
         )
@@ -44,7 +44,7 @@ class TroubleshootPage(QtWidgets.QDialog):
         self.repaint()
         return super().show()
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         self.setObjectName("troubleshoot_page")
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
