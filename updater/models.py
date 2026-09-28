@@ -21,6 +21,7 @@ class ComponentConfig:
     restart_ui: bool = False
     # Restart klipper on update even when the component's own service differs.
     restart_klipper: bool = False
+    health_url: str | None = None
 
 
 @dataclass(frozen=True)
