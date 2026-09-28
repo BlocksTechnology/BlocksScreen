@@ -6,16 +6,16 @@ from functools import partial
 from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.babystepPage import BabystepPage
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.confirmPage import ConfirmWidget
-from lib.panels.widgets.filesPage import FilesPage
-from lib.panels.widgets.jobStatusPage import JobStatusWidget
+from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.metadataPage import FileMetadataWidget
-from lib.panels.widgets.numpadPage import CustomNumpad
-from lib.panels.widgets.sensorsPanel import SensorsWindow
-from lib.panels.widgets.slider_selector_page import SliderPage
-from lib.panels.widgets.tunePage import TuneWidget
+from lib.panels.widgets.Common.numpadPage import CustomNumpad
+from lib.panels.widgets.PrintTab.babystepPage import BabystepPage
+from lib.panels.widgets.PrintTab.confirmPage import ConfirmWidget
+from lib.panels.widgets.PrintTab.filesPage import FilesPage
+from lib.panels.widgets.PrintTab.jobStatusPage import JobStatusWidget
+from lib.panels.widgets.PrintTab.sensorsPanel import SensorsWindow
+from lib.panels.widgets.PrintTab.tunePage import TuneWidget
+from lib.panels.widgets.Common.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
@@ -480,7 +480,7 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def setupMainPrintPage(self) -> None:
         """Setup UI for print page"""
-        self.setObjectName("printStackedWidget")
+        self.setObjectName("print_tab")
         self.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
         self.resize(710, 410)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -591,7 +591,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.addWidget(self.print_page)
 
         _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("printStackedWidget", "StackedWidget"))
         self.main_print_btn.setText(_translate("printStackedWidget", "Print"))
         self.main_print_btn.setProperty(
             "class", _translate("printStackedWidget", "menu_btn")

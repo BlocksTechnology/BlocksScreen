@@ -19,7 +19,9 @@ _project_root = Path(__file__).resolve().parent.parent.parent
 # which breaks the real ``lib.utils.*`` imports below on a full-suite run.
 # Clear any stale "lib"/"lib.*" entries before rebuilding our own stubs.
 for _stale in list(sys.modules):
-    if _stale == "lib" or _stale.startswith("lib."):
+    if (_stale == "lib" or _stale.startswith("lib.")) and isinstance(
+        sys.modules[_stale], MagicMock
+    ):
         del sys.modules[_stale]
 
 _STUB_MODULES = (
@@ -41,15 +43,14 @@ _STUB_MODULES = (
     "lib.panels.printTab",
     "lib.panels.utilitiesTab",
     "lib.panels.widgets",
-    "lib.panels.widgets.basePopup",
+    "lib.panels.widgets.Common.basePopup",
     "lib.panels.widgets.MainWindow.cancelPage",
     "lib.panels.widgets.MainWindow.connectionPage",
-    "lib.panels.widgets.loadWidget",
+    "lib.panels.widgets.Common.loadWidget",
     "lib.panels.widgets.MainWindow.notificationPage",
     "lib.panels.widgets.MainWindow.updatePage",
     "lib.printer",
     "lib.ui",
-    "lib.ui.mainWindow_ui",
     "lib.ui.resources",
     "lib.ui.resources.background_resources_rc",
     "lib.ui.resources.font_rc",
@@ -94,13 +95,14 @@ sys.modules["lib.panels.networkWindow"].NetworkControlWindow = MagicMock
 sys.modules["lib.panels.networkWindow"].PixmapCache = MagicMock
 sys.modules["lib.panels.printTab"].PrintTab = MagicMock
 sys.modules["lib.panels.utilitiesTab"].UtilitiesTab = MagicMock
-sys.modules["lib.panels.widgets.basePopup"].BasePopup = MagicMock
+sys.modules["lib.panels.widgets.Common.basePopup"].BasePopup = MagicMock
 sys.modules["lib.panels.widgets.MainWindow.cancelPage"].CancelPage = MagicMock
 sys.modules["lib.panels.widgets.MainWindow.connectionPage"].ConnectionPage = MagicMock
-sys.modules["lib.panels.widgets.loadWidget"].LoadingOverlayWidget = MagicMock
-sys.modules["lib.panels.widgets.MainWindow.notificationPage"].NotificationPage = MagicMock
+sys.modules["lib.panels.widgets.Common.loadWidget"].LoadingOverlayWidget = MagicMock
+sys.modules[
+    "lib.panels.widgets.MainWindow.notificationPage"
+].NotificationPage = MagicMock
 sys.modules["lib.panels.widgets.MainWindow.updatePage"].UpdatePage = MagicMock
 sys.modules["lib.printer"].Printer = MagicMock
-sys.modules["lib.ui.mainWindow_ui"].Ui_MainWindow = MagicMock
 sys.modules["lib.updater_worker"].UpdaterWorker = MagicMock
 sys.modules["screensaver"].ScreenSaver = MagicMock

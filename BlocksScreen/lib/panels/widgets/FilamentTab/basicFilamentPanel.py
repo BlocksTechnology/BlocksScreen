@@ -4,8 +4,8 @@ from functools import partial
 
 from devices.amu.models import FilamentPos, GateStatus
 from lib.filament import Filament
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
@@ -57,7 +57,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.mmu_configured = False
         self.load_popup = load_popup
         self._mmu_state = None
-        self._setupUi()
+        self._setup_ui()
         self.filament_state = self.FilamentStates.UNKNOWN
 
         self.setCurrentIndex(0)
@@ -368,9 +368,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         return root
 
-    def _setupUi(self):
-        self.setObjectName("self")
-        self.resize(710, 411)
+    def _setup_ui(self) -> None:
+        """Build the basic filament panel: load/unload controls and status labels."""
+        self.setObjectName("basic_filament_panel")
 
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

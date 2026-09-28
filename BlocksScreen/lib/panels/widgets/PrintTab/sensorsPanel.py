@@ -1,6 +1,6 @@
 import typing
 
-from lib.panels.widgets.sensorWidget import SensorWidget
+from lib.panels.widgets.PrintTab.sensorWidget import SensorWidget
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
@@ -22,7 +22,7 @@ class SensorsWindow(QtWidgets.QWidget):
         self.sensor_tracking_widget = {}
         self.current_widget = None
         self.sensor_list: list[SensorWidget] = []
-        self._setupUi()
+        self._setup_ui()
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setTabletTracking(True)
@@ -128,7 +128,7 @@ class SensorsWindow(QtWidgets.QWidget):
 
         return _item_widget
 
-    def _setupUi(self) -> None:
+    def _setup_ui(self) -> None:
         """Setup UI for updatePage"""
         font_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"

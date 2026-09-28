@@ -22,7 +22,7 @@ _bc = importlib.util.module_from_spec(_bc_spec)
 _bc_spec.loader.exec_module(_bc)
 sys.modules["lib.utils.blocks_combobox"] = _bc
 
-from lib.panels.widgets.filesPage import FilesPage  # noqa: E402
+from lib.panels.widgets.PrintTab.filesPage import FilesPage  # noqa: E402
 from lib.utils.list_model import ListItem  # noqa: E402
 
 

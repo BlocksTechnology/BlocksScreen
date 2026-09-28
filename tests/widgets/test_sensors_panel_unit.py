@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from lib.panels.widgets.sensorsPanel import SensorsWindow
+from lib.panels.widgets.PrintTab.sensorsPanel import SensorsWindow
 
 
 def test_reset_view_model_drops_stale_sensor_widgets():

@@ -22,10 +22,10 @@ from lib.panels.filamentTab import FilamentTab
 from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
-from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.MainWindow.cancelPage import CancelPage
 from lib.panels.widgets.MainWindow.connectionPage import ConnectionPage
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.MainWindow.notificationPage import NotificationPage
 from lib.panels.widgets.MainWindow.updatePage import UpdatePage
 from lib.printer import Printer
@@ -140,7 +140,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._klipper_restart_timeout.setSingleShot(True)
         self._klipper_restart_timeout.setInterval(30_000)
         self._klipper_restart_timeout.timeout.connect(self._on_klipper_restart_timeout)
-        self.main_content_widget.setCurrentIndex(0)
 
         usb_config = self.config.get_section("usb_manager", fallback=None)
         gdir = None
@@ -217,13 +216,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.main_content_widget.indexOf(self.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
         self.bed_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.main_content_widget.indexOf(self.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
         self.filament_type_icon.clicked.connect(
@@ -232,10 +231,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 2,
             )
         )
-        self.filament_type_icon.setText("PLA")
-        self.filament_type_icon.update()
-        self.nozzle_size_icon.setText("0.4mm")
-        self.nozzle_size_icon.update()
         self.conn_window.retry_connection_clicked.connect(slot=self.ws.retry_wb_conn)
         self.conn_window.firmware_restart_clicked.connect(
             slot=self.mc.restart_klipper_mcu_service
@@ -507,13 +502,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.main_content_widget.indexOf(self.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
         self.bed_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.main_content_widget.indexOf(self.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
 
@@ -598,7 +593,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_update_available(self, state: bool = False):
         """Signal render for red dot on utilities tab icon and Update button"""
         self.main_content_widget.setNotification(3, state)
-        self.utilitiesPanel.panel.update_btn.setShowNotification(state)
+        self.utilitiesPanel.up_update_btn.setShowNotification(state)
         self.repaint()
 
     def enable_tab_bar(self) -> bool:
@@ -1264,13 +1259,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.main_content_widget.indexOf(self.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                    self.controlPanel.indexOf(self.controlPanel.temperature_page),
                 )
             )
             self.bed_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.main_content_widget.indexOf(self.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                    self.controlPanel.indexOf(self.controlPanel.temperature_page),
                 )
             )
             return False
@@ -1283,20 +1278,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _setup_ui(self) -> None:
         """Build the main window chrome: header bar, tab widget, and tab pages."""
+        self._setup_window()
+        self._setup_tabs()
+        self._setup_header()
+        self.setCentralWidget(self.main_widget)
+
+    def _setup_window(self) -> None:
         self.setObjectName("MainWindow")
         self.resize(800, 480)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
-        self.setSizePolicy(sizePolicy)
         self.setMinimumSize(QtCore.QSize(800, 480))
         self.setMaximumSize(QtCore.QSize(1024, 600))
-        self.setSizeIncrement(QtCore.QSize(1, 1))
-        self.setBaseSize(QtCore.QSize(800, 480))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -1308,56 +1299,28 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setPalette(palette)
         self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
         self.setTabletTracking(True)
-        icon = QtGui.QIcon.fromTheme("applications-other")
-        self.setWindowIcon(icon)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.setStyleSheet(
-            "MainWindow >  {\n    url(:/font/media/fonts for text/Momcake-Thin.ttf);\n}"
-        )
         self.setAnimated(False)
+
         self.main_widget = QtWidgets.QWidget(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.main_widget.sizePolicy().hasHeightForWidth())
-        self.main_widget.setSizePolicy(sizePolicy)
+        self.main_widget.setObjectName("main_widget")
         self.main_widget.setMinimumSize(QtCore.QSize(800, 480))
         self.main_widget.setMaximumSize(QtCore.QSize(1024, 600))
-        self.main_widget.setSizeIncrement(QtCore.QSize(1, 1))
-        self.main_widget.setBaseSize(QtCore.QSize(800, 480))
         self.main_widget.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
         self.main_widget.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.main_widget.setStyleSheet(
-            "#main_widget{background-image: url(:/background/media/1st_background.png);}\n"
-            ""
+            "#main_widget{background-image: url(:/background/media/1st_background.png);}"
         )
-        self.main_widget.setObjectName("main_widget")
+
+    def _setup_tabs(self) -> None:
         self.main_content_widget = NotificationQTabWidget(parent=self.main_widget)
-        self.main_content_widget.setEnabled(True)
+        self.main_content_widget.setObjectName("main_content_widget")
         self.main_content_widget.setGeometry(QtCore.QRect(0, 60, 800, 420))
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.main_content_widget.sizePolicy().hasHeightForWidth()
-        )
-        self.main_content_widget.setSizePolicy(sizePolicy)
         self.main_content_widget.setMinimumSize(QtCore.QSize(800, 400))
         self.main_content_widget.setMaximumSize(QtCore.QSize(1024, 720))
-        self.main_content_widget.setBaseSize(QtCore.QSize(800, 400))
-        self.main_content_widget.setCursor(
-            QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor)
-        )
         self.main_content_widget.setLayoutDirection(
             QtCore.Qt.LayoutDirection.RightToLeft
         )
-        self.main_content_widget.setAutoFillBackground(False)
         self.main_content_widget.setStyleSheet(
             "#main_content_widget{\n"
             "background-image: url(:/background/media/1st_background.png);\n"
@@ -1369,8 +1332,6 @@ class MainWindow(QtWidgets.QMainWindow):
             "    max-height: 100px;\n"
             "    background: transparent;\n"
             "}\n"
-            "\n"
-            ""
         )
         self.main_content_widget.setTabPosition(QtWidgets.QTabWidget.TabPosition.West)
         self.main_content_widget.setTabShape(QtWidgets.QTabWidget.TabShape.Rounded)
@@ -1380,154 +1341,68 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_content_widget.setDocumentMode(True)
         self.main_content_widget.setTabsClosable(False)
         self.main_content_widget.setMovable(False)
-        self.main_content_widget.setObjectName("main_content_widget")
-        self.printTab = QtWidgets.QWidget()
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+
+        self.printTab = self._make_tab(
+            "printTab",
+            ":/icons/media/main_menu/ICON_home.png",
+            ":/icons/media/main_menu/ICON_home_pressed.png",
+            ":/icons/media/main_menu/ICON_home_blocked.png",
         )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.printTab.sizePolicy().hasHeightForWidth())
-        self.printTab.setSizePolicy(sizePolicy)
-        self.printTab.setMinimumSize(QtCore.QSize(720, 420))
-        self.printTab.setMaximumSize(QtCore.QSize(1024, 720))
-        self.printTab.setBaseSize(QtCore.QSize(1024, 420))
-        self.printTab.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
-        self.printTab.setObjectName("printTab")
+        self.filamentTab = self._make_tab(
+            "filamentTab",
+            ":/icons/media/main_menu/ICON_filament.png",
+            ":/icons/media/main_menu/ICON_filament_pressed.png",
+            ":/icons/media/main_menu/ICON_filamente_blocked.png",
+        )
+        self.controlTab = self._make_tab(
+            "controlTab",
+            ":/icons/media/main_menu/ICON_control.png",
+            ":/icons/media/main_menu/ICON_control_pressed.png",
+            ":/icons/media/main_menu/ICON_control_blocked.png",
+        )
+        self.utilitiesTab = self._make_tab(
+            "utilitiesTab",
+            ":/icons/media/main_menu/ICON_utilities.png",
+            ":/icons/media/main_menu/ICON_utilities_pressed.png",
+            ":/icons/media/main_menu/ICON_utilities_blocked.png",
+        )
+        self.main_content_widget.setCurrentIndex(0)
+
+    def _make_tab(
+        self, name: str, normal: str, pressed: str, blocked: str
+    ) -> QtWidgets.QWidget:
+        tab = QtWidgets.QWidget()
+        tab.setObjectName(name)
+        tab.setMinimumSize(QtCore.QSize(720, 420))
+        tab.setMaximumSize(QtCore.QSize(1024, 720))
         icon = QtGui.QIcon()
         icon.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_home.png"),
+            QtGui.QPixmap(normal),
             QtGui.QIcon.Mode.Normal,
             QtGui.QIcon.State.Off,
         )
         icon.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_home_pressed.png"),
+            QtGui.QPixmap(pressed),
             QtGui.QIcon.Mode.Normal,
             QtGui.QIcon.State.On,
         )
         icon.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_home_blocked.png"),
+            QtGui.QPixmap(blocked),
             QtGui.QIcon.Mode.Disabled,
             QtGui.QIcon.State.On,
         )
-        self.main_content_widget.addTab(self.printTab, icon, "")
-        self.filamentTab = QtWidgets.QWidget()
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.filamentTab.sizePolicy().hasHeightForWidth())
-        self.filamentTab.setSizePolicy(sizePolicy)
-        self.filamentTab.setMinimumSize(QtCore.QSize(720, 420))
-        self.filamentTab.setMaximumSize(QtCore.QSize(1024, 720))
-        self.filamentTab.setBaseSize(QtCore.QSize(1024, 420))
-        self.filamentTab.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
-        self.filamentTab.setObjectName("filamentTab")
-        icon1 = QtGui.QIcon()
-        icon1.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_filament.png"),
-            QtGui.QIcon.Mode.Normal,
-            QtGui.QIcon.State.Off,
-        )
-        icon1.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_filament_pressed.png"),
-            QtGui.QIcon.Mode.Normal,
-            QtGui.QIcon.State.On,
-        )
-        icon1.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_filamente_blocked.png"),
-            QtGui.QIcon.Mode.Disabled,
-            QtGui.QIcon.State.On,
-        )
-        self.main_content_widget.addTab(self.filamentTab, icon1, "")
-        self.controlTab = QtWidgets.QWidget()
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.controlTab.sizePolicy().hasHeightForWidth())
-        self.controlTab.setSizePolicy(sizePolicy)
-        self.controlTab.setMinimumSize(QtCore.QSize(720, 420))
-        self.controlTab.setMaximumSize(QtCore.QSize(1024, 720))
-        self.controlTab.setBaseSize(QtCore.QSize(720, 420))
-        self.controlTab.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
-        self.controlTab.setObjectName("controlTab")
-        icon2 = QtGui.QIcon()
-        icon2.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_control.png"),
-            QtGui.QIcon.Mode.Normal,
-            QtGui.QIcon.State.Off,
-        )
-        icon2.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_control_pressed.png"),
-            QtGui.QIcon.Mode.Normal,
-            QtGui.QIcon.State.On,
-        )
-        icon2.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_control_blocked.png"),
-            QtGui.QIcon.Mode.Disabled,
-            QtGui.QIcon.State.On,
-        )
-        self.main_content_widget.addTab(self.controlTab, icon2, "")
-        self.utilitiesTab = QtWidgets.QWidget()
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.utilitiesTab.sizePolicy().hasHeightForWidth())
-        self.utilitiesTab.setSizePolicy(sizePolicy)
-        self.utilitiesTab.setMinimumSize(QtCore.QSize(720, 420))
-        self.utilitiesTab.setMaximumSize(QtCore.QSize(1024, 720))
-        self.utilitiesTab.setBaseSize(QtCore.QSize(1024, 420))
-        self.utilitiesTab.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
-        self.utilitiesTab.setObjectName("utilitiesTab")
-        icon3 = QtGui.QIcon()
-        icon3.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_utilities.png"),
-            QtGui.QIcon.Mode.Normal,
-            QtGui.QIcon.State.Off,
-        )
-        icon3.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_utilities_pressed.png"),
-            QtGui.QIcon.Mode.Normal,
-            QtGui.QIcon.State.On,
-        )
-        icon3.addPixmap(
-            QtGui.QPixmap(":/icons/media/main_menu/ICON_utilities_blocked.png"),
-            QtGui.QIcon.Mode.Disabled,
-            QtGui.QIcon.State.On,
-        )
-        self.main_content_widget.addTab(self.utilitiesTab, icon3, "")
+        self.main_content_widget.addTab(tab, icon, "")
+        return tab
+
+    def _setup_header(self) -> None:
         self.main_header_layout = QtWidgets.QGroupBox(parent=self.main_widget)
-        self.main_header_layout.setEnabled(True)
+        self.main_header_layout.setObjectName("main_header_layout")
         self.main_header_layout.setGeometry(QtCore.QRect(0, 0, 800, 60))
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(2)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.main_header_layout.sizePolicy().hasHeightForWidth()
-        )
-        self.main_header_layout.setSizePolicy(sizePolicy)
         self.main_header_layout.setMinimumSize(QtCore.QSize(800, 60))
         self.main_header_layout.setMaximumSize(QtCore.QSize(1024, 80))
-        self.main_header_layout.setSizeIncrement(QtCore.QSize(1, 1))
-        self.main_header_layout.setBaseSize(QtCore.QSize(800, 60))
         font = QtGui.QFont()
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.main_header_layout.setFont(font)
-        self.main_header_layout.setCursor(
-            QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor)
-        )
         self.main_header_layout.setLayoutDirection(
             QtCore.Qt.LayoutDirection.LeftToRight
         )
@@ -1548,7 +1423,6 @@ class MainWindow(QtWidgets.QMainWindow):
             "    selection-background-color: rgb(60,60,60);\n"
             "    gridline-color:rgb(60,60,60);\n"
             "    selection-color:rgb(60,60,60);\n"
-            "    \n"
             "}\n"
             "\n"
             "QFrame > *{\n"
@@ -1558,26 +1432,21 @@ class MainWindow(QtWidgets.QMainWindow):
             "    color: rgb(255, 255, 255); \n"
             "    selection-color: rgb(60, 60, 60);\n"
             "    border-bottom-color: rgb(60, 60, 60);\n"
-            "    \n"
             "}\n"
-            "\n"
             "\n"
             "QPushButton:pressed{\n"
             "    border: none;\n"
             "    background: transparent;\n"
             "}"
         )
-        self.main_header_layout.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignJustify | QtCore.Qt.AlignmentFlag.AlignVCenter
-        )
-        self.main_header_layout.setObjectName("main_header_layout")
         self.header_main_layout = QtWidgets.QHBoxLayout(self.main_header_layout)
+        self.header_main_layout.setObjectName("header_main_layout")
         self.header_main_layout.setSizeConstraint(
             QtWidgets.QLayout.SizeConstraint.SetMinimumSize
         )
         self.header_main_layout.setContentsMargins(5, 0, 5, 0)
         self.header_main_layout.setSpacing(10)
-        self.header_main_layout.setObjectName("header_main_layout")
+
         self.notification_btn = IconButton(parent=self.main_header_layout)
         self.notification_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.notification_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1585,75 +1454,40 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notification_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/notification.svg")
         )
+        self.notification_btn.setProperty("button_type", "icon_text")
         self.header_main_layout.addWidget(
             self.notification_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
         )
-        self.extruder_temp_display = DisplayButton(parent=self.main_header_layout)
-        self.extruder_temp_display.setMinimumSize(QtCore.QSize(140, 60))
-        self.extruder_temp_display.setMaximumSize(QtCore.QSize(160, 60))
-        self.extruder_temp_display.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle_topbar.svg"),
+
+        self.extruder_temp_display = self._make_temp_display(
+            "extruder", ":/extruder_related/media/btn_icons/nozzle_topbar.svg"
         )
-        self.header_main_layout.addWidget(
-            self.extruder_temp_display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        self.extruder_temp_display.setProperty("button_type", "secondary_display")
+        self.extruder_temp_display.setProperty("name", "extruder_temperature_display")
+
+        self.bed_temp_display = self._make_temp_display(
+            "bed", ":/temperature_related/media/btn_icons/temperature_plate.svg"
         )
-        self.bed_temp_display = DisplayButton(parent=self.main_header_layout)
-        self.bed_temp_display.setMinimumSize(QtCore.QSize(140, 60))
-        self.bed_temp_display.setMaximumSize(QtCore.QSize(160, 60))
-        self.bed_temp_display.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/temperature_related/media/btn_icons/temperature_plate.svg"
-            ),
-        )
-        self.header_main_layout.addWidget(
-            self.bed_temp_display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
-        self.chamber_temp_display = DisplayButton(parent=self.main_header_layout)
-        self.chamber_temp_display.setMinimumSize(QtCore.QSize(140, 60))
-        self.chamber_temp_display.setMaximumSize(QtCore.QSize(160, 60))
-        self.chamber_temp_display.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/top_bar_icons/media/topbar/chamber_temp_topbar.svg"),
+        self.bed_temp_display.setProperty("button_type", "secondary_display")
+
+        self.chamber_temp_display = self._make_temp_display(
+            "chamber", ":/top_bar_icons/media/topbar/chamber_temp_topbar.svg"
         )
         self.chamber_temp_display.setProperty(
             "secondary_pixmap",
             QtGui.QPixmap(":/temperature_related/media/btn_icons/humidity.svg"),
         )
-        self.header_main_layout.addWidget(
-            self.chamber_temp_display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        self.chamber_temp_display.setProperty("display_format", "dual")
+        self.chamber_temp_display.setProperty("button_type", "display_secondary")
+
+        self.filament_type_icon = self._make_header_icon(
+            "PLA", ":/filament_related/media/btn_icons/load_filament.svg"
         )
-        self.filament_type_icon = IconButton(parent=self.main_header_layout)
-        self.filament_type_icon.setMinimumSize(QtCore.QSize(60, 60))
-        self.filament_type_icon.setMaximumSize(QtCore.QSize(60, 60))
-        self.filament_type_icon.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"),
+        self.nozzle_size_icon = self._make_header_icon(
+            "0.4mm", ":/temperature_related/media/btn_icons/standart_temperature.svg"
         )
-        self.header_main_layout.addWidget(
-            self.filament_type_icon, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
-        self.nozzle_size_icon = IconButton(parent=self.main_header_layout)
-        self.nozzle_size_icon.setMinimumSize(QtCore.QSize(60, 60))
-        self.nozzle_size_icon.setMaximumSize(QtCore.QSize(60, 60))
-        self.nozzle_size_icon.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/temperature_related/media/btn_icons/standart_temperature.svg"
-            ),
-        )
-        self.header_main_layout.addWidget(
-            self.nozzle_size_icon, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
+
         self.wifi_button = IconButton(parent=self.main_header_layout)
-        self.wifi_button.setSizePolicy(sizePolicy)
         self.wifi_button.setMinimumSize(QtCore.QSize(60, 60))
         self.wifi_button.setMaximumSize(QtCore.QSize(60, 60))
         self.wifi_button.setIconSize(QtCore.QSize(16, 16))
@@ -1661,6 +1495,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "icon_pixmap",
             QtGui.QPixmap(":/network/media/btn_icons/network/3bar_wifi.svg"),
         )
+        self.wifi_button.setProperty("button_type", "icon")
         self.header_main_layout.addWidget(
             self.wifi_button,
             0,
@@ -1669,38 +1504,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.header_main_layout.setStretch(1, 1)
         self.header_main_layout.setStretch(2, 1)
         self.header_main_layout.setStretch(3, 1)
-        self.setCentralWidget(self.main_widget)
 
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("MainWindow", "MainWindow"))
-        self.notification_btn.setProperty(
-            "button_type", _translate("MainWindow", "icon_text")
+    def _make_temp_display(self, text: str, icon: str) -> DisplayButton:
+        display = DisplayButton(parent=self.main_header_layout)
+        display.setMinimumSize(QtCore.QSize(140, 60))
+        display.setMaximumSize(QtCore.QSize(160, 60))
+        display.setProperty("icon_pixmap", QtGui.QPixmap(icon))
+        display.setText(text)
+        self.header_main_layout.addWidget(
+            display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
-        self.extruder_temp_display.setText(_translate("MainWindow", "extruder"))
-        self.extruder_temp_display.setProperty(
-            "button_type", _translate("MainWindow", "secondary_display")
-        )
-        self.extruder_temp_display.setProperty(
-            "name", _translate("MainWindow", "extruder_temperature_display")
-        )
-        self.bed_temp_display.setText(_translate("MainWindow", "bed"))
-        self.bed_temp_display.setProperty(
-            "button_type", _translate("MainWindow", "secondary_display")
-        )
-        self.chamber_temp_display.setText(_translate("MainWindow", "chamber"))
-        self.chamber_temp_display.setProperty(
-            "display_format", _translate("MainWindow", "dual")
-        )
-        self.chamber_temp_display.setProperty(
-            "button_type", _translate("MainWindow", "display_secondary")
-        )
-        self.filament_type_icon.setText(_translate("MainWindow", "Filament"))
-        self.filament_type_icon.setProperty(
-            "button_type", _translate("MainWindow", "icon_text")
-        )
-        self.nozzle_size_icon.setText(_translate("MainWindow", "nozzle"))
-        self.nozzle_size_icon.setProperty(
-            "button_type", _translate("MainWindow", "icon_text")
-        )
-        self.wifi_button.setProperty("button_type", _translate("MainWindow", "icon"))
-        self.main_content_widget.setCurrentIndex(3)
+        return display
+
+    def _make_header_icon(self, text: str, icon: str) -> IconButton:
+        btn = IconButton(parent=self.main_header_layout)
+        btn.setMinimumSize(QtCore.QSize(60, 60))
+        btn.setMaximumSize(QtCore.QSize(60, 60))
+        btn.setProperty("icon_pixmap", QtGui.QPixmap(icon))
+        btn.setProperty("button_type", "icon_text")
+        btn.setText(text)
+        self.header_main_layout.addWidget(btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        return btn
