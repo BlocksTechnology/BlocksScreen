@@ -1335,38 +1335,52 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_content_widget.setTabsClosable(False)
         self.main_content_widget.setMovable(False)
 
-        self.printTab = self._make_tab("printTab", "ICON_home", "ICON_home_blocked")
+        self.printTab = self._make_tab(
+            "printTab",
+            ":/icons/media/main_menu/ICON_home.png",
+            ":/icons/media/main_menu/ICON_home_pressed.png",
+            ":/icons/media/main_menu/ICON_home_blocked.png",
+        )
         self.filamentTab = self._make_tab(
-            "filamentTab", "ICON_filament", "ICON_filamente_blocked"
+            "filamentTab",
+            ":/icons/media/main_menu/ICON_filament.png",
+            ":/icons/media/main_menu/ICON_filament_pressed.png",
+            ":/icons/media/main_menu/ICON_filamente_blocked.png",
         )
         self.controlTab = self._make_tab(
-            "controlTab", "ICON_control", "ICON_control_blocked"
+            "controlTab",
+            ":/icons/media/main_menu/ICON_control.png",
+            ":/icons/media/main_menu/ICON_control_pressed.png",
+            ":/icons/media/main_menu/ICON_control_blocked.png",
         )
         self.utilitiesTab = self._make_tab(
-            "utilitiesTab", "ICON_utilities", "ICON_utilities_blocked"
+            "utilitiesTab",
+            ":/icons/media/main_menu/ICON_utilities.png",
+            ":/icons/media/main_menu/ICON_utilities_pressed.png",
+            ":/icons/media/main_menu/ICON_utilities_blocked.png",
         )
         self.main_content_widget.setCurrentIndex(0)
 
-    def _make_tab(self, name: str, stem: str, blocked: str) -> QtWidgets.QWidget:
+    def _make_tab(
+        self, name: str, normal: str, pressed: str, blocked: str
+    ) -> QtWidgets.QWidget:
         tab = QtWidgets.QWidget()
         tab.setObjectName(name)
         tab.setMinimumSize(QtCore.QSize(720, 420))
         tab.setMaximumSize(QtCore.QSize(1024, 720))
-        base = ":/icons/media/main_menu/"
         icon = QtGui.QIcon()
         icon.addPixmap(
-            QtGui.QPixmap(f"{base}{stem}.png"),
+            QtGui.QPixmap(normal),
             QtGui.QIcon.Mode.Normal,
             QtGui.QIcon.State.Off,
         )
         icon.addPixmap(
-            QtGui.QPixmap(f"{base}{stem}_pressed.png"),
+            QtGui.QPixmap(pressed),
             QtGui.QIcon.Mode.Normal,
             QtGui.QIcon.State.On,
         )
-        # the filament blocked icon is named inconsistently, so it is passed in
         icon.addPixmap(
-            QtGui.QPixmap(f"{base}{blocked}.png"),
+            QtGui.QPixmap(blocked),
             QtGui.QIcon.Mode.Disabled,
             QtGui.QIcon.State.On,
         )
