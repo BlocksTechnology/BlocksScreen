@@ -80,7 +80,6 @@ class ConnectionPage(QtWidgets.QFrame):
     _RESTART_LABELS: typing.ClassVar[dict[ConnectionState, str]] = {
         ConnectionState.KLIPPER_ERROR: "Firmware Restart",
         ConnectionState.KLIPPER_SHUTDOWN: "Firmware Restart",
-        ConnectionState.WEBSOCKET_LOST: "Retry Connection",
     }
 
     _KLIPPY_STATE_MAP: typing.ClassVar[dict[str, ConnectionState]] = {
@@ -91,9 +90,6 @@ class ConnectionPage(QtWidgets.QFrame):
         "ready": ConnectionState.KLIPPER_READY,
     }
 
-    retry_connection_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="retry_connection_clicked"
-    )
     wifi_button_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="call_network_page"
     )
@@ -277,9 +273,6 @@ class ConnectionPage(QtWidgets.QFrame):
         )
 
     def _on_restart_clicked(self) -> None:
-        if self._state == ConnectionState.WEBSOCKET_LOST:
-            self.retry_connection_clicked.emit()
-            return
         is_firmware = self._state in self._FIRMWARE_RESTART_STATES
         self._last_restart_was_firmware = is_firmware
         self._escalated_to_klipper_restart = False

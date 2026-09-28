@@ -168,6 +168,13 @@ class TestRestartButton:
         page._set_state(ConnectionState.KLIPPER_DISCONNECTED)
         assert page.restart_klipper_button.text() == "Restart Printer"
 
+    def test_websocket_lost_offers_restart_not_retry(self, page, qtbot):
+        # Reconnect is automatic, so the button only restarts Klipper
+        page._set_state(ConnectionState.WEBSOCKET_LOST)
+        assert page.restart_klipper_button.text() == "Restart Printer"
+        with qtbot.waitSignal(page.restart_klipper_clicked):
+            page._on_restart_clicked()
+
 
 class TestSignalWiring:
     def test_reboot_button(self, page, qtbot):
