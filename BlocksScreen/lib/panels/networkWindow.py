@@ -682,15 +682,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 hotspot_btn.State.ON if hotspot_on else hotspot_btn.State.OFF
             )
 
-    def _claim_link(self, winner) -> None:
-        """Force the other two link toggles OFF; only one link may be on at a time."""
-        for btn in (self.wifi_button, self.hotspot_button, self.ethernet_button):
-            if btn is winner:
-                continue
-            toggle = btn.toggle_button
-            with QtCore.QSignalBlocker(toggle):
-                toggle.state = toggle.State.OFF
-
     def _sync_ethernet_panel(self, state: NetworkState) -> None:
         """Show/hide the ethernet panel and sync its toggle state.
 
@@ -948,6 +939,15 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.mn_info_box.setWordWrap(True)
         self.mn_info_box.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
+    def _claim_link(self, winner) -> None:
+        """Force the other two link toggles OFF; only one link may be on at a time."""
+        for btn in (self.wifi_button, self.hotspot_button, self.ethernet_button):
+            if btn is winner:
+                continue
+            toggle = btn.toggle_button
+            with QtCore.QSignalBlocker(toggle):
+                toggle.state = toggle.State.OFF
+
     @QtCore.pyqtSlot(object, name="stateChange")
     def _on_toggle_state(self, new_state) -> None:
         """Route a toggle-button state change to the correct handler (Wi-Fi or hotspot)."""
@@ -1101,14 +1101,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._show_error_popup("Hotspot password must be at least 8 characters.")
             return
 
-        # Mutual exclusion: turn off Wi-Fi and Ethernet
-        wifi_btn = self.wifi_button.toggle_button
-        eth_btn = self.ethernet_button.toggle_button
-        with QtCore.QSignalBlocker(wifi_btn):
-            wifi_btn.state = wifi_btn.State.OFF
-        with QtCore.QSignalBlocker(eth_btn):
-            eth_btn.state = eth_btn.State.OFF
-
         hotspot_btn = self.hotspot_button.toggle_button
         with QtCore.QSignalBlocker(hotspot_btn):
             hotspot_btn.state = hotspot_btn.State.ON
@@ -1117,6 +1109,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._pending_operation = PendingOperation.HOTSPOT_ON
         self.setCurrentIndex(self.indexOf(self.main_network_page))
         self._set_loading_state(True)
+
+        # The worker keeps the cable for a hotspot, so a user activate drops it here.
+        self._claim_link(self.hotspot_button)
+        self._nm.disconnect_ethernet()
         self._nm.create_hotspot(new_name, new_password, "wpa-psk")
 
     def _show_hotspot_qr(self, ssid: str, password: str, security: str) -> None:
@@ -1652,7 +1648,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._initial_priority = priority
         self._initial_password = password
 
-    @QtCore.pyqtSlot(str, str)
+    @pyqtSlot(str, str)
     def _on_network_password_loaded(self, ssid: str, password: str) -> None:
         """Prefill the change-password field with the profile's stored psk."""
         if ssid != self._password_ssid:

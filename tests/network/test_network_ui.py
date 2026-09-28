@@ -820,6 +820,38 @@ class TestHotspotToggle:
         assert _off(w.wifi_button) and _off(w.ethernet_button)
 
 
+class TestOnHotspotActivate:
+    """The hotspot page's activate button follows the same one-link rule as the toggle."""
+
+    @staticmethod
+    def _activate(w, name="MyHotspot", password="validpass"):
+        w.hotspot_name_input_field.setText(name)
+        w.hotspot_password_input_field.setText(password)
+        w._on_hotspot_activate()
+
+    def test_creates_hotspot_and_drops_ethernet(self, win):
+        w, nm = win
+        self._activate(w)
+        nm.disconnect_ethernet.assert_called_once()
+        nm.create_hotspot.assert_called_once_with("MyHotspot", "validpass", "wpa-psk")
+        assert w._pending_operation == PendingOperation.HOTSPOT_ON
+
+    def test_turns_other_toggles_off(self, win):
+        w, nm = win
+        _all_on(w)
+        self._activate(w)
+        assert _off(w.wifi_button) and _off(w.ethernet_button)
+        assert not _off(w.hotspot_button)
+
+    def test_short_password_touches_nothing(self, win):
+        w, nm = win
+        with patch.object(w, "_show_error_popup") as mock_err:
+            self._activate(w, password="short")
+        mock_err.assert_called_once()
+        nm.disconnect_ethernet.assert_not_called()
+        nm.create_hotspot.assert_not_called()
+
+
 class TestEthernetToggle:
     def test_ethernet_on_calls_connect_ethernet(self, win):
         w, nm = win

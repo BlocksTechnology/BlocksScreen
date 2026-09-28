@@ -84,7 +84,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.thumbnail_graphics = []
-        self.layer_fallback = False
+        self._reported_layer: int | None = None
         self.total_layer_reported = False
         self._displayed_layer = 0
         self._last_z = 0.0
@@ -192,7 +192,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         (see ``on_print_start`` and the filename-change branch)."""
         self.total_layers = "?"
         self.total_layer_reported = False
-        self.layer_fallback = False
+        self._reported_layer = None
         self._layer_frozen = False
         self._awaiting_resume = False
         self._resume_baseline = 0.0
@@ -222,8 +222,16 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, metadata: dict) -> None:
         """Handle received file info/metadata (loads regardless of visibility)."""
-        # Metadata has no current_layer (that's live print_stats); don't reset it here.
-        layer_count = metadata.get("layer_count", -1)
+        _meta_file = metadata.get("filename", "")
+        # The fileinfo signal is global: drop metadata for a file browsed mid-print.
+        if (
+            self._current_file_name
+            and _meta_file
+            and _meta_file != self._current_file_name
+        ):
+            return
+        _count = metadata.get("layer_count")  # Moonraker sends null when unsliced
+        layer_count = int(_count) if isinstance(_count, (int, float)) else -1
         self.total_layers = str(layer_count) if layer_count >= 0 else "---"
         self.total_layer_reported = layer_count >= 0
         self.layer_display_button.secondary_text = self.total_layers
@@ -231,9 +239,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._gcode_end_byte = int(metadata.get("gcode_end_byte", 0) or 0)
         self.file_metadata = metadata
         self._load_thumbnails(*metadata.get("thumbnail_images", ()))
-        # Reconnect mid-print: metadata just arrived, recompute the current layer now.
-        if self._filament_used > 0:
-            self._update_layer_from_z()
+        self._refresh_layer_display()
 
     def pause_resume_print(self) -> None:
         """Handle pause/resume print job button clicked"""
@@ -363,16 +369,9 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.total_layer_reported = False
 
             if "current_layer" in value:
-                if self._layer_frozen:
-                    pass  # Hold the snapshot while paused.
-                elif value["current_layer"] is not None:
-                    _reported_layer = int(value["current_layer"])
-                    self.layer_display_button.setText(str(_reported_layer))
-                    self._displayed_layer = _reported_layer
-                    self.layer_fallback = False
-                else:
-                    # No info.current_layer from Klipper: compute from Z instead.
-                    self.layer_fallback = True
+                _reported = value["current_layer"]
+                self._reported_layer = None if _reported is None else int(_reported)
+                self._refresh_layer_display()
         elif isinstance(value, float):
             # print_duration + filament_used tracked regardless of visibility (gate Z fallback)
             if "print_duration" in field:
@@ -380,7 +379,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             elif "filament_used" in field:
                 self._filament_used = value
                 if value > 0:
-                    self._update_layer_from_z()
+                    self._refresh_layer_display()
             elif self.isVisible() and "total_duration" in field:
                 _time = estimate_print_time(int(value))
                 _print_time_string = (
@@ -396,32 +395,62 @@ class JobStatusWidget(QtWidgets.QWidget):
         if "gcode_position" in field and len(value) > 2:
             self._last_z = float(value[2])
 
-    def _update_layer_from_z(self) -> None:
-        """Recompute fallback layer from last Z on filament advance, so park/travel Z is ignored (Mainsail getPrintCurrentLayer)."""
-        if (
-            self._internal_print_status != "printing"
-            or self._layer_frozen  # held while paused (park Z-lift ignored)
-            or not self.layer_fallback
-            or self._print_duration <= 0  # skip pre-print homing/purge moves
-        ):
-            return
+    def _max_layers(self) -> int:
+        """Total layers: reported, metadata, geometry.
+
+        Order from Mainsail's getPrintMaxLayers (getters.ts).
+        """
+        if self.total_layer_reported:
+            try:
+                return int(self.total_layers)
+            except (TypeError, ValueError):
+                return 0
         meta = self.file_metadata
         if not meta:
-            return
-        layer_height = float(meta.get("layer_height", 0))
-        if layer_height <= 0:
-            return
-        first_layer_height = float(meta.get("first_layer_height", 0))
-        _max_layers = calculate_max_layers(
-            float(meta.get("object_height", 0)), layer_height, first_layer_height
+            return 0
+        return calculate_max_layers(
+            float(meta.get("object_height", 0) or 0),
+            float(meta.get("layer_height", 0) or 0),
+            float(meta.get("first_layer_height", 0) or 0),
         )
-        if not self.total_layer_reported and _max_layers > 0:
-            self.layer_display_button.secondary_text = str(_max_layers)
-        _current_layer = calculate_current_layer(
+
+    def _layer_from_z(self) -> int:
+        """Z-derived layer, holds the last value when its inputs are missing.
+
+        From Mainsail's getPrintCurrentLayer (getters.ts) Z estimate.
+        """
+        meta = self.file_metadata
+        if (
+            self._internal_print_status != "printing"
+            or self._print_duration <= 0  # skip pre-print homing/purge moves
+            or not meta
+        ):
+            return self._displayed_layer
+        layer_height = float(meta.get("layer_height", 0) or 0)
+        if layer_height <= 0:
+            return self._displayed_layer
+        return calculate_current_layer(
             z_position=self._last_z,
             layer_height=layer_height,
-            first_layer_height=first_layer_height,
-            max_layers=_max_layers,
+            first_layer_height=float(meta.get("first_layer_height", 0) or 0),
+            max_layers=self._max_layers(),
+        )
+
+    def _refresh_layer_display(self) -> None:
+        """Render current/total layer: Klipper's current_layer wins, else the Z estimate.
+
+        Mainsail's getters are computed, so the layer is re-derived on every update
+        instead of being armed once.
+        """
+        if self._layer_frozen:  # held while paused, park Z-lift must not bump it
+            return
+        _estimated_total = self._max_layers()
+        if not self.total_layer_reported and _estimated_total > 0:
+            self.layer_display_button.secondary_text = str(_estimated_total)
+        _current_layer = (
+            self._layer_from_z()
+            if self._reported_layer is None
+            else self._reported_layer
         )
         if _current_layer != self._displayed_layer:
             self._displayed_layer = _current_layer

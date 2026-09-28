@@ -7,7 +7,7 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
     clicked = QtCore.pyqtSignal()
 
     def __init__(self, parent):
-        super(NetworkWidgetbuttons, self).__init__(parent)
+        super().__init__(parent)
 
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self._icon_label = None

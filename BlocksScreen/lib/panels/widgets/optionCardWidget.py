@@ -1,7 +1,7 @@
 import typing
 
-from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class OptionCard(QtWidgets.QAbstractButton):

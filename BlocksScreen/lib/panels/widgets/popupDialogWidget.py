@@ -1,6 +1,5 @@
 import enum
 from collections import deque
-from typing import Deque
 
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -26,9 +25,9 @@ class Popup(QtWidgets.QDialog):
         super().__init__(parent)
         self.timeout_timer = QtCore.QTimer(self)
         self.timeout_timer.setSingleShot(True)
-        self.messages: Deque = deque()
+        self.messages: deque = deque()
         self.isShown = False
-        self.persistent_notifications: Deque = deque()
+        self.persistent_notifications: deque = deque()
         self.message_type: Popup.MessageType = Popup.MessageType.INFO
         self.default_background_color = QtGui.QColor(164, 164, 164)
         self.info_icon = QtGui.QPixmap(":ui/media/btn_icons/info.svg")
@@ -81,7 +80,8 @@ class Popup(QtWidgets.QDialog):
                 if isinstance(widget, QtWidgets.QMainWindow):
                     main_window = widget
                     break
-
+        if main_window is None:
+            return QtCore.QRect()
         parent_rect = main_window.geometry()
 
         width = int(parent_rect.width() * 0.85)

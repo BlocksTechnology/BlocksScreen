@@ -13,12 +13,12 @@ class ListItem:
     _rfontsize: int = 0
     _lfontsize: int = 0
 
-    callback: typing.Optional[typing.Callable] = None
+    callback: typing.Callable | None = None
 
     color: str = "#dfdfdf"
     color_left_icon: bool = False
-    right_icon: typing.Optional[QtGui.QPixmap] = None
-    left_icon: typing.Optional[QtGui.QPixmap] = None
+    right_icon: QtGui.QPixmap | None = None
+    left_icon: QtGui.QPixmap | None = None
 
     selected: bool = False
     allow_check: bool = True
@@ -33,7 +33,7 @@ class ListItem:
     notificate: bool = False
 
     # stores width and heitgh of the button so we dont need to recalculate it every time
-    _cache: typing.Dict[int, int] = field(default_factory=dict)
+    _cache: dict[int, int] = field(default_factory=dict)
 
     def clear_cache(self):
         """Call this if text or font size changes dynamically"""

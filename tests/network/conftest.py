@@ -307,7 +307,7 @@ _mock_configfile_mod.get_configparser = MagicMock(return_value=_mock_cfg_instanc
 sys.modules["configfile"] = _mock_configfile_mod
 
 # Now safe to import the actual network package
-from BlocksScreen.lib.network.models import (
+from BlocksScreen.lib.network.models import (  # noqa: E402
     ConnectionPriority,
     ConnectivityState,
     NetworkInfo,

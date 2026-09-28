@@ -26,7 +26,6 @@ class CancelPage(QtWidgets.QWidget):
         super().__init__(parent)
         self._setupUI()
         self.filename = ""
-        self._thumbnail_scan_done: bool = False
 
         self.confirm_button.clicked.connect(lambda: self._handle_accept())
         self.refuse_button.clicked.connect(lambda: self._handle_refuse())
@@ -54,8 +53,6 @@ class CancelPage(QtWidgets.QWidget):
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
         if isinstance(value, str):
             if "filename" in field:
-                if value != self.filename:
-                    self._thumbnail_scan_done = False
                 self.filename = value
                 if self.isVisible():
                     self.set_file_name(value)
