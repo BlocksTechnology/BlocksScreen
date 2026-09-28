@@ -40,6 +40,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     klippy_connected_signal = QtCore.pyqtSignal(bool, name="klippy_connection_status")
     klippy_state_signal = QtCore.pyqtSignal(str, name="klippy_state")
     query_server_info_signal = QtCore.pyqtSignal(name="query_server_information")
+    server_components_signal = QtCore.pyqtSignal(list, name="server_components")
 
     _KLIPPY_NOTIFY_METHODS: typing.ClassVar[frozenset[str]] = frozenset(
         {
@@ -307,6 +308,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 if "error" in response:
                     return
                 _result = response.get("result", {})
+                self.server_components_signal.emit(_result.get("components", []))
                 _klippy_state = _result.get("klippy_state")
                 if not _klippy_state:
                     return
