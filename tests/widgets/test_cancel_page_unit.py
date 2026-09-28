@@ -3,7 +3,7 @@
 import pytest
 from PyQt6 import QtWidgets
 
-from BlocksScreen.lib.panels.widgets.cancelPage import CancelPage
+from BlocksScreen.lib.panels.widgets.MainWindow.cancelPage import CancelPage
 
 
 @pytest.fixture
