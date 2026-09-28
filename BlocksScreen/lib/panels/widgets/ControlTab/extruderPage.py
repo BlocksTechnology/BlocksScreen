@@ -14,10 +14,10 @@ class ExtruderPage(QtWidgets.QWidget):
     """Filament extrude/retract page of the control tab."""
 
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="run_gcode"
+        str, name="run-gcode"
     )
 
-    request_back = QtCore.pyqtSignal(name="request-back-button")
+    request_back = QtCore.pyqtSignal(name="request-back")
 
     def __init__(
         self,
@@ -26,17 +26,16 @@ class ExtruderPage(QtWidgets.QWidget):
     ) -> None:
         super().__init__(parent)
 
-        self.setObjectName("extruder_page")
         self.extrude_list: list[int] = [2, 4, 8]
         self._setup_ui()
 
-        self.update()
-
         self.printer: Printer = printer
-        self.timers = []
         self.extrude_length: int = 10
         self.extrude_feedrate: int = 2
         self.extrude_page_message: str = ""
+        self._ready_timer = QtCore.QTimer(self)
+        self._ready_timer.setSingleShot(True)
+        self._ready_timer.timeout.connect(self._on_ready)
 
         self.exp_extrude_btn.clicked.connect(
             lambda: self.handle_extrusion(True)
@@ -46,41 +45,27 @@ class ExtruderPage(QtWidgets.QWidget):
         )  # False for retraction
 
         self.exp_back_btn.clicked.connect(self.request_back.emit)
-        self.extrude_select_length_10_btn.toggled.connect(
-            lambda: self.handle_toggle_extrude_length(
-                caller=self.extrude_select_length_10_btn, value=10
+        for btn, length in (
+            (self.extrude_select_length_10_btn, 10),
+            (self.extrude_select_length_50_btn, 50),
+            (self.extrude_select_length_100_btn, 100),
+        ):
+            btn.toggled.connect(
+                lambda on, v=length: on and self.handle_toggle_extrude_length(v)
             )
-        )
-        self.extrude_select_length_50_btn.toggled.connect(
-            lambda: self.handle_toggle_extrude_length(
-                caller=self.extrude_select_length_50_btn, value=50
+        for btn, feedrate in zip(
+            (
+                self.extrude_select_feedrate_low_btn,
+                self.extrude_select_feedrate_middle_btn,
+                self.extrude_select_feedrate_high_btn,
+            ),
+            self.extrude_list,
+        ):
+            btn.toggled.connect(
+                lambda on, v=feedrate: on and self.handle_toggle_extrude_feedrate(v)
             )
-        )
-        self.extrude_select_length_100_btn.toggled.connect(
-            lambda: self.handle_toggle_extrude_length(
-                caller=self.extrude_select_length_100_btn, value=100
-            )
-        )
-        self.extrude_select_feedrate_low_btn.toggled.connect(
-            lambda: self.handle_toggle_extrude_feedrate(
-                caller=self.extrude_select_feedrate_low_btn,
-                value=self.extrude_list[0],
-            )
-        )
-        self.extrude_select_feedrate_middle_btn.toggled.connect(
-            lambda: self.handle_toggle_extrude_feedrate(
-                caller=self.extrude_select_feedrate_middle_btn,
-                value=self.extrude_list[1],
-            )
-        )
-        self.extrude_select_feedrate_high_btn.toggled.connect(
-            lambda: self.handle_toggle_extrude_feedrate(
-                caller=self.extrude_select_feedrate_high_btn,
-                value=self.extrude_list[2],
-            )
-        )
 
-    @QtCore.pyqtSlot(str, name="handle-extrusion")
+    @QtCore.pyqtSlot(bool, name="handle-extrusion")
     def handle_extrusion(self, extrude: bool) -> None:
         """Slot that requests an extrusion/unextrusion move
 
@@ -104,44 +89,30 @@ class ExtruderPage(QtWidgets.QWidget):
             )
             self.extrude_page_message = "Retracting"
             self.exp_info_label.setText(self.extrude_page_message)
-        # This block of code schedules a method to be called in x amount of milliseconds
-        _sch_time_s = float(
-            self.extrude_length / self.extrude_feedrate
-        )  # calculate the amount of time it'll take for the operation
+        # restart so an earlier move can't report "Ready" during this one
+        move_time_s = self.extrude_length / self.extrude_feedrate
+        self._ready_timer.start(int(move_time_s + 2.0) * 1000)
+
+    def _on_ready(self) -> None:
         self.extrude_page_message = "Ready"
-        self.register_timed_callback(
-            int(_sch_time_s + 2.0) * 1000,  # In milliseconds
-            lambda: self.exp_info_label.setText(self.extrude_page_message),
-        )
+        self.exp_info_label.setText(self.extrude_page_message)
 
-    def register_timed_callback(self, time: int, callback: callable) -> None:
-        """Registers timed callback and starts the timeout"""
-        _timer = QtCore.QTimer()
-        _timer.setSingleShot(True)
-        _timer.timeout.connect(callback)
-        _timer.start(int(time))
-        self.timers.append(_timer)
-
-    @QtCore.pyqtSlot(bool, "PyQt_PyObject", int, name="select-extrude-feedrate")
-    def handle_toggle_extrude_feedrate(self, caller, value: int) -> None:
+    @QtCore.pyqtSlot(int, name="select-extrude-feedrate")
+    def handle_toggle_extrude_feedrate(self, value: int) -> None:
         """Slot to change the extruder feedrate, mainly used for toggle buttons
 
         Args:
-            checked (bool): Button checked state
-            caller (PyQtObject): The button that called this slot
             value (int): New value for the extruder feedrate
         """
         if value == self.extrude_feedrate:
             return
         self.extrude_feedrate = value
 
-    @QtCore.pyqtSlot(bool, "PyQt_PyObject", int, name="select-extrude-length")
-    def handle_toggle_extrude_length(self, caller, value: int) -> None:
+    @QtCore.pyqtSlot(int, name="select-extrude-length")
+    def handle_toggle_extrude_length(self, value: int) -> None:
         """Slot that changes the extrude length, mainly used for toggle buttons
 
         Args:
-            checked (bool): Button checked state
-            caller (PyQtObject): The button that called this slot
             value (int): New value for the extrude length
         """
         if self.extrude_length == value:
@@ -150,21 +121,14 @@ class ExtruderPage(QtWidgets.QWidget):
 
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
         """Refresh the info label while the extrude page is visible."""
-        if self.extrude_page.isVisible():
+        if self.isVisible():
             self.exp_info_label.setText(self.extrude_page_message)
         return super().paintEvent(a0)
 
     def _setup_ui(self) -> None:
         """Build the extruder page: extrude/retract controls and status labels."""
-        widget = QtWidgets.QWidget(parent=self)
-        widget.setMinimumSize(QtCore.QSize(710, 410))
-        widget.setMaximumSize(QtCore.QSize(710, 410))
         self.setObjectName("extruder_page")
-        self.extrude_page = QtWidgets.QWidget()
-        self.extrude_page.setMinimumSize(QtCore.QSize(710, 400))
-        self.extrude_page.setMaximumSize(QtCore.QSize(720, 420))
-        self.extrude_page.setObjectName("extrude_page")
-        self.verticalLayout = QtWidgets.QVBoxLayout(self.extrude_page)
+        self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
         spacerItem = QtWidgets.QSpacerItem(
             20,
@@ -182,7 +146,7 @@ class ExtruderPage(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.Minimum,
         )
         self.exp_header_layout.addItem(spacerItem1)
-        self.exp_title_label = QtWidgets.QLabel(parent=self.extrude_page)
+        self.exp_title_label = QtWidgets.QLabel(parent=self)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum
         )
@@ -212,7 +176,7 @@ class ExtruderPage(QtWidgets.QWidget):
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
 
-        self.exp_back_btn = IconButton(parent=self.extrude_page)
+        self.exp_back_btn = IconButton(parent=self)
 
         self.exp_back_btn.setSizePolicy(sizePolicy)
         self.exp_back_btn.setMinimumSize(QtCore.QSize(60, 60))
@@ -236,7 +200,7 @@ class ExtruderPage(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setPointSize(14)
 
-        self.exp_length_group_box = QtWidgets.QGroupBox(parent=self.extrude_page)
+        self.exp_length_group_box = QtWidgets.QGroupBox(parent=self)
         self.exp_length_group_box.setMinimumSize(QtCore.QSize(0, 80))
         self.exp_length_group_box.setMaximumSize(QtCore.QSize(16777215, 16777215))
         self.exp_length_group_box.setFont(font)
@@ -310,7 +274,7 @@ class ExtruderPage(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setPointSize(14)
 
-        self.exp_feedrate_group_box = QtWidgets.QGroupBox(parent=self.extrude_page)
+        self.exp_feedrate_group_box = QtWidgets.QGroupBox(parent=self)
         self.exp_feedrate_group_box.setMinimumSize(QtCore.QSize(0, 80))
         self.exp_feedrate_group_box.setFont(font)
         self.exp_feedrate_group_box.setStyleSheet("color:white")
@@ -404,7 +368,7 @@ class ExtruderPage(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
-        self.exp_unextrude_btn = BlocksCustomButton(parent=self.extrude_page)
+        self.exp_unextrude_btn = BlocksCustomButton(parent=self)
         self.exp_unextrude_btn.setSizePolicy(sizePolicy)
         self.exp_unextrude_btn.setMinimumSize(QtCore.QSize(250, 80))
         self.exp_unextrude_btn.setMaximumSize(QtCore.QSize(250, 80))
@@ -420,7 +384,7 @@ class ExtruderPage(QtWidgets.QWidget):
         font.setPointSize(16)
 
         self.exp_buttons_layout.addWidget(self.exp_unextrude_btn)
-        self.exp_nozzle_icon_label = BlocksLabel(parent=self.extrude_page)
+        self.exp_nozzle_icon_label = BlocksLabel(parent=self)
         self.exp_nozzle_icon_label.setMinimumSize(QtCore.QSize(60, 60))
         self.exp_nozzle_icon_label.setMaximumSize(QtCore.QSize(60, 60))
         self.exp_nozzle_icon_label.setFont(font)
@@ -438,7 +402,7 @@ class ExtruderPage(QtWidgets.QWidget):
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
 
-        self.exp_extrude_btn = BlocksCustomButton(parent=self.extrude_page)
+        self.exp_extrude_btn = BlocksCustomButton(parent=self)
         self.exp_extrude_btn.setSizePolicy(sizePolicy)
         self.exp_extrude_btn.setMinimumSize(QtCore.QSize(250, 80))
         self.exp_extrude_btn.setMaximumSize(QtCore.QSize(250, 80))
@@ -466,7 +430,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_info_layout.setContentsMargins(5, 5, 5, 5)
         self.exp_info_layout.setObjectName("exp_info_layout")
 
-        self.exp_info_label = QtWidgets.QLabel(parent=self.extrude_page)
+        self.exp_info_label = QtWidgets.QLabel(parent=self)
         self.exp_info_label.setSizePolicy(sizePolicy)
         self.exp_info_label.setFont(font)
         self.exp_info_label.setStyleSheet("background: transparent; color: white;")
@@ -478,7 +442,6 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_vertical_content_layout.addLayout(self.exp_movement_content_layout)
         self.exp_vertical_content_layout.setStretch(2, 1)
         self.verticalLayout.addLayout(self.exp_vertical_content_layout)
-        widget.setLayout(self.verticalLayout)
 
         _translate = QtCore.QCoreApplication.translate
         self.exp_title_label.setText(_translate("controlStackedWidget", "Extrude"))

@@ -370,8 +370,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
     def _setup_ui(self) -> None:
         """Build the basic filament panel: load/unload controls and status labels."""
-        self.setObjectName("self")
-        self.resize(710, 411)
+        self.setObjectName("basic_filament_panel")
 
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

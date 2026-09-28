@@ -11,17 +11,14 @@ class AxisPage(QtWidgets.QWidget):
     """Axis movement page of the control tab."""
 
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="run_gcode"
+        str, name="run-gcode"
     )
-    request_back = QtCore.pyqtSignal(name="request_back")
+    request_back = QtCore.pyqtSignal(name="request-back")
 
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
 
-        self.setObjectName("axis_page")
         self._setup_ui()
-
-        self.update()
 
         self.move_length: float = 1.0
         self.move_speed: float = 25.0
@@ -131,10 +128,7 @@ class AxisPage(QtWidgets.QWidget):
 
     def _setup_ui(self) -> None:
         """Build the axis page: jog pads, step selector, and status labels."""
-        widget = QtWidgets.QWidget(parent=self)
-        widget.setMinimumSize(QtCore.QSize(710, 410))
-        widget.setMaximumSize(QtCore.QSize(710, 410))
-        self.setObjectName("move_axis_page")
+        self.setObjectName("axis_page")
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
         self.mva_header_layout = QtWidgets.QHBoxLayout()
@@ -262,7 +256,7 @@ class AxisPage(QtWidgets.QWidget):
         self.horizontalLayout_3.setObjectName("horizontalLayout_3")
 
         self.axis_select_length_group = QtWidgets.QButtonGroup(self)
-        self.axis_select_length_group.setObjectName("extrude_select_length_group")
+        self.axis_select_length_group.setObjectName("axis_select_length_group")
 
         self.mva_select_length_1_btn = BlocksCustomCheckButton(parent=self)
         self.mva_select_length_1_btn.setMinimumSize(QtCore.QSize(90, 90))
@@ -314,7 +308,7 @@ class AxisPage(QtWidgets.QWidget):
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
 
         self.axis_select_speed_group = QtWidgets.QButtonGroup(self)
-        self.axis_select_speed_group.setObjectName("extrude_select_length_group")
+        self.axis_select_speed_group.setObjectName("axis_select_speed_group")
 
         self.mva_select_speed_25_btn = BlocksCustomCheckButton(parent=self)
         self.mva_select_speed_25_btn.setMinimumSize(QtCore.QSize(90, 90))
@@ -511,7 +505,6 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_z_value_label.setObjectName("mva_z_value_label")
         self.horizontalLayout_6.addWidget(self.mva_z_value_label)
         self.verticalLayout.addLayout(self.horizontalLayout_6)
-        widget.setLayout(self.verticalLayout)
 
         _translate = QtCore.QCoreApplication.translate
         self.mva_x_label.setText(_translate("controlStackedWidget", "X:"))

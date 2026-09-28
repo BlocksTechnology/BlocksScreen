@@ -24,6 +24,7 @@ class AxisMaintPage(QtWidgets.QWidget):
     ) -> None:
         super().__init__(parent)
 
+        self.current_object: str | None = None
         self.answerPage = BasePopup(self, False, True)
         self.answerPage.accepted.connect(self._run_AXIS_MAINTENANCE_gcode)
 
@@ -59,18 +60,14 @@ class AxisMaintPage(QtWidgets.QWidget):
             f"Apply oil to the {self.current_object.upper()} axis, then press Confirm.",
         )
 
-        self.answerPage.show()
         self.call_load_panel.emit(
             True, f"Homing {self.current_object.upper()} axis...", False
         )
+        QtCore.QTimer.singleShot(10000, self._on_homed)
 
-        QtCore.QTimer.singleShot(
-            10000,
-            lambda: {
-                self.call_load_panel.emit(False, "", False),
-                self.answerPage.show(),
-            },
-        )
+    def _on_homed(self) -> None:
+        self.call_load_panel.emit(False, "", False)
+        self.answerPage.show()
 
     def _setup_ui(self) -> None:
         self.setObjectName("axes_page")

@@ -5,21 +5,22 @@ from collections import deque
 from devices.amu import AMUManager
 from devices.amu.models import GateStatus
 from lib.panels.widgets.Common.basePopup import BasePopup
-from lib.panels.widgets.FilamentTab.colorWheelWidget import ColorWheelWidget
+from lib.panels.widgets.Common.keyboardPage import CustomQwertyKeyboard
+from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.Common.numpadPage import CustomNumpad
 from lib.panels.widgets.FilamentTab.addFilamentPage import AddFilamentPage
 from lib.panels.widgets.FilamentTab.addSpoolPage import AddSpoolPage
 from lib.panels.widgets.FilamentTab.amuPage import AMUpage
 from lib.panels.widgets.FilamentTab.basicFilamentPanel import BasicFilamentPanel
+from lib.panels.widgets.FilamentTab.colorWheelWidget import ColorWheelWidget
 from lib.panels.widgets.FilamentTab.spoolmanPage import SpoolmanPage
-from lib.panels.widgets.Common.keyboardPage import CustomQwertyKeyboard
-from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.Common.numpadPage import CustomNumpad
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
+from lib.utils.menu_grid import fixed_menu_grid
 from lib.utils.toolmap import MmuToolmapWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -1025,25 +1026,25 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.load_status_label.setText(mmu_state.action)
 
-    def setupUi(self):
+    @staticmethod
+    def _hblank() -> QtWidgets.QWidget:
+        blank = QtWidgets.QWidget()
+        blank.setFixedSize(60, 60)
+        return blank
+
+    def _setup_ui(self):
         """Build the tab's landing page (title + Filament Control / Spoolman buttons)."""
-        self.resize(710, 410)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        widget = QtWidgets.QWidget()
-        widget.setMinimumSize(QtCore.QSize(710, 410))
-        widget.setMaximumSize(QtCore.QSize(710, 410))
         self.setObjectName("filament_page")
-        self.verticalLayout = QtWidgets.QVBoxLayout(widget)
+        self.filament_control_page = QtWidgets.QWidget()
+        self.filament_control_page.setFixedSize(710, 410)
+        self.verticalLayout = QtWidgets.QVBoxLayout(self.filament_control_page)
         self.verticalLayout.setObjectName("verticalLayout")
         self.fp_header_layout = QtWidgets.QHBoxLayout()
         self.fp_header_layout.setObjectName("fp_header_layout")
+        self.fp_header_layout.addWidget(self._hblank())
 
-        self.fp_hblank_left = QtWidgets.QWidget()
-        self.fp_hblank_left.setMinimumSize(QtCore.QSize(60, 55))
-        self.fp_hblank_left.setMaximumSize(QtCore.QSize(60, 55))
-        self.fp_header_layout.addWidget(self.fp_hblank_left)
-
-        self.fp_header_title = QtWidgets.QLabel(parent=widget)
+        self.fp_header_title = QtWidgets.QLabel(parent=self.filament_control_page)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Minimum,
@@ -1060,10 +1061,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.fp_header_title.setObjectName("fp_header_title")
         self.fp_header_layout.addWidget(self.fp_header_title)
 
-        self.fp_hblank_right = QtWidgets.QWidget()
-        self.fp_hblank_right.setMinimumSize(QtCore.QSize(60, 55))
-        self.fp_hblank_right.setMaximumSize(QtCore.QSize(60, 55))
-        self.fp_header_layout.addWidget(self.fp_hblank_right)
+        self.fp_header_layout.addWidget(self._hblank())
 
         self.verticalLayout.addLayout(self.fp_header_layout)
         self.fp_content_layout = QtWidgets.QGridLayout()
@@ -1110,21 +1108,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.fp_content_layout.addWidget(self.fp_button_2, 1, 1, 1, 1)
 
-        self.fp_content_layout.setRowMinimumHeight(0, 80)
-        self.fp_content_layout.setRowMinimumHeight(1, 80)
-        self.fp_content_layout.setRowMinimumHeight(2, 80)
-        self.fp_content_layout.setContentsMargins(0, 0, 0, 0)
-
-        fp_content_widget = QtWidgets.QWidget(parent=widget)
-        fp_content_widget.setLayout(self.fp_content_layout)
-        fp_content_widget.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        self.verticalLayout.addWidget(
+            fixed_menu_grid(self.filament_control_page, self.fp_content_layout)
         )
-        fp_content_widget.setFixedHeight(80 * 3 + self.fp_content_layout.spacing() * 2)
-        self.verticalLayout.addWidget(fp_content_widget)
 
-        self.filament_control_page = widget
-        self.addWidget(widget)
+        self.addWidget(self.filament_control_page)
         self.fp_header_title.setText("Filament")
         self.fp_button_1.setText("Filament\nControl")
         self.fp_button_2.setText("Spoolman")

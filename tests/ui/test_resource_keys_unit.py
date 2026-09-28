@@ -22,10 +22,6 @@ XFAIL_KEYS = {
     ":/background/media/graphics/scroll_list_window.svg": (
         "asset is on disk but declared by no .qrc; retired by PR 3"
     ),
-    ":/button_borders/media/btn_icons/back.svg": (
-        "wrong prefix, real key is :/ui/media/btn_icons/back.svg; "
-        "lives in a generated _ui.py so the .ui file is the fix; retired by PR 3"
-    ),
     ":/graphics/media/btn_icons/z_offset_adjust.svg": (
         "asset deleted from the qrc in 927e43c (2025-06-04) and absent from "
         "disk, yet 3 call sites still request it; retired by PR 3"
