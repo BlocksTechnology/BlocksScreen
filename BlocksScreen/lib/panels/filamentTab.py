@@ -59,7 +59,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._color_selected_callback: typing.Callable[[str], None] | None = None
         self._selected_spool: dict | None = None
         self._material_filter: str | None = None
-        self.moonraker_run = True
+        self._spoolman_available: bool | None = None
+        self._popup_form_page: QtWidgets.QWidget | None = None
+        self._popup_spool_page: QtWidgets.QWidget | None = None
 
         self._setup_pre_gate_popup()
         self._setup_load_popup()
@@ -126,7 +128,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self._basic_panel))
         )
 
-        self.ws.connected_signal.connect(self.handle_moonraker_components)
+        self.ws.server_components_signal.connect(self.handle_moonraker_components)
 
         self.run_gcode.connect(self.ws.api.run_gcode)
 
@@ -139,20 +141,27 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.load_state = False
         self.load_popup.hide()
 
-    def handle_moonraker_components(self):
-        """Build the pre-gate popup pages once, choosing spoolman vs. manual-entry order."""
-        if self.moonraker_run:
-            components = self.ws._moonRest.get_server_info()
-            if "spoolman" not in components.get("result", {}).get("components", []):
-                self.fp_button_2.hide()
-                self._popup_stack.addWidget(self._build_form_page())
-                self._popup_stack.addWidget(self._build_spool_page())
-            else:
-                self.fp_button_2.show()
-                self._popup_stack.addWidget(self._build_spool_page())
-                self._popup_stack.addWidget(self._build_form_page())
-                self.request_filament_change_page.emit()
-            self.moonraker_run = False
+    @QtCore.pyqtSlot(list, name="handle_moonraker_components")
+    def handle_moonraker_components(self, components: list) -> None:
+        """Re-check spoolman on each server.info: updates add it without a UI restart."""
+        available = "spoolman" in components
+        if available == self._spoolman_available:
+            return
+        self._spoolman_available = available
+        if self._popup_form_page is None:
+            self._popup_form_page = self._build_form_page()
+            self._popup_spool_page = self._build_spool_page()
+        # insertWidget moves an existing page; the second move makes index 0 current.
+        pages = (
+            (self._popup_spool_page, self._popup_form_page)
+            if available
+            else (self._popup_form_page, self._popup_spool_page)
+        )
+        for i, page in enumerate(pages):
+            self._popup_stack.insertWidget(i, page)
+        self.fp_button_2.setVisible(available)
+        if available:
+            self.request_filament_change_page.emit()
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
@@ -975,9 +984,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 )
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
+                # Latch here: an early single-gate state must not veto a later AMU.
+                self.amu_configured = True
             else:
                 self.load_status_widget.set_left_text("Auxiliary Extruder")
-            self.amu_configured = True
 
         if self.load_state:
             if mmu_state.action == "Idle":
