@@ -64,13 +64,17 @@ CONFIG_USB_DEVICE_ID=0xb001   # this board's PID from the table above
 
 ## How matching uses the IDs
 
-device_discoveryd reports each serial device's USB vendor/product ID (read
-from sysfs for the USB device behind the tty). `DeviceProfile.matches()`
-treats a reported ID as final for profiles that set `vendor_id`: a board
-still on Klipper's stock `1d50:614e` does **not** match the AMU profile, even
-if its USB serial string contains "AMU". Reflash every AMU with its assigned
-PID before relying on detection.
+Each serial device's USB vendor/product ID comes from device_discoveryd when
+it reports one; otherwise BlocksScreen reads it from sysfs itself - the
+`idVendor`/`idProduct` of the USB device behind the tty
+(`devices/discovery/serial_devices.py`, `usb_ids_from_sysfs`). The daemon
+currently sends `0` for `Serial` entries, so in practice the sysfs lookup is
+what supplies the IDs, for daemon reports and the legacy by-id scan alike.
 
-The profile's `match` regex is only used when no ID is reported (0): the
-legacy `/dev/serial/by-id` scan used while the daemon is unreachable, or a
-daemon older than the sysfs ID lookup.
+`DeviceProfile.matches()` treats a known ID as final for profiles that set
+`vendor_id`: a board still on Klipper's stock `1d50:614e` does **not** match
+the AMU profile, even if its USB serial string contains "AMU". Reflash every
+AMU with its assigned PID before relying on detection.
+
+The profile's `match` regex is only used when no ID can be found at all
+(device not backed by a USB tty in sysfs).

@@ -10,11 +10,18 @@ entries - the daemon also reports USB devices, which the legacy scanner
 never did). When the daemon can't be used - not installed on this machine,
 not running yet, or speaking an unsupported protocol - scanning falls back
 to the legacy tools.serial_scanner, so behaviour is unchanged either way.
+
+USB vendor/product IDs: the daemon only reports them for its `USB` entries
+(0 for `Serial` ones), and the legacy scan never did. So whenever a serial
+device arrives without an ID, it is read here from sysfs - the idVendor /
+idProduct of the USB device behind the tty - which is what lets device
+profiles match on the IDs from USB_IDS.md instead of the by-id name.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -24,6 +31,10 @@ from .client import fetch_snapshot
 _logger = logging.getLogger(__name__)
 
 SERIAL_BY_ID_PATH = "/dev/serial/by-id/"
+SYSFS_TTY_PATH = "/sys/class/tty"
+# tty -> USB interface -> USB device is two levels; the extra headroom covers
+# drivers that add a level (usb-serial adapters: ttyUSB0/.../port/interface).
+_SYSFS_MAX_DEPTH = 4
 
 
 class FirmwareState(Enum):
@@ -125,13 +136,52 @@ def _usb_id(value: Any) -> int:
         return 0
 
 
+def _read_hex(path: str) -> int:
+    try:
+        with open(path, encoding="ascii") as f:
+            return int(f.read().strip(), 16)
+    except (OSError, ValueError):
+        return 0
+
+
+def usb_ids_from_sysfs(dev: Device) -> tuple[int, int]:
+    """(vendor_id, product_id) of the USB device behind dev's tty, (0, 0) if unknown.
+
+    /sys/class/tty/<tty>/device is the USB interface the tty belongs to; the
+    idVendor/idProduct files live on its parent USB device.
+    """
+    tty_path = dev.device_path
+    if not tty_path and dev.symlink_name:
+        tty_path = os.path.realpath(dev.symlink)
+    tty = os.path.basename(tty_path)
+    if not tty.startswith("tty"):
+        return 0, 0
+    node = os.path.realpath(os.path.join(SYSFS_TTY_PATH, tty, "device"))
+    for _ in range(_SYSFS_MAX_DEPTH):
+        vendor_id = _read_hex(os.path.join(node, "idVendor"))
+        if vendor_id:
+            return vendor_id, _read_hex(os.path.join(node, "idProduct"))
+        parent = os.path.dirname(node)
+        if parent == node:
+            break
+        node = parent
+    return 0, 0
+
+
+def fill_usb_ids(dev: Device) -> Device:
+    """Fill dev's vendor/product ID from sysfs when nothing reported one."""
+    if not dev.vendor_id:
+        dev.vendor_id, dev.product_id = usb_ids_from_sysfs(dev)
+    return dev
+
+
 def device_from_json(data: dict[str, Any]) -> Device:
     """Build a Device from one device object of the daemon's protocol."""
     dev = Device(**{f: str(data.get(f) or "") for f in _DEVICE_FIELDS})
     dev.firmware = _firmware(str(data.get("firmware") or ""))
     dev.vendor_id = _usb_id(data.get("vendor_id"))
     dev.product_id = _usb_id(data.get("product_id"))
-    return dev
+    return fill_usb_ids(dev)
 
 
 class SerialScanner:
@@ -151,7 +201,7 @@ class SerialScanner:
             _logger.info(
                 "device_discoveryd unavailable, using legacy /dev/serial/by-id scan"
             )
-            return self._legacy_scan()
+            return self.legacy_scan()
         return [
             device_from_json(d)
             for d in devices
@@ -171,7 +221,8 @@ class SerialScanner:
         return [d for d in self.scan() if d.is_unflashed]
 
     @staticmethod
-    def _legacy_scan() -> list[Device]:
+    def legacy_scan() -> list[Device]:
+        """Plain /dev/serial/by-id listing, without the daemon"""
         # Imported lazily: once every machine runs the daemon, this fallback
         # and tools/serial_scanner.py can be deleted together.
         from tools.serial_scanner import (  # pylint: disable=import-outside-toplevel
@@ -182,5 +233,5 @@ class SerialScanner:
         for old in LegacySerialScanner().scan():
             dev = Device(**{f: getattr(old, f) for f in _DEVICE_FIELDS})
             dev.firmware = _firmware(old.firmware.value)
-            result.append(dev)
+            result.append(fill_usb_ids(dev))
         return result

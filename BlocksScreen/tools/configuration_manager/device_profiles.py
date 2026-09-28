@@ -66,6 +66,10 @@ class DeviceProfile:  # pylint: disable=too-many-instance-attributes
     # when the profile wants ID-based matching instead of the symlink regex.
     vendor_id: int | None = None
     product_id: int | None = None
+    # Ask the user before applying (and before re-applying at boot until they
+    # have accepted once) - for devices whose config swaps a whole printer
+    # variant, like the AMU.
+    confirm: bool = False
 
     def matches(self, device: Device) -> bool:
         """Whether this profile applies to the given serial device.
@@ -145,6 +149,12 @@ def _usb_id(value: Any, key: str) -> int | None:
         raise ValueError(f"'{key}' must be an integer or hex string") from e
 
 
+def _bool(value: Any, key: str) -> bool:
+    if not isinstance(value, bool):
+        raise TypeError(f"'{key}' must be true or false")
+    return value
+
+
 def _parse(entry: dict[str, Any]) -> DeviceProfile | None:
     name = entry.get("name")
     try:
@@ -165,6 +175,7 @@ def _parse(entry: dict[str, Any]) -> DeviceProfile | None:
             disable_includes=_str_list(entry.get("disable_includes")),
             vendor_id=_usb_id(entry.get("vendor_id"), "vendor_id"),
             product_id=product_id,
+            confirm=_bool(entry.get("confirm", False), "confirm"),
         )
     except (ValueError, TypeError, re.error) as e:
         _logger.error("Skipping device profile %r: %s", name, e)

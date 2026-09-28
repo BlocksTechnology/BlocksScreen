@@ -25,6 +25,11 @@
 #                     (USB_VENDOR_ID/USB_DEVICE_ID, under LOW_LEVEL_OPTIONS).
 #                     See USB_IDS.md (next to this file) for the standard
 #                     BlocksTechnology vendor_id/product_id allocation table.
+#   confirm           true: ask the user before applying (Klipper is restarted
+#                     after they accept). Once accepted, the profile is also
+#                     re-applied at every boot without asking; until then boot
+#                     leaves printer.cfg alone and the prompt comes up with the
+#                     UI. Default false (applied silently, like beacon).
 #
 # Profiles are applied at every boot for the devices plugged in at that
 # moment (on top of the RF50-Klipper printer.cfg), and live when the
@@ -45,7 +50,12 @@ profiles:
     match: 'AMU'
     vendor_id: '0x1d50'
     product_id: '0xb001'
-    section: mcu AMU
+    confirm: true
+    # Happy Hare's mmu.cfg (config/variant_mmu/base, included below) declares
+    # [mcu mmu] with a placeholder serial and all MMU pins use the `mmu:`
+    # prefix, so the real serial must go into that same section. printer.cfg
+    # places it after the include, so this serial overrides the placeholder.
+    section: mcu mmu
     options:
       serial: ${serial}
     enable_includes:

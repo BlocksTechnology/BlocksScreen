@@ -66,6 +66,22 @@ def default_socket_path() -> str:
     return SYSTEMD_SOCKET_PATH
 
 
+def _describe(device: dict[str, Any]) -> str:
+    """One-line summary of a daemon device object for the log."""
+    # vid_hex is only meaningful on USB entries (the daemon sends 0 for Serial).
+    usb_id = (
+        f"{device.get('vid_hex')}:{device.get('pid_hex')}"
+        if device.get("connection") == "USB"
+        else ""
+    )
+    return "{} [{}] {} {}".format(
+        device.get("symlink_name") or device.get("name") or "?",
+        device.get("connection", "?"),
+        device.get("device_path") or "",
+        usb_id,
+    ).strip()
+
+
 def _parse_message(line: bytes) -> dict[str, Any] | None:
     """Decode and validate one protocol line.
 
@@ -152,15 +168,19 @@ class DeviceDiscoveryClient(QtCore.QObject):
     snapshot immediately on connect, so starting earlier can drop it.
     """
 
-    device_added = QtCore.pyqtSignal(dict)
-    device_removed = QtCore.pyqtSignal(dict)
-    snapshot_ready = QtCore.pyqtSignal(list)
-    daemon_connected = QtCore.pyqtSignal()
-    daemon_disconnected = QtCore.pyqtSignal()
+    device_added = QtCore.pyqtSignal(dict, name="dd-device-added")
+    device_removed = QtCore.pyqtSignal(dict, name="dd-device-removed")
+    snapshot_ready = QtCore.pyqtSignal(list, name="dd-snapshot-ready")
+    daemon_connected = QtCore.pyqtSignal(name="dd-daemon-conn")
+    daemon_disconnected = QtCore.pyqtSignal(name="dd-daemon-disc")
 
     def __init__(self, socket_path: str | None = None) -> None:
         super().__init__()
-        self._socket_path = socket_path or default_socket_path()
+        # None = resolve on every connection attempt: the systemd socket may
+        # not exist yet when BlocksScreen starts (the daemon is Type=simple,
+        # so it can still be binding), and a path fixed at construction
+        # would then point at the fallback forever.
+        self._explicit_path = socket_path
         self._stop_event = threading.Event()
         self._sock: socket.socket | None = None
         self._thread = threading.Thread(
@@ -183,16 +203,25 @@ class DeviceDiscoveryClient(QtCore.QObject):
         if self._thread.is_alive():
             self._thread.join(timeout=5.0)
 
+    def _socket_path(self) -> str:
+        return self._explicit_path or default_socket_path()
+
     def _run(self) -> None:
         attempt = 0
         while not self._stop_event.is_set():
+            path = self._socket_path()
             try:
-                self._connect_and_read()
+                self._connect_and_read(path)
+                if not self._stop_event.is_set():
+                    _log.info("device_discoveryd closed the connection, reconnecting")
                 attempt = (
                     0  # clean disconnect after a working connection: reset backoff
                 )
             except OSError as exc:
-                _log.debug("device_discoveryd connection error: %s", exc)
+                # First failure at INFO so a missing/unreachable daemon shows
+                # up in the journal; the retries after it stay at DEBUG.
+                log = _log.info if attempt == 0 else _log.debug
+                log("device_discoveryd not reachable at %s: %s", path, exc)
             except Exception:  # noqa: BLE001  # pylint: disable=broad-except
                 # A bug here must not end the thread: CrashHandler would
                 # exit the whole UI. Log it and reconnect with backoff.
@@ -206,13 +235,17 @@ class DeviceDiscoveryClient(QtCore.QObject):
             attempt += 1
             self._stop_event.wait(delay)
 
-    def _connect_and_read(self) -> None:
+    def _connect_and_read(self, path: str) -> None:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(2.0)  # periodic wake-up so stop_event is noticed promptly
-        sock.connect(self._socket_path)
+        try:
+            sock.connect(path)
+        except OSError:
+            sock.close()
+            raise
         self._sock = sock
         self.daemon_connected.emit()
-        _log.info("Connected to device_discoveryd at %s", self._socket_path)
+        _log.info("Connected to device_discoveryd at %s", path)
 
         buf = b""
         try:
@@ -243,10 +276,21 @@ class DeviceDiscoveryClient(QtCore.QObject):
             return
         msg_type = msg["type"]
         if msg_type == "snapshot":
+            _log.info(
+                "device_discoveryd snapshot: %d devices, serial: %s",
+                len(msg["devices"]),
+                [
+                    d.get("symlink_name")
+                    for d in msg["devices"]
+                    if d.get("connection") == "Serial"
+                ],
+            )
             self.snapshot_ready.emit(msg["devices"])
         elif msg_type == "added":
+            _log.info("device_discoveryd added: %s", _describe(msg["device"]))
             self.device_added.emit(msg["device"])
         elif msg_type == "removed":
+            _log.info("device_discoveryd removed: %s", _describe(msg["device"]))
             self.device_removed.emit(msg["device"])
         elif msg_type == "hello":
             proto = msg.get("proto")
@@ -256,6 +300,6 @@ class DeviceDiscoveryClient(QtCore.QObject):
                     proto,
                     SUPPORTED_PROTOCOL,
                 )
-            _log.debug("device_discoveryd hello: pid=%s", msg.get("pid"))
+            _log.info("device_discoveryd hello: proto=%s pid=%s", proto, msg.get("pid"))
         else:
             _log.debug("Unknown message type from device_discoveryd: %s", msg_type)

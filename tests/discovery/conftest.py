@@ -20,6 +20,14 @@ if _BS_DIR not in sys.path:
     sys.path.append(_BS_DIR)
 
 
+@pytest.fixture(autouse=True)
+def _no_host_sysfs(tmp_path, monkeypatch):
+    """Keep the USB-ID sysfs lookup off the test machine's real /sys."""
+    from devices.discovery import serial_devices
+
+    monkeypatch.setattr(serial_devices, "SYSFS_TTY_PATH", str(tmp_path / "sys-tty"))
+
+
 @pytest.fixture
 def sock_path():
     # Not tmp_path: AF_UNIX paths are limited to 108 bytes.

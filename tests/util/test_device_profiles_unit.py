@@ -78,7 +78,9 @@ class TestLoadProfiles:
     def test_bundled(self, profiles):
         assert [p.name for p in profiles] == ["beacon", "amu"]
         amu = _by_name(profiles, "amu")
-        assert amu.section == "mcu AMU"
+        assert amu.section == "mcu mmu"
+        assert amu.confirm is True
+        assert _by_name(profiles, "beacon").confirm is False
         assert amu.enable_includes == ("config/variant_mmu/base/*.cfg",)
         assert amu.disable_includes == ("config/variant_sync_single/*.cfg",)
 
@@ -104,7 +106,7 @@ class TestLoadProfiles:
         profiles = dp.load_profiles(override=path)
         amu = _by_name(profiles, "amu")
         assert amu.match.pattern == "MyAMU"
-        assert amu.section == "mcu AMU"  # untouched keys come from the bundle
+        assert amu.section == "mcu mmu"  # untouched keys come from the bundle
         assert _by_name(profiles, "fps").section == "mcu fps"
 
     def test_override_can_disable(self, tmp_path):
@@ -289,7 +291,7 @@ class TestApply:
         # new section at a block boundary, just before the last [mcu ...]
         assert (
             "[beacon]\nserial:\n\n"
-            "[mcu AMU]\nserial: /dev/serial/by-id/"
+            "[mcu mmu]\nserial: /dev/serial/by-id/"
             "usb-Klipper_stm32f446xx_AMU0001-if00\n\n"
             "[mcu pi]\nserial: /tmp/klipper_host_mcu\n\n####"
         ) in out
@@ -320,18 +322,18 @@ class TestApply:
     def test_save_config_block_untouched(self, profiles):
         cfg = (
             PRINTER_CFG
-            + "#*# [mcu AMU]\n#*# [include config/variant_sync_single/*.cfg]\n"
+            + "#*# [mcu mmu]\n#*# [include config/variant_sync_single/*.cfg]\n"
         )
         out, _ = dp.apply_device_profiles(cfg, profiles, [AMU])
         tail = cfg[cfg.index(SV_CONFIG_MARKER) :]
         assert out.endswith(tail)
-        assert out.count("[mcu AMU]") == 2  # one new section + the untouched #*# line
+        assert out.count("[mcu mmu]") == 2  # one new section + the untouched #*# line
 
     def test_no_marker_and_no_mcu_appends(self, profiles):
         out = dp.apply_profile(
             "[printer]\nkinematics: corexy", _by_name(profiles, "amu"), AMU
         )
-        assert out.endswith(f"\n[mcu AMU]\nserial: {AMU.symlink}\n")
+        assert out.endswith(f"\n[mcu mmu]\nserial: {AMU.symlink}\n")
 
     def test_template_placeholders(self):
         profile = dp.DeviceProfile(
@@ -394,3 +396,44 @@ class TestSetInclude:
         text = "#####\n[include a.cfg]\n"
         assert dp.set_include(text, "a.cfg", False) == "#####\n#[include a.cfg]\n"
         assert dp.set_include("#####\n#[include a.cfg]\n", "a.cfg", True) == text
+
+
+def _rf50_repo():
+    for candidate in (
+        os.environ.get("RF50_KLIPPER_DIR"),
+        os.path.expanduser("~/RF50-Klipper"),
+        os.path.expanduser("~/github/RF50-Klipper"),
+    ):
+        if candidate and os.path.isfile(os.path.join(candidate, "printer.cfg")):
+            return candidate
+    return None
+
+
+@pytest.mark.skipif(_rf50_repo() is None, reason="RF50-Klipper checkout not found")
+class TestRF50Layout:
+    """The AMU template against the real RF50-Klipper files it has to fit."""
+
+    def test_amu_serial_lands_in_the_mcu_happy_hare_uses(self, profiles):
+        repo = _rf50_repo()
+        amu = _by_name(profiles, "amu")
+        mmu_cfg = open(
+            os.path.join(repo, "config", "variant_mmu", "base", "mmu.cfg"),
+            encoding="utf-8",
+        ).read()
+        mcu_sections = re.findall(r"^\[(mcu\s+[^\]]+)\]", mmu_cfg, re.MULTILINE)
+        assert amu.section in [" ".join(s.split()) for s in mcu_sections]
+
+    def test_apply_to_real_printer_cfg(self, profiles):
+        repo = _rf50_repo()
+        text = open(os.path.join(repo, "printer.cfg"), encoding="utf-8").read()
+        amu = _by_name(profiles, "amu")
+        out = dp.apply_profile(text, amu, AMU)
+        assert re.search(r"^\[include config/variant_mmu/base/\*\.cfg\]", out, re.M)
+        assert re.search(
+            r"^#\[include config/variant_sync_single/\*\.cfg\s*\]", out, re.M
+        )
+        header = out[: out.index(f"[{amu.section}]")]
+        # after the include, so its serial overrides mmu.cfg's placeholder
+        assert "[include config/variant_mmu/base/*.cfg]" in header
+        assert f"[{amu.section}]\nserial: {AMU.symlink}\n" in out
+        assert dp.apply_profile(out, amu, AMU) == out

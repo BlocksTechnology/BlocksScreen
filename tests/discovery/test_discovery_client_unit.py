@@ -62,6 +62,32 @@ class TestDefaultSocketPath:
         assert dd_client.default_socket_path() == dd_client.SYSTEMD_SOCKET_PATH
 
 
+class TestLateDaemon:
+    def test_socket_created_after_start_is_found(self, sock_path, tmp_path, monkeypatch):
+        # BlocksScreen can start before device-discoveryd has bound its socket
+        # (Type=simple). The client must look the path up again on each retry
+        # instead of sticking with the $XDG_RUNTIME_DIR fallback it saw first.
+        monkeypatch.delenv("DEVICE_DISCOVERY_SOCKET", raising=False)
+        monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+        monkeypatch.setattr(dd_client, "SYSTEMD_SOCKET_PATH", sock_path)
+        client = DeviceDiscoveryClient()
+        events = _collect(client)
+        client.start()
+        daemon = None
+        try:
+            time.sleep(0.3)  # first attempt fails: no socket anywhere yet
+            daemon = FakeDaemon(
+                sock_path,
+                [{"type": "hello", "proto": 1, "pid": 1}, {"type": "snapshot", "devices": []}],
+            )
+            assert _next(events) == ("connected", None)  # next retry, ~2 s later
+            assert _next(events) == ("snapshot", [])
+        finally:
+            client.stop()
+            if daemon:
+                daemon.close()
+
+
 class TestProtocol:
     def test_snapshot_added_removed(self, sock_path):
         dev = {"name": "Klipper stm32h723xx", "connection": "Serial"}
@@ -193,7 +219,7 @@ class TestBrokenDaemon:
     ):
         calls = []
 
-        def boom(self):
+        def boom(self, path):
             calls.append(1)
             raise RuntimeError("bug")
 

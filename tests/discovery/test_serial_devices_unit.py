@@ -138,7 +138,7 @@ class TestScanViaDaemon:
 
     def test_empty_snapshot_is_not_a_fallback(self, daemon, sock_path, monkeypatch):
         daemon([_hello(), {"type": "snapshot", "devices": []}])
-        monkeypatch.setattr(sd.SerialScanner, "_legacy_scan", staticmethod(pytest.fail))
+        monkeypatch.setattr(sd.SerialScanner, "legacy_scan", staticmethod(pytest.fail))
         assert sd.SerialScanner(sock_path).scan() == []
 
 
@@ -188,3 +188,63 @@ class TestFetchSnapshot:
 
     def test_missing_socket_returns_none(self, sock_path):
         assert dd_client.fetch_snapshot(sock_path) is None
+
+
+class TestSysfsUsbIds:
+    """IDs read from sysfs when the daemon reports none (it never does for Serial)."""
+
+    @pytest.fixture
+    def sysfs(self, tmp_path, monkeypatch):
+        # /sys/class/tty/ttyACM1/device -> .../usb1/1-1/1-1:1.0 (interface);
+        # idVendor/idProduct live on the parent USB device 1-1.
+        usb_dev = tmp_path / "devices" / "usb1" / "1-1"
+        iface = usb_dev / "1-1:1.0"
+        iface.mkdir(parents=True)
+        (usb_dev / "idVendor").write_text("1d50\n")
+        (usb_dev / "idProduct").write_text("b001\n")
+        tty = tmp_path / "class" / "tty" / "ttyACM1"
+        tty.mkdir(parents=True)
+        (tty / "device").symlink_to(iface)
+        monkeypatch.setattr(sd, "SYSFS_TTY_PATH", str(tmp_path / "class" / "tty"))
+        return tmp_path
+
+    def test_daemon_serial_entry_gets_ids_from_sysfs(self, sysfs):
+        dev = sd.device_from_json(
+            {
+                "connection": "Serial",
+                "symlink_name": "usb-Klipper_stm32h723xx_2B00-if00",
+                "device_path": "/dev/ttyACM1",
+                "vendor_id": 0,
+                "product_id": 0,
+            }
+        )
+        assert (dev.vendor_id, dev.product_id) == (0x1D50, 0xB001)
+
+    def test_reported_ids_win_over_sysfs(self, sysfs):
+        dev = sd.device_from_json(
+            {"device_path": "/dev/ttyACM1", "vendor_id": 0x1234, "product_id": 1}
+        )
+        assert (dev.vendor_id, dev.product_id) == (0x1234, 1)
+
+    def test_unknown_tty_stays_zero(self, sysfs):
+        dev = sd.device_from_json({"device_path": "/dev/ttyACM9"})
+        assert (dev.vendor_id, dev.product_id) == (0, 0)
+
+    def test_non_tty_path_is_ignored(self, sysfs):
+        assert sd.usb_ids_from_sysfs(sd.Device(device_path="/etc/passwd")) == (0, 0)
+
+    def test_amu_matched_by_id_without_amu_in_name(self, sysfs):
+        from tools.configuration_manager.device_profiles import load_profiles
+
+        amu = next(p for p in load_profiles(override=None) if p.name == "amu")
+        dev = sd.device_from_json(
+            {
+                "symlink_name": "usb-Klipper_stm32h723xx_2B00-if00",
+                "device_path": "/dev/ttyACM1",
+            }
+        )
+        assert amu.matches(dev)
+        stock = sd.Device(
+            symlink_name="usb-Klipper_AMU_stock-if00", vendor_id=0x1D50, product_id=0x614E
+        )
+        assert not amu.matches(stock)  # stock Klipper ID: ID mismatch is final
