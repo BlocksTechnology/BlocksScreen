@@ -331,8 +331,11 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         """Arrow pixmap, decoded once rather than per paint."""
         arrow = self._arrow_cache.get(expanded)
         if arrow is None:
-            name = "arrow_down" if expanded else "arrow_right"
-            arrow = QtGui.QPixmap(f":/arrow_icons/media/btn_icons/{name}.svg")
+            arrow = QtGui.QPixmap(
+                ":/arrow_icons/media/btn_icons/arrow_down.svg"
+                if expanded
+                else ":/arrow_icons/media/btn_icons/arrow_right.svg"
+            )
             self._arrow_cache[expanded] = arrow
         return arrow
 
