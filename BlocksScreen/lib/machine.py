@@ -14,7 +14,7 @@ class MachineControl(QtCore.QObject):
     service_restart = QtCore.pyqtSignal(str, name="service-restart")
 
     def __init__(self, parent: typing.Optional["QtCore.QObject"]) -> None:
-        super(MachineControl, self).__init__(parent)
+        super().__init__(parent)
         self.setObjectName("MachineControl")
 
     @QtCore.pyqtSlot(name="machine_restart")

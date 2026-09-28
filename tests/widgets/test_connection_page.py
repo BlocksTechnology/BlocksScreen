@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
 from events import KlippyDisconnected, KlippyReady
-from BlocksScreen.lib.panels.widgets.connectionPage import (
+from BlocksScreen.lib.panels.widgets.MainWindow.connectionPage import (
     ConnectionState,
     ConnectionPage,
 )
