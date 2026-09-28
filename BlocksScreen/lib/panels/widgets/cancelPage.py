@@ -42,9 +42,9 @@ class CancelPage(QtWidgets.QWidget):
         self.run_gcode.emit("SDCARD_RESET_FILE")
 
     _REASON_HEADERS: typing.ClassVar[dict[str, str]] = {
-        "complete": "Print Completed",
+        "complete": "Print Finished",
         "error": "Print Error",
-        "cancelled": "Print job was\ncancelled",
+        "cancelled": "Print Cancelled",
     }
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
@@ -56,8 +56,12 @@ class CancelPage(QtWidgets.QWidget):
                 self.filename = value
                 if self.isVisible():
                     self.set_file_name(value)
-            elif "state" in field and value in self._REASON_HEADERS:
-                self.cf_info_tf.setText(self._REASON_HEADERS[value])
+            elif "state" in field:
+                if value in self._REASON_HEADERS:
+                    self.cf_info_tf.setText(self._REASON_HEADERS[value])
+                elif value == "printing":
+                    # New job: drop the previous job's reason so it cannot leak.
+                    self.cf_info_tf.clear()
 
     def show(self):
         self.request_file_info.emit(self.filename)
@@ -171,7 +175,7 @@ class CancelPage(QtWidgets.QWidget):
         self.info_layout = QtWidgets.QVBoxLayout(self.info_frame)
 
         self.cf_info_tf = QtWidgets.QLabel(parent=self.info_frame)
-        self.cf_info_tf.setText("Print job was\ncancelled")
+        self.cf_info_tf.setText(self._REASON_HEADERS["cancelled"])
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)

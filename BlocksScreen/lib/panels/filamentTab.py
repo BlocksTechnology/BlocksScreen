@@ -1,4 +1,5 @@
 import logging
+import typing
 from collections import deque
 
 from devices.amu import AMUManager
@@ -55,9 +56,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.popup_gates: deque = deque()
         self._spool_id_map: dict[str, dict] = {}
         self._current_field: QtWidgets.QLineEdit | None = None
-        self._color_target_field = None
+        self._color_selected_callback: typing.Callable[[str], None] | None = None
+        self._selected_spool: dict | None = None
         self._material_filter: str | None = None
-        self.moonraker_run = True
+        self._spoolman_available: bool | None = None
+        self._popup_form_page: QtWidgets.QWidget | None = None
+        self._popup_spool_page: QtWidgets.QWidget | None = None
 
         self._setup_pre_gate_popup()
         self._setup_load_popup()
@@ -124,7 +128,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self._basic_panel))
         )
 
-        self.ws.connected_signal.connect(self.handle_moonraker_components)
+        self.ws.server_components_signal.connect(self.handle_moonraker_components)
 
         self.run_gcode.connect(self.ws.api.run_gcode)
 
@@ -137,20 +141,27 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.load_state = False
         self.load_popup.hide()
 
-    def handle_moonraker_components(self):
-        """Build the pre-gate popup pages once, choosing spoolman vs. manual-entry order."""
-        if self.moonraker_run:
-            components = self.ws._moonRest.get_server_info()
-            if "spoolman" not in components.get("result", {}).get("components", []):
-                self.fp_button_2.hide()
-                self._popup_stack.addWidget(self._build_form_page())
-                self._popup_stack.addWidget(self._build_spool_page())
-            else:
-                self.fp_button_2.show()
-                self._popup_stack.addWidget(self._build_spool_page())
-                self._popup_stack.addWidget(self._build_form_page())
-                self.request_filament_change_page.emit()
-            self.moonraker_run = False
+    @QtCore.pyqtSlot(list, name="handle_moonraker_components")
+    def handle_moonraker_components(self, components: list) -> None:
+        """Re-check spoolman on each server.info: updates add it without a UI restart."""
+        available = "spoolman" in components
+        if available == self._spoolman_available:
+            return
+        self._spoolman_available = available
+        if self._popup_form_page is None:
+            self._popup_form_page = self._build_form_page()
+            self._popup_spool_page = self._build_spool_page()
+        # insertWidget moves an existing page; the second move makes index 0 current.
+        pages = (
+            (self._popup_spool_page, self._popup_form_page)
+            if available
+            else (self._popup_form_page, self._popup_spool_page)
+        )
+        for i, page in enumerate(pages):
+            self._popup_stack.insertWidget(i, page)
+        self.fp_button_2.setVisible(available)
+        if available:
+            self.request_filament_change_page.emit()
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
@@ -312,7 +323,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda: self._on_show_keyboard(self._popup_name)
         )
         self._popup_color.clicked.connect(
-            lambda: self._open_color_wheel(self._popup_color)
+            lambda: self._open_color_wheel(
+                self._popup_color.text(), self._popup_color.setText
+            )
         )
         self._popup_material.clicked.connect(
             lambda: self._on_show_keyboard(self._popup_material)
@@ -433,7 +446,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._spool_delegate = EntryDelegate()
         self._spool_list_view.setModel(self._spool_model)
         self._spool_list_view.setItemDelegate(self._spool_delegate)
-        self._spool_delegate.item_selected.connect(self._on_spool_selected)
+        self._spool_delegate.item_selected.connect(self._on_list_item_tapped)
         self._spool_load_widget = LoadingOverlayWidget(
             frame, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
@@ -566,7 +579,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.accept_btn.setFixedSize(QtCore.QSize(230, 80))
         self.accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
         self.accept_btn.setFont(font)
-        self.accept_btn.clicked.connect(lambda: self._on_spool_selected())
+        self.accept_btn.clicked.connect(self._on_accept_clicked)
 
         frame_2_lay.addWidget(
             self.skip_btn, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -581,7 +594,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         return page
 
     def handle_skip_button(self):
-        """Map the pending pre-gate gate to an empty spool and dismiss the popup."""
+        """Handles the skip button action from the pre-gate popup to send the appropriate G-code to map the gate to no spool."""
         gate = self.pre_gate_idx.get("gate", 0)
         self._reset_popup()
         self.run_gcode.emit(
@@ -747,34 +760,35 @@ class FilamentTab(QtWidgets.QStackedWidget):
             )
             self._no_spools_label.show()
 
-    def _on_spool_selected(self) -> None:
-        item = self._spool_model.get_selected_item()
-        if item is None:
+    @QtCore.pyqtSlot(ListItem)
+    def _on_list_item_tapped(self, item: ListItem) -> None:
+        if not item:
+            return
+        if item.text == "+ Add Spool":
+            self.reset_spool_info()
+            self._add_popup.show()
             return
         spool = self._spool_id_map.get(item.text)
-
-        if self.sender() != self.accept_btn:
-            if item.text == "+ Add Spool":
-                self._add_popup.show()
-                return
-            if spool is None:
-                return
-            self.accept_btn.setEnabled(True)
-            filament = spool.get("filament") or {}
-            self.filament_name_label.setText(item.text)
-            self.material_label.setText(filament.get("material", "N/A"))
-            self.weight_label.setText(
-                f"{spool.get('remaining_weight')} g"
-                if spool.get("remaining_weight") is not None
-                else "N/A"
-            )
-            self.vendor_label.setText(
-                filament.get("vendor", "N/A").get("name", "N/A")
-                if filament.get("vendor")
-                else "N/A"
-            )
-
+        if spool is None:
             return
+        self._selected_spool = spool
+        self.accept_btn.setEnabled(True)
+        filament = spool.get("filament") or {}
+        self.filament_name_label.setText(item.text)
+        self.material_label.setText(filament.get("material", "N/A"))
+        self.weight_label.setText(
+            f"{spool.get('remaining_weight')} g"
+            if spool.get("remaining_weight") is not None
+            else "N/A"
+        )
+        self.vendor_label.setText(
+            filament.get("vendor", "N/A").get("name", "N/A")
+            if filament.get("vendor")
+            else "N/A"
+        )
+
+    def _on_accept_clicked(self) -> None:
+        spool = self._selected_spool
         if not spool:
             return
         filament = spool.get("filament") or {}
@@ -785,6 +799,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         f_temp = filament.get("settings_extruder_temp", -1)
         gate = self.pre_gate_idx.get("gate", 0)
 
+        self._selected_spool = None
         self.accept_btn.setEnabled(False)
         self.popup.hide()
         self._material_filter = None
@@ -809,6 +824,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.material_label.setText("N/A")
         self.weight_label.setText("N/A")
         self.vendor_label.setText("N/A")
+        self._selected_spool = None
         self.accept_btn.setEnabled(False)
 
     @staticmethod
@@ -896,18 +912,19 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._current_field.setText(value)
             self._current_field.editingFinished.emit()
 
-    def _open_color_wheel(self, field) -> None:
-        self._color_target_field = field
-        self._color_wheel.set_color_hex(field.text().strip("#") or "ffffff")
+    def _open_color_wheel(
+        self, current_hex: str, on_selected: typing.Callable[[str], None]
+    ) -> None:
+        self._color_selected_callback = on_selected
+        self._color_wheel.set_color_hex(current_hex.strip("#") or "ffffff")
         self._color_wheel_popup.show()
         self._color_wheel_popup.raise_()
 
     @QtCore.pyqtSlot(str, name="on-color-selected")
     def _on_color_selected(self, hex_str: str) -> None:
-        if self._color_target_field is not None:
-            self._color_target_field.setText(hex_str)
-            self._color_target_field.editingFinished.emit()
-            self._color_target_field = None
+        callback, self._color_selected_callback = self._color_selected_callback, None
+        if callback is not None:
+            callback(hex_str)
 
     def _clear_gate_map(self, gate_info) -> None:
         """Blank a gate's map entry when its filament runs out."""
@@ -967,9 +984,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 )
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
+                # Latch here: an early single-gate state must not veto a later AMU.
+                self.amu_configured = True
             else:
                 self.load_status_widget.set_left_text("Auxiliary Extruder")
-            self.amu_configured = True
 
         if self.load_state:
             if mmu_state.action == "Idle":
