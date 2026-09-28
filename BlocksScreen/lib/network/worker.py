@@ -1,3 +1,5 @@
+"""Async D-Bus NetworkManager worker: signal watching, link control, state snapshots."""
+
 import asyncio
 import fcntl
 import ipaddress
@@ -476,10 +478,9 @@ class NetworkManagerWorker(QObject):
         if not self._signal_wifi:
             return
         logger.debug("AP Added listener started on %s", self._primary_wifi_path)
-        async for ap_path in self._signal_wifi.access_point_added:
+        async for _ in self._signal_wifi.access_point_added:
             if not self._running:
                 return
-            logger.debug("AP added: %s", ap_path)
             self._schedule_debounced_scan()
 
     async def _listen_ap_removed(self) -> None:
@@ -487,10 +488,9 @@ class NetworkManagerWorker(QObject):
         if not self._signal_wifi:
             return
         logger.debug("AP Removed listener started on %s", self._primary_wifi_path)
-        async for ap_path in self._signal_wifi.access_point_removed:
+        async for _ in self._signal_wifi.access_point_removed:
             if not self._running:
                 return
-            logger.debug("AP removed: %s", ap_path)
             self._schedule_debounced_scan()
 
     async def _listen_wired_state_changed(self) -> None:
@@ -836,7 +836,6 @@ class NetworkManagerWorker(QObject):
                         current_ip = _fallback
                         if _iface != "wlan0":
                             eth_connected = True
-                        logger.debug("OS fallback IP for '%s': %s", _iface, _fallback)
                         break
 
             signal = 0
@@ -852,10 +851,6 @@ class NetworkManagerWorker(QObject):
             if not hotspot_enabled and self._is_hotspot_active and not current_ssid:
                 hotspot_enabled = True
                 current_ssid = self._hotspot_config.ssid
-                logger.debug(
-                    "Hotspot SSID not found via D-Bus, using config: '%s'",
-                    current_ssid,
-                )
 
             if hotspot_enabled:
                 sec_type = self._hotspot_config.security

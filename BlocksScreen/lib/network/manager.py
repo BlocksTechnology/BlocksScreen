@@ -1,3 +1,5 @@
+"""Qt-facing NetworkManager facade: owns the worker thread and its signals."""
+
 # pylint: disable=protected-access
 
 import asyncio
@@ -17,7 +19,7 @@ from .worker import NetworkManagerWorker
 
 logger = logging.getLogger(__name__)
 
-_KEEPALIVE_POLL_MS: int = 300_000  # 5 minutes — safety net for missed signals
+_KEEPALIVE_POLL_MS: int = 300_000  # 5 minutes: safety net for missed signals
 
 
 class NetworkManager(QObject):
@@ -27,9 +29,9 @@ class NetworkManager(QObject):
     a ``NetworkManagerWorker`` that runs all D-Bus coroutines on its
     dedicated asyncio thread.
 
-    Coroutines are submitted to ``worker._asyncio_loop`` — the same loop
-    on which the D-Bus file-descriptor was registered — so signal delivery
-    and async I/O always occur on the correct selector.
+    Coroutines are submitted to ``worker._asyncio_loop`` (the same loop the
+    D-Bus file-descriptor was registered on), so signal delivery and async
+    I/O always occur on the correct selector.
 
     """
 
@@ -72,7 +74,7 @@ class NetworkManager(QObject):
         self._worker.reconnect_complete.connect(self.reconnect_complete)
         self._worker.initialized.connect(self._on_worker_initialized)
 
-        # Keepalive timer — safety net for any missed D-Bus signals.
+        # Keepalive timer: safety net for any missed D-Bus signals.
         self._keepalive_timer = QTimer(self)
         self._keepalive_timer.setInterval(_KEEPALIVE_POLL_MS)
         self._keepalive_timer.timeout.connect(self._on_keepalive_tick)
@@ -96,7 +98,7 @@ class NetworkManager(QObject):
             future.add_done_callback(self._pending_futures.discard)
         else:
             logger.debug(
-                "Dropping early coroutine — loop not yet running: %s",
+                "Dropping early coroutine, loop not yet running: %s",
                 coro.__qualname__,
             )
             coro.close()
@@ -114,7 +116,7 @@ class NetworkManager(QObject):
             return
         self._worker_ready = True
         logger.info(
-            "Worker initialised — starting keepalive (every %d ms)",
+            "Worker initialised: starting keepalive (every %d ms)",
             _KEEPALIVE_POLL_MS,
         )
         self._keepalive_timer.start()
@@ -185,7 +187,7 @@ class NetworkManager(QObject):
 
     @pyqtSlot()
     def _on_keepalive_tick(self) -> None:
-        """Safety-net refresh — runs every 5 min to catch any missed signals."""
+        """Safety-net refresh: runs every 5 min to catch any missed signals."""
         if self._shutting_down:
             return
         self._schedule(self._worker._async_get_current_state())
@@ -273,7 +275,7 @@ class NetworkManager(QObject):
         new_password: str,
         security: str = "wpa-psk",
     ) -> None:
-        """Change hotspot name/password/security — cleans up old profiles."""
+        """Change hotspot name/password/security: cleans up old profiles."""
         self._schedule(
             self._worker._async_update_hotspot_config(
                 old_ssid, new_ssid, new_password, security
@@ -346,17 +348,17 @@ class NetworkManager(QObject):
 
     @property
     def hotspot_ssid(self) -> str:
-        """Hotspot SSID — read from main-thread cache (thread-safe)."""
+        """Hotspot SSID: read from main-thread cache (thread-safe)."""
         return self._cached_hotspot_ssid
 
     @property
     def hotspot_password(self) -> str:
-        """Hotspot password — read from main-thread cache (thread-safe)."""
+        """Hotspot password: read from main-thread cache (thread-safe)."""
         return self._cached_hotspot_password
 
     @property
     def hotspot_security(self) -> str:
-        """Hotspot security type — always 'wpa-psk' (WPA2-PSK, thread-safe)."""
+        """Hotspot security type: always 'wpa-psk' (WPA2-PSK, thread-safe)."""
         return self._cached_hotspot_security
 
     def get_network_info(self, ssid: str) -> NetworkInfo | None:
