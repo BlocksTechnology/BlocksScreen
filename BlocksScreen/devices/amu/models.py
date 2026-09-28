@@ -4,10 +4,10 @@ from enum import IntEnum, StrEnum
 
 
 class GateStatus(IntEnum):
-    UNKNOWN = 0
+    EMPTY = 0
     AVAILABLE = 1
     AVAILABLE_FROM_BUFFER = 2
-    EMPTY = -1
+    UNKNOWN = -1
 
 
 class FilamentPos(IntEnum):
@@ -67,6 +67,7 @@ class MMUState:
     filament: str  # "Loaded" | "Unloaded" | "Unknown"
     filament_pos: FilamentPos
     action: str
+    bowden_progress: float
     print_state: str
     reason_for_pause: str
     has_bypass: bool
@@ -142,6 +143,7 @@ class MMUState:
             filament=data.get("filament", "Unknown"),
             filament_pos=FilamentPos(data.get("filament_pos", FilamentPos.UNKNOWN)),
             action=data.get("action", ""),
+            bowden_progress=data.get("bowden_progress", -1),
             print_state=data.get("print_state", ""),
             reason_for_pause=data.get("reason_for_pause", ""),
             has_bypass=data.get("has_bypass", False),
