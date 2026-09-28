@@ -26,7 +26,6 @@ class CancelPage(QtWidgets.QWidget):
         super().__init__(parent)
         self._setupUI()
         self.filename = ""
-        self._thumbnail_scan_done: bool = False
 
         self.confirm_button.clicked.connect(lambda: self._handle_accept())
         self.refuse_button.clicked.connect(lambda: self._handle_refuse())
@@ -45,7 +44,7 @@ class CancelPage(QtWidgets.QWidget):
     _REASON_HEADERS: typing.ClassVar[dict[str, str]] = {
         "complete": "Print Finished",
         "error": "Print Error",
-        "cancelled": "Print Canceled",
+        "cancelled": "Print Cancelled",
     }
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
@@ -54,8 +53,6 @@ class CancelPage(QtWidgets.QWidget):
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
         if isinstance(value, str):
             if "filename" in field:
-                if value != self.filename:
-                    self._thumbnail_scan_done = False
                 self.filename = value
                 if self.isVisible():
                     self.set_file_name(value)
@@ -63,9 +60,7 @@ class CancelPage(QtWidgets.QWidget):
                 if value in self._REASON_HEADERS:
                     self.cf_info_tf.setText(self._REASON_HEADERS[value])
                 elif value == "printing":
-                    # New job started: drop any reason text left over from the
-                    # previous cycle so it can't leak through if this one ends
-                    # without hitting a state in _REASON_HEADERS.
+                    # New job: drop the previous job's reason so it cannot leak.
                     self.cf_info_tf.clear()
 
     def show(self):
@@ -180,7 +175,7 @@ class CancelPage(QtWidgets.QWidget):
         self.info_layout = QtWidgets.QVBoxLayout(self.info_frame)
 
         self.cf_info_tf = QtWidgets.QLabel(parent=self.info_frame)
-        self.cf_info_tf.setText("Print job was\ncancelled")
+        self.cf_info_tf.setText(self._REASON_HEADERS["cancelled"])
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
