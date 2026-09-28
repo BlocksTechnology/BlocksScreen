@@ -2,6 +2,7 @@ import os
 import typing
 
 import helper_methods
+from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
@@ -21,6 +22,9 @@ class ConfirmWidget(QtWidgets.QWidget):
     on_delete: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="delete_file"
     )
+    show_metadata: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, dict, name="show_metadata"
+    )
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
@@ -28,14 +32,21 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = self._blocksthumbnail
+        self._thumbnails: list = []
+        self._current_gcode: str = ""
+        self._loader_connected: bool = False
         self.directory = "gcodes"
         self.filename = ""
+        self._filedata: dict = {}
         self.confirm_button.clicked.connect(
             lambda: self.on_accept.emit(
                 str(os.path.join(self.directory, self.filename))
             )
         )
         self.back_btn.clicked.connect(self.request_back.emit)
+        self.file_info_btn.clicked.connect(
+            lambda: self.show_metadata.emit(self._current_gcode, self._filedata)
+        )
         self.delete_file_button.clicked.connect(
             lambda: self.on_delete.emit(self.filename, self.directory)
         )
@@ -48,66 +59,68 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.directory = directory
         self.filename = filename
         self.cf_file_name.setText(self.filename)
-        self._update_metadata_labels(metadata or {})
+        self._current_gcode = text.removeprefix("/")
+        self._filedata = metadata or {}
+        self._update_metadata_labels(self._filedata)
         self.update()
 
     def _update_metadata_labels(self, metadata: dict) -> None:
         """Update thumbnail and text labels from metadata."""
-        self._apply_thumbnail(metadata)
-        raw_weight = metadata.get("filament_weight_total")
-        _total_filament: float | str = (
-            raw_weight if isinstance(raw_weight, (int, float)) and raw_weight > 0 else 0
-        )
-        raw_seconds = metadata.get("estimated_time")
+        self._thumbnails = metadata.get("thumbnail_paths", [])
+        self.thumbnail = self._resolve_thumbnail()
+        weight = metadata.get("filament_weight_total")
+        estimated = metadata.get("estimated_time")
         seconds = (
-            int(raw_seconds)
-            if isinstance(raw_seconds, (int, float)) and raw_seconds > 0
+            int(estimated)
+            if isinstance(estimated, (int, float)) and estimated > 0
             else 0
         )
+        time_str = helper_methods.format_duration(seconds) if seconds else "Unknown"
+        filament_str = (
+            helper_methods.format_weight(weight)
+            if isinstance(weight, (int, float)) and weight > 0
+            else "Unknown"
+        )
+        self.cf_info_tf.setText(f"Total Filament: {filament_str}")
+        self.cf_info_tr.setText(f"Slicer time: {time_str}")
 
-        days, hours, minutes, _ = helper_methods.estimate_print_time(seconds)
-        if seconds <= 0:
-            time_str = "Unknown"
-        elif seconds < 60:
-            time_str = "less than 1 minute"
-        else:
-            if days > 0:
-                time_str = f"{days}d {hours}h {minutes}m"
-            elif hours > 0:
-                time_str = f"{hours}h {minutes}m"
-            else:
-                time_str = f"{minutes}m"
-        if _total_filament == 0:
-            _total_filament = "Unknown"
-        elif _total_filament > 499:
-            _total_filament /= 1000
-            _total_filament = str("%.2f" % _total_filament) + "kg"
-        else:
-            _total_filament = str("%.2f" % _total_filament) + "g"
-        filament_label = f"Total Filament: {_total_filament}"
-        time_label = f"Slicer time: {time_str}"
-        self.cf_info_tf.setText(filament_label)
-        self.cf_info_tr.setText(time_label)
+    @QtCore.pyqtSlot(dict, name="on_fileinfo")
+    def on_fileinfo(self, filedata: dict) -> None:
+        """Refresh the shown file's metadata, e.g. a late duration."""
+        if filedata.get("filename", "").removeprefix("/") != self._current_gcode:
+            return
+        self._filedata = filedata
+        # A file opened before its metadata arrived shows it once it lands.
+        if self.isVisible():
+            self._update_metadata_labels(filedata)
+            self.update()
 
-    def _apply_thumbnail(self, metadata: dict) -> None:
-        """Set self.thumbnail from metadata, falling back to the logo."""
-        thumbnails = metadata.get("thumbnail_images", [])
-        if thumbnails:
-            last = thumbnails[-1]
-            if isinstance(last, QtGui.QImage) and not last.isNull():
-                self.thumbnail = last
-                return
-        self.thumbnail = self._blocksthumbnail
+    def _resolve_thumbnail(self) -> QtGui.QImage:
+        """Largest on-disk thumbnail, else embedded, else placeholder."""
+        if self._thumbnails:
+            disk = QtGui.QImage(self._thumbnails[-1])
+            if not disk.isNull():
+                return disk
+        loader = gcode_loader.get_loader()
+        if loader is None:
+            return self._blocksthumbnail
+        if not self._loader_connected:
+            loader.ready.connect(self._on_embedded_ready)
+            self._loader_connected = True
+        cached = loader.cached(self._current_gcode)
+        if cached is not None and not cached.isNull():
+            return cached
+        loader.request_embedded(self._current_gcode)
+        return self._blocksthumbnail
+
+    def _on_embedded_ready(self, gcode_path: str, image: QtGui.QImage) -> None:
+        """Show a late embedded thumbnail for the shown file."""
+        if gcode_path == self._current_gcode and not image.isNull():
+            self.thumbnail = image
+            self.update()
 
     def estimate_print_time(self, seconds: int) -> list:
-        """Convert time in seconds format to days, hours, minutes, seconds.
-
-        Args:
-            seconds (int): Seconds
-
-        Returns:
-            list: list that contains the converted information [days, hours, minutes, seconds]
-        """
+        """Convert seconds to [days, hours, minutes, seconds]."""
         num_min, seconds = divmod(seconds, 60)
         num_hours, minutes = divmod(num_min, 60)
         days, hours = divmod(num_hours, 24)
@@ -176,14 +189,6 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_header_title = QtWidgets.QHBoxLayout()
         self.cf_header_title.setObjectName("cf_header_title")
 
-        self.spacer = QtWidgets.QSpacerItem(
-            60,
-            60,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        self.spacer.setGeometry(QtCore.QRect(0, 0, 60, 60))
-        self.cf_header_title.addItem(self.spacer)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
@@ -201,6 +206,18 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_file_name.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.cf_file_name.setObjectName("cf_file_name")
         self.cf_header_title.addWidget(self.cf_file_name)
+
+        self.file_info_btn = IconButton(self)
+        self.file_info_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.file_info_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self.file_info_btn.setFlat(True)
+        self.file_info_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg")
+        )
+        self.file_info_btn.setObjectName("file_info_btn")
+        self.cf_header_title.insertWidget(
+            0, self.file_info_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
+        )
 
         self.back_btn = IconButton(self)
         self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
