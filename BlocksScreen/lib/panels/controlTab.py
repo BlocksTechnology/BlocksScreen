@@ -427,6 +427,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def _setup_ui(self) -> None:
         """Build the control tab page: header, back button, and option grid."""
+        self.resize(710, 410)
         root = QtWidgets.QWidget()
         root.setObjectName("control_page")
         root.setMinimumSize(QtCore.QSize(710, 410))
