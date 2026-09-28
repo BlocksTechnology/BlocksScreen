@@ -147,9 +147,17 @@ class TestWaitForProfileIp:
     async def test_returns_ip_once_ssid_matches(self, qapp):
         w = _worker(qapp)
         w._get_current_ssid = AsyncMock(side_effect=["Other", "home"])
-        w._get_current_ip.return_value = "10.0.0.7"
+        w._get_ip_by_interface.return_value = "10.0.0.7"
         assert await w._wait_for_profile_ip("Home", timeout=5.0) == "10.0.0.7"
         assert w._get_current_ssid.await_count == 2
+        w._get_ip_by_interface.assert_awaited_with("wlan0")
+
+    @pytest.mark.asyncio
+    async def test_primary_ethernet_ip_does_not_count(self, qapp):
+        w = _worker(qapp)
+        w._get_current_ssid = AsyncMock(return_value="Home")
+        w._get_current_ip.return_value = "192.168.0.10"
+        assert await w._wait_for_profile_ip("Home", timeout=0.01) == ""
 
     @pytest.mark.asyncio
     async def test_os_fallback_when_nm_has_no_ip(self, qapp):
@@ -162,7 +170,7 @@ class TestWaitForProfileIp:
     async def test_lookup_error_is_retried(self, qapp):
         w = _worker(qapp)
         w._get_current_ssid = AsyncMock(side_effect=[RuntimeError("dbus"), "Home"])
-        w._get_current_ip.return_value = "10.0.0.9"
+        w._get_ip_by_interface.return_value = "10.0.0.9"
         assert await w._wait_for_profile_ip("Home", timeout=5.0) == "10.0.0.9"
 
     @pytest.mark.asyncio
