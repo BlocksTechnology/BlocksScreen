@@ -57,7 +57,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.mmu_configured = False
         self.load_popup = load_popup
         self._mmu_state = None
-        self._setupUi()
+        self._setup_ui()
         self.filament_state = self.FilamentStates.UNKNOWN
 
         self.setCurrentIndex(0)
@@ -368,7 +368,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         return root
 
-    def _setupUi(self):
+    def _setup_ui(self) -> None:
+        """Build the basic filament panel: load/unload controls and status labels."""
         self.setObjectName("self")
         self.resize(710, 411)
 
