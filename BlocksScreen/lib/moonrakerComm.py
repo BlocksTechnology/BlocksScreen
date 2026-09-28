@@ -7,7 +7,6 @@ import typing
 import websocket
 from events import (
     WebSocketDisconnected,
-    WebSocketError,
     WebSocketMessageReceived,
     WebSocketOpen,
 )
@@ -31,8 +30,10 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     """MoonWebSocket class object for creating a websocket connection to Moonraker."""
 
     QUERY_KLIPPY_TIMEOUT: int = 2
-    max_retries = 3
     timeout = 3
+    # A silently dead socket never reaches on_close without client pings
+    PING_INTERVAL: int = 20
+    PING_TIMEOUT: int = 10  # Moonraker's own pong timeout (tornado 6.5 default)
 
     connecting_signal = QtCore.pyqtSignal([int], [str], name="websocket_connecting")
     connected_signal = QtCore.pyqtSignal(name="websocket-connected")
@@ -55,13 +56,14 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self.daemon = True
 
         self.connected = False
-        self.connecting = False
         self.disconnected = False
         self._reconnect_count = 0
+        self._klippy_state: str | None = None
         self.callback_table: dict = {}
 
         self._state_lock = threading.RLock()
         self._request_lock = threading.Lock()
+        self._connect_lock = threading.Lock()
 
         self._host = parent.config.get("host", parser=str, default="localhost")
         self._port = parent.config.get("port", parser=int, default=7125)
@@ -71,12 +73,10 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self._wst = None
         self._request_id = 0
         self.request_table: dict = {}
-        self._klippy_retry_count = 0
         self._moonRest = MoonRest(host=self._host, port=self._port)
         self.api: MoonAPI = MoonAPI(self)
         self._retry_timer: RepeatedTimer | None = None
         websocket.setdefaulttimeout(self.timeout)
-        self._intentional_disconnect: bool = False
 
         self.query_server_info_signal.connect(self.api.api_query_server_info)
         self.query_klippy_status_timer = RepeatedTimer(
@@ -94,55 +94,31 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     @QtCore.pyqtSlot(name="retry_wb_conn")
     def retry_wb_conn(self):
         """Retry websocket connection"""
-        with self._state_lock:
-            if self.connecting is True and self.connected is False:
-                return False
-        self.try_connection()
+        return self.try_connection()
 
     @QtCore.pyqtSlot(name="try_connection")
     def try_connection(self):
-        """Try connecting to websocket"""
-        with self._state_lock:
-            self.connecting = True
-            self._reconnect_count = 0
-        if self._retry_timer is not None:
-            self._retry_timer.stopTimer()
-        self._retry_timer = RepeatedTimer(self.timeout, self.reconnect)
-        return self.connect()
+        """Arm the reconnect watchdog and attempt a connection now"""
+        if self._retry_timer is None:
+            self._retry_timer = RepeatedTimer(self.timeout, self.reconnect)
+        else:
+            self._retry_timer.startTimer()
+        return self.reconnect()
 
     def reconnect(self) -> bool:
-        """Reconnect to websocket"""
-        with self._state_lock:
-            if self.connected:
-                return True
-            over_limit = self._reconnect_count >= self.max_retries
-
-        if over_limit:
-            if self._retry_timer is not None:
-                self._retry_timer.stopTimer()
-            unable_to_connect_event = WebSocketError(
-                data="Unable to establish connection to Websocket"
-            )
-            self.connecting_signal[int].emit(0)
-            with self._state_lock:
-                self.connecting = False
-            try:
-                instance = QtWidgets.QApplication.instance()
-                if instance is not None:
-                    instance.postEvent(self.parent(), unable_to_connect_event)
-                else:
-                    raise TypeError("QApplication.instance expected ad non-None value")
-            except Exception as e:
-                logger.error(
-                    "Error on sending Event %s | Error message: %s",
-                    unable_to_connect_event.__class__.__name__,
-                    e,
-                )
-            logger.warning(
-                "Maximum number of connection retries reached, Unable to establish connection with Moonraker"
-            )
+        """Watchdog tick, retries forever per Moonraker's client startup sequence"""
+        # Non-blocking: a tick and a Qt-thread call must not open two sockets
+        if not self._connect_lock.acquire(blocking=False):
             return False
-        return self.connect()
+        try:
+            with self._state_lock:
+                if self.connected:
+                    return True
+            if self._wst is not None and self._wst.is_alive():
+                return False  # Previous attempt still in flight
+            return self.connect()
+        finally:
+            self._connect_lock.release()
 
     def connect(self) -> bool:
         """Connect to websocket"""
@@ -178,6 +154,10 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self._wst = threading.Thread(
             name="websocket.run_forever",
             target=self.ws.run_forever,
+            kwargs={
+                "ping_interval": self.PING_INTERVAL,
+                "ping_timeout": self.PING_TIMEOUT,
+            },
             daemon=True,
         )
         try:
@@ -191,8 +171,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
 
     def wb_disconnect(self) -> None:
         """Websocket disconnect"""
+        if self._retry_timer is not None:
+            self._retry_timer.stopTimer()
         if self._wst is not None and self.ws is not None:
-            self._intentional_disconnect = True
             self.ws.close()
             if self._wst.is_alive():
                 self._wst.join(timeout=self.timeout + 1)
@@ -241,11 +222,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         logger.info(
             f"Websocket closed, code: {_close_status_code}, message: {_close_message}"
         )
-        if not self.connecting and not self._intentional_disconnect:
-            QtCore.QMetaObject.invokeMethod(
-                self, "try_connection", QtCore.Qt.ConnectionType.QueuedConnection
-            )
-        self._intentional_disconnect = False
 
     @QtCore.pyqtSlot(name="evaluate_klippy_status")
     def evaluate_klippy_status(self) -> None:
@@ -261,10 +237,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         """
         _ws = args[0] if len(args) == 1 else None
         with self._state_lock:
-            self.connecting = False
             self.connected = True
-            self._klippy_retry_count = 0
             self._reconnect_count = 0
+            self._klippy_state = None  # Re-emit the state after every reconnect
         self.evaluate_klippy_status()
         open_event = WebSocketOpen(data="Connected")
         try:
@@ -277,8 +252,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             logger.info("Unexpected error opening websocket: %s", e)
 
         self.connected_signal.emit()
-        if self._retry_timer is not None:
-            self._retry_timer.stopTimer()
         logger.info("Connection to websocket achieved on %s", _ws)
 
     def on_message(self, *args) -> None:
@@ -314,23 +287,17 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                     return
                 if _klippy_state == "ready":
                     self.query_klippy_status_timer.stopTimer()
-                    self._klippy_retry_count = 0
-                    self.api.update_status()  # Request update status immediately after klippy ready DEVDEBT
-                elif _klippy_state in ("startup", "disconnected"):
-                    self._klippy_retry_count += 1
-                    if self._klippy_retry_count >= 30:
-                        self.query_klippy_status_timer.stopTimer()
-                        logger.error(
-                            "Klippy startup sequence timed out after %d retries (state=%s)",
-                            self._klippy_retry_count,
-                            _klippy_state,
-                        )
-                    elif not self.query_klippy_status_timer.running:
-                        self.query_klippy_status_timer.startTimer()
+                else:
+                    self.query_klippy_status_timer.startTimer()
                 self.klippy_connected_signal.emit(
                     _result.get("klippy_connected", False)
                 )
-                self.klippy_state_signal.emit(_klippy_state)
+                if _klippy_state != self._klippy_state:
+                    # Poll repeats the state; consumers act on transitions only
+                    self._klippy_state = _klippy_state
+                    if _klippy_state == "ready":
+                        self.api.update_status()  # Request update status immediately after klippy ready DEVDEBT
+                    self.klippy_state_signal.emit(_klippy_state)
                 return
             else:
                 _callback = _entry[2] if len(_entry) > 2 else None
@@ -356,14 +323,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                     )
         elif "method" in response:
             if response["method"] in self._KLIPPY_NOTIFY_METHODS:
-                self._klippy_retry_count = 0
+                if response["method"] == "notify_klippy_disconnected":
+                    self._klippy_state = None  # Restart may end in the same state
                 self.evaluate_klippy_status()
-            elif (
-                response["method"] == "notify_klippy_ready"
-                and not self.query_klippy_status_timer.running
-            ):
-                # Poll may have hit its retry cap; re-query so the ready path still runs
-                self.query_server_info_signal.emit()
             message_event = (
                 WebSocketMessageReceived(  # mainly used to pass websocket notifications
                     method=response["method"],

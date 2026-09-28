@@ -31,7 +31,7 @@ class ConnectionPage(QtWidgets.QFrame):
 
     _MESSAGES: typing.ClassVar[dict[ConnectionState, str]] = {
         ConnectionState.DISCONNECTED: "The printer is offline.\nReconnecting automatically…",
-        ConnectionState.CONNECTING: "Connecting to the printer\nAttempt {n}",
+        ConnectionState.CONNECTING: "Connecting to the printer\nAttempting to reconnect",
         ConnectionState.WEBSOCKET_LOST: "Connection interrupted.\nAttempting to reconnect…",
         ConnectionState.MOONRAKER_CONNECTED: "Connection established.\nWaiting for the printer to initialise…",
         ConnectionState.KLIPPER_STARTUP: "The printer is starting up.\nPlease wait…",
@@ -80,7 +80,6 @@ class ConnectionPage(QtWidgets.QFrame):
     _RESTART_LABELS: typing.ClassVar[dict[ConnectionState, str]] = {
         ConnectionState.KLIPPER_ERROR: "Firmware Restart",
         ConnectionState.KLIPPER_SHUTDOWN: "Firmware Restart",
-        ConnectionState.WEBSOCKET_LOST: "Retry Connection",
     }
 
     _KLIPPY_STATE_MAP: typing.ClassVar[dict[str, ConnectionState]] = {
@@ -91,9 +90,6 @@ class ConnectionPage(QtWidgets.QFrame):
         "ready": ConnectionState.KLIPPER_READY,
     }
 
-    retry_connection_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="retry_connection_clicked"
-    )
     wifi_button_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="call_network_page"
     )
@@ -200,15 +196,19 @@ class ConnectionPage(QtWidgets.QFrame):
             return
         if self._handle_pending_restart(state):
             return
-        self.dot_timer.stop()
-        self._state = state
-        message = self._MESSAGES[state].format(n=context, message=context)
-        self.status_label.setText(message)
+        message = self._MESSAGES[state].format(message=context)
         if state == ConnectionState.CONNECTING:
-            self.base_text = message
-            self.dot_count = 0
-            self.dot_timer.start()
-        elif state == ConnectionState.KLIPPER_READY:
+            # Attempts land every 3s off the 1s beat, restarting would desync the dots
+            if not self.dot_timer.isActive():
+                self.base_text = message
+                self.dot_count = 0
+                self._add_dot()
+                self.dot_timer.start()
+        else:
+            self.dot_timer.stop()
+            self.status_label.setText(message)
+        self._state = state
+        if state == ConnectionState.KLIPPER_READY:
             self._stop_restart_overlay()
             self._last_shutdown_context = ""
             self.hide()
@@ -224,11 +224,8 @@ class ConnectionPage(QtWidgets.QFrame):
         self.call_load_panel.emit(False, "", False)
 
     def _add_dot(self) -> None:
-        self.dot_count += 1
-        if self.dot_count > 3:
-            self.dot_count = 0
-        dots = "." * self.dot_count
-        self.status_label.setText(f"{self.base_text}{dots}")
+        self.dot_count = self.dot_count % 3 + 1
+        self.status_label.setText(f"{self.base_text}{'.' * self.dot_count}")
 
     def _update_restart_label(self, state: ConnectionState) -> None:
         """Set restart_klipper_button label based on current state."""
@@ -277,9 +274,6 @@ class ConnectionPage(QtWidgets.QFrame):
         )
 
     def _on_restart_clicked(self) -> None:
-        if self._state == ConnectionState.WEBSOCKET_LOST:
-            self.retry_connection_clicked.emit()
-            return
         is_firmware = self._state in self._FIRMWARE_RESTART_STATES
         self._last_restart_was_firmware = is_firmware
         self._escalated_to_klipper_restart = False
@@ -324,10 +318,10 @@ class ConnectionPage(QtWidgets.QFrame):
         else:
             logger.warning("Unknown Klipper state: %s", state)
 
-    @QtCore.pyqtSlot(int, name="on_websocket_connecting")
-    def on_websocket_connecting(self, attempt: int) -> None:
+    @QtCore.pyqtSlot(name="on_websocket_connecting")
+    def on_websocket_connecting(self) -> None:
         """Handle websocket reconnection attempts."""
-        self._set_state(ConnectionState.CONNECTING, context=str(attempt))
+        self._set_state(ConnectionState.CONNECTING)
 
     @QtCore.pyqtSlot(name="on_websocket_connection_achieved")
     def on_websocket_connection_achieved(self) -> None:

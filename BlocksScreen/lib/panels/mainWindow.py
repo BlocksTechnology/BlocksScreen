@@ -139,6 +139,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._klipper_restart_timeout.setSingleShot(True)
         self._klipper_restart_timeout.setInterval(30_000)
         self._klipper_restart_timeout.timeout.connect(self._on_klipper_restart_timeout)
+        # Outlasts a RESTART's socket gap and klipper.service RestartSec=10
+        self._klipper_disconnect_grace = QtCore.QTimer(self)
+        self._klipper_disconnect_grace.setSingleShot(True)
+        self._klipper_disconnect_grace.setInterval(15_000)
+        self._klipper_disconnect_grace.timeout.connect(self._auto_restart_klipper)
 
         usb_config = self.config.get_section("usb_manager", fallback=None)
         gdir = None
@@ -230,7 +235,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 2,
             )
         )
-        self.conn_window.retry_connection_clicked.connect(slot=self.ws.retry_wb_conn)
         self.conn_window.firmware_restart_clicked.connect(
             slot=self.mc.restart_klipper_mcu_service
         )
@@ -299,7 +303,6 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.updater_worker.rollback_done.connect(self.update_page.handle_rollback_done)
         self.updater_worker.recover_done.connect(self.update_page.handle_recover_done)
-        self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.utilitiesPanel.show_update_page.connect(self.show_update_page)
         self.conn_window.update_button_clicked.connect(self.show_update_page)
         self.extruder_temp_display.display_format = "upper_downer"
@@ -441,28 +444,37 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str, name="on-klippy-state")
     def _on_klippy_state(self, state: str) -> None:
         self._klippy_ready = state == "ready"
+        if state == "disconnected":
+            self._klipper_disconnect_grace.start()
+        else:
+            self._klipper_disconnect_grace.stop()
         if state == "shutdown":
             if self._update_in_progress:
                 _logger.warning("Klipper E-stop detected — cancelling active update")
                 self.updater_worker.trigger_cancel()
-        elif (
-            state == "disconnected"
-            and not self._klipper_auto_restart_pending
-            and not self._update_in_progress
-            and not self.conn_window.manual_restart_pending
-        ):
-            _logger.info("Klipper disconnected — auto-restarting service")
-            self._klipper_auto_restart_pending = True
-            self.loadwidget.set_status_message("Restarting Klipper...")
-            self.loadscreen.show()
-            self._klipper_restart_timeout.start()
-            self.ws.api.restart_service("klipper")
         elif state == "ready" and self._klipper_auto_restart_pending:
             _logger.info("Klipper back online after auto-restart")
             self._klipper_auto_restart_pending = False
             self._klipper_restart_timeout.stop()
             if not self._post_update_reconnect:
                 self.loadscreen.hide()
+
+    @QtCore.pyqtSlot(name="auto-restart-klipper")
+    def _auto_restart_klipper(self) -> None:
+        """Restart the klipper service once it stays disconnected past the grace."""
+        if (
+            self._klipper_auto_restart_pending
+            or self._update_in_progress
+            or self.conn_window.manual_restart_pending
+            or not self.ws.connected
+        ):
+            return
+        _logger.info("Klipper disconnected — auto-restarting service")
+        self._klipper_auto_restart_pending = True
+        self.loadwidget.set_status_message("Restarting Klipper...")
+        self.loadscreen.show()
+        self._klipper_restart_timeout.start()
+        self.ws.api.restart_service("klipper")
 
     @QtCore.pyqtSlot(name="arm-health-bless")
     def _arm_health_bless(self) -> None:

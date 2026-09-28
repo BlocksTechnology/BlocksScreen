@@ -36,9 +36,9 @@ class TestSetState:
         assert "offline" in page.status_label.text()
 
     def test_connecting(self, page):
-        page._set_state(ConnectionState.CONNECTING, context="3")
+        page.on_websocket_connecting()
         assert page._state == ConnectionState.CONNECTING
-        assert "Attempt 3" in page.status_label.text()
+        assert page.status_label.text().endswith("Attempting to reconnect.")
 
     def test_websocket_lost(self, page):
         page._set_state(ConnectionState.WEBSOCKET_LOST)
@@ -94,30 +94,33 @@ class TestSetState:
 
 class TestDotTimer:
     def test_connecting_starts_timer(self, page):
-        page._set_state(ConnectionState.CONNECTING, context="1")
+        page._set_state(ConnectionState.CONNECTING)
         assert page.dot_timer.isActive()
 
     def test_non_connecting_stops_timer(self, page):
-        page._set_state(ConnectionState.CONNECTING, context="1")
+        page._set_state(ConnectionState.CONNECTING)
         page._set_state(ConnectionState.MOONRAKER_CONNECTED)
         assert not page.dot_timer.isActive()
 
     def test_add_dot_cycles(self, page):
         page.base_text = "Connecting"
         page.dot_count = 0
-        page._add_dot()
-        assert page.status_label.text() == "Connecting."
-        page._add_dot()
-        assert page.status_label.text() == "Connecting.."
-        page._add_dot()
-        assert page.status_label.text() == "Connecting..."
-        page._add_dot()
-        assert page.status_label.text() == "Connecting"
+        for dots in [".", "..", "...", "."]:
+            page._add_dot()
+            assert page.status_label.text() == f"Connecting{dots}"
 
     def test_dot_count_resets_on_connecting(self, page):
         page.dot_count = 2
-        page._set_state(ConnectionState.CONNECTING, context="1")
-        assert page.dot_count == 0
+        page._set_state(ConnectionState.CONNECTING)
+        assert page.dot_count == 1
+
+    def test_repeat_attempts_keep_dot_beat(self, page):
+        # Attempts come every 3s from the retry thread, off the 1s dot beat
+        page.on_websocket_connecting()
+        page._add_dot()
+        page.on_websocket_connecting()
+        assert page.status_label.text().endswith("reconnect..")
+        assert page.dot_count == 2
 
 
 class TestVisibility:
@@ -168,6 +171,13 @@ class TestRestartButton:
         page._set_state(ConnectionState.KLIPPER_DISCONNECTED)
         assert page.restart_klipper_button.text() == "Restart Printer"
 
+    def test_websocket_lost_offers_restart_not_retry(self, page, qtbot):
+        # Reconnect is automatic, so the button only restarts Klipper
+        page._set_state(ConnectionState.WEBSOCKET_LOST)
+        assert page.restart_klipper_button.text() == "Restart Printer"
+        with qtbot.waitSignal(page.restart_klipper_clicked):
+            page._on_restart_clicked()
+
 
 class TestSignalWiring:
     def test_reboot_button(self, page, qtbot):
@@ -214,8 +224,8 @@ class TestBugRegressions:
 
     def test_dot_count_resets_on_connecting(self, page):
         page.dot_count = 3
-        page._set_state(ConnectionState.CONNECTING, context=1)
-        assert page.dot_count == 0
+        page._set_state(ConnectionState.CONNECTING)
+        assert page.dot_count == 1
 
     def test_websocket_lost_does_not_show_when_toggle_off(self, page):
         page.conn_toggle = False
