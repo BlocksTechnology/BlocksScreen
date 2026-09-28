@@ -34,7 +34,6 @@ from lib.ui.resources.font_rc import *
 from lib.ui.resources.graphic_resources_rc import *
 from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
-from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
 from lib.updater_worker import UpdaterWorker
 from lib.utils.blocks_tabwidget import NotificationQTabWidget

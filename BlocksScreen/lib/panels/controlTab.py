@@ -219,7 +219,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             ),
             (
                 "Fans",
-                ":/temperature_related/media/btn_icons/fan.svg",
+                ":/fan_related/media/btn_icons/fan.svg",
                 lambda: self.change_page(self.indexOf(self.fans_page)),
             ),
             (
@@ -374,7 +374,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         if has_true_zero:
             self.cp_button_3.setText("Fans")
             self.cp_button_3.setPixmap(
-                QtGui.QPixmap(":/temperature_related/media/btn_icons/fan.svg")
+                QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg")
             )
             self.cp_button_3.clicked.connect(
                 lambda: self.change_page(self.indexOf(self.fans_page))

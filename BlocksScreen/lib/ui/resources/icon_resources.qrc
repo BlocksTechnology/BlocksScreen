@@ -55,8 +55,6 @@
     <file>media/btn_icons/temperature_error.svg</file>
     <file>media/btn_icons/temperature_plate.svg</file>
     <file>media/btn_icons/temperature_up.svg</file>
-    <file>media/btn_icons/blower.svg</file>
-    <file>media/btn_icons/fan.svg</file>
     <file>media/btn_icons/cooldown.svg</file>
     <file>media/btn_icons/heatsoak_icon.svg</file>
     <file>media/btn_icons/hot_temperature.svg</file>
@@ -88,13 +86,6 @@
     <file>media/btn_icons/eject.svg</file>
     <file>media/btn_icons/humity_and_temp.svg</file>
     <file>media/btn_icons/spoll.svg</file>
-    <file>media/topbar/abs_filament_topbar.svg</file>
-    <file>media/topbar/custom_filament_topbar.svg</file>
-    <file>media/topbar/hips_filament_topbar.svg</file>
-    <file>media/topbar/nylon_filament_topbar.svg</file>
-    <file>media/topbar/petg_filament_topbar.svg</file>
-    <file>media/topbar/pla_filament_topbar.svg</file>
-    <file>media/topbar/tpu_filament_topbar.svg</file>
     <file>media/btn_icons/change_filament.svg</file>
     <file>media/btn_icons/filament_sensor.svg</file>
     <file>media/btn_icons/filament_sensor_off.svg</file>
