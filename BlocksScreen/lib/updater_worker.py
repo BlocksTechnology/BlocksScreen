@@ -77,6 +77,8 @@ class UpdaterWorker(QtCore.QObject):
         self._last_activity: float = 0.0
         # Unique bus name of the live daemon; a change means it restarted.
         self._daemon_owner: str = ""
+        # Latest busy state, for replay_busy(); the worker thread runs before MainWindow wires slots.
+        self._last_busy: bool = False
         self._owner_task: asyncio.Task | None = None
         self._escalated: bool = False
         # Serializes the reconnect and owner-watch entry points into _connect().
@@ -218,11 +220,17 @@ class UpdaterWorker(QtCore.QObject):
         else:
             self._busy_false_event.set()
         _log.info("connected to owner %s, busy=%s", self._daemon_owner, busy)
+        self._last_busy = busy
         self.busy_changed.emit(busy)
         if not busy:
             self.request_reconnect.emit()
 
         self.proxy_connected.emit()
+
+    def replay_busy(self) -> None:
+        """Re-emit busy=True once slots are wired; the connect-time emit can fire before they are."""
+        if self._last_busy:
+            self.busy_changed.emit(True)
 
     def _on_listener_done(self, task: asyncio.Task) -> None:
         """Emit daemon_unavailable and schedule reconnect if a listener exits unexpectedly."""
@@ -591,6 +599,7 @@ class UpdaterWorker(QtCore.QObject):
         async for busy in self._proxy.busy_changed:
             _log.info("busy_changed received: %s", busy)
             self._touch_activity()
+            self._last_busy = busy
             if busy:
                 self._busy_false_event.clear()
                 task = asyncio.create_task(self._busy_watchdog(), name="busy_watchdog")

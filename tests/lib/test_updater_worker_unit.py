@@ -30,6 +30,7 @@ def _make_worker():
     w._last_activity = 0.0
     w._proxy = MagicMock()
     w._shutting_down = False
+    w._last_busy = False
     w._daemon_owner = ""
     w._owner_task = None
     w._escalated = False
@@ -510,3 +511,14 @@ class TestShutdown:
         worker.shutdown()
         owner_task.cancel.assert_called_once()
         listener.cancel.assert_called_once()
+
+
+class TestReplayBusy:
+    def test_replays_true_only(self, worker, qtbot):
+        received: list[bool] = []
+        worker.busy_changed.connect(received.append)
+        worker.replay_busy()
+        assert received == []
+        worker._last_busy = True
+        worker.replay_busy()
+        assert received == [True]

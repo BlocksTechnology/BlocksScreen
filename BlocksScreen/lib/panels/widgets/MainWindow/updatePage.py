@@ -361,7 +361,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.show_loading(busy)
         if busy:
             # Busy with no user press = the daemon is installing a missing component.
-            self._provisioning = not self._overlay_shown
+            self._provisioning = self._provisioning or not self._overlay_shown
             if self._provisioning:
                 self._overlay_shown = True
                 self.call_load_panel.emit(

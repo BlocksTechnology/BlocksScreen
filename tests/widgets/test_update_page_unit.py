@@ -545,3 +545,9 @@ class TestBootProvisioning:
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("klipper", 1, 4)
         assert blocker.args == [True, "klipper: fetching", False]
+
+    def test_replayed_busy_keeps_provisioning(self, page):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page.handle_busy_changed(True)
+        assert page._provisioning is True
