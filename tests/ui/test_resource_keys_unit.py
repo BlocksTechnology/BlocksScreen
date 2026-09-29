@@ -1,12 +1,4 @@
-"""Guards Qt resource keys: no broken ':/' literal, no stale blob, no font fallback.
-
-Qt resolves an unknown ':/' key to a null QPixmap with no exception, no warning
-and no log line, and it substitutes the system face for an unknown font-family
-just as quietly. The only feedback is a blank rectangle or the wrong typeface on
-the panel, which is how the keys in XFAIL_KEYS survived for months and how all 10
-topbar filament icons shipped in a fallback font. These tests turn that silent
-failure into a red test.
-"""
+"""Guards Qt resource keys: Qt renders an unknown ':/' key blank, silently."""
 
 import importlib
 import re
@@ -18,24 +10,18 @@ PKG_ROOT = REPO_ROOT / "BlocksScreen"
 RESOURCES = PKG_ROOT / "lib" / "ui" / "resources"
 RC_PACKAGE = "BlocksScreen.lib.ui.resources"
 
-# Known-broken keys, measured 2026-08-31. This dict may only ever shrink:
-# test_xfail_keys_are_still_broken fails once an entry stops being broken.
+# Known-broken keys; may only shrink, enforced by the stale-entry test.
 XFAIL_KEYS = {
     ":/network/media/btn_icons/network/{b}bar_wifi{": (
         "not broken at runtime: an f-string template the scanner cannot "
-        "evaluate, whose real keys are the 0bar..3bar matrix; the literal "
-        "disappears when the Icon enum replaces it in PR 8"
+        "evaluate, whose real keys are the 0bar..3bar matrix; retired by #324"
     ),
 }
 
-# Deliberately a text scan, not an AST walk: an AST walk only sees ast.Constant,
-# so it would silently drop the wifi f-string template above. The optional slash
-# catches ":ui/..." too, which Qt resolves the same as ":/ui/..." (verified) and
-# which 6 sites in this package use. The trailing + excludes a bare ":".
+# Text scan, not AST: AST misses f-strings; '/?' also matches ':ui/...'.
 _LITERAL = re.compile(r'["\'](:/?[^"\'\s]+)["\']')
 
-# Matches the CSS in an .svg <style> block. The assets are minified one-liners, so
-# the reported line number is usually 1 and the family name is what carries.
+# Matches CSS in an .svg <style> block; the assets are minified one-liners.
 _FONT_FAMILY = re.compile(r"font-family:\s*([^;}\"']+)")
 
 
@@ -58,7 +44,7 @@ def _qrc_entries() -> list[tuple[str, Path]]:
 
 
 def _qrc_keys() -> set[str]:
-    """Return the resource keys declared by the .qrc XML, the developer-facing source."""
+    """Return the resource keys declared by the .qrc XML."""
     return {key for key, _ in _qrc_entries()}
 
 
@@ -68,7 +54,7 @@ def _literal_sites() -> dict[str, list[str]]:
     for module in sorted((PKG_ROOT / "lib").rglob("*.py")):
         if module.name.endswith("_rc.py"):
             continue
-        text = module.read_text(errors="replace")
+        text = module.read_text(encoding="utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), 1):
             for match in _LITERAL.finditer(line):
                 where = f"{module.relative_to(REPO_ROOT)}:{number}"
@@ -82,16 +68,16 @@ def _qrc_prefix_roots() -> set[str]:
 
 
 def _import_blobs() -> None:
-    """Import every _rc.py, which is what registers its resources into Qt's tree."""
+    """Import every _rc.py, which registers its resources into Qt's tree."""
     for blob in sorted(RESOURCES.glob("*_rc.py")):
         importlib.import_module(f"{RC_PACKAGE}.{blob.stem}")
 
 
 def _svg_font_families() -> dict[str, list[str]]:
-    """Map every font-family declared by an .svg under resources to its 'file:line' sites."""
+    """Map every font-family an .svg declares to its 'file:line' sites."""
     families: dict[str, list[str]] = {}
     for svg in sorted(RESOURCES.rglob("*.svg")):
-        text = svg.read_text(errors="replace")
+        text = svg.read_text(encoding="utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), 1):
             for match in _FONT_FAMILY.finditer(line):
                 where = f"{svg.relative_to(REPO_ROOT)}:{number}"
@@ -100,14 +86,12 @@ def _svg_font_families() -> dict[str, list[str]]:
 
 
 def _compiled_keys() -> set[str]:
-    """Return the resource keys compiled into the _rc.py blobs, under our prefixes only."""
+    """Return the resource keys compiled into the _rc.py blobs, our prefixes only."""
     from PyQt6.QtCore import QDir, QDirIterator
 
     _import_blobs()
 
-    # Walk our own prefixes, never ':/'. Qt registers its own style and PDF
-    # resources into the same tree as soon as QtGui/QtWidgets is imported, and
-    # which of those appear depends on what the rest of the suite imported first.
+    # Skip ':/': Qt's own resources land there, import-order dependent.
     keys = set()
     for root in _qrc_prefix_roots():
         walk = QDirIterator(
@@ -128,7 +112,7 @@ def _report(header: str, detail: dict[str, list[str]]) -> str:
 
 
 def test_resources_dir_is_findable():
-    """Fail loudly if the path derivation breaks, so the other tests cannot pass empty."""
+    """Fail loudly if path derivation breaks, so the other tests cannot pass empty."""
     assert RESOURCES.is_dir(), f"resources dir not found at {RESOURCES}"
     assert list(RESOURCES.glob("*.qrc")), f"no .qrc files under {RESOURCES}"
 
@@ -188,14 +172,12 @@ def test_compiled_blobs_match_the_qrc_xml():
 
 
 def test_compiled_blobs_match_the_asset_bytes():
-    """The blobs carry the current asset bytes, which the key-set check above cannot see."""
+    """The blobs carry the current asset bytes, which the key-set check cannot see."""
     from PyQt6.QtCore import QFile, QIODevice
 
     _import_blobs()
 
-    # `make rcc` only recompiles git-modified .qrc files, so editing an asset in
-    # place leaves the XML untouched and the blob silently stale. Comparing the
-    # bytes is the only check that catches it.
+    # `make rcc` only recompiles modified .qrc files, so an in-place asset edit leaves a stale blob.
     stale = {}
     for key, path in _qrc_entries():
         handle = QFile(key)
@@ -208,9 +190,7 @@ def test_compiled_blobs_match_the_asset_bytes():
             stale[key] = [
                 f"{path.relative_to(REPO_ROOT)} changed after the blob was built"
             ]
-    assert not stale, _report(
-        "assets edited without recompiling the blob (rerun pyrcc5 by hand):", stale
-    )
+    assert not stale, _report("assets edited without recompiling the blob:", stale)
 
 
 def test_svg_font_families_resolve_exactly(qapp):
@@ -222,11 +202,10 @@ def test_svg_font_families_resolve_exactly(qapp):
     _import_blobs()
     register_momcake.cache_clear()
     assert register_momcake() == MOMCAKE_FAMILY, (
-        "the bundled .ttf files no longer file under MOMCAKE_FAMILY; the .svg "
-        "assets and lib/utils/fonts.py have to name the same family"
+        "the bundled .ttf files no longer file under MOMCAKE_FAMILY"
     )
 
-    # Qt logs nothing when it substitutes, so ask it what it actually resolved to.
+    # Qt logs nothing when it substitutes, so ask it what it resolved to.
     fallbacks = {
         family: sites
         for family, sites in _svg_font_families().items()

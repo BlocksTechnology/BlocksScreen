@@ -6,7 +6,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class BlocksLabel(QtWidgets.QLabel):
     """Custom QLabel with marquee scrolling, glow animation, and icon overlay support."""
 
-    def __init__(self, parent: QtWidgets.QWidget = None, *args, **kwargs):
+    clicked = QtCore.pyqtSignal()
+
+    def __init__(self, parent: QtWidgets.QWidget | None, *args, **kwargs):
         """Initialise the label and configure default scroll/animation state."""
         super().__init__(parent, *args, **kwargs)
 
@@ -57,6 +59,7 @@ class BlocksLabel(QtWidgets.QLabel):
             and not self.timer.isActive()
             and self._marquee
         ):
+            self.clicked.emit()
             self.start_scroll()
 
     def setPixmap(self, a0: QtGui.QPixmap) -> None:

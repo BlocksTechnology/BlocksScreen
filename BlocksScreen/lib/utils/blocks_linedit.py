@@ -1,5 +1,3 @@
-import typing
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -10,7 +8,7 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
     TEXT_MARGIN = 10
     CORNER_RADIUS = 8
 
-    def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
 
         # State
@@ -22,6 +20,7 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
 
         # Pre-allocated colors (avoid allocation in paint)
         self._bg_color = QtGui.QColor(223, 223, 223)
+        self._disabled_bg_color = QtGui.QColor(169, 169, 169)
         self._bg_pressed_color = QtGui.QColor(200, 200, 200)
         self._text_color = QtGui.QColor(0, 0, 0)
         self._placeholder_color = QtGui.QColor(130, 130, 130)
@@ -89,13 +88,15 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         """Handle mouse release"""
         super().mouseReleaseEvent(event)
 
-    def paintEvent(self, event: typing.Optional[QtGui.QPaintEvent]) -> None:
+    def paintEvent(self, event: QtGui.QPaintEvent | None) -> None:
         """Custom paint with embedded toggle button."""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
         # Background
-        painter.setBrush(self._bg_color)
+        painter.setBrush(
+            self._bg_color if self.isEnabled() else self._disabled_bg_color
+        )
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.drawRoundedRect(self.rect(), self.CORNER_RADIUS, self.CORNER_RADIUS)
 
