@@ -49,6 +49,8 @@ def svc():
     )
     mock_svc.recover = AsyncMock()
     mock_svc.has_fetch_failures = MagicMock(return_value=False)
+    mock_svc.needs_provision = MagicMock(return_value=False)
+    mock_svc.provision_missing = AsyncMock(return_value=False)
     mock_svc._components = [
         ComponentConfig(name="moonraker", kind="git"),
         ComponentConfig(name="klipper", kind="git"),
@@ -63,6 +65,7 @@ def svc():
     s = UpdaterDbusService.__new__(UpdaterDbusService)
     s._svc = mock_svc
     s._busy = False
+    s._boot_busy = False
     s._background_tasks = set()
     s._status_check_in_progress = False
     s._status_pending = False

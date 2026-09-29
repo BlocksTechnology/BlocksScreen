@@ -102,7 +102,9 @@ class UpdaterInterface(
         """Wire the service and busy state, then spawn the boot, poll, and self-heal tasks."""
         super().__init__()
         self._svc = UpdateService(callback=DbusProgressCallback(self))
-        self._busy: bool = False
+        # Busy before export so the UI's get_busy on connect sees a boot provision, not a MainWindow flash.
+        self._boot_busy: bool = self._svc.needs_provision()
+        self._busy: bool = self._boot_busy
         self._background_tasks: set[asyncio.Task] = set()
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
@@ -128,6 +130,12 @@ class UpdaterInterface(
         exc = task.exception()
         if exc is not None:
             _log.error("task %r failed", task.get_name(), exc_info=exc)
+
+    def _release_boot_busy(self) -> None:
+        """Drop the busy state pre-set at boot; no await between this and provision's own busy(False)."""
+        if self._boot_busy:
+            self._boot_busy = False
+            self._set_busy(False)
 
     def _set_busy(self, busy: bool) -> None:
         """Emit busy_changed only on state transitions to avoid redundant signals."""
@@ -191,14 +199,17 @@ class UpdaterInterface(
 
     async def _periodic_status_check(self) -> None:
         """Emit status shortly after startup, then at the poll interval - or sooner while fetches fail."""
-        await asyncio.sleep(3.0)
+        if not self._boot_busy:
+            await asyncio.sleep(3.0)
         while True:
             try:
+                # Provision first (a no-op stat when nothing is missing) so status reflects it.
+                await self._svc.provision_missing(self._set_busy)
+                self._release_boot_busy()
                 await self._emit_status()
-                if await self._svc.provision_missing(self._set_busy):
-                    await self._emit_status()  # reflect freshly-installed components
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
+                self._release_boot_busy()
             interval = self._svc.poll_interval
             if self._svc.has_fetch_failures():
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)

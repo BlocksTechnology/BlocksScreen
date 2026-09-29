@@ -480,17 +480,25 @@ class UpdateService:
                 )
         return ok
 
-    async def provision_missing(
-        self, on_busy: Callable[[bool], None] | None = None
-    ) -> bool:
-        """Clone absent install_if_missing components at boot; on_busy brackets the work."""
-        missing = [
+    def _missing_provisions(self) -> list[ComponentConfig]:
+        """install_if_missing components whose directory is absent."""
+        return [
             c
             for c in self._components
             if c.install_if_missing
             and c.url
             and (c.path is None or not c.path.exists())
         ]
+
+    def needs_provision(self) -> bool:
+        """True if provision_missing() would clone something (cheap filesystem check)."""
+        return bool(self._missing_provisions())
+
+    async def provision_missing(
+        self, on_busy: Callable[[bool], None] | None = None
+    ) -> bool:
+        """Clone absent install_if_missing components at boot; on_busy brackets the work."""
+        missing = self._missing_provisions()
         if not missing:
             return False
         provisioned = False

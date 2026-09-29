@@ -349,6 +349,46 @@ class TestPollIntervalUsage:
         assert sleeps == [3.0, 42.0]
 
 
+class TestBootProvisionBusy:
+    def _build(self, missing):
+        from updater import dbus_service
+
+        mock_svc = MagicMock()
+        mock_svc.needs_provision.return_value = missing
+        with (
+            patch.object(dbus_service, "UpdateService", return_value=mock_svc),
+            patch.object(dbus_service.UpdaterDbusService, "_spawn", MagicMock()),
+        ):
+            return dbus_service.UpdaterDbusService()
+
+    @pytest.mark.parametrize("missing", [True, False])
+    def test_busy_at_construction_iff_component_missing(self, missing):
+        """Busy must be set before export so the UI's get_busy on connect sees the provision."""
+        assert self._build(missing)._busy is missing
+
+    @pytest.mark.asyncio
+    async def test_boot_busy_skips_initial_sleep_and_releases(self, svc):
+        """Missing component: provision runs at once (no 3 s sleep), then busy drops."""
+        from updater import dbus_service
+
+        svc._boot_busy = svc._busy = True
+        sleeps: list[float] = []
+
+        async def fake_sleep(delay):
+            sleeps.append(delay)
+            raise asyncio.CancelledError
+
+        with (
+            patch.object(dbus_service.asyncio, "sleep", fake_sleep),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await svc._periodic_status_check()
+
+        assert sleeps == [svc._svc.poll_interval]
+        assert svc._boot_busy is False
+        assert svc._busy is False
+
+
 class TestMethodReturnValues:
     @pytest.mark.asyncio
     async def test_update_all_rejected_when_busy_returns_false(self, svc):
