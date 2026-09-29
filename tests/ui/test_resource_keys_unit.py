@@ -21,6 +21,9 @@ XFAIL_KEYS = {
 # Text scan, not AST: AST misses f-strings; '/?' also matches ':ui/...'.
 _LITERAL = re.compile(r'["\'](:/?[^"\'\s]+)["\']')
 
+# Matches CSS in an .svg <style> block; the assets are minified one-liners.
+_FONT_FAMILY = re.compile(r"font-family:\s*([^;}\"']+)")
+
 
 def _canonical(key: str) -> str:
     """Normalize a bare ':' prefix to ':/', the two forms Qt treats as equivalent."""
@@ -64,12 +67,29 @@ def _qrc_prefix_roots() -> set[str]:
     return {f":/{key.split('/')[1]}" for key in _qrc_keys()}
 
 
+def _import_blobs() -> None:
+    """Import every _rc.py, which registers its resources into Qt's tree."""
+    for blob in sorted(RESOURCES.glob("*_rc.py")):
+        importlib.import_module(f"{RC_PACKAGE}.{blob.stem}")
+
+
+def _svg_font_families() -> dict[str, list[str]]:
+    """Map every font-family an .svg declares to its 'file:line' sites."""
+    families: dict[str, list[str]] = {}
+    for svg in sorted(RESOURCES.rglob("*.svg")):
+        text = svg.read_text(encoding="utf-8", errors="replace")
+        for number, line in enumerate(text.splitlines(), 1):
+            for match in _FONT_FAMILY.finditer(line):
+                where = f"{svg.relative_to(REPO_ROOT)}:{number}"
+                families.setdefault(match.group(1).strip(), []).append(where)
+    return families
+
+
 def _compiled_keys() -> set[str]:
     """Return the resource keys compiled into the _rc.py blobs, our prefixes only."""
     from PyQt6.QtCore import QDir, QDirIterator
 
-    for blob in sorted(RESOURCES.glob("*_rc.py")):
-        importlib.import_module(f"{RC_PACKAGE}.{blob.stem}")
+    _import_blobs()
 
     # Skip ':/': Qt's own resources land there, import-order dependent.
     keys = set()
@@ -149,3 +169,49 @@ def test_compiled_blobs_match_the_qrc_xml():
             compiled - declared
         )
     assert not drift, _report("the .qrc XML and the _rc.py blobs disagree:", drift)
+
+
+def test_compiled_blobs_match_the_asset_bytes():
+    """The blobs carry the current asset bytes, which the key-set check cannot see."""
+    from PyQt6.QtCore import QFile, QIODevice
+
+    _import_blobs()
+
+    # `make rcc` only recompiles modified .qrc files, so an in-place asset edit leaves a stale blob.
+    stale = {}
+    for key, path in _qrc_entries():
+        handle = QFile(key)
+        if not handle.open(QIODevice.OpenModeFlag.ReadOnly):
+            stale[key] = ["absent from every compiled blob"]
+            continue
+        compiled = bytes(handle.readAll())
+        handle.close()
+        if compiled != path.read_bytes():
+            stale[key] = [
+                f"{path.relative_to(REPO_ROOT)} changed after the blob was built"
+            ]
+    assert not stale, _report("assets edited without recompiling the blob:", stale)
+
+
+def test_svg_font_families_resolve_exactly(qapp):
+    """Every font-family an .svg declares matches a real face, so nothing falls back."""
+    from PyQt6.QtGui import QFont, QFontInfo
+
+    from BlocksScreen.lib.utils.fonts import MOMCAKE_FAMILY, register_momcake
+
+    _import_blobs()
+    register_momcake.cache_clear()
+    assert register_momcake() == MOMCAKE_FAMILY, (
+        "the bundled .ttf files no longer file under MOMCAKE_FAMILY"
+    )
+
+    # Qt logs nothing when it substitutes, so ask it what it resolved to.
+    fallbacks = {
+        family: sites
+        for family, sites in _svg_font_families().items()
+        if QFontInfo(QFont(family)).family() != family
+    }
+    assert not fallbacks, _report(
+        "font families no loaded face matches (Qt paints these in the system font):",
+        fallbacks,
+    )
