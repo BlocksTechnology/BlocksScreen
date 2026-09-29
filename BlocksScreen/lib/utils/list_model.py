@@ -36,7 +36,7 @@ class ListItem:
     notificate: bool = False
 
     # per-width height cache; the -1 key holds a notification's display timestamp
-    _cache: dict[int, int | str] = field(default_factory=dict)
+    _cache: dict[int, typing.Any] = field(default_factory=dict)
 
 
 class EntryListModel(QtCore.QAbstractListModel):

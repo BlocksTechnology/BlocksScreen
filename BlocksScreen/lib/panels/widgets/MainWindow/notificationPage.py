@@ -103,6 +103,12 @@ class NotificationPage(QtWidgets.QWidget):
         self.model.setData(index, True, EntryListModel.EnableRole)
         self.on_item_clicked(index.data(QtCore.Qt.ItemDataRole.UserRole))
 
+    def _should_select_newest(self) -> bool:
+        """False while the user is viewing another entry, so it is not deselected."""
+        if not self.isVisible() or self.selected_item is None:
+            return True
+        return self.selected_item is self.model.entries[0]
+
     def _ingest_notification(self, message: str, priority: int) -> None:
         """Adds *message* to the model, collapsing a repeat of the last entry (moonraker echo spam)."""
         match priority:
@@ -116,13 +122,15 @@ class NotificationPage(QtWidgets.QWidget):
                 color, icon = "#a4a4a4", self._ICON_INFO
 
         if self.model.refresh_last_if_duplicate(message, color):
-            self._select_row(0)
+            if self._should_select_newest():
+                self._select_row(0)
             return
 
         self.notification_list_view.blockSignals(True)
         try:
             self._add_notif_entry(message, color, icon)
-            self._select_row(0)
+            if self._should_select_newest():
+                self._select_row(0)
         finally:
             self.notification_list_view.blockSignals(False)
 
@@ -256,7 +264,6 @@ class NotificationPage(QtWidgets.QWidget):
         self.back_btn = IconButton(self)
         self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.back_btn.setFlat(True)
         self.back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.header_content_layout.addWidget(
             self.back_btn
