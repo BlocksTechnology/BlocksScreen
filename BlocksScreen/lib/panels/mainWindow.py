@@ -217,6 +217,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
         self.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
+        self.notiPage.has_new_notification.connect(
+            self.notification_btn.setShowNotification
+        )
+        self.notiPage.has_new_notification.connect(
+            self.conn_window.notification_button.setShowNotification
+        )
         self.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.main_content_widget.indexOf(self.controlTab),
