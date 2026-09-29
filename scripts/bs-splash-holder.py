@@ -17,6 +17,7 @@ import fcntl
 import json
 import os
 import signal
+import socket
 import sys
 import time
 
@@ -27,6 +28,7 @@ _VT_WAITACTIVE = 0x5607
 _VT_NUM = 8
 _POLL_INTERVAL = 0.5
 _STATUS_PATH = "/run/blockscreen/updater_status.json"
+_X0 = "/tmp/.X11-unix/X0"  # nosec B108 - canonical X11 socket path
 
 _running = True
 _status_mtime: float = 0.0
@@ -36,6 +38,19 @@ _cache_mtime: float = 0.0  # mtime of the cache version last written to fb0
 def _log(msg: str) -> None:
     sys.stderr.write(f"bs-splash-holder: {msg}\n")
     sys.stderr.flush()
+
+
+def _x_session_live() -> bool:
+    """Probe X0 by connecting: the socket file outlives a crashed X server."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(1.0)
+        try:
+            s.connect(_X0)
+        except (FileNotFoundError, ConnectionRefusedError):
+            return False
+        except OSError:
+            return True  # busy backlog or EACCES: never steal the VT from a live GUI
+    return True
 
 
 def _activate_tty8() -> None:
@@ -93,8 +108,13 @@ def _on_sigterm(_sig: int, _frame: object) -> None:
 
 signal.signal(signal.SIGTERM, _on_sigterm)
 
-# Switch to tty8 immediately - VT switch does not require fb0.
-_activate_tty8()
+# Switch to tty8 immediately - VT switch does not require fb0. Skip when X is
+# already up (first-install start lands mid-session): stealing the VT from the
+# live GUI on tty7 would look like a bricked screen until a power cycle.
+if _x_session_live():
+    _log("X session present - not activating tty8")
+else:
+    _activate_tty8()
 
 # Clear tty8 and hide the cursor (no bare text): the screen stays black until the
 # splash image is written to fb0 below, so the user only ever sees the logo splash.

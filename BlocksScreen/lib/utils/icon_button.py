@@ -156,7 +156,7 @@ class IconButton(QtWidgets.QPushButton):
         elif name == "has_text":
             self.has_text = value
         elif name == "name":
-            self._name = name
+            self._name = value
         elif name == "text_color":
             self.text_color = value
         return super().setProperty(name, value)

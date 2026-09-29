@@ -162,6 +162,10 @@ cython_debug/
 *.drawio
 *.logs
 *.log
+# TimedRotatingFileHandler appends a date suffix, so *.log alone leaves logs/ dirty on every box.
+logs/
+# Bench-only acceptance/diagnostic suite: stays local, never shipped to the fleet.
+scripts/healthcheck/
 
 */*Zone.Identifier
 *:Zone.Identifier

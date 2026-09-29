@@ -17,8 +17,8 @@ for _stale_key in (
     "lib",
     "lib.panels",
     "lib.panels.widgets",
-    "lib.panels.widgets.notificationPage",
-    "lib.panels.widgets.popupDialogWidget",
+    "lib.panels.widgets.MainWindow.notificationPage",
+    "lib.panels.widgets.Common.popupDialogWidget",
     "lib.utils",
     "lib.utils.blocks_button",
     "lib.utils.blocks_frame",
@@ -32,7 +32,7 @@ _lib_spec = importlib.machinery.ModuleSpec("lib", loader=None, is_package=True)
 _lib_spec.submodule_search_locations = [str(_bs_lib_dir)]
 sys.modules["lib"] = importlib.util.module_from_spec(_lib_spec)
 
-from lib.panels.widgets.notificationPage import NotificationPage  # noqa: E402
+from lib.panels.widgets.MainWindow.notificationPage import NotificationPage  # noqa: E402
 
 _notification_page_module = sys.modules[NotificationPage.__module__]
 
@@ -54,7 +54,7 @@ def _mock_setup(self) -> None:
 def page(qtbot):
     with (
         patch.object(_notification_page_module, "Popup", MagicMock()),
-        patch.object(NotificationPage, "_setupUI", _mock_setup),
+        patch.object(NotificationPage, "_setup_ui", _mock_setup),
     ):
         pg = NotificationPage()
     qtbot.addWidget(pg)

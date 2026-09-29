@@ -19,11 +19,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# printTab/controlTab import configfile, lib.files, lib.printer purely for
-# type hints and passthrough attribute assignment -- stub them so importing
-# the tab classes doesn't require the real config/websocket/printer stack.
+# fresh stubs, not setdefault: patching an already-imported real configfile leaks
 for _name in ("configfile", "lib.files", "lib.printer"):
-    sys.modules.setdefault(_name, types.ModuleType(_name))
+    sys.modules[_name] = types.ModuleType(_name)
 sys.modules["configfile"].BlocksScreenConfig = MagicMock
 sys.modules["configfile"].get_configparser = MagicMock(return_value=MagicMock())
 sys.modules["lib.files"].Files = MagicMock
@@ -41,11 +39,12 @@ sys.modules.pop("lib.utils.icon_button", None)
 sys.modules.pop("lib.panels.printTab", None)
 sys.modules.pop("lib.panels.controlTab", None)
 sys.modules.pop("lib.ui", None)
-sys.modules.pop("lib.ui.controlStackedWidget_ui", None)
+for _stubbed in [_m for _m in sys.modules if _m.startswith("lib.panels.widgets")]:
+    sys.modules.pop(_stubbed, None)
 
 from lib.panels.controlTab import ControlTab  # noqa: E402
 from lib.panels.printTab import PrintTab  # noqa: E402
-from lib.panels.widgets.slider_selector_page import SliderPage  # noqa: E402
+from lib.panels.widgets.Common.slider_selector_page import SliderPage  # noqa: E402
 
 
 @pytest.fixture

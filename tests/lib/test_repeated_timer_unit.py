@@ -1,5 +1,7 @@
+import sys
 import threading
 import time
+from types import SimpleNamespace
 
 from BlocksScreen.lib.utils.RepeatedTimer import RepeatedTimer
 
@@ -32,3 +34,46 @@ def test_normal_repeat_still_fires():
     time.sleep(0.1)
     rt.stopTimer()
     assert len(calls) >= 2
+
+
+def test_stop_racing_start_never_joins_unstarted_thread(monkeypatch):
+    """stopTimer() during startTimer() must wait for the start, not join an unstarted thread."""
+    entered, release = threading.Event(), threading.Event()
+
+    class _SlowStart(threading.Thread):
+        def start(self):
+            entered.set()
+            release.wait(timeout=2)
+            super().start()
+
+    rt = RepeatedTimer(10, lambda: None)
+    rt.stopTimer()
+    monkeypatch.setattr(
+        sys.modules[RepeatedTimer.__module__],
+        "threading",
+        SimpleNamespace(
+            Thread=_SlowStart,
+            Event=threading.Event,
+            Lock=threading.Lock,
+            current_thread=threading.current_thread,
+        ),
+    )
+    errors = []
+
+    def stop():
+        try:
+            rt.stopTimer()
+        except RuntimeError as e:
+            errors.append(e)
+
+    starter = threading.Thread(target=rt.startTimer)
+    starter.start()
+    assert entered.wait(timeout=2), "startTimer never reached Thread.start"
+    stopper = threading.Thread(target=stop)
+    stopper.start()
+    stopper.join(timeout=0.2)  # stays blocked on the lock until start() returns
+    release.set()
+    starter.join(timeout=2)
+    stopper.join(timeout=2)
+    assert errors == []
+    assert rt.running is False
