@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
-from lib.panels.widgets.confirmPage import ConfirmWidget
+from lib.panels.widgets.PrintTab.confirmPage import ConfirmWidget
 
 
 def _labels(metadata: dict) -> tuple[str, str]:

@@ -82,8 +82,8 @@ class NetworkStatus(IntEnum):
     ``NetworkInfo.is_open`` (derived from ``security_type``) instead.
     """
 
-    DISCOVERED = 0  # Seen in scan, not saved — protected security
-    OPEN = 1  # Seen in scan, not saved — open (no passphrase)
+    DISCOVERED = 0  # Seen in scan, not saved: protected security
+    OPEN = 1  # Seen in scan, not saved: open (no passphrase)
     SAVED = 2  # Profile saved on this device
     ACTIVE = 3  # Currently connected
     HIDDEN = 4  # Hidden-network placeholder
@@ -237,6 +237,10 @@ class SavedNetwork:
     signal_strength: int = 0
     timestamp: int = 0  # Unix time of last successful activation
     is_dhcp: bool = True  # True = auto (DHCP), False = manual (static IP)
+    ip_address: str = ""  # static IPv4 config, all empty while on DHCP
+    netmask: str = ""
+    gateway: str = ""
+    dns_servers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,7 +291,7 @@ class HotspotSecurity(str, Enum):
     """
 
     WPA1 = "wpa1"
-    WPA2_PSK = "wpa-psk"  # WPA2-PSK (CCMP) — default
+    WPA2_PSK = "wpa-psk"  # WPA2-PSK (CCMP): default
 
     @classmethod
     def is_valid(cls, value: str) -> bool:

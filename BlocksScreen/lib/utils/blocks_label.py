@@ -212,7 +212,7 @@ class BlocksLabel(QtWidgets.QLabel):
             else:
                 qp.fillRect(rect, self._background_color)
 
-        if self.icon_pixmap:
+        if self.icon_pixmap is not None and not self.icon_pixmap.isNull():
             icon_rect = QtCore.QRectF(
                 0.0 + self.icon_margin,
                 0.0 + self.icon_margin,
