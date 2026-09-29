@@ -2397,6 +2397,7 @@ class TestDeferredRestart:
         mock_restart.assert_not_called()
         mock_verify.assert_not_called()
         assert not sentinel.exists()  # consumed
+        assert svc.daemon_restart_pending is True
 
     @pytest.mark.asyncio
     async def test_code_restarts_only_when_importable(self, tmp_path: Path):
@@ -2413,6 +2414,7 @@ class TestDeferredRestart:
             svc = self._svc_with_ui()
             await svc._apply_deferred_restart()
         mock_restart.assert_called_once_with("BlocksScreen-updater.service")
+        assert svc.daemon_restart_pending is True
 
     @pytest.mark.asyncio
     async def test_code_skips_restart_when_not_importable(self, tmp_path: Path):
@@ -2430,6 +2432,7 @@ class TestDeferredRestart:
             svc = self._svc_with_ui()
             await svc._apply_deferred_restart()
         mock_restart.assert_not_called()
+        assert svc.daemon_restart_pending is False
 
     def test_read_clear_sentinel_install_outranks_code(self, tmp_path: Path):
         sentinel = tmp_path / "updater-restart-needed"

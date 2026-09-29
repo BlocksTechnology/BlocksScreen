@@ -275,7 +275,10 @@ class UpdaterInterface(
             self._update_all_locked, "update_all", "updater"
         )
         # Silent apt pass only if we held the lock; else the CLI run owns apt.
-        if ran:
+        if ran and self._svc.daemon_restart_pending:
+            # A SIGKILL from the restart could land inside dpkg; the next poll re-offers the packages.
+            _log.info("background apt upgrade skipped: daemon restart pending")
+        elif ran:
             self._spawn(
                 self._svc.background_apt_upgrade(), name="background_apt_upgrade"
             )

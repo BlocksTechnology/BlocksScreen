@@ -422,6 +422,21 @@ class TestMethodReturnValues:
         assert "RF50-Klipper" in called_with
         assert "klipper" not in called_with  # clean repo not updated
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("restart_pending", "apt_spawned"), [(True, False), (False, True)]
+    )
+    async def test_background_apt_skipped_when_daemon_restart_pending(
+        self, svc, restart_pending, apt_spawned
+    ):
+        """A pending daemon restart would SIGKILL apt mid-run, so the pass is skipped."""
+        svc._svc.check_status = AsyncMock(return_value={})
+        svc._svc.background_apt_upgrade = AsyncMock()
+        svc._svc.daemon_restart_pending = restart_pending
+        await svc._run_update_all()
+        await asyncio.sleep(0)  # let a spawned task run
+        assert svc._svc.background_apt_upgrade.called is apt_spawned
+
 
 class TestLockHeldSurfacesError:
     def _held_lock(self):

@@ -260,6 +260,8 @@ class UpdateService:
         self._log = logging.getLogger("updater")
         # Self-heal: trailing-window sample ring for crash-loop detection.
         self._nrestarts_samples: dict[str, list[tuple[float, int]]] = {}
+        # Set once this daemon is about to be stopped, so no apt child gets SIGKILLed with it.
+        self.daemon_restart_pending = False
 
     def has_component(self, name: str) -> bool:
         """Return True if a component with the given name is registered."""
@@ -1005,6 +1007,7 @@ class UpdateService:
                     "(install-updater runs out-of-band)"
                 )
                 await asyncio.to_thread(self._touch_deploy_flag)
+                self.daemon_restart_pending = True
                 return
             comp = next(
                 (c for c in self._components if c.service in _FIRE_AND_FORGET_SERVICES),
@@ -1022,6 +1025,7 @@ class UpdateService:
                 UPDATER_SERVICE,
             )
             await restart_service_noblock(UPDATER_SERVICE)
+            self.daemon_restart_pending = True
         except Exception:  # noqa: BLE001
             self._log.error("deferred restart handling failed", exc_info=True)
 

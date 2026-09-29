@@ -1382,7 +1382,9 @@ class TestWaitForHttpReady:
     @pytest.mark.asyncio
     async def test_times_out_when_never_ready(self):
         with patch("updater.executor._http_probe", return_value=False):
-            assert await wait_for_http_ready("http://127.0.0.1:7912/x", timeout=0) is False
+            assert (
+                await wait_for_http_ready("http://127.0.0.1:7912/x", timeout=0) is False
+            )
 
     @pytest.mark.asyncio
     async def test_polls_until_ready(self):
