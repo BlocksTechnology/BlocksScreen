@@ -11,14 +11,14 @@ from updater.models import ComponentStatus
 def page(qapp):
     """UpdatePage instance with all heavy UI deps mocked."""
     patches = [
-        patch("BlocksScreen.lib.panels.widgets.updatePage.LoadingOverlayWidget"),
-        patch("BlocksScreen.lib.panels.widgets.updatePage.BlocksCustomButton"),
-        patch("BlocksScreen.lib.panels.widgets.updatePage.IconButton"),
+        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.LoadingOverlayWidget"),
+        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BlocksCustomButton"),
+        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.IconButton"),
     ]
     for p in patches:
         p.start()
 
-    from BlocksScreen.lib.panels.widgets.updatePage import UpdatePage
+    from BlocksScreen.lib.panels.widgets.MainWindow.updatePage import UpdatePage
 
     def _mock_setup(self):
         for attr in (
@@ -40,7 +40,7 @@ def page(qapp):
         self._chevron_right = MagicMock()
         self._chevron_down = MagicMock()
 
-    setup_patch = patch.object(UpdatePage, "_setupUI", _mock_setup)
+    setup_patch = patch.object(UpdatePage, "_setup_ui", _mock_setup)
     setup_patch.start()
     pg = UpdatePage()
     setup_patch.stop()
@@ -498,7 +498,7 @@ class TestBadStatusPayload:
 
 class TestConfirmPopupCleanup:
     def test_second_confirm_deletes_previous_popup(self, page):
-        with patch("BlocksScreen.lib.panels.widgets.updatePage.BasePopup") as popup_cls:
+        with patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BasePopup") as popup_cls:
             first = MagicMock()
             second = MagicMock()
             popup_cls.side_effect = [first, second]

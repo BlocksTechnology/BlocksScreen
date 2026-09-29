@@ -9,7 +9,7 @@ from configfile import BlocksScreenConfig, get_configparser
 from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
-from lib.klipper_message_filter import (  # noqa: F405
+from lib.klipper_message_filter import (
     MessageSource,
     Severity,
     match_message,
@@ -22,22 +22,23 @@ from lib.panels.filamentTab import FilamentTab
 from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.cancelPage import CancelPage
-from lib.panels.widgets.connectionPage import ConnectionPage
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.notificationPage import NotificationPage
-from lib.panels.widgets.updatePage import UpdatePage
+from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.MainWindow.cancelPage import CancelPage
+from lib.panels.widgets.MainWindow.connectionPage import ConnectionPage
+from lib.panels.widgets.MainWindow.notificationPage import NotificationPage
+from lib.panels.widgets.MainWindow.updatePage import UpdatePage
 from lib.printer import Printer
-from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
 from lib.ui.resources.background_resources_rc import *
 from lib.ui.resources.font_rc import *
 from lib.ui.resources.graphic_resources_rc import *
 from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
-from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
 from lib.updater_worker import UpdaterWorker
+from lib.utils.blocks_tabwidget import NotificationQTabWidget
+from lib.utils.display_button import DisplayButton
+from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
@@ -120,10 +121,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
-        super(MainWindow, self).__init__()
+        super().__init__()
         self.config: BlocksScreenConfig = get_configparser()
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self)
+        self._setup_ui()
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
         self._update_in_progress: bool = False
@@ -139,7 +139,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._klipper_restart_timeout.setSingleShot(True)
         self._klipper_restart_timeout.setInterval(30_000)
         self._klipper_restart_timeout.timeout.connect(self._on_klipper_restart_timeout)
-        self.ui.main_content_widget.setCurrentIndex(0)
+        # Outlasts a RESTART's socket gap and klipper.service RestartSec=10
+        self._klipper_disconnect_grace = QtCore.QTimer(self)
+        self._klipper_disconnect_grace.setSingleShot(True)
+        self._klipper_disconnect_grace.setInterval(15_000)
+        self._klipper_disconnect_grace.timeout.connect(self._auto_restart_klipper)
 
         usb_config = self.config.get_section("usb_manager", fallback=None)
         gdir = None
@@ -170,16 +174,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
-        self.printPanel = PrintTab(
-            self.ui.printTab, self.file_data, self.ws, self.printer
+        self.printPanel = PrintTab(self.printTab, self.file_data, self.ws, self.printer)
+        self.usb_manager.usb_mounted.connect(
+            self.printPanel.filesPage_widget.on_usb_added
+        )
+        # usb_unmounted only; also wiring hardware_removed refreshes twice.
+        self.usb_manager.usb_unmounted.connect(
+            self.printPanel.filesPage_widget.on_usb_removed
         )
         if not os.environ.get("BLOCKSCREEN_DEV"):
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
-            self.ui.filamentTab, self.printer, self.ws, self.config, self.amu_manager
+            self.filamentTab, self.printer, self.ws, self.config, self.amu_manager
         )
-        self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
-        self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
+        self.controlPanel = ControlTab(self.controlTab, self.ws, self.printer)
+        self.utilitiesPanel = UtilitiesTab(self.utilitiesTab, self.ws, self.printer)
 
         self.networkPanel = NetworkControlWindow(self)
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
@@ -195,6 +204,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
         self.in_case_error.connect(self.printPanel.in_case_error)
+        self.in_case_error.connect(self.filamentPanel.in_case_error)
 
         self.show_notifications.connect(self.notiPage.new_notication)
 
@@ -206,31 +216,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
-
-        self.ui.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
-        self.ui.extruder_temp_display.clicked.connect(
+        self.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
+        self.notiPage.has_new_notification.connect(
+            self.notification_btn.setShowNotification
+        )
+        self.notiPage.has_new_notification.connect(
+            self.conn_window.notification_button.setShowNotification
+        )
+        self.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
-                self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.main_content_widget.indexOf(self.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
-        self.ui.bed_temp_display.clicked.connect(
+        self.bed_temp_display.clicked.connect(
             lambda: self.global_change_page(
-                self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.main_content_widget.indexOf(self.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
-        self.ui.filament_type_icon.clicked.connect(
+        self.filament_type_icon.clicked.connect(
             lambda: self.global_change_page(
-                self.ui.main_content_widget.indexOf(self.ui.filamentTab),
+                self.main_content_widget.indexOf(self.filamentTab),
                 2,
             )
         )
-        self.ui.filament_type_icon.setText("PLA")
-        self.ui.filament_type_icon.update()
-        self.ui.nozzle_size_icon.setText("0.4mm")
-        self.ui.nozzle_size_icon.update()
-        self.conn_window.retry_connection_clicked.connect(slot=self.ws.retry_wb_conn)
         self.conn_window.firmware_restart_clicked.connect(
             slot=self.mc.restart_klipper_mcu_service
         )
@@ -255,7 +265,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
-        self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
+        self.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
         self.call_network_panel.connect(self.networkPanel.show_network_panel)
         self.call_notification_panel.connect(self.notiPage.show_notification_panel)
         self.networkPanel.update_wifi_icon.connect(self.change_wifi_icon)
@@ -263,7 +273,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.conn_window.notification_button_clicked.connect(
             self.call_notification_panel.emit
         )
-        self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
+        self.wifi_button.clicked.connect(self.call_network_panel.emit)
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
         )
@@ -299,11 +309,10 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.updater_worker.rollback_done.connect(self.update_page.handle_rollback_done)
         self.updater_worker.recover_done.connect(self.update_page.handle_recover_done)
-        self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.utilitiesPanel.show_update_page.connect(self.show_update_page)
         self.conn_window.update_button_clicked.connect(self.show_update_page)
-        self.ui.extruder_temp_display.display_format = "upper_downer"
-        self.ui.bed_temp_display.display_format = "upper_downer"
+        self.extruder_temp_display.display_format = "upper_downer"
+        self.bed_temp_display.display_format = "upper_downer"
 
         self.controlPanel.call_load_panel.connect(self.show_loadscreen)
         self.filamentPanel.call_load_panel.connect(self.show_loadscreen)
@@ -320,7 +329,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.loadscreen.add_widget(self.loadwidget)
         self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
-        self.cancelpage = CancelPage(self, ws=self.ws)
+        self.cancelpage = CancelPage(self)
         self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
         self.cancelpage.run_gcode.connect(self.ws.api.run_gcode)
         self.printer.print_stats_update[str, str].connect(
@@ -345,7 +354,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.print_stats_update[str, str].connect(self._track_print_state)
 
         self.print_status = "idle"
-        self.ui.chamber_temp_display.hide()
+        self.chamber_temp_display.hide()
 
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
@@ -388,11 +397,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
-            if not show and self._post_update_reconnect:
-                return
-            elif not show and self._update_in_progress:
-                return
-            elif not show and self._klipper_auto_restart_pending:
+            if (
+                not show
+                and self._post_update_reconnect
+                or not show
+                and self._update_in_progress
+                or not show
+                and self._klipper_auto_restart_pending
+            ):
                 return
 
             if _sender == self.filamentPanel:
@@ -418,9 +430,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_update_page(self, fullscreen: bool):
         """Slot for displaying update Panel"""
         if not fullscreen:
-            self.update_page.setParent(self.ui.main_content_widget)
-            current_index = self.ui.main_content_widget.currentIndex()
-            tab_rect = self.ui.main_content_widget.tabBar().tabRect(current_index)
+            self.update_page.setParent(self.main_content_widget)
+            current_index = self.main_content_widget.currentIndex()
+            tab_rect = self.main_content_widget.tabBar().tabRect(current_index)
             width = tab_rect.width()
             _parent_size = self.update_page.parent().size()
             self.update_page.setGeometry(
@@ -438,28 +450,37 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str, name="on-klippy-state")
     def _on_klippy_state(self, state: str) -> None:
         self._klippy_ready = state == "ready"
+        if state == "disconnected":
+            self._klipper_disconnect_grace.start()
+        else:
+            self._klipper_disconnect_grace.stop()
         if state == "shutdown":
             if self._update_in_progress:
                 _logger.warning("Klipper E-stop detected — cancelling active update")
                 self.updater_worker.trigger_cancel()
-        elif (
-            state == "disconnected"
-            and not self._klipper_auto_restart_pending
-            and not self._update_in_progress
-            and not self.conn_window.manual_restart_pending
-        ):
-            _logger.info("Klipper disconnected — auto-restarting service")
-            self._klipper_auto_restart_pending = True
-            self.loadwidget.set_status_message("Restarting Klipper...")
-            self.loadscreen.show()
-            self._klipper_restart_timeout.start()
-            self.ws.api.restart_service("klipper")
         elif state == "ready" and self._klipper_auto_restart_pending:
             _logger.info("Klipper back online after auto-restart")
             self._klipper_auto_restart_pending = False
             self._klipper_restart_timeout.stop()
             if not self._post_update_reconnect:
                 self.loadscreen.hide()
+
+    @QtCore.pyqtSlot(name="auto-restart-klipper")
+    def _auto_restart_klipper(self) -> None:
+        """Restart the klipper service once it stays disconnected past the grace."""
+        if (
+            self._klipper_auto_restart_pending
+            or self._update_in_progress
+            or self.conn_window.manual_restart_pending
+            or not self.ws.connected
+        ):
+            return
+        _logger.info("Klipper disconnected — auto-restarting service")
+        self._klipper_auto_restart_pending = True
+        self.loadwidget.set_status_message("Restarting Klipper...")
+        self.loadscreen.show()
+        self._klipper_restart_timeout.start()
+        self.ws.api.restart_service("klipper")
 
     @QtCore.pyqtSlot(name="arm-health-bless")
     def _arm_health_bless(self) -> None:
@@ -491,20 +512,20 @@ class MainWindow(QtWidgets.QMainWindow):
         """Slot for cancel print signal"""
         self.enable_tab_bar()
         try:
-            self.ui.extruder_temp_display.clicked.disconnect()
-            self.ui.bed_temp_display.clicked.disconnect()
+            self.extruder_temp_display.clicked.disconnect()
+            self.bed_temp_display.clicked.disconnect()
         except TypeError:
             pass
-        self.ui.extruder_temp_display.clicked.connect(
+        self.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
-                self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.main_content_widget.indexOf(self.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
-        self.ui.bed_temp_display.clicked.connect(
+        self.bed_temp_display.clicked.connect(
             lambda: self.global_change_page(
-                self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.main_content_widget.indexOf(self.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
 
@@ -588,8 +609,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(bool, name="update-available")
     def on_update_available(self, state: bool = False):
         """Signal render for red dot on utilities tab icon and Update button"""
-        self.ui.main_content_widget.setNotification(3, state)
-        self.utilitiesPanel.panel.update_btn.setShowNotification(state)
+        self.main_content_widget.setNotification(3, state)
+        self.utilitiesPanel.up_update_btn.setShowNotification(state)
         self.repaint()
 
     def enable_tab_bar(self) -> bool:
@@ -601,22 +622,22 @@ class MainWindow(QtWidgets.QMainWindow):
             bool: True if the TabBar was disabled
         """
 
-        self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.controlTab), True
+        self.main_content_widget.setTabEnabled(
+            self.main_content_widget.indexOf(self.controlTab), True
         )
-        self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.utilitiesTab), True
+        self.main_content_widget.setTabEnabled(
+            self.main_content_widget.indexOf(self.utilitiesTab), True
         )
-        self.ui.header_main_layout.setEnabled(True)
+        self.header_main_layout.setEnabled(True)
         return all(
             [
-                not self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.controlTab)
+                not self.main_content_widget.isTabEnabled(
+                    self.main_content_widget.indexOf(self.controlTab)
                 ),
-                not self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.utilitiesTab)
+                not self.main_content_widget.isTabEnabled(
+                    self.main_content_widget.indexOf(self.utilitiesTab)
                 ),
-                not self.ui.header_main_layout.isEnabled(),
+                not self.header_main_layout.isEnabled(),
             ]
         )
 
@@ -631,22 +652,22 @@ class MainWindow(QtWidgets.QMainWindow):
         Returns:
             boolean: True if the TabBar was disabled
         """
-        self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.controlTab), False
+        self.main_content_widget.setTabEnabled(
+            self.main_content_widget.indexOf(self.controlTab), False
         )
-        self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.utilitiesTab), False
+        self.main_content_widget.setTabEnabled(
+            self.main_content_widget.indexOf(self.utilitiesTab), False
         )
-        self.ui.header_main_layout.setEnabled(False)
+        self.header_main_layout.setEnabled(False)
         return all(
             [
-                not self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.controlTab)
+                not self.main_content_widget.isTabEnabled(
+                    self.main_content_widget.indexOf(self.controlTab)
                 ),
-                not self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.utilitiesTab)
+                not self.main_content_widget.isTabEnabled(
+                    self.main_content_widget.indexOf(self.utilitiesTab)
                 ),
-                not self.ui.header_main_layout.isEnabled(),
+                not self.header_main_layout.isEnabled(),
             ]
         )
 
@@ -663,14 +684,14 @@ class MainWindow(QtWidgets.QMainWindow):
         the header, so the user cannot navigate away mid-calibration.
         """
         for tab in (
-            self.ui.printTab,
-            self.ui.filamentTab,
-            self.ui.utilitiesTab,
+            self.printTab,
+            self.filamentTab,
+            self.utilitiesTab,
         ):
-            self.ui.main_content_widget.setTabEnabled(
-                self.ui.main_content_widget.indexOf(tab), not locked
+            self.main_content_widget.setTabEnabled(
+                self.main_content_widget.indexOf(tab), not locked
             )
-        self.ui.header_main_layout.setEnabled(not locked)
+        self.header_main_layout.setEnabled(not locked)
 
     @QtCore.pyqtSlot(str, str, name="track_print_state")
     def _track_print_state(self, field: str, value: str) -> None:
@@ -684,7 +705,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _print_tab_index(self) -> int:
         """Tab index of the print tab in the main content widget."""
-        return self.ui.main_content_widget.indexOf(self.ui.printTab)
+        return self.main_content_widget.indexOf(self.printTab)
 
     def _job_status_index(self) -> int:
         """Panel index of the job-status page inside the print tab."""
@@ -726,7 +747,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Returns:
             int: The index os the page
         """
-        match self.ui.main_content_widget.currentIndex():
+        match self.main_content_widget.currentIndex():
             case 0:
                 return self.printPanel.currentIndex()
             case 1:
@@ -743,7 +764,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Args:
             panel_index (int): The index of the page we want to go to
         """
-        match self.ui.main_content_widget.currentIndex():
+        match self.main_content_widget.currentIndex():
             case 0:
                 self.printPanel.setCurrentIndex(panel_index)
             case 1:
@@ -760,7 +781,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Args:
             icon_key (int): WifiIconKey mapping for the current network state
         """
-        self.ui.wifi_button.setPixmap(HeaderWifiIconProvider.get_pixmap(icon_key))
+        self.wifi_button.setPixmap(HeaderWifiIconProvider.get_pixmap(icon_key))
 
     @QtCore.pyqtSlot(int, int, name="request-change-page")
     def global_change_page(self, tab_index: int, panel_index: int) -> None:
@@ -782,7 +803,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_loadscreen(False)
         panel_index = self._guard_print_panel(tab_index, panel_index)
         current_page = [
-            self.ui.main_content_widget.currentIndex(),
+            self.main_content_widget.currentIndex(),
             self.current_panel_index(),
         ]
         requested_page = [tab_index, panel_index]
@@ -790,7 +811,7 @@ class MainWindow(QtWidgets.QMainWindow):
             _logger.debug("User is already on the requested page")
             return
         self.index_stack.append(current_page)
-        self.ui.main_content_widget.setCurrentIndex(tab_index)
+        self.main_content_widget.setCurrentIndex(tab_index)
         self.set_current_panel_index(panel_index)
         _logger.debug(
             f"Requested page change -> Tab index : {requested_page[0]} | panel index : {requested_page[1]}",
@@ -807,7 +828,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Tab index argument expected type int, got %s", str(type(tab_index))
             )
             return
-        self.ui.main_content_widget.setCurrentIndex(tab_index)
+        self.main_content_widget.setCurrentIndex(tab_index)
         _logger.debug(
             f"Requested tab change -> Tab index : {tab_index}",
         )
@@ -820,7 +841,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         _tab, _panel = self.index_stack[-1]
         _panel = self._guard_print_panel(_tab, _panel)
-        self.ui.main_content_widget.setCurrentIndex(_tab)
+        self.main_content_widget.setCurrentIndex(_tab)
         self.set_current_panel_index(_panel)
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
@@ -1052,7 +1073,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_gcode_response_message(self, method, data, metadata) -> None:
         """Handle websocket gcode responses messages"""
-        _gcode_response = data.get("params")
+        _gcode_response = data.get("params", [])
         self.gcode_response[list].emit(_gcode_response)
         if _gcode_response:
             if self._popup_toggle:
@@ -1158,9 +1179,9 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handles extruder printer object updates"""
         if extruder_name == "extruder":
             if field == "temperature":
-                self.ui.extruder_temp_display.setText(f"{new_value:.0f}")
+                self.extruder_temp_display.setText(f"{new_value:.0f}")
             elif field == "target":
-                self.ui.extruder_temp_display.secondary_text = (
+                self.extruder_temp_display.secondary_text = (
                     f"{round(int(new_value)):.0f}°C"
                 )
 
@@ -1168,34 +1189,32 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_heater_bed_update(self, name: str, field: str, new_value: float) -> None:
         """Handles heater_bed printer object updates"""
         if field == "temperature":
-            self.ui.bed_temp_display.setText(f"{new_value:.0f}")
+            self.bed_temp_display.setText(f"{new_value:.0f}")
         elif field == "target":
-            self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}°C"
+            self.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}°C"
 
     @QtCore.pyqtSlot(str, str, float, name="sensor_update")
     def on_temp_sensor_update(self, name: str, field: str, value: float) -> None:
         """Handles Chamber temperature if a sensor with that name exists"""
         if name == "Chamber":
-            if self.ui.chamber_temp_display.isHidden():
-                self.ui.chamber_temp_display.show()
+            if self.chamber_temp_display.isHidden():
+                self.chamber_temp_display.show()
             if field == "temperature":
-                self.ui.chamber_temp_display.setText(f"{round(int(value)):.0f}°C")
+                self.chamber_temp_display.setText(f"{round(int(value)):.0f}°C")
             elif field == "humidity":
-                self.ui.chamber_temp_display.setSecondaryText(
-                    f"{round(int(value)):.0f}%"
-                )
+                self.chamber_temp_display.setSecondaryText(f"{round(int(value)):.0f}%")
 
     @QtCore.pyqtSlot(str, name="set-header-filament-type")
     def set_header_filament_type(self, type: str):
         """Sets header filament text label"""
-        self.ui.filament_type_icon.setText(f"{type}")
-        self.ui.filament_type_icon.update()
+        self.filament_type_icon.setText(f"{type}")
+        self.filament_type_icon.update()
 
     @QtCore.pyqtSlot(str, name="set-header-nozzle-diameter")
     def set_header_nozzle_diameter(self, diam: str):
         """Sets header nozzle diameter text label"""
-        self.ui.nozzle_size_icon.setText(f"{diam}mm")
-        self.ui.nozzle_size_icon.update()
+        self.nozzle_size_icon.setText(f"{diam}mm")
+        self.nozzle_size_icon.update()
 
     def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
         """Handles GUI closing"""
@@ -1222,19 +1241,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self.print_status = "printing"
             self.disable_tab_bar()
             try:
-                self.ui.extruder_temp_display.clicked.disconnect()
-                self.ui.bed_temp_display.clicked.disconnect()
+                self.extruder_temp_display.clicked.disconnect()
+                self.bed_temp_display.clicked.disconnect()
             except TypeError:
                 pass
-            self.ui.extruder_temp_display.clicked.connect(
+            self.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
-                    self.ui.main_content_widget.indexOf(self.ui.printTab),
+                    self.main_content_widget.indexOf(self.printTab),
                     self.printPanel.indexOf(self.printPanel.tune_page),
                 )
             )
-            self.ui.bed_temp_display.clicked.connect(
+            self.bed_temp_display.clicked.connect(
                 lambda: self.global_change_page(
-                    self.ui.main_content_widget.indexOf(self.ui.printTab),
+                    self.main_content_widget.indexOf(self.printTab),
                     self.printPanel.indexOf(self.printPanel.tune_page),
                 )
             )
@@ -1250,20 +1269,20 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.handle_cancel_print()
             self.enable_tab_bar()
             try:
-                self.ui.extruder_temp_display.clicked.disconnect()
-                self.ui.bed_temp_display.clicked.disconnect()
+                self.extruder_temp_display.clicked.disconnect()
+                self.bed_temp_display.clicked.disconnect()
             except TypeError:
                 pass
-            self.ui.extruder_temp_display.clicked.connect(
+            self.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
-                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                    self.main_content_widget.indexOf(self.controlTab),
+                    self.controlPanel.indexOf(self.controlPanel.temperature_page),
                 )
             )
-            self.ui.bed_temp_display.clicked.connect(
+            self.bed_temp_display.clicked.connect(
                 lambda: self.global_change_page(
-                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                    self.main_content_widget.indexOf(self.controlTab),
+                    self.controlPanel.indexOf(self.controlPanel.temperature_page),
                 )
             )
             return False
@@ -1273,3 +1292,253 @@ class MainWindow(QtWidgets.QMainWindow):
         """Sets default size for the widget"""
         self.adjustSize()
         return QtCore.QSize(800, 480)
+
+    def _setup_ui(self) -> None:
+        """Build the main window chrome: header bar, tab widget, and tab pages."""
+        self._setup_window()
+        self._setup_tabs()
+        self._setup_header()
+        self.setCentralWidget(self.main_widget)
+
+    def _setup_window(self) -> None:
+        self.setObjectName("MainWindow")
+        self.resize(800, 480)
+        self.setMinimumSize(QtCore.QSize(800, 480))
+        self.setMaximumSize(QtCore.QSize(1024, 600))
+        palette = QtGui.QPalette()
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        self.setPalette(palette)
+        self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
+        self.setTabletTracking(True)
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.setAnimated(False)
+
+        self.main_widget = QtWidgets.QWidget(parent=self)
+        self.main_widget.setObjectName("main_widget")
+        self.main_widget.setMinimumSize(QtCore.QSize(800, 480))
+        self.main_widget.setMaximumSize(QtCore.QSize(1024, 600))
+        self.main_widget.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
+        self.main_widget.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.main_widget.setStyleSheet(
+            "#main_widget{background-image: url(:/background/media/1st_background.png);}"
+        )
+
+    def _setup_tabs(self) -> None:
+        self.main_content_widget = NotificationQTabWidget(parent=self.main_widget)
+        self.main_content_widget.setObjectName("main_content_widget")
+        self.main_content_widget.setGeometry(QtCore.QRect(0, 60, 800, 420))
+        self.main_content_widget.setMinimumSize(QtCore.QSize(800, 400))
+        self.main_content_widget.setMaximumSize(QtCore.QSize(1024, 720))
+        self.main_content_widget.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.RightToLeft
+        )
+        self.main_content_widget.setStyleSheet(
+            "#main_content_widget{\n"
+            "background-image: url(:/background/media/1st_background.png);\n"
+            "}\n"
+            "QTabBar::tab{\n"
+            "    min-width: 80px;\n"
+            "    max-width: 80px;\n"
+            "    min-height: 100px;\n"
+            "    max-height: 100px;\n"
+            "    background: transparent;\n"
+            "}\n"
+        )
+        self.main_content_widget.setTabPosition(QtWidgets.QTabWidget.TabPosition.West)
+        self.main_content_widget.setTabShape(QtWidgets.QTabWidget.TabShape.Rounded)
+        self.main_content_widget.setIconSize(QtCore.QSize(60, 60))
+        self.main_content_widget.setElideMode(QtCore.Qt.TextElideMode.ElideLeft)
+        self.main_content_widget.setUsesScrollButtons(False)
+        self.main_content_widget.setDocumentMode(True)
+        self.main_content_widget.setTabsClosable(False)
+        self.main_content_widget.setMovable(False)
+
+        self.printTab = self._make_tab(
+            "printTab",
+            ":/icons/media/main_menu/ICON_home.png",
+            ":/icons/media/main_menu/ICON_home_pressed.png",
+            ":/icons/media/main_menu/ICON_home_blocked.png",
+        )
+        self.filamentTab = self._make_tab(
+            "filamentTab",
+            ":/icons/media/main_menu/ICON_filament.png",
+            ":/icons/media/main_menu/ICON_filament_pressed.png",
+            ":/icons/media/main_menu/ICON_filamente_blocked.png",
+        )
+        self.controlTab = self._make_tab(
+            "controlTab",
+            ":/icons/media/main_menu/ICON_control.png",
+            ":/icons/media/main_menu/ICON_control_pressed.png",
+            ":/icons/media/main_menu/ICON_control_blocked.png",
+        )
+        self.utilitiesTab = self._make_tab(
+            "utilitiesTab",
+            ":/icons/media/main_menu/ICON_utilities.png",
+            ":/icons/media/main_menu/ICON_utilities_pressed.png",
+            ":/icons/media/main_menu/ICON_utilities_blocked.png",
+        )
+        self.main_content_widget.setCurrentIndex(0)
+
+    def _make_tab(
+        self, name: str, normal: str, pressed: str, blocked: str
+    ) -> QtWidgets.QWidget:
+        tab = QtWidgets.QWidget()
+        tab.setObjectName(name)
+        tab.setMinimumSize(QtCore.QSize(720, 420))
+        tab.setMaximumSize(QtCore.QSize(1024, 720))
+        icon = QtGui.QIcon()
+        icon.addPixmap(
+            QtGui.QPixmap(normal),
+            QtGui.QIcon.Mode.Normal,
+            QtGui.QIcon.State.Off,
+        )
+        icon.addPixmap(
+            QtGui.QPixmap(pressed),
+            QtGui.QIcon.Mode.Normal,
+            QtGui.QIcon.State.On,
+        )
+        icon.addPixmap(
+            QtGui.QPixmap(blocked),
+            QtGui.QIcon.Mode.Disabled,
+            QtGui.QIcon.State.On,
+        )
+        self.main_content_widget.addTab(tab, icon, "")
+        return tab
+
+    def _setup_header(self) -> None:
+        self.main_header_layout = QtWidgets.QGroupBox(parent=self.main_widget)
+        self.main_header_layout.setObjectName("main_header_layout")
+        self.main_header_layout.setGeometry(QtCore.QRect(0, 0, 800, 60))
+        self.main_header_layout.setMinimumSize(QtCore.QSize(800, 60))
+        self.main_header_layout.setMaximumSize(QtCore.QSize(1024, 80))
+        font = QtGui.QFont()
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        self.main_header_layout.setFont(font)
+        self.main_header_layout.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
+        self.main_header_layout.setStyleSheet(
+            "QWidget {\n"
+            "    background-color: rgb(50,50,50);\n"
+            "    color:rgb(255,255,255);\n"
+            "    border-color : rgb(60,60,60);\n"
+            "    selection-background-color: rgb(60,60,60);\n"
+            "    gridline-color:rgb(60,60,60);\n"
+            "    selection-color:rgb(60,60,60);\n"
+            "}\n"
+            "\n"
+            "QGroupBox{\n"
+            "    background-color: rgb(50,50,50);\n"
+            "    border: none; \n"
+            "    border-color : rgb(60,60,60);\n"
+            "    selection-background-color: rgb(60,60,60);\n"
+            "    gridline-color:rgb(60,60,60);\n"
+            "    selection-color:rgb(60,60,60);\n"
+            "}\n"
+            "\n"
+            "QFrame > *{\n"
+            "    background-color: rgb(50, 50, 50);\n"
+            "    selection-background-color: rgb(60, 60, 60);\n"
+            "    gridline-color: rgb(60, 60, 60);\n"
+            "    color: rgb(255, 255, 255); \n"
+            "    selection-color: rgb(60, 60, 60);\n"
+            "    border-bottom-color: rgb(60, 60, 60);\n"
+            "}\n"
+            "\n"
+            "QPushButton:pressed{\n"
+            "    border: none;\n"
+            "    background: transparent;\n"
+            "}"
+        )
+        self.header_main_layout = QtWidgets.QHBoxLayout(self.main_header_layout)
+        self.header_main_layout.setObjectName("header_main_layout")
+        self.header_main_layout.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
+        )
+        self.header_main_layout.setContentsMargins(5, 0, 5, 0)
+        self.header_main_layout.setSpacing(10)
+
+        self.notification_btn = IconButton(parent=self.main_header_layout)
+        self.notification_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.notification_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self.notification_btn.setIconSize(QtCore.QSize(60, 60))
+        self.notification_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/notification.svg")
+        )
+        self.notification_btn.setProperty("button_type", "icon_text")
+        self.header_main_layout.addWidget(
+            self.notification_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+
+        self.extruder_temp_display = self._make_temp_display(
+            "extruder", ":/extruder_related/media/btn_icons/nozzle_topbar.svg"
+        )
+        self.extruder_temp_display.setProperty("button_type", "secondary_display")
+        self.extruder_temp_display.setProperty("name", "extruder_temperature_display")
+
+        self.bed_temp_display = self._make_temp_display(
+            "bed", ":/temperature_related/media/btn_icons/temperature_plate.svg"
+        )
+        self.bed_temp_display.setProperty("button_type", "secondary_display")
+
+        self.chamber_temp_display = self._make_temp_display(
+            "chamber", ":/top_bar_icons/media/topbar/chamber_temp_topbar.svg"
+        )
+        self.chamber_temp_display.setProperty(
+            "secondary_pixmap",
+            QtGui.QPixmap(":/temperature_related/media/btn_icons/humidity.svg"),
+        )
+        self.chamber_temp_display.setProperty("display_format", "dual")
+        self.chamber_temp_display.setProperty("button_type", "display_secondary")
+
+        self.filament_type_icon = self._make_header_icon(
+            "PLA", ":/filament_related/media/btn_icons/load_filament.svg"
+        )
+        self.nozzle_size_icon = self._make_header_icon(
+            "0.4mm", ":/temperature_related/media/btn_icons/standart_temperature.svg"
+        )
+
+        self.wifi_button = IconButton(parent=self.main_header_layout)
+        self.wifi_button.setMinimumSize(QtCore.QSize(60, 60))
+        self.wifi_button.setMaximumSize(QtCore.QSize(60, 60))
+        self.wifi_button.setIconSize(QtCore.QSize(16, 16))
+        self.wifi_button.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/network/media/btn_icons/network/3bar_wifi.svg"),
+        )
+        self.wifi_button.setProperty("button_type", "icon")
+        self.header_main_layout.addWidget(
+            self.wifi_button,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignTop,
+        )
+        self.header_main_layout.setStretch(1, 1)
+        self.header_main_layout.setStretch(2, 1)
+        self.header_main_layout.setStretch(3, 1)
+
+    def _make_temp_display(self, text: str, icon: str) -> DisplayButton:
+        display = DisplayButton(parent=self.main_header_layout)
+        display.setMinimumSize(QtCore.QSize(140, 60))
+        display.setMaximumSize(QtCore.QSize(160, 60))
+        display.setProperty("icon_pixmap", QtGui.QPixmap(icon))
+        display.setText(text)
+        self.header_main_layout.addWidget(
+            display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        return display
+
+    def _make_header_icon(self, text: str, icon: str) -> IconButton:
+        btn = IconButton(parent=self.main_header_layout)
+        btn.setMinimumSize(QtCore.QSize(60, 60))
+        btn.setMaximumSize(QtCore.QSize(60, 60))
+        btn.setProperty("icon_pixmap", QtGui.QPixmap(icon))
+        btn.setProperty("button_type", "icon_text")
+        btn.setText(text)
+        self.header_main_layout.addWidget(btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        return btn

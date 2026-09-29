@@ -202,21 +202,21 @@ class DisplayButton(QtWidgets.QPushButton):
                         QtCore.Qt.TextFlag.TextShowMnemonic
                         | QtCore.Qt.AlignmentFlag.AlignHCenter
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                        str(self.text()) if self.text() else str("?"),
+                        str(self.text()) if self.text() else "?",
                     )
                     painter.drawText(
                         _stl_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
                         | QtCore.Qt.AlignmentFlag.AlignHCenter
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                        str(self.secondary_text) if self.secondary_text else str("?"),
+                        str(self.secondary_text) if self.secondary_text else "?",
                     )
                     painter.drawText(
                         _mtl_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
                         | QtCore.Qt.AlignmentFlag.AlignHCenter
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                        str("/"),
+                        "/",
                     )
                 elif self.display_format == "upper_downer":
                     _mtl = QtCore.QRectF(
@@ -369,7 +369,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     QtCore.Qt.TextFlag.TextShowMnemonic
                     | QtCore.Qt.AlignmentFlag.AlignHCenter
                     | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    str(self.text()) if self.text() else str("?"),
+                    str(self.text()) if self.text() else "?",
                 )
                 painter.setPen(QtCore.Qt.PenStyle.NoPen)
         _ = painter.end()

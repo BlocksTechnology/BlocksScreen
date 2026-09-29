@@ -1,5 +1,3 @@
-import typing
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -45,7 +43,7 @@ class BlocksCustomCheckButton(QtWidgets.QAbstractButton):
         self.update()
         return
 
-    def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
+    def paintEvent(self, e: QtGui.QPaintEvent | None):
         """Re-implemented method, paint widget, optimized for performance."""
 
         painter = QtGui.QPainter(self)
