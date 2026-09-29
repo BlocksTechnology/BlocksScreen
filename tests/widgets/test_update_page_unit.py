@@ -11,8 +11,12 @@ from updater.models import ComponentStatus
 def page(qapp):
     """UpdatePage instance with all heavy UI deps mocked."""
     patches = [
-        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.LoadingOverlayWidget"),
-        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BlocksCustomButton"),
+        patch(
+            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.LoadingOverlayWidget"
+        ),
+        patch(
+            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BlocksCustomButton"
+        ),
         patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.IconButton"),
     ]
     for p in patches:
@@ -307,12 +311,22 @@ class TestHandleBusyChanged:
         with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
             page.handle_busy_changed(False)
 
-    def test_false_emits_call_load_panel_when_overlay_shown(self, page, qtbot):
+    def test_false_holds_overlay_until_status_ready(self, page, qtbot):
         page.show_loading = MagicMock()
         page._overlay_shown = True
-        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+        with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
             page.handle_busy_changed(False)
-        assert blocker.args == [False, "",False]
+        assert page._overlay_shown is True
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_status_ready(_make_payload())
+        assert blocker.args == [False, "", False]
+        assert page._overlay_shown is False
+
+    def test_stale_overlay_fallback_dismisses(self, page, qtbot):
+        page._overlay_shown = True
+        page._busy = False
+        with qtbot.waitSignal(page.call_load_panel, timeout=200):
+            page._dismiss_stale_overlay()
         assert page._overlay_shown is False
 
     def test_true_starts_elapsed_timer(self, page):
@@ -413,13 +427,13 @@ class TestHandleStepComplete:
     def test_emits_call_load_panel_with_step_message(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("klipper", 1, 4)
-        assert blocker.args == [True, "klipper: fetching",False]
+        assert blocker.args == [True, "klipper: fetching", False]
         page._progress_label.setText.assert_called_with("Step 1/4")
 
     def test_unknown_steps_falls_back_to_working(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("moonraker", 99, 4)
-        assert blocker.args == [True, "moonraker: working",False]
+        assert blocker.args == [True, "moonraker: working", False]
         page._progress_label.setText.assert_called_with("Step 99/4")
 
 
@@ -498,7 +512,9 @@ class TestBadStatusPayload:
 
 class TestConfirmPopupCleanup:
     def test_second_confirm_deletes_previous_popup(self, page):
-        with patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BasePopup") as popup_cls:
+        with patch(
+            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BasePopup"
+        ) as popup_cls:
             first = MagicMock()
             second = MagicMock()
             popup_cls.side_effect = [first, second]

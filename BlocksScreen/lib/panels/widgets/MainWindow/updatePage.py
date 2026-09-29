@@ -340,6 +340,7 @@ class UpdatePage(QtWidgets.QWidget):
                 _log.debug("status_ready: emitting call_load_panel(False)")
                 self.call_load_panel.emit(False, "", False)
                 self._post_update_status_pending = False
+                self._overlay_shown = False
         else:
             _log.debug("status_ready: skipping loadscreen dismiss (busy=True)")
         self.build_cards()
@@ -370,9 +371,17 @@ class UpdatePage(QtWidgets.QWidget):
                 # Keep the overlay up: SIGTERM is imminent, MainWindow would flash.
                 QtCore.QTimer.singleShot(15000, self._dismiss_after_restart_grace)
             elif self._overlay_shown:
-                self._overlay_shown = False
-                self.call_load_panel.emit(False, "", False)
+                # Hold the overlay until fresh status lands, else stale cards flash.
+                self._post_update_status_pending = True
+                QtCore.QTimer.singleShot(10000, self._dismiss_stale_overlay)
             self._request_status_debounced()
+
+    def _dismiss_stale_overlay(self) -> None:
+        """Drop the overlay if the post-update status never arrived."""
+        if self._overlay_shown and not self._busy:
+            self._overlay_shown = False
+            self._post_update_status_pending = False
+            self.call_load_panel.emit(False, "", False)
 
     def _dismiss_after_restart_grace(self) -> None:
         """Drop the overlay if the expected UI restart never came."""
