@@ -476,8 +476,10 @@ class UpdateService:
                 )
         return ok
 
-    async def provision_missing(self) -> bool:
-        """Clone absent install_if_missing components at boot (no manual update)."""
+    async def provision_missing(
+        self, on_busy: Callable[[bool], None] | None = None
+    ) -> bool:
+        """Clone absent install_if_missing components at boot; on_busy brackets the work."""
         missing = [
             c
             for c in self._components
@@ -492,10 +494,16 @@ class UpdateService:
             if not acquired:
                 self._log.info("provision_missing: update in progress, deferring")
                 return False
-            for c in missing:
-                if c.path is None or not c.path.exists():  # recheck under lock
-                    await self._provision_component(c)
-                    provisioned = True
+            if on_busy:
+                on_busy(True)  # UI shows step_complete only while busy
+            try:
+                for c in missing:
+                    if c.path is None or not c.path.exists():  # recheck under lock
+                        await self._provision_component(c)
+                        provisioned = True
+            finally:
+                if on_busy:
+                    on_busy(False)
         return provisioned
 
     async def _preflight_fetch(
@@ -1982,7 +1990,7 @@ class UpdateService:
         if not await wait_for_service_active(service, timeout=90.0):
             self._log.error("%s did not become active after restart", service)
             return False
-        if health_url and not await wait_for_http_ready(health_url):
+        if health_url and not await wait_for_http_ready(health_url, service=service):
             self._log.error("%s active but health check failed", service)
             return False
         self._log.info("%s active after restart", service)

@@ -72,6 +72,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._update_avail: bool = False
         self._post_update_status_pending: bool = False
         self._overlay_shown: bool = False
+        self._restart_pending: bool = False
         self._elapsed_time_seconds: int = 0
         self._elapsed_timer: QtCore.QTimer = QtCore.QTimer(self)
         self._elapsed_timer.setSingleShot(False)
@@ -335,7 +336,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._update_avail = _update_avail
         if not self._busy:
             self.show_loading(False)
-            if self._post_update_status_pending:
+            if self._post_update_status_pending and not self._restart_pending:
                 _log.debug("status_ready: emitting call_load_panel(False)")
                 self.call_load_panel.emit(False, "", False)
                 self._post_update_status_pending = False
@@ -350,6 +351,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._busy = busy
         self.show_loading(busy)
         if busy:
+            self._restart_pending = False
             self._elapsed_time_seconds = 0
             self._elapsed_timer.start()
             self._busy_timeout_timer.start()
@@ -364,10 +366,20 @@ class UpdatePage(QtWidgets.QWidget):
             self._progress_label.hide()
             self._cancel_btn.hide()
             self.update_all_btn.setEnabled(True)
-            if self._overlay_shown:
+            if self._restart_pending:
+                # Keep the overlay up: SIGTERM is imminent, MainWindow would flash.
+                QtCore.QTimer.singleShot(15000, self._dismiss_after_restart_grace)
+            elif self._overlay_shown:
                 self._overlay_shown = False
                 self.call_load_panel.emit(False, "", False)
             self._request_status_debounced()
+
+    def _dismiss_after_restart_grace(self) -> None:
+        """Drop the overlay if the expected UI restart never came."""
+        if self._restart_pending and not self._busy:
+            self._restart_pending = False
+            self._overlay_shown = False
+            self.call_load_panel.emit(False, "", False)
 
     @QtCore.pyqtSlot(name="on-update-all-clicked")
     def on_update_all_clicked(self) -> None:
@@ -425,6 +437,8 @@ class UpdatePage(QtWidgets.QWidget):
         if self._busy_timeout_timer.isActive():
             self._busy_timeout_timer.start()
         self._overlay_shown = True
+        # BlocksScreen's last step restarts this very process.
+        self._restart_pending = name == "BlocksScreen" and step == total
         overlay_msg = f"{name}: {label}"
         self._progress_label.setText(f"Step {step}/{total}")
         self.call_load_panel.emit(True, overlay_msg, False)

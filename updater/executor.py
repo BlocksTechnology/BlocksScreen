@@ -1034,13 +1034,22 @@ def _http_probe(url: str) -> bool:
         conn.close()
 
 
-async def wait_for_http_ready(url: str, timeout: float = 120.0) -> bool:
-    """Poll a component's loopback health URL until it returns 2xx or timeout."""
+async def wait_for_http_ready(
+    url: str, timeout: float = 120.0, *, service: str | None = None
+) -> bool:
+    """Poll a health URL until 2xx or timeout; fail fast if `service` leaves active."""
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         if await asyncio.to_thread(_http_probe, url):
             logger.info("health check ok: %s", url)
             return True
+        # A crash-looping unit is 'activating', never 'active': don't wait out the timeout.
+        if (
+            service
+            and not (await _run([SYSTEMCTL, "is-active", service], timeout=10.0))[0]
+        ):
+            logger.warning("service %r left active during health check", service)
+            return False
         if asyncio.get_running_loop().time() >= deadline:
             logger.warning("health check timed out after %.0fs: %s", timeout, url)
             return False

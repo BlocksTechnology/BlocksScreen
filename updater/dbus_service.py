@@ -195,7 +195,7 @@ class UpdaterInterface(
         while True:
             try:
                 await self._emit_status()
-                if await self._svc.provision_missing():
+                if await self._svc.provision_missing(self._set_busy):
                     await self._emit_status()  # reflect freshly-installed components
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
