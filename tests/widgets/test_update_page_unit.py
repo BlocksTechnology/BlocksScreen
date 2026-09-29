@@ -522,3 +522,26 @@ class TestConfirmPopupCleanup:
             page._show_update_confirm()
         first.deleteLater.assert_called_once()
         second.deleteLater.assert_not_called()
+
+
+class TestBootProvisioning:
+    def test_busy_without_user_press_shows_installing_message(self, page, qtbot):
+        page.show_loading = MagicMock()
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_busy_changed(True)
+        assert blocker.args == [True, "Missing component, installing ...", False]
+
+    def test_provision_steps_name_the_component(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_step_complete("Spoolman", 1, 4)
+        assert blocker.args == [True, "Installing Spoolman: cloning", False]
+
+    def test_user_update_keeps_update_labels(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page._overlay_shown = True
+        page.handle_busy_changed(True)
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_step_complete("klipper", 1, 4)
+        assert blocker.args == [True, "klipper: fetching", False]

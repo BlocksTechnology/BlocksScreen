@@ -46,6 +46,13 @@ class UpdatePage(QtWidgets.QWidget):
         }
     )
 
+    # Boot provisioning of a missing component reuses steps 1-4 with different meanings.
+    _PROVISION_STEP_LABELS: typing.ClassVar[MappingProxyType[int, str]] = (
+        MappingProxyType(
+            {1: "cloning", 2: "installing deps", 3: "setting up", 4: "starting"}
+        )
+    )
+
     _APT_STEP_LABELS: typing.ClassVar[MappingProxyType[int, str]] = MappingProxyType(
         {1: "updating packages", 2: "upgrading packages"}
     )
@@ -73,6 +80,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._post_update_status_pending: bool = False
         self._overlay_shown: bool = False
         self._restart_pending: bool = False
+        self._provisioning: bool = False
         self._elapsed_time_seconds: int = 0
         self._elapsed_timer: QtCore.QTimer = QtCore.QTimer(self)
         self._elapsed_timer.setSingleShot(False)
@@ -352,6 +360,13 @@ class UpdatePage(QtWidgets.QWidget):
         self._busy = busy
         self.show_loading(busy)
         if busy:
+            # Busy with no user press = the daemon is installing a missing component.
+            self._provisioning = not self._overlay_shown
+            if self._provisioning:
+                self._overlay_shown = True
+                self.call_load_panel.emit(
+                    True, "Missing component, installing ...", False
+                )
             self._restart_pending = False
             self._elapsed_time_seconds = 0
             self._elapsed_timer.start()
@@ -361,6 +376,7 @@ class UpdatePage(QtWidgets.QWidget):
             self._progress_label.show()
             self._cancel_btn.show()
         else:
+            self._provisioning = False
             self._elapsed_timer.stop()
             self._busy_timeout_timer.stop()
             self._elapsed_time_label.hide()
@@ -439,6 +455,8 @@ class UpdatePage(QtWidgets.QWidget):
         status = self._statuses.get(name)
         if status and status.kind == "apt":
             label = self._APT_STEP_LABELS.get(step, "working")
+        elif self._provisioning:
+            label = self._PROVISION_STEP_LABELS.get(step, "working")
         else:
             label = self._STEP_LABELS.get(step, "working")
         _log.info("step_complete: %s %d/%d (%s)", name, step, total, label)
@@ -448,7 +466,9 @@ class UpdatePage(QtWidgets.QWidget):
         self._overlay_shown = True
         # BlocksScreen's last step restarts this very process.
         self._restart_pending = name == "BlocksScreen" and step == total
-        overlay_msg = f"{name}: {label}"
+        overlay_msg = (
+            f"Installing {name}: {label}" if self._provisioning else f"{name}: {label}"
+        )
         self._progress_label.setText(f"Step {step}/{total}")
         self.call_load_panel.emit(True, overlay_msg, False)
 
