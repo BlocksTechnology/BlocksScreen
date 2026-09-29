@@ -20,6 +20,9 @@ _log = logging.getLogger(__name__)
 _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
 # Poll again this soon while a git fetch is failing: a boot-time DNS miss must not hide updates for a full poll interval.
 _FETCH_RETRY_INTERVAL_S = 300.0
+# Boot reconcile holds the process lock briefly; provisioning is deferred, not lost.
+_PROVISION_RETRIES = 10
+_PROVISION_RETRY_S = 3.0
 
 
 class DbusProgressCallback:
@@ -131,6 +134,15 @@ class UpdaterInterface(
         if exc is not None:
             _log.error("task %r failed", task.get_name(), exc_info=exc)
 
+    async def _provision_with_retry(self) -> None:
+        """Retry while boot reconcile still holds the process lock and defers provisioning."""
+        for attempt in range(_PROVISION_RETRIES):
+            await self._svc.provision_missing(self._set_busy)
+            if not self._svc.needs_provision():
+                return
+            if attempt + 1 < _PROVISION_RETRIES:
+                await asyncio.sleep(_PROVISION_RETRY_S)
+
     def _release_boot_busy(self) -> None:
         """Drop the busy state pre-set at boot; no await between this and provision's own busy(False)."""
         if self._boot_busy:
@@ -204,7 +216,7 @@ class UpdaterInterface(
         while True:
             try:
                 # Provision first (a no-op stat when nothing is missing) so status reflects it.
-                await self._svc.provision_missing(self._set_busy)
+                await self._provision_with_retry()
                 self._release_boot_busy()
                 await self._emit_status()
             except Exception as exc:  # noqa: BLE001

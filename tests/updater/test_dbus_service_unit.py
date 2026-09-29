@@ -389,6 +389,37 @@ class TestBootProvisionBusy:
         assert svc._busy is False
 
 
+class TestProvisionRetry:
+    @pytest.mark.asyncio
+    async def test_retries_while_lock_defers_then_stops(self, svc):
+        """Deferred provisioning (lock held by boot reconcile) is retried, not left for the next poll."""
+        from updater import dbus_service
+
+        svc._svc.needs_provision = MagicMock(side_effect=[True, True, False])
+        sleeps: list[float] = []
+
+        async def fake_sleep(delay):
+            sleeps.append(delay)
+
+        with patch.object(dbus_service.asyncio, "sleep", fake_sleep):
+            await svc._provision_with_retry()
+
+        assert svc._svc.provision_missing.await_count == 3
+        assert sleeps == [dbus_service._PROVISION_RETRY_S] * 2
+
+    @pytest.mark.asyncio
+    async def test_gives_up_after_bounded_retries(self, svc):
+        """A component that never provisions must not loop forever."""
+        from updater import dbus_service
+
+        svc._svc.needs_provision = MagicMock(return_value=True)
+
+        with patch.object(dbus_service.asyncio, "sleep", AsyncMock()):
+            await svc._provision_with_retry()
+
+        assert svc._svc.provision_missing.await_count == dbus_service._PROVISION_RETRIES
+
+
 class TestMethodReturnValues:
     @pytest.mark.asyncio
     async def test_update_all_rejected_when_busy_returns_false(self, svc):
