@@ -1473,7 +1473,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.notification_btn.setProperty("button_type", "icon_text")
         self.header_main_layout.addWidget(
-            self.notification_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
+            self.notification_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
 
         self.extruder_temp_display = self._make_temp_display(

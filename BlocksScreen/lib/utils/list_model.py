@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
+_TEXT_LEFT_PADDING = 10  # gap between the left icon and the text, all list pages
+
 
 @dataclass(slots=True)
 class ListItem:
@@ -33,7 +35,8 @@ class ListItem:
     height: int = 60
     notificate: bool = False
 
-    _cache: dict[int, int] = field(default_factory=dict)
+    # per-width height cache; the -1 key holds a notification's display timestamp
+    _cache: dict[int, typing.Any] = field(default_factory=dict)
 
 
 class EntryListModel(QtCore.QAbstractListModel):
@@ -51,6 +54,18 @@ class EntryListModel(QtCore.QAbstractListModel):
     def rowCount(self, parent=QtCore.QModelIndex()) -> int:
         """Gets model row count"""
         return len(self.entries)
+
+    def refresh_last_if_duplicate(self, text: str, color: str) -> bool:
+        """Collapse a repeat of the newest entry instead of inserting a new row."""
+        if not self.entries:
+            return False
+        last = self.entries[0]
+        if last.text != text or last.color != color:
+            return False
+        last._cache[-1] = QtCore.QDateTime.currentDateTime().toString("hh:mm:ss")
+        idx = self.index(0)
+        self.dataChanged.emit(idx, idx)
+        return True
 
     def clear(self) -> None:
         """Clear model rows"""
@@ -72,19 +87,6 @@ class EntryListModel(QtCore.QAbstractListModel):
             self.beginRemoveRows(QtCore.QModelIndex(), index, index)
             self.entries.pop(index)
             self.endRemoveRows()
-
-    def delete_duplicates(self) -> None:
-        """Drop entries sharing identical text, color, and last time value."""
-        seen: set[tuple[str, str, typing.Any]] = set()
-        unique: list[ListItem] = []
-        for item in self.entries:
-            key = (item.text, item.color, item._cache.get(-1))
-            if key not in seen:
-                unique.append(item)
-                seen.add(key)
-        self.beginResetModel()
-        self.entries = unique
-        self.endResetModel()
 
     def remove_item_by_text(self, text: str) -> bool:
         """Remove the item with *text*; True if found."""
@@ -357,7 +359,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
 
         left_reserved = 10
         if item.left_icon:
-            left_reserved = (base_h * 0.1) + ellipse_size + 8
+            left_reserved = (base_h * 0.1) + ellipse_size + 8 + _TEXT_LEFT_PADDING
 
         if item._lfontsize > 0 and item._lfontsize != option.font.pointSize():
             f = QtGui.QFont(option.font)
@@ -467,15 +469,15 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             rect.right() - ellipse_size - ellipse_margin - rect.height() * 0.10
         )
 
-        text_rect = QtCore.QRectF(
+        text_left = (
             rect.left()
             + left_margin
-            + (left_icon_rect.width() if item.left_icon else 0),
+            + (left_icon_rect.width() + _TEXT_LEFT_PADDING if item.left_icon else 0)
+        )
+        text_rect = QtCore.QRectF(
+            text_left,
             rect.top(),
-            text_margin
-            - rect.left()
-            - left_margin
-            - (left_icon_rect.width() if item.left_icon else 0),
+            text_margin - text_left,
             rect.height(),
         )
 
@@ -580,8 +582,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         """Turn a release into a drag, an arrow toggle or a row selection."""
         if self._is_drag(event):
             return False
-        # Arrow first, so an arrow tap does not also select the row.
+        # Arrow first, so an arrow tap skips the callback.
         if self._toggle_expand(event, model, option, index, item):
+            # Also select, or the info panel stays stale after an arrow tap.
+            self._select_row(model, index, item)
             return True
         if item.callback and callable(item.callback):
             item.callback()
