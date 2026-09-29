@@ -47,9 +47,11 @@ from updater.executor import (
     git_tree_has_path,
     git_untracked_paths,
     is_git_repo,
+    is_service_active,
     restart_service,
     restart_service_noblock,
     run_hook,
+    stop_service,
     verify_updater_importable,
     wait_for_http_ready,
     wait_for_service_active,
@@ -1703,6 +1705,9 @@ class UpdateService:
 
     async def _fail_provision(self, component: ComponentConfig, reason: str) -> bool:
         """Remove the partial clone, log, and report failure."""
+        if component.service and reason in ("hook", "restart"):
+            # Else systemd crash-loops the unit on the deleted dir until StartLimit.
+            await stop_service(component.service)
         await self._remove_clone(component)
         self._history("install_failed", component.name, reason=reason)
         self._log.warning(
@@ -1716,7 +1721,12 @@ class UpdateService:
         """Restart+health-check+enable the provisioned service; fail reason or None."""
         if not component.service:
             return None
-        if not await self._restart_one(component.service, component.health_url):
+        if await is_service_active(component.service):
+            # The hook already started it (enable --now): a restart would start it twice.
+            ok = await self._await_health(component.service, component.health_url)
+        else:
+            ok = await self._restart_one(component.service, component.health_url)
+        if not ok:
             return "restart"
         # Enable only after a clean start (no boot-looping failed unit).
         en_ok, en_err = await enable_service(component.service)
@@ -1979,6 +1989,14 @@ class UpdateService:
         if guard is not None:
             return guard
         return await self._stage_apply_ref(component, tip)
+
+    async def _await_health(self, service: str, health_url: str | None) -> bool:
+        """Verify an already-running service answers its health URL."""
+        if health_url and not await wait_for_http_ready(health_url, service=service):
+            self._log.error("%s active but health check failed", service)
+            return False
+        self._log.info("%s already active, restart skipped", service)
+        return True
 
     async def _restart_one(self, service: str, health_url: str | None = None) -> bool:
         """Restart a service and verify it came active (kill-fallback aware)."""

@@ -995,6 +995,13 @@ async def enable_service(name: str | None) -> tuple[bool, str]:
     return await _run([SUDO, SYSTEMCTL, "enable", name], timeout=15.0)
 
 
+async def is_service_active(name: str) -> bool:
+    """One-shot systemctl is-active probe."""
+    if not _SERVICE_RE.match(name):
+        return False
+    return (await _run([SYSTEMCTL, "is-active", name], timeout=10.0))[0]
+
+
 async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:
     """Poll systemctl is-active until active or timeout."""
     if not _SERVICE_RE.match(name):
@@ -1077,6 +1084,15 @@ async def verify_updater_importable(component_path: Path | None) -> bool:
     if not ok:
         logger.error("updater import self-test failed: %s", out.strip())
     return ok
+
+
+async def stop_service(name: str | None) -> tuple[bool, str]:
+    """Stop a systemd service."""
+    if name is None:
+        return (False, "service name is None")
+    if not _SERVICE_RE.match(name):
+        return (False, f"service name {name!r} is invalid")
+    return await _run([SUDO, SYSTEMCTL, "stop", name], timeout=30.0)
 
 
 async def restart_service(name: str | None) -> tuple[bool, str]:

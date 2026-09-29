@@ -1753,10 +1753,12 @@ class TestProvisionMissingComponent:
                 return_value=(True, ""),
             ),
             patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.is_service_active", return_value=False),
             patch("updater.service.restart_service", return_value=(True, "")),
             patch(
                 "updater.service.wait_for_service_active", return_value=False
             ) as mock_wait,
+            patch("updater.service.stop_service", return_value=(True, "")) as mock_stop,
             patch("updater.service.shutil.rmtree") as mock_rmtree,
         ):
             svc = UpdateService(callback=cb)
@@ -1764,6 +1766,7 @@ class TestProvisionMissingComponent:
             ok = await svc.update_component("newcomp")
         assert ok is False
         mock_wait.assert_called_once()
+        mock_stop.assert_called_once_with("newcomp.service")
         mock_rmtree.assert_called_once()
         assert cb.on_error.call_args[0][1] == "restart"
 
@@ -1783,11 +1786,13 @@ class TestProvisionMissingComponent:
                 return_value=(True, ""),
             ),
             patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.is_service_active", return_value=False),
             patch("updater.service.restart_service", return_value=(True, "")),
             patch("updater.service.wait_for_service_active", return_value=True),
             patch(
                 "updater.service.wait_for_http_ready", return_value=False
             ) as mock_health,
+            patch("updater.service.stop_service", return_value=(True, "")) as mock_stop,
             patch("updater.service.shutil.rmtree") as mock_rmtree,
         ):
             svc = UpdateService(callback=cb)
@@ -1795,6 +1800,7 @@ class TestProvisionMissingComponent:
             ok = await svc.update_component("newcomp")
         assert ok is False
         mock_health.assert_called_once()
+        mock_stop.assert_called_once_with("newcomp.service")
         mock_rmtree.assert_called_once()
         assert cb.on_error.call_args[0][1] == "restart"
 
@@ -1814,6 +1820,7 @@ class TestProvisionMissingComponent:
                 return_value=(True, ""),
             ),
             patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.is_service_active", return_value=False),
             patch("updater.service.restart_service", return_value=(True, "")),
             patch("updater.service.wait_for_service_active", return_value=True),
             patch(
@@ -1826,9 +1833,38 @@ class TestProvisionMissingComponent:
             svc._components = [comp]
             ok = await svc.update_component("newcomp")
         assert ok is True
-        mock_health.assert_called_once_with("http://127.0.0.1:7912/health")
+        mock_health.assert_called_once_with(
+            "http://127.0.0.1:7912/health", service="newcomp.service"
+        )
         mock_rmtree.assert_not_called()
         cb.on_component_done.assert_called_with("newcomp", True)
+
+    @pytest.mark.asyncio
+    async def test_provision_skips_restart_when_hook_started_service(self, tmp_path):
+        comp = self._comp(
+            tmp_path,
+            service="newcomp.service",
+            health_url="http://127.0.0.1:7912/health",
+        )
+        cb = MagicMock()
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.is_service_active", return_value=True),
+            patch("updater.service.restart_service") as mock_restart,
+            patch("updater.service.wait_for_http_ready", return_value=True),
+            patch("updater.service.enable_service", return_value=(True, "")),
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            ok = await svc.update_component("newcomp")
+        assert ok is True
+        mock_restart.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_check_status_reports_needs_install(self, tmp_path):
