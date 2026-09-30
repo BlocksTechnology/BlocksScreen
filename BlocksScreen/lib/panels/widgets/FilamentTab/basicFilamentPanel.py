@@ -8,6 +8,7 @@ from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_field import BlocksField
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -62,6 +63,19 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         self.setCurrentIndex(0)
 
+        self.confirm_pos_popup = BasePopup(self, False, True)
+        self.confirm_pos_popup.set_message(
+            "Change the filament position?\n\n"
+            "This overrides the printer's filament state.\n"
+            "Only confirm if it matches where the filament\n"
+            "actually is in the printer."
+        )
+        self._pos_pending = ""
+        self.confirm_pos_popup.accepted.connect(
+            lambda: self._accept_pos_change(self._pos_pending)
+        )
+        self.confirm_pos_popup.rejected.connect(self._reject_pos_change)
+
         self.popup = Popup(self)
 
         if self.cfg.has_section("filament_presence"):
@@ -70,7 +84,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         else:
             self.filament_sensor = None
 
-        self.Basic_fp_load_btn.clicked.connect(self._on_load_unload_clicked)
+        self.Basic_fp_load_btn.clicked.connect(self._on_load_clicked)
+        self.Basic_fp_unload_btn.clicked.connect(
+            lambda: self.unload_filament(toolhead=0, temp=250)
+        )
         self.fcp_back_button.clicked.connect(self.back_button)
 
         self.printer.unload_filament_update.connect(self.on_unload_filament)
@@ -104,7 +121,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             if filament_type and i.value.name in filament_type:
                 filament_type = i
                 break
-        self._lbl_mat.setText(filament_type.value.name)
+        self._lbl_mat.set_right_text(filament_type.value.name)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -133,6 +150,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
         """slot to handle filament sensor updates"""
+        if self.mmu_configured:
+            return
         if parameter == "filament_detected":
             if not isinstance(value, bool):
                 self.filament_state = self.FilamentStates.UNKNOWN
@@ -194,7 +213,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             self.run_gcode.emit(
                 f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
             )
-        self.call_load_panel.emit(True, "Loading", True)
         if not self.mmu_configured:
             self.call_load_panel.emit(True, "Loading", True)
             self.run_gcode.emit("LOAD_FILAMENT")
@@ -231,10 +249,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.load_popup.show()
         self.run_gcode.emit("MMU_EJECT")
 
-    def _on_load_unload_clicked(self) -> None:
-        if self.filament_state is self.FilamentStates.LOADED:
-            self.unload_filament(toolhead=0, temp=250)
-            return
+    def _on_load_clicked(self) -> None:
         if self.state in ("printing", "paused"):
             self.load_filament(0, FilamentTypes.UNKNOWN)
             return
@@ -268,12 +283,40 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             self.mmu_configured = True
 
         self._mmu_state = mmu_state
-        if mmu_state.filament_pos == FilamentPos.UNKNOWN:
-            self.filament_state = self.FilamentStates.UNKNOWN
+        if mmu_state.filament_pos == FilamentPos.LOADED:
+            self.filament_state = self.FilamentStates.LOADED
         elif mmu_state.filament_pos == FilamentPos.UNLOADED:
             self.filament_state = self.FilamentStates.UNLOADED
         else:
-            self.filament_state = self.FilamentStates.LOADED
+            self.filament_state = self.FilamentStates.UNKNOWN
+        if self._lbl_pos.select_option(self.filament_state.name.capitalize()):
+            self._pos_committed = self._lbl_pos.text()
+        gate_info = mmu_state.current_gate_info
+        self._apply_color_swatch(gate_info.color if gate_info else "")
+
+    def _apply_color_swatch(self, hex_str: str) -> None:
+        hex_text = (hex_str or "").strip().lstrip("#")
+        if len(hex_text) == 8:
+            hex_text = hex_text[:6]
+        if len(hex_text) == 6:
+            color = QtGui.QColor(f"#{hex_text}")
+            self._lbl_clr.set_right_text("")
+            self._lbl_clr.set_right_stylesheet(
+                "min-width: 146px; min-height: 46px;"
+                "border-radius: 8px;"
+                f"background: rgb({color.red()},{color.green()},{color.blue()});"
+                "border: 2px solid rgba(255,255,255,80);"
+            )
+        else:
+            self._lbl_clr.set_right_text("✕")
+            self._lbl_clr.set_right_stylesheet(
+                "min-width: 146px; min-height: 46px;"
+                "border-radius: 8px;"
+                "background: rgb(40,40,40);"
+                "border: 2px dashed rgba(255,255,255,80);"
+                "color: #e8445a;"
+                "font-size: 28px; font-weight: bold;"
+            )
 
     @property
     def _gate_has_filament(self) -> bool:
@@ -294,18 +337,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @filament_state.setter
     def filament_state(self, update: FilamentStates) -> None:
         self._filament_state = update
-        if update is self.FilamentStates.LOADED:
-            self.Basic_fp_load_btn.setText("Unload")
-            self.Basic_fp_load_btn.setProperty(
-                "icon_pixmap",
-                QtGui.QPixmap(":/filament_related/media/btn_icons/unload_filament.svg"),
-            )
-        else:
-            self.Basic_fp_load_btn.setText("Load")
-            self.Basic_fp_load_btn.setProperty(
-                "icon_pixmap",
-                QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"),
-            )
+        self.Basic_fp_load_btn.setEnabled(update is not self.FilamentStates.LOADED)
+        self.Basic_fp_unload_btn.setEnabled(update is not self.FilamentStates.UNLOADED)
 
     def change_page(self, index: int) -> None:
         """Switch this stacked widget to the page at *index*."""
@@ -330,50 +363,47 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             return True
         return "gcode_macro UNLOAD_FILAMENT" in _available_objects
 
+    def on_pos_change(self) -> None:
+        """Ask to confirm a user-picked position, reverting it if declined."""
+        new_pos = self._lbl_pos.text()
+        if new_pos == self._pos_committed:
+            return
+        self._pos_pending = new_pos
+        self.confirm_pos_popup.open()
+
+    def _accept_pos_change(self, new_pos: str) -> None:
+        self._pos_committed = new_pos
+        n = 1 if new_pos == "Loaded" else 0
+        self.run_gcode.emit(f"MMU_RECOVER TOOL=0 GATE=0 LOADED={n}")
+
+    def _reject_pos_change(self) -> None:
+        self._lbl_pos.select_option(self._pos_committed)
+
     def _setupInfoBox(self):
         root = BlocksCustomFrame(parent=self.filament_control_page)
-        root.setMinimumSize(QtCore.QSize(600, 80))
-        root.setMaximumSize(QtCore.QSize(600, 80))
+        root.setMinimumSize(QtCore.QSize(350, 300))
         root.setObjectName("root")
 
         font = QtGui.QFont()
         font.setPointSize(15)
 
-        hozlay = QtWidgets.QHBoxLayout(root)
+        hozlay = QtWidgets.QVBoxLayout(root)
 
-        self.Basic_fp_info_title_6 = QtWidgets.QLabel(self)
-        self.Basic_fp_info_title_6.setMinimumSize(QtCore.QSize(0, 0))
-        self.Basic_fp_info_title_6.setMaximumSize(QtCore.QSize(170, 60))
-        self.Basic_fp_info_title_6.setFont(font)
-        self.Basic_fp_info_title_6.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.Basic_fp_info_title_6.setObjectName("Basic_fp_info_title_6")
+        self._lbl_mat = BlocksField(self, "Material:", "bottom")
 
-        font = QtGui.QFont()
-        font.setPointSize(13)
+        self._lbl_pos = BlocksField(self, "Position:", "bottom", "DropDownMenu")
+        self._lbl_pos.set_placeholder("Unknown")
+        self._lbl_pos.set_options(["Loaded", "Unloaded"])
+        self._lbl_pos.select_option("Unknown")
+        self._pos_committed = self._lbl_pos.text()
+        self._lbl_pos.on_edit.connect(self.on_pos_change)
 
-        self._lbl_mat = QtWidgets.QLabel(self)
-        self._lbl_mat.setMinimumSize(QtCore.QSize(0, 60))
-        self._lbl_mat.setMaximumSize(QtCore.QSize(16777215, 60))
-        self._lbl_mat.setFont(font)
-        self._lbl_mat.setStyleSheet("color:white")
-        self._lbl_mat.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self._lbl_mat.setObjectName("_lbl_mat")
+        self._lbl_clr = BlocksField(self, "Color:")
+        self._apply_color_swatch("")
 
-        self.line_2 = QtWidgets.QFrame(self)
-        self.line_2.setStyleSheet("color:white")
-        self.line_2.setFrameShape(QtWidgets.QFrame.Shape.VLine)
-        self.line_2.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.line_2.setObjectName("line_2")
-
-        self.Basic_fp_info_title_6.setText("Filament Type: ")
-        self._lbl_mat.setText("...")
-
-        hozlay.addWidget(self.Basic_fp_info_title_6)
-        hozlay.addWidget(self.line_2)
         hozlay.addWidget(self._lbl_mat)
-
+        hozlay.addWidget(self._lbl_pos)
+        hozlay.addWidget(self._lbl_clr)
         return root
 
     def _setup_ui(self) -> None:
@@ -406,8 +436,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         )
 
         self.filament_control_page.setSizePolicy(sizePolicy)
-        self.filament_control_page.setMinimumSize(QtCore.QSize(710, 400))
-        self.filament_control_page.setMaximumSize(QtCore.QSize(720, 420))
+        self.filament_control_page.setFixedSize(QtCore.QSize(710, 400))
         self.filament_control_page.setObjectName("filament_control_page")
 
         self.verticalLayout = QtWidgets.QVBoxLayout(self.filament_control_page)
@@ -480,54 +509,14 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.main_back_button.setObjectName("main_back_button")
         self.Basic_fp_header_layout.addWidget(self.main_back_button)
 
-        spacerItem2 = QtWidgets.QSpacerItem(
-            20,
-            40,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
-        spacerItem3 = QtWidgets.QSpacerItem(
-            20,
-            40,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
-        spacerItem4 = QtWidgets.QSpacerItem(
-            20,
-            26,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-        )
-        spacerItem5 = QtWidgets.QSpacerItem(
-            60,
-            20,
-            QtWidgets.QSizePolicy.Policy.Maximum,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-        )
-        spacerItem6 = QtWidgets.QSpacerItem(
-            20,
-            40,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
-        spacerItem7 = QtWidgets.QSpacerItem(
-            20,
-            40,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
         self.verticalLayout.addLayout(self.Basic_fp_header_layout)
-        self.verticalLayout.addItem(spacerItem2)
 
-        self.verticalLayout_3 = QtWidgets.QVBoxLayout()
-        self.verticalLayout_3.setObjectName("verticalLayout_3")
-        self.verticalLayout_3.addItem(spacerItem6)
+        self.HLayout = QtWidgets.QHBoxLayout()
+        self.HLayout.setObjectName("HLayout")
 
-        self.verticalLayout_3.addWidget(
-            self._setupInfoBox(), 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        self.HLayout.addWidget(
+            self._setupInfoBox(), QtCore.Qt.AlignmentFlag.AlignHCenter
         )
-
-        self.verticalLayout_3.addItem(spacerItem3)
 
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
@@ -541,39 +530,54 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
 
-        self.horizontalLayout = QtWidgets.QHBoxLayout()
-        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.buttons_frame = BlocksCustomFrame(parent=self.filament_control_page)
+        self.buttons_frame.setFixedSize(QtCore.QSize(290, 300))
+        self.buttons_frame.setObjectName("buttons_frame")
+
+        self.Vlayout = QtWidgets.QVBoxLayout(self.buttons_frame)
+        self.Vlayout.setObjectName("Vlayout")
+        self.Vlayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.Vlayout.setSpacing(10)
 
         self.Basic_fp_load_btn = BlocksCustomButton(parent=self.filament_control_page)
         self.Basic_fp_load_btn.setSizePolicy(sizePolicy)
-        self.Basic_fp_load_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.Basic_fp_load_btn.setMaximumSize(QtCore.QSize(250, 80))
+        self.Basic_fp_load_btn.setFixedSize(QtCore.QSize(250, 80))
         self.Basic_fp_load_btn.setFont(font)
         self.Basic_fp_load_btn.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"),
         )
         self.Basic_fp_load_btn.setObjectName("Basic_fp_load_btn")
-        self.horizontalLayout.addWidget(self.Basic_fp_load_btn)
+        self.Vlayout.addWidget(self.Basic_fp_load_btn)
+
+        self.Basic_fp_unload_btn = BlocksCustomButton(parent=self.filament_control_page)
+        self.Basic_fp_unload_btn.setSizePolicy(sizePolicy)
+        self.Basic_fp_unload_btn.setFixedSize(QtCore.QSize(250, 80))
+        self.Basic_fp_unload_btn.setFont(font)
+        self.Basic_fp_unload_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/filament_related/media/btn_icons/unload_filament.svg"),
+        )
+        self.Basic_fp_unload_btn.setObjectName("Basic_fp_unload_btn")
+        self.Vlayout.addWidget(self.Basic_fp_unload_btn)
 
         self.Basic_fp_check_btn = BlocksCustomButton(parent=self.filament_control_page)
         self.Basic_fp_check_btn.setSizePolicy(sizePolicy)
-        self.Basic_fp_check_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.Basic_fp_check_btn.setMaximumSize(QtCore.QSize(250, 80))
+        self.Basic_fp_check_btn.setFixedSize(QtCore.QSize(250, 80))
         self.Basic_fp_check_btn.setFont(font)
         self.Basic_fp_check_btn.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/filament_related/media/btn_icons/check gate 1.svg"),
         )
         self.Basic_fp_check_btn.setObjectName("Basic_fp_check_btn")
-        self.horizontalLayout.addWidget(self.Basic_fp_check_btn)
+        self.Vlayout.addWidget(self.Basic_fp_check_btn)
         self.Basic_fp_check_btn.hide()
 
-        self.verticalLayout_3.addLayout(self.horizontalLayout)
-        self.verticalLayout.addLayout(self.verticalLayout_3)
+        self.HLayout.addWidget(
+            self.buttons_frame, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        self.verticalLayout.addLayout(self.HLayout)
 
-        self.verticalLayout.addItem(spacerItem4)
-        self.verticalLayout.addItem(spacerItem7)
         self.addWidget(self.filament_control_page)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -603,7 +607,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         self.fcp_header_layout = QtWidgets.QHBoxLayout()
         self.fcp_header_layout.setObjectName("fcp_header_layout")
-        self.fcp_header_layout.addItem(spacerItem5)
 
         font = QtGui.QFont()
         font.setFamily("Momcake")
@@ -742,6 +745,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         self.Basic_fp_header_title.setText("Filament Control")
         self.Basic_fp_load_btn.setText("Load")
+        self.Basic_fp_unload_btn.setText("Unload")
         self.Basic_fp_check_btn.setText("Check gate")
         self.fcp_header_title.setText("Load Filament")
         self.fcp_back_button.setText("Back")
