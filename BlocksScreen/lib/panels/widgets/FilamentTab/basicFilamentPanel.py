@@ -280,6 +280,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
                 btn.clicked.connect(partial(self.open_pre_gate_popup, _filament_type))
             self.Basic_fp_check_btn.show()
+            self._lbl_clr.show()
             self.mmu_configured = True
 
         self._mmu_state = mmu_state
@@ -391,15 +392,16 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         self._lbl_mat = BlocksField(self, "Material:", "bottom")
 
-        self._lbl_pos = BlocksField(self, "Position:", "bottom", "DropDownMenu")
+        self._lbl_pos = BlocksField(self, "Position:", None, "DropDownMenu")
         self._lbl_pos.set_placeholder("Unknown")
         self._lbl_pos.set_options(["Loaded", "Unloaded"])
         self._lbl_pos.select_option("Unknown")
         self._pos_committed = self._lbl_pos.text()
         self._lbl_pos.on_edit.connect(self.on_pos_change)
 
-        self._lbl_clr = BlocksField(self, "Color:")
+        self._lbl_clr = BlocksField(self, "Color:", "upper")
         self._apply_color_swatch("")
+        self._lbl_clr.hide()
 
         hozlay.addWidget(self._lbl_mat)
         hozlay.addWidget(self._lbl_pos)
