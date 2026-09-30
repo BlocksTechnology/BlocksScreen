@@ -66,10 +66,12 @@ def svc():
     s._svc = mock_svc
     s._busy = False
     s._boot_busy = False
+    s._provisioning = False
     s._background_tasks = set()
     s._status_check_in_progress = False
     s._status_pending = False
     s.busy_changed = MagicMock()
+    s.provisioning_changed = MagicMock()
     s.status_ready = MagicMock()
     s.error = MagicMock()
     return s

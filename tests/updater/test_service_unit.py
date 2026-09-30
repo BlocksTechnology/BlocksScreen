@@ -341,6 +341,7 @@ class TestGitUpdate:
             call("klipper", 2, 4),
             call("klipper", 3, 4),
             call("klipper", 4, 4),
+            call("BlocksScreen", 4, 4),  # restart_ui: UI holds its overlay
         ]
 
     @pytest.mark.asyncio
@@ -1758,7 +1759,7 @@ class TestProvisionMissingComponent:
             patch(
                 "updater.service.wait_for_service_active", return_value=False
             ) as mock_wait,
-            patch("updater.service.stop_service", return_value=(True, "")) as mock_stop,
+            patch("updater.service.disable_service", return_value=(True, "")) as mock_stop,
             patch("updater.service.shutil.rmtree") as mock_rmtree,
         ):
             svc = UpdateService(callback=cb)
@@ -1792,7 +1793,7 @@ class TestProvisionMissingComponent:
             patch(
                 "updater.service.wait_for_http_ready", return_value=False
             ) as mock_health,
-            patch("updater.service.stop_service", return_value=(True, "")) as mock_stop,
+            patch("updater.service.disable_service", return_value=(True, "")) as mock_stop,
             patch("updater.service.shutil.rmtree") as mock_rmtree,
         ):
             svc = UpdateService(callback=cb)
@@ -1961,9 +1962,20 @@ class TestProvisionMissing:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            did = await svc.provision_missing()
-        assert did is True
+            deferred = await svc.provision_missing()
+        assert deferred is False
         mock_prov.assert_awaited_once_with(comp)
+
+    @pytest.mark.asyncio
+    async def test_failed_install_is_not_reported_as_deferred(self, tmp_path):
+        comp = self._comp(tmp_path)
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component", return_value=False),
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            assert await svc.provision_missing() is False
 
     @pytest.mark.asyncio
     async def test_present_component_is_never_provisioned(self, tmp_path):
@@ -1975,8 +1987,8 @@ class TestProvisionMissing:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            did = await svc.provision_missing()
-        assert did is False
+            deferred = await svc.provision_missing()
+        assert deferred is False
         mock_prov.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1989,8 +2001,8 @@ class TestProvisionMissing:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            did = await svc.provision_missing()
-        assert did is False
+            deferred = await svc.provision_missing()
+        assert deferred is False
         mock_prov.assert_not_called()
 
     @pytest.mark.asyncio
@@ -2003,8 +2015,8 @@ class TestProvisionMissing:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            did = await svc.provision_missing()
-        assert did is False
+            deferred = await svc.provision_missing()
+        assert deferred is True
         mock_prov.assert_not_called()
 
 
@@ -2409,12 +2421,38 @@ class TestDeferredRestart:
                 "updater.service.verify_updater_importable",
                 new=AsyncMock(return_value=True),
             ),
-            patch("updater.service.restart_service_noblock") as mock_restart,
+            patch(
+                "updater.service.restart_service_noblock", return_value=(True, "")
+            ) as mock_restart,
         ):
             svc = self._svc_with_ui()
             await svc._apply_deferred_restart()
         mock_restart.assert_called_once_with("BlocksScreen-updater.service")
         assert svc.daemon_restart_pending is True
+
+    @pytest.mark.asyncio
+    async def test_failed_restart_request_is_not_pending(self, tmp_path: Path):
+        sentinel = tmp_path / "updater-restart-needed"
+        sentinel.write_text("code\n")
+        with (
+            patch("updater.service.restart_sentinel_path", return_value=sentinel),
+            patch(
+                "updater.service.verify_updater_importable",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "updater.service.restart_service_noblock", return_value=(False, "x")
+            ),
+        ):
+            svc = self._svc_with_ui()
+            await svc._apply_deferred_restart()
+        assert svc.daemon_restart_pending is False
+
+    def test_restart_pending_expires(self):
+        svc = self._svc_with_ui()
+        svc._mark_restart_pending()
+        with patch("updater.service.time.monotonic", return_value=1e12):
+            assert svc.daemon_restart_pending is False
 
     @pytest.mark.asyncio
     async def test_code_skips_restart_when_not_importable(self, tmp_path: Path):

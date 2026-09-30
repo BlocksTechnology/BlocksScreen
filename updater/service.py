@@ -33,6 +33,7 @@ from updater.executor import (
     check_apt_status,
     check_git_status,
     classify_apt_error,
+    disable_service,
     enable_service,
     git_checkout,
     git_clone,
@@ -51,7 +52,6 @@ from updater.executor import (
     restart_service,
     restart_service_noblock,
     run_hook,
-    stop_service,
     verify_updater_importable,
     wait_for_http_ready,
     wait_for_service_active,
@@ -167,6 +167,8 @@ _KLIPPER_SERVICE = "klipper.service"
 
 # Self-heal: the UI component name (components.yaml) that the supervisor watches.
 _UI_COMPONENT = "BlocksScreen"
+# A requested daemon restart that has not happened by now is assumed lost.
+_RESTART_PENDING_TTL_S = 600.0
 # Marker file proving updater exists: absence at target ref aborts update (lack bricks Type=notify host with no self-heal).
 _UPDATER_MARKER = "updater/dbus_service.py"
 # Forward-heal always targets the curated-stable channel, not the configured branch.
@@ -260,8 +262,15 @@ class UpdateService:
         self._log = logging.getLogger("updater")
         # Self-heal: trailing-window sample ring for crash-loop detection.
         self._nrestarts_samples: dict[str, list[tuple[float, int]]] = {}
-        # Set once this daemon is about to be stopped, so no apt child gets SIGKILLed with it.
-        self.daemon_restart_pending = False
+        self._restart_pending_until = 0.0
+
+    @property
+    def daemon_restart_pending(self) -> bool:
+        """True while this daemon is about to be stopped, so no apt child gets SIGKILLed with it."""
+        return time.monotonic() < self._restart_pending_until
+
+    def _mark_restart_pending(self) -> None:
+        self._restart_pending_until = time.monotonic() + _RESTART_PENDING_TTL_S
 
     def has_component(self, name: str) -> bool:
         """Return True if a component with the given name is registered."""
@@ -497,26 +506,24 @@ class UpdateService:
     async def provision_missing(
         self, on_busy: Callable[[bool], None] | None = None
     ) -> bool:
-        """Clone absent install_if_missing components at boot; on_busy brackets the work."""
+        """Clone absent install_if_missing components; True if deferred by a held lock."""
         missing = self._missing_provisions()
         if not missing:
             return False
-        provisioned = False
         with process_lock() as acquired:
             if not acquired:
                 self._log.info("provision_missing: update in progress, deferring")
-                return False
+                return True
             if on_busy:
-                on_busy(True)  # UI shows step_complete only while busy
+                on_busy(True)
             try:
                 for c in missing:
                     if c.path is None or not c.path.exists():  # recheck under lock
                         await self._provision_component(c)
-                        provisioned = True
             finally:
                 if on_busy:
                     on_busy(False)
-        return provisioned
+        return False
 
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig]
@@ -802,6 +809,8 @@ class UpdateService:
                 ui_services.add(c.service)
         # klipper/RF50 hold config the UI reads at startup: refresh it too.
         if any(c.restart_ui for c in alive):
+            if _UI_SERVICE not in ui_services:
+                self._cb("on_step", _UI_COMPONENT, 4, 4)  # UI holds its overlay
             ui_services.add(_UI_SERVICE)
         for svc in ui_services:
             self._log.info("git batch: fire-and-forget restart of %s (no wait)", svc)
@@ -1015,7 +1024,7 @@ class UpdateService:
                     "(install-updater runs out-of-band)"
                 )
                 await asyncio.to_thread(self._touch_deploy_flag)
-                self.daemon_restart_pending = True
+                self._mark_restart_pending()
                 return
             comp = next(
                 (c for c in self._components if c.service in _FIRE_AND_FORGET_SERVICES),
@@ -1032,8 +1041,11 @@ class UpdateService:
                 "deferred: updater code changed, clean self-restart of %s",
                 UPDATER_SERVICE,
             )
-            await restart_service_noblock(UPDATER_SERVICE)
-            self.daemon_restart_pending = True
+            ok, err = await restart_service_noblock(UPDATER_SERVICE)
+            if ok:
+                self._mark_restart_pending()
+            else:
+                self._log.error("daemon restart request failed: %s", err)
         except Exception:  # noqa: BLE001
             self._log.error("deferred restart handling failed", exc_info=True)
 
@@ -1718,8 +1730,8 @@ class UpdateService:
     async def _fail_provision(self, component: ComponentConfig, reason: str) -> bool:
         """Remove the partial clone, log, and report failure."""
         if component.service and reason in ("hook", "restart"):
-            # Else systemd crash-loops the unit on the deleted dir until StartLimit.
-            await stop_service(component.service)
+            # The hook may have enabled it: it would crash-loop on the deleted dir.
+            await disable_service(component.service)
         await self._remove_clone(component)
         self._history("install_failed", component.name, reason=reason)
         self._log.warning(
@@ -2170,6 +2182,7 @@ class UpdateService:
                 component.name,
                 _UI_SERVICE,
             )
+            self._cb("on_step", _UI_COMPONENT, 4, 4)  # UI holds its overlay
             await restart_service_noblock(_UI_SERVICE)
 
     async def _run_git_update(self, component: ComponentConfig) -> bool:

@@ -31,6 +31,7 @@ def _make_worker():
     w._proxy = MagicMock()
     w._shutting_down = False
     w._last_busy = False
+    w._last_provisioning = False
     w._daemon_owner = ""
     w._owner_task = None
     w._escalated = False
@@ -522,3 +523,27 @@ class TestReplayBusy:
         worker._last_busy = True
         worker.replay_busy()
         assert received == [True]
+
+    def test_replays_provisioning_before_busy(self, worker, qtbot):
+        order: list[str] = []
+        worker.provisioning_changed.connect(lambda v: order.append(f"prov={v}"))
+        worker.busy_changed.connect(lambda v: order.append(f"busy={v}"))
+        worker._last_busy = worker._last_provisioning = True
+        worker.replay_busy()
+        assert order == ["prov=True", "busy=True"]
+
+
+class TestGetProvisioning:
+    @pytest.mark.asyncio
+    async def test_old_daemon_without_method_is_not_provisioning(self, worker):
+        import sdbus
+
+        worker._proxy.get_provisioning = AsyncMock(
+            side_effect=sdbus.SdBusBaseError("unknown method")
+        )
+        assert await worker._get_provisioning() is False
+
+    @pytest.mark.asyncio
+    async def test_returns_daemon_answer(self, worker):
+        worker._proxy.get_provisioning = AsyncMock(return_value=True)
+        assert await worker._get_provisioning() is True

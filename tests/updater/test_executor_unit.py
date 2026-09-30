@@ -373,6 +373,15 @@ class TestGitDescribe:
         cmd = exec_mock.call_args.args
         assert "origin/main" in cmd
 
+    @pytest.mark.asyncio
+    async def test_describes_with_tags_and_hash_fallback(self, tmp_path):
+        proc = _make_proc(0, b"v1.0.0-12-gabc1234\n", b"")
+        exec_mock = AsyncMock(return_value=proc)
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            assert await git_describe(tmp_path) == "v1.0.0-12-gabc1234"
+        cmd = exec_mock.call_args.args
+        assert "--tags" in cmd and "--always" in cmd
+
 
 class TestGitResetToHash:
     @pytest.mark.asyncio

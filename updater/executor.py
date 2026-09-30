@@ -719,8 +719,8 @@ async def git_default_branch(path: Path | None) -> str:
 
 
 async def git_describe(path: Path, ref: str | None = None) -> str:
-    """Return the nearest tag for ref (or HEAD), or empty string."""
-    cmd = [GIT, "describe", "--tags", "--abbrev=0"]
+    """Return `tag-N-gHASH` (or a bare hash without tags) for ref or HEAD; empty on error."""
+    cmd = [GIT, "describe", "--tags", "--always"]
     if ref:
         cmd.append(ref)
     ok, output = await _run(cmd, cwd=path, timeout=10.0)
@@ -1051,10 +1051,7 @@ async def wait_for_http_ready(
             logger.info("health check ok: %s", url)
             return True
         # A crash-looping unit is 'activating', never 'active': don't wait out the timeout.
-        if (
-            service
-            and not (await _run([SYSTEMCTL, "is-active", service], timeout=10.0))[0]
-        ):
+        if service and not await is_service_active(service):
             logger.warning("service %r left active during health check", service)
             return False
         if asyncio.get_running_loop().time() >= deadline:
@@ -1086,13 +1083,13 @@ async def verify_updater_importable(component_path: Path | None) -> bool:
     return ok
 
 
-async def stop_service(name: str | None) -> tuple[bool, str]:
-    """Stop a systemd service."""
+async def disable_service(name: str | None) -> tuple[bool, str]:
+    """Stop and disable a systemd service."""
     if name is None:
         return (False, "service name is None")
     if not _SERVICE_RE.match(name):
         return (False, f"service name {name!r} is invalid")
-    return await _run([SUDO, SYSTEMCTL, "stop", name], timeout=30.0)
+    return await _run([SUDO, SYSTEMCTL, "disable", "--now", name], timeout=30.0)
 
 
 async def restart_service(name: str | None) -> tuple[bool, str]:

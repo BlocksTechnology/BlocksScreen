@@ -395,7 +395,7 @@ class TestProvisionRetry:
         """Deferred provisioning (lock held by boot reconcile) is retried, not left for the next poll."""
         from updater import dbus_service
 
-        svc._svc.needs_provision = MagicMock(side_effect=[True, True, False])
+        svc._svc.provision_missing = AsyncMock(side_effect=[True, True, False])
         sleeps: list[float] = []
 
         async def fake_sleep(delay):
@@ -408,16 +408,54 @@ class TestProvisionRetry:
         assert sleeps == [dbus_service._PROVISION_RETRY_S] * 2
 
     @pytest.mark.asyncio
-    async def test_gives_up_after_bounded_retries(self, svc):
-        """A component that never provisions must not loop forever."""
+    async def test_failed_install_is_not_retried(self, svc):
+        """A tried-and-failed install (offline, broken unit) runs once, not 10 times."""
         from updater import dbus_service
 
-        svc._svc.needs_provision = MagicMock(return_value=True)
+        svc._svc.needs_provision = MagicMock(return_value=True)  # dir still absent
+        svc._svc.provision_missing = AsyncMock(return_value=False)
+
+        with patch.object(dbus_service.asyncio, "sleep", AsyncMock()):
+            await svc._provision_with_retry()
+
+        svc._svc.provision_missing.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_gives_up_after_bounded_retries(self, svc):
+        """A lock that never frees must not loop forever."""
+        from updater import dbus_service
+
+        svc._svc.provision_missing = AsyncMock(return_value=True)
 
         with patch.object(dbus_service.asyncio, "sleep", AsyncMock()):
             await svc._provision_with_retry()
 
         assert svc._svc.provision_missing.await_count == dbus_service._PROVISION_RETRIES
+
+
+class TestProvisioningFlag:
+    def test_provision_busy_emits_provisioning_then_busy(self, svc):
+        svc._provisioning = False
+        svc._provision_busy(True)
+        svc.provisioning_changed.emit.assert_called_once_with((True,))
+        svc.busy_changed.emit.assert_called_once_with((True,))
+        assert svc._provisioning is True
+
+    def test_boot_release_clears_both(self, svc):
+        svc._boot_busy = svc._busy = svc._provisioning = True
+        svc._release_boot_busy()
+        assert (svc._busy, svc._provisioning) == (False, False)
+
+    @pytest.mark.asyncio
+    async def test_get_provisioning_reports_flag(self, svc):
+        svc._provisioning = True
+        assert await svc.get_provisioning() is True
+
+    @pytest.mark.asyncio
+    async def test_cancel_ignored_while_provisioning(self, svc):
+        svc._provisioning = svc._busy = True
+        await svc.cancel()
+        assert svc._busy is True
 
 
 class TestMethodReturnValues:

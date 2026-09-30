@@ -37,7 +37,7 @@ _DAEMON_BUS_NAME = "com.blockscreen.Updater"
 _UPDATER_UNIT = "BlocksScreen-updater.service"
 
 # Reconnect attempts before asking systemd to start a unit it has given up on.
-_ESCALATE_AFTER = 3
+_ESCALATE_AFTER = 2
 
 
 class UpdaterWorker(QtCore.QObject):
@@ -55,6 +55,7 @@ class UpdaterWorker(QtCore.QObject):
     rollback_done = QtCore.pyqtSignal(str, bool)
     recover_done = QtCore.pyqtSignal(str, bool)
     busy_changed = QtCore.pyqtSignal(bool)
+    provisioning_changed = QtCore.pyqtSignal(bool)
     daemon_unavailable = QtCore.pyqtSignal()
     update_rejected = QtCore.pyqtSignal()  # daemon refused the request (already busy)
     request_reconnect = QtCore.pyqtSignal()
@@ -77,8 +78,9 @@ class UpdaterWorker(QtCore.QObject):
         self._last_activity: float = 0.0
         # Unique bus name of the live daemon; a change means it restarted.
         self._daemon_owner: str = ""
-        # Latest busy state, for replay_busy(); the worker thread runs before MainWindow wires slots.
+        # For replay_busy(): this thread starts before MainWindow wires its slots.
         self._last_busy: bool = False
+        self._last_provisioning: bool = False
         self._owner_task: asyncio.Task | None = None
         self._escalated: bool = False
         # Serializes the reconnect and owner-watch entry points into _connect().
@@ -188,6 +190,7 @@ class UpdaterWorker(QtCore.QObject):
             self._listen_rollback,
             self._listen_recover_done,
             self._listen_busy_changed,
+            self._listen_provisioning_changed,
         ]
         for fn in listeners:
             task = asyncio.create_task(fn(), name=fn.__name__)
@@ -221,14 +224,26 @@ class UpdaterWorker(QtCore.QObject):
             self._busy_false_event.set()
         _log.info("connected to owner %s, busy=%s", self._daemon_owner, busy)
         self._last_busy = busy
+        self._last_provisioning = busy and await self._get_provisioning()
+        self.provisioning_changed.emit(self._last_provisioning)
         self.busy_changed.emit(busy)
         if not busy:
             self.request_reconnect.emit()
 
         self.proxy_connected.emit()
 
+    async def _get_provisioning(self) -> bool:
+        """Daemons predating get_provisioning answer with an error: treat as not provisioning."""
+        try:
+            async with asyncio.timeout(5):
+                return await self._proxy.get_provisioning()
+        except (sdbus.SdBusBaseError, TimeoutError):
+            return False
+
     def replay_busy(self) -> None:
-        """Re-emit busy=True once slots are wired; the connect-time emit can fire before they are."""
+        """Re-emit busy state once slots are wired; the connect-time emit can fire before they are."""
+        if self._last_provisioning:
+            self.provisioning_changed.emit(True)
         if self._last_busy:
             self.busy_changed.emit(True)
 
@@ -608,6 +623,13 @@ class UpdaterWorker(QtCore.QObject):
             else:
                 self._busy_false_event.set()
             self.busy_changed.emit(busy)
+
+    async def _listen_provisioning_changed(self) -> None:
+        """Forward provisioning_changed signals."""
+        async for provisioning in self._proxy.provisioning_changed:
+            self._touch_activity()
+            self._last_provisioning = provisioning
+            self.provisioning_changed.emit(provisioning)
 
     async def _busy_watchdog(self) -> None:
         """Emit daemon_unavailable after _BUSY_IDLE_LIMIT seconds of daemon silence.

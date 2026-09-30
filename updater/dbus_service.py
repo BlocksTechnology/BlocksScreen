@@ -20,7 +20,7 @@ _log = logging.getLogger(__name__)
 _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
 # Poll again this soon while a git fetch is failing: a boot-time DNS miss must not hide updates for a full poll interval.
 _FETCH_RETRY_INTERVAL_S = 300.0
-# Boot reconcile holds the process lock briefly; provisioning is deferred, not lost.
+# Retries while boot reconcile holds the process lock.
 _PROVISION_RETRIES = 10
 _PROVISION_RETRY_S = 3.0
 
@@ -101,13 +101,19 @@ class UpdaterInterface(
         """Emitted on True↔False transition only (state-machine guard)."""
         raise NotImplementedError
 
+    @sdbus.dbus_signal_async("b")
+    def provisioning_changed(self) -> tuple[bool]:
+        """Emitted on True↔False transition while a missing component is being installed."""
+        raise NotImplementedError
+
     def __init__(self) -> None:
         """Wire the service and busy state, then spawn the boot, poll, and self-heal tasks."""
         super().__init__()
         self._svc = UpdateService(callback=DbusProgressCallback(self))
-        # Busy before export so the UI's get_busy on connect sees a boot provision, not a MainWindow flash.
+        # Set before export so the UI's first get_busy sees a boot install.
         self._boot_busy: bool = self._svc.needs_provision()
         self._busy: bool = self._boot_busy
+        self._provisioning: bool = self._boot_busy
         self._background_tasks: set[asyncio.Task] = set()
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
@@ -135,19 +141,26 @@ class UpdaterInterface(
             _log.error("task %r failed", task.get_name(), exc_info=exc)
 
     async def _provision_with_retry(self) -> None:
-        """Retry while boot reconcile still holds the process lock and defers provisioning."""
-        for attempt in range(_PROVISION_RETRIES):
-            await self._svc.provision_missing(self._set_busy)
-            if not self._svc.needs_provision():
+        """Retry only while boot reconcile's process lock defers provisioning."""
+        for _ in range(_PROVISION_RETRIES):
+            if not await self._svc.provision_missing(self._provision_busy):
                 return
-            if attempt + 1 < _PROVISION_RETRIES:
-                await asyncio.sleep(_PROVISION_RETRY_S)
+            await asyncio.sleep(_PROVISION_RETRY_S)
+
+    def _provision_busy(self, busy: bool) -> None:
+        self._set_provisioning(busy)
+        self._set_busy(busy)
 
     def _release_boot_busy(self) -> None:
-        """Drop the busy state pre-set at boot; no await between this and provision's own busy(False)."""
+        """Drop the state pre-set at boot."""
         if self._boot_busy:
             self._boot_busy = False
-            self._set_busy(False)
+            self._provision_busy(False)
+
+    def _set_provisioning(self, provisioning: bool) -> None:
+        if provisioning != self._provisioning:
+            self._provisioning = provisioning
+            self.provisioning_changed.emit((provisioning,))
 
     def _set_busy(self, busy: bool) -> None:
         """Emit busy_changed only on state transitions to avoid redundant signals."""
@@ -215,7 +228,6 @@ class UpdaterInterface(
             await asyncio.sleep(3.0)
         while True:
             try:
-                # Provision first (a no-op stat when nothing is missing) so status reflects it.
                 await self._provision_with_retry()
                 self._release_boot_busy()
                 await self._emit_status()
@@ -299,7 +311,7 @@ class UpdaterInterface(
         )
         # Silent apt pass only if we held the lock; else the CLI run owns apt.
         if ran and self._svc.daemon_restart_pending:
-            # A SIGKILL from the restart could land inside dpkg; the next poll re-offers the packages.
+            # A restart SIGKILL could land inside dpkg.
             _log.info("background apt upgrade skipped: daemon restart pending")
         elif ran:
             self._spawn(
@@ -348,9 +360,17 @@ class UpdaterInterface(
         """D-Bus method: return current busy state so reconnecting clients can sync."""
         return self._busy
 
+    @sdbus.dbus_method_async(result_signature="b")
+    async def get_provisioning(self) -> bool:
+        """D-Bus method: True while a missing component is being installed."""
+        return self._provisioning
+
     @sdbus.dbus_method_async()
     async def cancel(self) -> None:
         """D-Bus method: cancel the running update or recover task and wait for cleanup."""
+        if self._provisioning:
+            _log.info("cancel() ignored: component install in progress")
+            return
         cancelled_tasks: list[asyncio.Task] = []
         for task in list(self._background_tasks):
             name = task.get_name()

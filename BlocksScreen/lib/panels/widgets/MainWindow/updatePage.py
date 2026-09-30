@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import typing
 from types import MappingProxyType
 
@@ -15,6 +16,12 @@ from lib.utils.icon_button import IconButton
 from updater.models import ComponentStatus
 
 _log = logging.getLogger(__name__)
+_DESCRIBE_SUFFIX = re.compile(r"-(\d+)-g[0-9a-f]+$")
+
+
+def _compact_version(describe: str) -> str:
+    """`v1.0.0-12-gabc1234` -> `v1.0.0+12`, so commits past one tag stay distinguishable."""
+    return _DESCRIBE_SUFFIX.sub(r"+\1", describe)
 
 
 class UpdatePage(QtWidgets.QWidget):
@@ -46,7 +53,6 @@ class UpdatePage(QtWidgets.QWidget):
         }
     )
 
-    # Boot provisioning of a missing component reuses steps 1-4 with different meanings.
     _PROVISION_STEP_LABELS: typing.ClassVar[MappingProxyType[int, str]] = (
         MappingProxyType(
             {1: "cloning", 2: "installing deps", 3: "setting up", 4: "starting"}
@@ -121,9 +127,6 @@ class UpdatePage(QtWidgets.QWidget):
             self._overlay_shown = False
             self.show_loading(False)
             self.call_load_panel.emit(False, "", False)
-            self._show_toast(
-                "Update is taking longer than expected - tap refresh to check status"
-            )
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """Rebuild cards and request a fresh status poll each time the page becomes visible."""
@@ -164,8 +167,8 @@ class UpdatePage(QtWidgets.QWidget):
             return "status error"
         if status.kind in ("system", "apt"):
             return "updates available"
-        current = status.current_version or status.current_hash[:8]
-        return f"{current} → {status.remote_version or 'unknown'}"
+        current = _compact_version(status.current_version) or status.current_hash[:8]
+        return f"{current} → {_compact_version(status.remote_version) or 'unknown'}"
 
     def _make_white_label(
         self,
@@ -360,13 +363,8 @@ class UpdatePage(QtWidgets.QWidget):
         self._busy = busy
         self.show_loading(busy)
         if busy:
-            # Busy with no user press = the daemon is installing a missing component.
-            self._provisioning = self._provisioning or not self._overlay_shown
             if self._provisioning:
-                self._overlay_shown = True
-                self.call_load_panel.emit(
-                    True, "Missing component, installing ...", False
-                )
+                self._show_provisioning_overlay()
             self._restart_pending = False
             self._elapsed_time_seconds = 0
             self._elapsed_timer.start()
@@ -391,6 +389,16 @@ class UpdatePage(QtWidgets.QWidget):
                 self._post_update_status_pending = True
                 QtCore.QTimer.singleShot(10000, self._dismiss_stale_overlay)
             self._request_status_debounced()
+
+    def handle_provisioning_changed(self, provisioning: bool) -> None:
+        """Daemon-declared: the current busy period installs a missing component."""
+        self._provisioning = provisioning
+        if provisioning and self._busy:
+            self._show_provisioning_overlay()
+
+    def _show_provisioning_overlay(self) -> None:
+        self._overlay_shown = True
+        self.call_load_panel.emit(True, "Missing component, installing ...", False)
 
     def _dismiss_stale_overlay(self) -> None:
         """Drop the overlay if the post-update status never arrived."""
@@ -464,7 +472,6 @@ class UpdatePage(QtWidgets.QWidget):
         if self._busy_timeout_timer.isActive():
             self._busy_timeout_timer.start()
         self._overlay_shown = True
-        # BlocksScreen's last step restarts this very process.
         self._restart_pending = name == "BlocksScreen" and step == total
         overlay_msg = (
             f"Installing {name}: {label}" if self._provisioning else f"{name}: {label}"
@@ -519,7 +526,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._cancel_btn.hide()
         self.show_loading(False)
         self._show_toast(
-            "Updater unavailable. Check system logs or restart BlocksScreen.",
+            "Updater unavailable, restarting it automatically ...",
             success=False,
         )
         self.update_all_btn.setEnabled(False)

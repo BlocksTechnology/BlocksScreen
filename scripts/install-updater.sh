@@ -4,10 +4,12 @@ set -euo pipefail
 Red='\033[0;31m'
 Green='\033[0;32m'
 Blue='\033[0;34m'
+Yellow='\033[0;33m'
 Normal='\033[0m'
 
 echo_info() { printf "${Blue}%s${Normal}\n" "$1"; }
 echo_ok() { printf "${Green}%s${Normal}\n" "$1"; }
+echo_warn() { printf "${Yellow}%s${Normal}\n" "$1"; }
 echo_error() { printf "${Red}%s${Normal}\n" "$1"; }
 
 # Root and blocks both run this: O_CREAT on the other's file in sticky /tmp is denied, a read-only open is not.
@@ -125,7 +127,7 @@ _BS_SVC_SRC="$BS_PATH/scripts/BlocksScreen.service"
 _BS_SVC_DEST="/etc/systemd/system/BlocksScreen.service"
 if [[ ! -f "$_BS_SVC_SRC" ]]; then
     # Never remove the running unit without a replacement; the device has no SSH recovery.
-    echo_info "WARN: $_BS_SVC_SRC missing, leaving existing BlocksScreen.service intact"
+    echo_warn "$_BS_SVC_SRC missing, leaving existing BlocksScreen.service intact"
 elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC_SRC")" ]]; then
     # Atomic replace via temp symlink + rename: the unit is never absent.
     sudo ln -sfn "$_BS_SVC_SRC" "${_BS_SVC_DEST}.new"
@@ -133,8 +135,7 @@ elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC
     sudo systemctl unmask BlocksScreen.service 2>/dev/null || true
 fi
 sudo systemctl daemon-reload
-# A linked-but-not-enabled UI unit never starts at boot: blank screen and no SSH recovery.
-sudo systemctl enable BlocksScreen.service 2>/dev/null || echo_info "WARN: could not enable BlocksScreen.service"
+sudo systemctl enable BlocksScreen.service 2>/dev/null || echo_warn "could not enable BlocksScreen.service"
 echo_ok "BlocksScreen.service is a symlink - hook no longer needs sudo cp"
 
 echo_info "Setting up apt cache directory for blocks user ..."

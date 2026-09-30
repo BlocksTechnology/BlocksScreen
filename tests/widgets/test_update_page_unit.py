@@ -11,12 +11,8 @@ from updater.models import ComponentStatus
 def page(qapp):
     """UpdatePage instance with all heavy UI deps mocked."""
     patches = [
-        patch(
-            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.LoadingOverlayWidget"
-        ),
-        patch(
-            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BlocksCustomButton"
-        ),
+        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.LoadingOverlayWidget"),
+        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BlocksCustomButton"),
         patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.IconButton"),
     ]
     for p in patches:
@@ -137,6 +133,12 @@ class TestVersionString:
     def test_git_falls_back_to_unknown_when_no_remote(self, page):
         s = _make_status(current_version="v0.1.0", remote_version="")
         assert page._version_string(s) == "v0.1.0 → unknown"
+
+    def test_same_tag_commits_ahead_stay_distinguishable(self, page):
+        s = _make_status(
+            current_version="v1.0.0-12-gabc1234", remote_version="v1.0.0-15-gdef5678"
+        )
+        assert page._version_string(s) == "v1.0.0+12 → v1.0.0+15"
 
     def test_system_returns_updates_available(self, page):
         s = _make_status(kind="system", packages_upgradable=12)
@@ -427,13 +429,13 @@ class TestHandleStepComplete:
     def test_emits_call_load_panel_with_step_message(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("klipper", 1, 4)
-        assert blocker.args == [True, "klipper: fetching", False]
+        assert blocker.args == [True, "klipper: fetching",False]
         page._progress_label.setText.assert_called_with("Step 1/4")
 
     def test_unknown_steps_falls_back_to_working(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("moonraker", 99, 4)
-        assert blocker.args == [True, "moonraker: working", False]
+        assert blocker.args == [True, "moonraker: working",False]
         page._progress_label.setText.assert_called_with("Step 99/4")
 
 
@@ -512,9 +514,7 @@ class TestBadStatusPayload:
 
 class TestConfirmPopupCleanup:
     def test_second_confirm_deletes_previous_popup(self, page):
-        with patch(
-            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BasePopup"
-        ) as popup_cls:
+        with patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BasePopup") as popup_cls:
             first = MagicMock()
             second = MagicMock()
             popup_cls.side_effect = [first, second]
@@ -525,14 +525,29 @@ class TestConfirmPopupCleanup:
 
 
 class TestBootProvisioning:
-    def test_busy_without_user_press_shows_installing_message(self, page, qtbot):
+    def test_declared_provisioning_shows_installing_message(self, page, qtbot):
         page.show_loading = MagicMock()
+        page.handle_provisioning_changed(True)
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_busy_changed(True)
         assert blocker.args == [True, "Missing component, installing ...", False]
 
+    def test_provisioning_after_busy_still_shows_message(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_provisioning_changed(True)
+        assert blocker.args == [True, "Missing component, installing ...", False]
+
+    def test_undeclared_busy_is_not_an_install(self, page, qtbot):
+        page.show_loading = MagicMock()
+        with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
+            page.handle_busy_changed(True)
+        assert page._provisioning is False
+
     def test_provision_steps_name_the_component(self, page, qtbot):
         page.show_loading = MagicMock()
+        page.handle_provisioning_changed(True)
         page.handle_busy_changed(True)
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("Spoolman", 1, 4)
@@ -546,8 +561,15 @@ class TestBootProvisioning:
             page.handle_step_complete("klipper", 1, 4)
         assert blocker.args == [True, "klipper: fetching", False]
 
-    def test_replayed_busy_keeps_provisioning(self, page):
+    def test_provisioning_clears_when_busy_ends(self, page):
         page.show_loading = MagicMock()
+        page.handle_provisioning_changed(True)
         page.handle_busy_changed(True)
-        page.handle_busy_changed(True)
-        assert page._provisioning is True
+        page.handle_busy_changed(False)
+        assert page._provisioning is False
+
+
+class TestRestartPending:
+    def test_ui_restart_step_holds_overlay(self, page):
+        page.handle_step_complete("BlocksScreen", 4, 4)
+        assert page._restart_pending is True
