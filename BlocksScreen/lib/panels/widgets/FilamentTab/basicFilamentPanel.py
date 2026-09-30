@@ -130,6 +130,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         """slot to handle print stats updates changing back button behavior"""
         if "state" in field:
             self.state = value
+            self._refresh_check_btn()
             if value in ("printing", "paused"):
                 try:
                     self.main_back_button.disconnect()
@@ -209,7 +210,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 message="Filament is already loaded.",
             )
             return
-        if self.state not in ("printing", "paused"):
+        if not self._in_print:
             self.run_gcode.emit(
                 f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
             )
@@ -237,7 +238,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             )
             return
         self.find_routine_objects()
-        if self.state not in ("printing", "paused"):
+        if not self._in_print:
             self.run_gcode.emit(
                 f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
             )
@@ -250,7 +251,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit("MMU_EJECT")
 
     def _on_load_clicked(self) -> None:
-        if self.state in ("printing", "paused"):
+        if self._in_print:
             self.load_filament(0, FilamentTypes.UNKNOWN)
             return
         self.change_page(self.indexOf(self.fcp))
@@ -332,6 +333,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         )
 
     @property
+    def _in_print(self) -> bool:
+        return self.state in ("printing", "paused")
+
+    @property
     def filament_state(self):
         return self._filament_state
 
@@ -379,6 +384,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
     def _reject_pos_change(self) -> None:
         self._lbl_pos.select_option(self._pos_committed)
+
+    def _refresh_check_btn(self) -> None:
+        self.Basic_fp_check_btn.setEnabled(
+            not self._in_print and self.filament_state is not self.FilamentStates.LOADED
+        )
 
     def _setupInfoBox(self):
         root = BlocksCustomFrame(parent=self.filament_control_page)
