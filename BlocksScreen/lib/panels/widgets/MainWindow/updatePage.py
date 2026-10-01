@@ -96,6 +96,15 @@ class UpdatePage(QtWidgets.QWidget):
         self._busy_timeout_timer.setSingleShot(True)
         self._busy_timeout_timer.setInterval(400_000)  # 400s > 360s watchdog
         self._busy_timeout_timer.timeout.connect(self._on_busy_timeout)
+        # Reusable: a stale singleShot from update N would close update N+1's overlay.
+        self._restart_grace_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._restart_grace_timer.setSingleShot(True)
+        self._restart_grace_timer.setInterval(15000)
+        self._restart_grace_timer.timeout.connect(self._dismiss_after_restart_grace)
+        self._stale_overlay_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._stale_overlay_timer.setSingleShot(True)
+        self._stale_overlay_timer.setInterval(10000)
+        self._stale_overlay_timer.timeout.connect(self._dismiss_stale_overlay)
         self._update_confirm_popup: BasePopup | None = None
         self.show_loading(True)
 
@@ -366,13 +375,16 @@ class UpdatePage(QtWidgets.QWidget):
             if self._provisioning:
                 self._show_provisioning_overlay()
             self._restart_pending = False
+            self._restart_grace_timer.stop()
+            self._stale_overlay_timer.stop()
             self._elapsed_time_seconds = 0
             self._elapsed_timer.start()
             self._busy_timeout_timer.start()
             self._elapsed_time_label.show()
             self._progress_label.setText("")
             self._progress_label.show()
-            self._cancel_btn.show()
+            # The daemon ignores cancel() while installing a component.
+            self._cancel_btn.setVisible(not self._provisioning)
         else:
             self._provisioning = False
             self._elapsed_timer.stop()
@@ -383,17 +395,18 @@ class UpdatePage(QtWidgets.QWidget):
             self.update_all_btn.setEnabled(True)
             if self._restart_pending:
                 # Keep the overlay up: SIGTERM is imminent, MainWindow would flash.
-                QtCore.QTimer.singleShot(15000, self._dismiss_after_restart_grace)
+                self._restart_grace_timer.start()
             elif self._overlay_shown:
                 # Hold the overlay until fresh status lands, else stale cards flash.
                 self._post_update_status_pending = True
-                QtCore.QTimer.singleShot(10000, self._dismiss_stale_overlay)
+                self._stale_overlay_timer.start()
             self._request_status_debounced()
 
     def handle_provisioning_changed(self, provisioning: bool) -> None:
         """Daemon-declared: the current busy period installs a missing component."""
         self._provisioning = provisioning
         if provisioning and self._busy:
+            self._cancel_btn.hide()
             self._show_provisioning_overlay()
 
     def _show_provisioning_overlay(self) -> None:
@@ -472,7 +485,8 @@ class UpdatePage(QtWidgets.QWidget):
         if self._busy_timeout_timer.isActive():
             self._busy_timeout_timer.start()
         self._overlay_shown = True
-        self._restart_pending = name == "BlocksScreen" and step == total
+        # Latch: a later step from another component must not re-arm the flash path.
+        self._restart_pending |= name == "BlocksScreen" and step == total
         overlay_msg = (
             f"Installing {name}: {label}" if self._provisioning else f"{name}: {label}"
         )

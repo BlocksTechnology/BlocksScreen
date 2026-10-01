@@ -230,8 +230,11 @@ class UpdaterInterface(
             await asyncio.sleep(3.0)
         while True:
             try:
-                if not self._provisioned:  # one attempt per start; user Update retries
-                    self._provisioned = not await self._provision_with_retry()
+                if not self._provisioned:
+                    # Once per start; re-armed only by a lock deferral or an error.
+                    deferred = await self._provision_with_retry()
+                    self._provisioned = not deferred
+                    _log.info("provisioning pass done (deferred=%s)", deferred)
                 self._release_boot_busy()
                 await self._emit_status()
             except Exception as exc:  # noqa: BLE001

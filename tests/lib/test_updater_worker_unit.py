@@ -32,6 +32,7 @@ def _make_worker():
     w._shutting_down = False
     w._last_busy = False
     w._last_provisioning = False
+    w._provisioning_signals = 0
     w._daemon_owner = ""
     w._owner_task = None
     w._escalated = False
@@ -547,3 +548,30 @@ class TestGetProvisioning:
     async def test_returns_daemon_answer(self, worker):
         worker._proxy.get_provisioning = AsyncMock(return_value=True)
         assert await worker._get_provisioning() is True
+
+
+class TestPollProvisioning:
+    @pytest.mark.asyncio
+    async def test_poll_seeds_the_value(self, worker):
+        worker._proxy.get_provisioning = AsyncMock(return_value=True)
+        await worker._poll_provisioning(True)
+        assert worker._last_provisioning is True
+
+    @pytest.mark.asyncio
+    async def test_not_busy_skips_the_poll(self, worker):
+        worker._proxy.get_provisioning = AsyncMock(return_value=True)
+        await worker._poll_provisioning(False)
+        assert worker._last_provisioning is False
+        worker._proxy.get_provisioning.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_signal_during_poll_wins(self, worker):
+        async def slow_poll():
+            # The listener delivers the real transition while the poll is in flight.
+            worker._last_provisioning = False
+            worker._provisioning_signals += 1
+            return True
+
+        worker._proxy.get_provisioning = slow_poll
+        await worker._poll_provisioning(True)
+        assert worker._last_provisioning is False

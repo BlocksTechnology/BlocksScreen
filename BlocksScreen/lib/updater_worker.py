@@ -81,6 +81,7 @@ class UpdaterWorker(QtCore.QObject):
         # For replay_busy(): this thread starts before MainWindow wires its slots.
         self._last_busy: bool = False
         self._last_provisioning: bool = False
+        self._provisioning_signals: int = 0
         self._owner_task: asyncio.Task | None = None
         self._escalated: bool = False
         # Serializes the reconnect and owner-watch entry points into _connect().
@@ -224,13 +225,22 @@ class UpdaterWorker(QtCore.QObject):
             self._busy_false_event.set()
         _log.info("connected to owner %s, busy=%s", self._daemon_owner, busy)
         self._last_busy = busy
-        self._last_provisioning = busy and await self._get_provisioning()
+        await self._poll_provisioning(busy)
         self.provisioning_changed.emit(self._last_provisioning)
-        self.busy_changed.emit(busy)
+        self.busy_changed.emit(self._last_busy)
         if not busy:
             self.request_reconnect.emit()
 
         self.proxy_connected.emit()
+
+    async def _poll_provisioning(self, busy: bool) -> None:
+        """Seed _last_provisioning unless a live signal landed during the poll."""
+        seen = self._provisioning_signals
+        polled = busy and await self._get_provisioning()
+        if self._provisioning_signals == seen:
+            self._last_provisioning = polled
+        else:
+            _log.info("provisioning signal beat the connect-time poll; keeping it")
 
     async def _get_provisioning(self) -> bool:
         """Daemons predating get_provisioning answer with an error: treat as not provisioning."""
@@ -629,6 +639,7 @@ class UpdaterWorker(QtCore.QObject):
         async for provisioning in self._proxy.provisioning_changed:
             self._touch_activity()
             self._last_provisioning = provisioning
+            self._provisioning_signals += 1
             self.provisioning_changed.emit(provisioning)
 
     async def _busy_watchdog(self) -> None:

@@ -341,7 +341,7 @@ class TestHandleBusyChanged:
         page.show_loading = MagicMock()
         page.handle_busy_changed(True)
         page._elapsed_time_label.show.assert_called_once()
-        page._cancel_btn.show.assert_called_once()
+        page._cancel_btn.setVisible.assert_called_once_with(True)
 
     def test_false_stops_elapsed_timer(self, page):
         page.show_loading = MagicMock()
@@ -386,7 +386,7 @@ class TestCancelButton:
     def test_cancel_btn_visible_only_when_busy(self, page):
         page.show_loading = MagicMock()
         page.handle_busy_changed(True)
-        page._cancel_btn.show.assert_called()
+        page._cancel_btn.setVisible.assert_called_with(True)
         page._cancel_btn.reset_mock()
         page.handle_busy_changed(False)
         page._cancel_btn.hide.assert_called()
@@ -573,3 +573,49 @@ class TestRestartPending:
     def test_ui_restart_step_holds_overlay(self, page):
         page.handle_step_complete("BlocksScreen", 4, 4)
         assert page._restart_pending is True
+
+    def test_later_step_does_not_clear_the_latch(self, page):
+        page.handle_step_complete("BlocksScreen", 4, 4)
+        page.handle_step_complete("updater", 2, 4)
+        assert page._restart_pending is True
+
+    def test_new_busy_period_clears_the_latch(self, page):
+        page.show_loading = MagicMock()
+        page.handle_step_complete("BlocksScreen", 4, 4)
+        page.handle_busy_changed(True)
+        assert page._restart_pending is False
+
+
+class TestDismissTimers:
+    def test_busy_true_stops_pending_dismiss_timers(self, page):
+        page.show_loading = MagicMock()
+        page._overlay_shown = True
+        page.handle_busy_changed(True)
+        page.handle_busy_changed(False)
+        assert page._stale_overlay_timer.isActive()
+        page.handle_busy_changed(True)
+        assert not page._stale_overlay_timer.isActive()
+        assert not page._restart_grace_timer.isActive()
+
+    def test_restart_grace_uses_the_reusable_timer(self, page):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page.handle_step_complete("BlocksScreen", 4, 4)
+        page.handle_busy_changed(False)
+        assert page._restart_grace_timer.isActive()
+        assert not page._stale_overlay_timer.isActive()
+
+
+class TestCancelHiddenWhileProvisioning:
+    def test_provisioning_busy_hides_cancel(self, page):
+        page.show_loading = MagicMock()
+        page.handle_provisioning_changed(True)
+        page.handle_busy_changed(True)
+        page._cancel_btn.setVisible.assert_called_with(False)
+
+    def test_provisioning_after_busy_hides_cancel(self, page):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page._cancel_btn.reset_mock()
+        page.handle_provisioning_changed(True)
+        page._cancel_btn.hide.assert_called_once()
