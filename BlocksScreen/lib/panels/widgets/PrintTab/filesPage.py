@@ -657,6 +657,7 @@ class FilesPage(QtWidgets.QWidget):
         layout.addStretch(1)
 
         self._sort_combo = BlocksComboBox(parent=self)
+        self._sort_combo.setMinimumWidth(200)
         for name in self.SORTING_TYPES:
             self._sort_combo.addItem(name)
         self._sort_combo.currentTextChanged.connect(self._on_sort_key_changed)
