@@ -416,7 +416,7 @@ class TestProvisionRetry:
         svc._svc.provision_missing = AsyncMock(return_value=False)
 
         with patch.object(dbus_service.asyncio, "sleep", AsyncMock()):
-            await svc._provision_with_retry()
+            assert await svc._provision_with_retry() is False
 
         svc._svc.provision_missing.assert_awaited_once()
 
@@ -428,9 +428,43 @@ class TestProvisionRetry:
         svc._svc.provision_missing = AsyncMock(return_value=True)
 
         with patch.object(dbus_service.asyncio, "sleep", AsyncMock()):
-            await svc._provision_with_retry()
+            assert await svc._provision_with_retry() is True
 
         assert svc._svc.provision_missing.await_count == dbus_service._PROVISION_RETRIES
+
+    async def _run_polls(self, svc, polls: int) -> None:
+        from updater import dbus_service
+
+        svc._boot_busy = True  # skip the initial 3 s sleep
+        calls = 0
+
+        async def fake_sleep(_delay):
+            nonlocal calls
+            calls += 1
+            if calls >= polls:
+                raise asyncio.CancelledError
+
+        with (
+            patch.object(dbus_service.asyncio, "sleep", fake_sleep),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await svc._periodic_status_check()
+
+    @pytest.mark.asyncio
+    async def test_failed_install_not_retried_on_later_polls(self, svc):
+        """Boot tries once; later polls never re-clone (user Update does)."""
+        svc._svc.provision_missing = AsyncMock(return_value=False)
+        await self._run_polls(svc, polls=3)
+        svc._svc.provision_missing.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_still_deferred_after_retries_is_tried_on_next_poll(self, svc):
+        from updater import dbus_service
+
+        svc._svc.provision_missing = AsyncMock(return_value=True)
+        with patch.object(dbus_service, "_PROVISION_RETRIES", 1):
+            await self._run_polls(svc, polls=3)
+        assert svc._svc.provision_missing.await_count == 2
 
 
 class TestProvisioningFlag:

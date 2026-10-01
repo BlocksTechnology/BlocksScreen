@@ -114,6 +114,7 @@ class UpdaterInterface(
         self._boot_busy: bool = self._svc.needs_provision()
         self._busy: bool = self._boot_busy
         self._provisioning: bool = self._boot_busy
+        self._provisioned: bool = False
         self._background_tasks: set[asyncio.Task] = set()
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
@@ -140,12 +141,13 @@ class UpdaterInterface(
         if exc is not None:
             _log.error("task %r failed", task.get_name(), exc_info=exc)
 
-    async def _provision_with_retry(self) -> None:
-        """Retry only while boot reconcile's process lock defers provisioning."""
+    async def _provision_with_retry(self) -> bool:
+        """Retry while boot reconcile's lock defers provisioning; True if still deferred."""
         for _ in range(_PROVISION_RETRIES):
             if not await self._svc.provision_missing(self._provision_busy):
-                return
+                return False
             await asyncio.sleep(_PROVISION_RETRY_S)
+        return True
 
     def _provision_busy(self, busy: bool) -> None:
         self._set_provisioning(busy)
@@ -228,7 +230,8 @@ class UpdaterInterface(
             await asyncio.sleep(3.0)
         while True:
             try:
-                await self._provision_with_retry()
+                if not self._provisioned:  # one attempt per start; user Update retries
+                    self._provisioned = not await self._provision_with_retry()
                 self._release_boot_busy()
                 await self._emit_status()
             except Exception as exc:  # noqa: BLE001

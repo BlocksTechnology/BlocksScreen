@@ -67,6 +67,7 @@ def svc():
     s._busy = False
     s._boot_busy = False
     s._provisioning = False
+    s._provisioned = False
     s._background_tasks = set()
     s._status_check_in_progress = False
     s._status_pending = False
