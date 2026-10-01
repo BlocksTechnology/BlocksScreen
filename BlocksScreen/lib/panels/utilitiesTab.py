@@ -103,7 +103,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.printer.printer_config.connect(
             self.routines_page.on_printer_config_received
         )
-        self.routines_page.subscribe_config.connect(self.subscribe_config)
         self.on_object_list.connect(self.routines_page.on_object_list)
 
         # --- Axis Maintenance ---
