@@ -255,6 +255,7 @@ class UpdateService:
         self._log = logging.getLogger("updater")
         self._nrestarts_samples: dict[str, list[tuple[float, int]]] = {}
         self._restart_pending_until = 0.0
+        self._reconciled = False
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -498,6 +499,7 @@ class UpdateService:
             if not acquired:
                 self._log.info("provision_missing: update in progress, deferring")
                 return True
+            await self.reconcile_if_pending()
             if on_busy:
                 on_busy(True)
             try:
@@ -1388,15 +1390,23 @@ class UpdateService:
         except OSError:
             self._log.warning("failed to clear self-heal fault marker")
 
-    async def reconcile(self) -> None:
-        """Heal repos left damaged by a power loss mid-update, for every component."""
+    async def reconcile(self) -> bool:
+        """Heal repos a power cut left damaged mid-update; False if the lock is busy."""
+        if self._reconciled:
+            return True
         with process_lock() as acquired:
             if not acquired:
-                self._log.info(
-                    "reconcile: another updater holds the lock - skipping boot heal"
-                )
-                return
-            await self._reconcile_locked()
+                return False
+            await self.reconcile_if_pending()
+        return True
+
+    async def reconcile_if_pending(self) -> None:
+        """Run the boot heal once per process; caller must hold the process lock."""
+        if self._reconciled:
+            return
+        # Set first: a crashing heal must not wedge every later update behind it.
+        self._reconciled = True
+        await self._reconcile_locked()
 
     async def _revert_inflight(self) -> None:
         """Revert power-cut batches; failed reverts stay in the marker for retry."""
@@ -1892,7 +1902,7 @@ class UpdateService:
         if elapsed >= 30:
             ok, error = await git_fetch(component.path)
             if not ok:
-                self._log.error(error)
+                self._log.error("%s: fetch failed: %s", component.name, error)
                 # connectivity-only fsck can miss it; pass the fetch error as hint.
                 if not await git_has_corruption(component.path, hint=error):
                     return (False, "network")

@@ -19,6 +19,7 @@ from updater.service import UpdateService
 _log = logging.getLogger(__name__)
 _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
 _FETCH_RETRY_INTERVAL_S = 300.0
+_RECONCILE_RETRY_S = 5.0
 
 
 class DbusProgressCallback:
@@ -111,10 +112,13 @@ class UpdaterInterface(
         self._provisioning: bool = self._boot_busy
         self._provisioned: bool = False
         self._background_tasks: set[asyncio.Task] = set()
+        self._closing: bool = False
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
         self._invalid_requests: int = 0
-        self._reconcile_task = self._spawn(self._svc.reconcile(), name="boot_reconcile")
+        self._reconcile_task = self._spawn(
+            self._boot_reconcile(), name="boot_reconcile"
+        )
         self._spawn(self._svc.background_prime_nrestarts(), name="boot_prime_nrestarts")
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
         self._spawn(self._svc.supervise_ui(), name="supervise_ui")
@@ -125,7 +129,32 @@ class UpdaterInterface(
         task = asyncio.get_running_loop().create_task(coro, name=name)
         self._background_tasks.add(task)
         task.add_done_callback(self._task_done)
+        if self._closing:
+            task.cancel()
         return task
+
+    async def shutdown(self) -> None:
+        """Cancel background tasks, including late spawns, before the loop closes."""
+        self._closing = True
+        while pending := [t for t in self._background_tasks if not t.done()]:
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    async def _boot_reconcile(self) -> None:
+        """Run the boot heal; retry in the background while the lock is held."""
+        if not await self._svc.reconcile():
+            # The start script takes this lock on every UI start; a cold boot races it.
+            _log.info("reconcile: another updater holds the lock - deferring boot heal")
+            self._spawn(self._retry_reconcile(), name="boot_reconcile_retry")
+
+    async def _retry_reconcile(self) -> None:
+        """Poll until the lock frees and the deferred boot heal has run."""
+        while True:
+            await asyncio.sleep(_RECONCILE_RETRY_S)
+            if await self._svc.reconcile():
+                _log.info("reconcile: deferred boot heal done")
+                return
 
     def _task_done(self, task: asyncio.Task) -> None:
         """Drop the task ref and log its exception now, not at some later GC."""
@@ -292,6 +321,7 @@ class UpdaterInterface(
                     self.error.emit((target, "another update is running"))
                     return False
                 ran = True
+                await self._svc.reconcile_if_pending()
                 await work()
         except Exception as exc:  # noqa: BLE001
             _log.error("_run_%s failed: %s", label, exc, exc_info=True)

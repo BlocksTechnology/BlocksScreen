@@ -79,6 +79,7 @@ async def _run_daemon() -> None:
         except asyncio.TimeoutError:
             pass
     _log.info("updater daemon shutting down")
+    await service.shutdown()
 
 
 def _watchdog_ping_interval() -> float:
@@ -141,6 +142,7 @@ async def main() -> None:
     match args.command:
         case "update":
             with _cli_lock():
+                await svc.reconcile_if_pending()
                 if args.name is None:
                     ok = await svc.update_all()
                 else:
@@ -153,6 +155,7 @@ async def main() -> None:
                 _print_component_status(s, args.verbose)
         case "recover":
             with _cli_lock():
+                await svc.reconcile_if_pending()
                 if not await svc.recover(args.name, hard=args.hard):
                     raise SystemExit(1)
         case "bless":

@@ -52,6 +52,8 @@ def svc():
     mock_svc.has_fetch_failures = MagicMock(return_value=False)
     mock_svc.needs_provision = MagicMock(return_value=False)
     mock_svc.provision_missing = AsyncMock(return_value=False)
+    mock_svc.reconcile = AsyncMock(return_value=True)
+    mock_svc.reconcile_if_pending = AsyncMock()
     mock_svc._components = [
         ComponentConfig(name="moonraker", kind="git"),
         ComponentConfig(name="klipper", kind="git"),
@@ -70,6 +72,7 @@ def svc():
     s._provisioning = False
     s._provisioned = False
     s._background_tasks = set()
+    s._closing = False
     s._status_check_in_progress = False
     s._status_pending = False
     s.busy_changed = MagicMock()

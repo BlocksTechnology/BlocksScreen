@@ -2090,6 +2090,29 @@ class TestProvisionMissing:
         assert deferred is True
         mock_prov.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_runs_pending_boot_heal_before_cloning(self, tmp_path):
+        # Batches overwrite the in-flight marker, so the deferred heal must go first.
+        comp = self._comp(tmp_path)
+        order: list[str] = []
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(
+                UpdateService,
+                "_reconcile_locked",
+                side_effect=lambda: order.append("heal"),
+            ),
+            patch.object(
+                UpdateService,
+                "_provision_component",
+                side_effect=lambda c: order.append("clone") or True,
+            ),
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            await svc.provision_missing()
+        assert order == ["heal", "clone"]
+
 
 class TestReclone:
     """_reclone_component: temp-clone + atomic swap as the deepest corruption rung."""
@@ -2318,9 +2341,43 @@ class TestReconcile:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            await svc.reconcile()
+            assert await svc.reconcile() is False
         mock_hash.assert_not_called()
         mock_repair.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_runs_once_per_process(self):
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_reconcile_locked") as mock_heal,
+        ):
+            svc = UpdateService()
+            assert await svc.reconcile() is True
+            assert await svc.reconcile() is True
+            await svc.reconcile_if_pending()
+        mock_heal.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_busy_lock_leaves_heal_pending(self):
+        # A skipped boot heal must still run for the next lock holder, not be dropped.
+        with patch.object(UpdateService, "_reconcile_locked") as mock_heal:
+            svc = UpdateService()
+            with patch("updater.service.process_lock", lambda: nullcontext(False)):
+                assert await svc.reconcile() is False
+            mock_heal.assert_not_called()
+            await svc.reconcile_if_pending()
+        mock_heal.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_crashing_heal_does_not_rerun(self):
+        with patch.object(
+            UpdateService, "_reconcile_locked", side_effect=RuntimeError("boom")
+        ) as mock_heal:
+            svc = UpdateService()
+            with pytest.raises(RuntimeError):
+                await svc.reconcile_if_pending()
+            await svc.reconcile_if_pending()
+        mock_heal.assert_awaited_once()
 
 
 class TestWriteStateDurability:

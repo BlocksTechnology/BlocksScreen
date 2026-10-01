@@ -73,8 +73,12 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     echo "[hook:BlocksScreen] daemon-reload done (xorg service)"
 fi
 
+# Same set as post-merge: only install-updater.sh deploys these, so any change must re-run it.
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
-        -- scripts/install-updater.sh scripts/bs-apt-helper.sh 2>/dev/null; then
+        -- scripts/install-updater.sh scripts/bs-apt-helper.sh \
+        scripts/BlocksScreen-updater.service scripts/BlocksScreen-bootstrap.service \
+        scripts/com.blockscreen.Updater.conf scripts/com.blockscreen.Updater.service \
+        2>/dev/null; then
     echo "[hook:BlocksScreen] install files changed - setting deploy flag"
     _set_deploy_flag
 fi

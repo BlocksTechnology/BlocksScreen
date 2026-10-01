@@ -1,5 +1,6 @@
 import asyncio
 import json
+from contextlib import nullcontext
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -602,3 +603,77 @@ class TestLockHeldSurfacesError:
             await svc._run_recover("klipper", hard=False)
         svc.error.emit.assert_called_once_with(("klipper", "another update is running"))
         svc._svc.recover.assert_not_called()
+
+
+class TestBootReconcileRetry:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("acquired", [True, False])
+    async def test_retry_spawned_only_when_lock_busy(self, svc, acquired):
+        """The start script holds the lock on UI start; a busy lock must defer, not drop."""
+        svc._svc.reconcile = AsyncMock(return_value=acquired)
+        with patch.object(
+            svc, "_spawn", MagicMock(side_effect=lambda coro, **_: coro.close())
+        ) as spawn:
+            await svc._boot_reconcile()
+        if acquired:
+            spawn.assert_not_called()
+        else:
+            spawn.assert_called_once()
+            assert spawn.call_args.kwargs["name"] == "boot_reconcile_retry"
+
+    @pytest.mark.asyncio
+    async def test_retry_polls_until_heal_runs(self, svc):
+        from updater import dbus_service
+
+        svc._svc.reconcile = AsyncMock(side_effect=[False, False, True])
+        sleep = AsyncMock()
+        with patch.object(dbus_service.asyncio, "sleep", sleep):
+            await svc._retry_reconcile()
+        assert svc._svc.reconcile.await_count == 3
+        assert sleep.await_count == 3
+        sleep.assert_awaited_with(dbus_service._RECONCILE_RETRY_S)
+
+    @pytest.mark.asyncio
+    async def test_lock_holder_heals_before_work(self, svc):
+        """A batch overwrites the in-flight marker, so a pending heal must run first."""
+        order: list[str] = []
+        svc._svc.reconcile_if_pending = AsyncMock(
+            side_effect=lambda: order.append("heal")
+        )
+        work = AsyncMock(side_effect=lambda: order.append("work"))
+        with patch("updater.dbus_service.process_lock", lambda: nullcontext(True)):
+            assert await svc._run_with_lock(work, "update_all", "updater") is True
+        assert order == ["heal", "work"]
+
+
+class TestShutdown:
+    @pytest.mark.asyncio
+    async def test_drains_status_respawned_during_shutdown(self, svc):
+        """The pending_status respawn from _emit_status's finally must not outlive the loop."""
+        started = asyncio.Event()
+
+        async def blocking_check(**_kw):
+            started.set()
+            await asyncio.Event().wait()
+
+        svc._svc.check_status = AsyncMock(side_effect=blocking_check)
+        task = svc._spawn(svc._emit_status(), name="status")
+        await started.wait()
+        svc._status_pending = True
+        await svc.shutdown()
+        assert task.cancelled()
+        assert svc._svc.check_status.await_count == 1
+        assert svc._background_tasks == set()
+
+    @pytest.mark.asyncio
+    async def test_spawn_after_shutdown_never_runs(self, svc):
+        ran = []
+
+        async def late():
+            ran.append(True)
+
+        await svc.shutdown()
+        task = svc._spawn(late(), name="late")
+        await asyncio.gather(task, return_exceptions=True)
+        assert task.cancelled()
+        assert ran == []

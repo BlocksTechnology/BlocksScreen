@@ -966,6 +966,8 @@ async def run_hook(
         return (False, "hook path escapes hooks directory")
     if not hook.exists():
         return (True, "no hook")
+    if not os.access(hook, os.X_OK):
+        return (False, "hook not executable")
     env = _make_clean_env()
     env.update(
         {

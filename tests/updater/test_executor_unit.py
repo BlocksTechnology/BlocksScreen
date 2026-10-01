@@ -1133,6 +1133,7 @@ class TestRunHook:
 
         monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
         (tmp_path / "comp.sh").write_text("#!/bin/bash\nexit 0\n")
+        (tmp_path / "comp.sh").chmod(0o755)
         with patch.object(ex, "_run", new=AsyncMock(return_value=(True, ""))) as run:
             await run_hook("comp", tmp_path, "newh", "prevh", timeout=600.0)
         assert run.await_args.kwargs["timeout"] == 600.0
@@ -1144,6 +1145,7 @@ class TestRunHook:
 
         monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
         (tmp_path / "comp.sh").write_text("#!/bin/bash\nexit 0\n")
+        (tmp_path / "comp.sh").chmod(0o755)
         with patch.object(ex, "_run", new=AsyncMock(return_value=(True, ""))) as run:
             await run_hook("comp", tmp_path, "n", "p")
         assert run.await_args.kwargs["timeout"] == 60.0
@@ -1156,6 +1158,21 @@ class TestRunHook:
         ok, msg = await run_hook("../../etc/passwd", tmp_path, "n", "p")
         assert ok is False
         assert "escapes" in msg
+
+    @pytest.mark.asyncio
+    async def test_non_executable_hook_fails_cleanly(self, tmp_path, monkeypatch):
+        """A hook without the exec bit is a hook failure, not an unexpected error."""
+        import updater.executor as ex
+
+        monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
+        (tmp_path / "comp.sh").write_text("#!/bin/bash\nexit 0\n")
+        (tmp_path / "comp.sh").chmod(0o644)
+        with patch.object(ex, "_run", new=AsyncMock()) as run:
+            assert await run_hook("comp", tmp_path, "n", "p") == (
+                False,
+                "hook not executable",
+            )
+        run.assert_not_awaited()
 
 
 class TestEnableService:
