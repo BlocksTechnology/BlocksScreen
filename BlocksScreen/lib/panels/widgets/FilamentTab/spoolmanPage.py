@@ -326,7 +326,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         return super().showEvent(event)
 
     def _setup_ui(self) -> None:  # noqa: N802
-        self.setMaximumHeight(470)
+        self.setMaximumHeight(410)
 
         size_policy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
