@@ -27,12 +27,17 @@ class BlocksField(QtWidgets.QWidget):
         if self.editable == "LineEdit":
             lineedit = BlocksCustomLinEdit(self)
             lineedit.editingFinished.connect(self.on_edit)
+            lineedit.textChanged.connect(self._sync_static_label)
             return lineedit
         if self.editable == "DropDownMenu":
             combo = BlocksComboBox(self, open_up=True)
             combo.setMinimumSize(QtCore.QSize(150, 50))
             combo.activated.connect(self.on_edit)
+            combo.currentIndexChanged.connect(self._sync_static_label)
             return combo
+        return self._create_label()
+
+    def _create_label(self) -> QtWidgets.QLabel:
         lbl = QtWidgets.QLabel(self)
         font = QtGui.QFont()
         font.setPointSize(13)
@@ -51,16 +56,24 @@ class BlocksField(QtWidgets.QWidget):
         self._left_lbl.setFont(font)
         self._left_lbl.setStyleSheet(self.default_stylesheet)
 
+        # Read-only stand-in shown instead of the editor when not editable.
+        self._static_lbl = None
         self._right = self._create_right_widget()
+        if self.editable is not None:
+            self._static_lbl = self._create_label()
+            self._static_lbl.hide()
 
         center = QtCore.Qt.AlignmentFlag.AlignCenter
         self._left_lbl.setAlignment(center)
-        if isinstance(self._right, QtWidgets.QLabel):
-            self._right.setAlignment(center)
+        for lbl in (self._right, self._static_lbl):
+            if isinstance(lbl, QtWidgets.QLabel):
+                lbl.setAlignment(center)
 
         row = QtWidgets.QHBoxLayout()
         row.addWidget(self._left_lbl, 1, center)
         row.addWidget(self._right, 1, center)
+        if self._static_lbl is not None:
+            row.addWidget(self._static_lbl, 1, center)
 
         sep = None
         if self.line is not None:
@@ -110,6 +123,22 @@ class BlocksField(QtWidgets.QWidget):
         if isinstance(self._right, QtWidgets.QComboBox):
             return self._right.currentText()
         return self._right.text()
+
+    def _sync_static_label(self) -> None:
+        if self._static_lbl is None:
+            return
+        text = self.text()
+        if not text and isinstance(self._right, QtWidgets.QComboBox):
+            text = self._right.placeholderText()
+        self._static_lbl.setText(text)
+
+    def set_editable(self, editable: bool) -> None:
+        """set editable true or false (changes widget to label if False)"""
+        if self._static_lbl is None:
+            return
+        self._sync_static_label()
+        self._right.setVisible(editable)
+        self._static_lbl.setVisible(not editable)
 
     def select_option(self, text: str) -> bool:
         """Select the dropdown option matching text."""
