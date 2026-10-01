@@ -351,60 +351,34 @@ class TestPollIntervalUsage:
         assert sleeps == [3.0, 42.0]
 
 
-class TestBootProvisionBusy:
-    def _build(self, missing):
+class TestBootNotBusy:
+    def test_idle_at_construction(self):
+        """Offline boots must not open on the install overlay: busy waits for a real clone."""
         from updater import dbus_service
 
-        mock_svc = MagicMock()
-        mock_svc.needs_provision.return_value = missing
         with (
-            patch.object(dbus_service, "UpdateService", return_value=mock_svc),
+            patch.object(dbus_service, "UpdateService", return_value=MagicMock()),
             patch.object(
                 dbus_service.UpdaterDbusService,
                 "_spawn",
                 MagicMock(side_effect=lambda coro, **_: coro.close()),
             ),
         ):
-            return dbus_service.UpdaterDbusService()
-
-    @pytest.mark.parametrize("missing", [True, False])
-    def test_busy_at_construction_iff_component_missing(self, missing):
-        """Busy must be set before export so the UI's get_busy on connect sees the provision."""
-        assert self._build(missing)._busy is missing
-
-    @pytest.mark.asyncio
-    @pytest.mark.usefixtures("reconciled")
-    async def test_boot_busy_skips_initial_sleep_and_releases(self, svc):
-        """Missing component: provision runs at once (no 3 s sleep), then busy drops."""
-        from updater import dbus_service
-
-        svc._boot_busy = svc._busy = True
-        sleeps: list[float] = []
-
-        async def fake_sleep(delay):
-            sleeps.append(delay)
-            raise asyncio.CancelledError
-
-        with (
-            patch.object(dbus_service.asyncio, "sleep", fake_sleep),
-            pytest.raises(asyncio.CancelledError),
-        ):
-            await svc._periodic_status_check()
-
-        assert sleeps == [svc._svc.poll_interval]
-        assert svc._boot_busy is False
-        assert svc._busy is False
+            built = dbus_service.UpdaterDbusService()
+        assert (built._busy, built._provisioning) == (False, False)
 
 
 @pytest.mark.usefixtures("reconciled")
 class TestBootProvision:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("raised", [False, True])
-    async def test_provisions_only_after_boot_reconcile(self, svc, raised):
+    async def test_provisions_only_after_boot_reconcile(self, svc, raised, monkeypatch):
         """Reconcile holds the process lock: provisioning first would always defer."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_BOOT_DELAY_S", 0.0)
         gate = asyncio.get_running_loop().create_future()
         svc._reconcile_task = gate
-        svc._boot_busy = True  # skip the initial 3 s sleep
         svc._svc.poll_interval = 3600.0
         task = asyncio.create_task(svc._periodic_status_check())
         await asyncio.sleep(0.05)
@@ -426,12 +400,11 @@ class TestBootProvision:
     async def _run_polls(self, svc, polls: int) -> list[float]:
         from updater import dbus_service
 
-        svc._boot_busy = True  # skip the initial 3 s sleep
         sleeps: list[float] = []
 
         async def fake_sleep(delay):
             sleeps.append(delay)
-            if len(sleeps) >= polls:
+            if len(sleeps) > polls:
                 raise asyncio.CancelledError
 
         with (
@@ -439,6 +412,7 @@ class TestBootProvision:
             pytest.raises(asyncio.CancelledError),
         ):
             await svc._periodic_status_check()
+        assert sleeps.pop(0) == dbus_service._BOOT_DELAY_S
         return sleeps
 
     @pytest.mark.asyncio
@@ -469,11 +443,6 @@ class TestProvisioningFlag:
         svc.provisioning_changed.emit.assert_called_once_with((True,))
         svc.busy_changed.emit.assert_called_once_with((True,))
         assert svc._provisioning is True
-
-    def test_boot_release_clears_both(self, svc):
-        svc._boot_busy = svc._busy = svc._provisioning = True
-        svc._release_boot_busy()
-        assert (svc._busy, svc._provisioning) == (False, False)
 
     @pytest.mark.asyncio
     async def test_get_provisioning_reports_flag(self, svc):

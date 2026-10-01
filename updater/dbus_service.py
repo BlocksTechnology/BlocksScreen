@@ -20,6 +20,7 @@ _log = logging.getLogger(__name__)
 _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
 _FETCH_RETRY_INTERVAL_S = 300.0
 _RECONCILE_RETRY_S = 5.0
+_BOOT_DELAY_S = 3.0
 
 
 class DbusProgressCallback:
@@ -104,12 +105,11 @@ class UpdaterInterface(
         raise NotImplementedError
 
     def __init__(self) -> None:
-        """Set busy before export so the UI's first get_busy sees a boot install."""
+        """Start idle: busy rises only once a reachable install actually begins."""
         super().__init__()
         self._svc = UpdateService(callback=DbusProgressCallback(self))
-        self._boot_busy: bool = self._svc.needs_provision()
-        self._busy: bool = self._boot_busy
-        self._provisioning: bool = self._boot_busy
+        self._busy: bool = False
+        self._provisioning: bool = False
         self._provisioned: bool = False
         self._background_tasks: set[asyncio.Task] = set()
         self._closing: bool = False
@@ -168,12 +168,6 @@ class UpdaterInterface(
     def _provision_busy(self, busy: bool) -> None:
         self._set_provisioning(busy)
         self._set_busy(busy)
-
-    def _release_boot_busy(self) -> None:
-        """Drop the state pre-set at boot."""
-        if self._boot_busy:
-            self._boot_busy = False
-            self._provision_busy(False)
 
     def _set_provisioning(self, provisioning: bool) -> None:
         if provisioning != self._provisioning:
@@ -242,8 +236,7 @@ class UpdaterInterface(
 
     async def _periodic_status_check(self) -> None:
         """Provision once; emit status per poll, sooner on fetch failure or deferral."""
-        if not self._boot_busy:
-            await asyncio.sleep(3.0)
+        await asyncio.sleep(_BOOT_DELAY_S)
         while True:
             try:
                 if not self._provisioned:
@@ -251,11 +244,9 @@ class UpdaterInterface(
                     deferred = await self._svc.provision_missing(self._provision_busy)
                     self._provisioned = not deferred
                     _log.info("provisioning pass done (deferred=%s)", deferred)
-                self._release_boot_busy()
                 await self._emit_status()
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
-                self._release_boot_busy()
             interval = self._svc.poll_interval
             if self._svc.has_fetch_failures():
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)

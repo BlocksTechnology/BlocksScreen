@@ -34,6 +34,7 @@ from updater.executor import (
     git_has_corruption,
     git_is_dirty,
     git_pull,
+    git_remote_reachable,
     git_remote_url,
     git_repair,
     git_reset_to_hash,
@@ -212,6 +213,28 @@ class TestGitClone:
         assert argv[:2] == ["/usr/bin/git", "clone"]
         assert "--branch" in argv and "main" in argv
         assert argv[-2:] == ["https://github.com/x/y", str(dest)]
+
+
+class TestGitRemoteReachable:
+    @pytest.mark.asyncio
+    async def test_rejects_non_https_without_running(self):
+        with patch("updater.executor._run", new_callable=AsyncMock) as mock_run:
+            assert await git_remote_reachable("git@github.com:x/y") is False
+        mock_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("ok", [True, False])
+    async def test_short_bounded_ls_remote(self, ok):
+        with patch(
+            "updater.executor._run", new_callable=AsyncMock, return_value=(ok, "")
+        ) as mock_run:
+            assert await git_remote_reachable("https://github.com/x/y") is ok
+        assert mock_run.call_args[0][0][1:] == [
+            "ls-remote",
+            "https://github.com/x/y",
+            "HEAD",
+        ]
+        assert mock_run.call_args.kwargs["timeout"] <= 20.0
 
 
 class TestGitGetHash:

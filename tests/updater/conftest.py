@@ -50,7 +50,6 @@ def svc():
     )
     mock_svc.recover = AsyncMock()
     mock_svc.has_fetch_failures = MagicMock(return_value=False)
-    mock_svc.needs_provision = MagicMock(return_value=False)
     mock_svc.provision_missing = AsyncMock(return_value=False)
     mock_svc.reconcile = AsyncMock(return_value=True)
     mock_svc.reconcile_if_pending = AsyncMock()
@@ -68,7 +67,6 @@ def svc():
     s = UpdaterDbusService.__new__(UpdaterDbusService)
     s._svc = mock_svc
     s._busy = False
-    s._boot_busy = False
     s._provisioning = False
     s._provisioned = False
     s._background_tasks = set()

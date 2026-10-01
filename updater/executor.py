@@ -452,6 +452,14 @@ async def git_clone(
     return await _run(cmd, timeout=300.0)
 
 
+async def git_remote_reachable(url: str, timeout: float = 15.0) -> bool:
+    """True if the https remote answers ls-remote in time (cheap offline probe)."""
+    if not _GIT_URL_RE.match(url):
+        return False
+    ok, _ = await _run([GIT, "ls-remote", url, "HEAD"], timeout=timeout)
+    return ok
+
+
 async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[bool, str]:
     """Hard-reset repo at path directly to prev_hash (no fetch)."""
     if not path:

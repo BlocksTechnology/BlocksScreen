@@ -14,9 +14,11 @@ from updater.service import LoggingCallback, UpdateService
 
 @pytest.fixture(autouse=True)
 def _isolate_inflight(tmp_path_factory, monkeypatch):
-    """Keep the in-flight marker out of the real cache for every test in this file."""
+    """Keep the in-flight marker, state and history out of the real cache."""
     marker = tmp_path_factory.mktemp("inflight") / "updater_inflight.json"
     monkeypatch.setattr(updater_service, "_INFLIGHT_PATH", marker)
+    monkeypatch.setattr(updater_service, "_STATE_PATH", marker.with_name("state.json"))
+    monkeypatch.setattr(updater_service, "_HISTORY_PATH", marker.with_name("h.jsonl"))
 
 
 class TestLoggingCallback:
@@ -2012,6 +2014,13 @@ class TestProvisionMissingComponent:
 class TestProvisionMissing:
     """provision_missing clones absent opted-in components outside a user Update."""
 
+    @pytest.fixture(autouse=True)
+    def reachable(self):
+        with patch(
+            "updater.service.git_remote_reachable", AsyncMock(return_value=True)
+        ) as probe:
+            yield probe
+
     def _comp(self, tmp_path: Path, *, name: str = "Spoolman") -> ComponentConfig:
         return ComponentConfig(
             name=name,
@@ -2021,6 +2030,55 @@ class TestProvisionMissing:
             url=f"https://github.com/test/{name}",
             install_if_missing=True,
         )
+
+    @pytest.mark.asyncio
+    async def test_unreachable_remote_skips_without_busy(self, tmp_path, reachable):
+        # Offline devices: no overlay, no clone, no deferral re-poll.
+        reachable.return_value = False
+        on_busy = MagicMock()
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            svc._components = [self._comp(tmp_path)]
+            assert await svc.provision_missing(on_busy) is False
+        mock_prov.assert_not_called()
+        on_busy.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_failed_install_never_retried_unattended(self, tmp_path, reachable):
+        # A broken install must not re-run under the overlay on every boot.
+        on_busy = MagicMock()
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            svc._components = [self._comp(tmp_path)]
+            await svc._set_provision_failed("Spoolman", True)
+            assert await svc.provision_missing(on_busy) is False
+        mock_prov.assert_not_called()
+        on_busy.assert_not_called()
+        reachable.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_fail_sets_flag_and_success_clears_it(self, tmp_path):
+        comp = self._comp(tmp_path)
+        with patch("updater.service.git_clone", return_value=(False, "offline")):
+            svc = UpdateService()
+            assert await svc._provision_component(comp) is False
+        assert svc._read_state()["Spoolman"]["provision_failed"] is True
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch.object(
+                UpdateService, "_install_dependencies", return_value=(True, "")
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+        ):
+            assert await svc._provision_component(comp) is True
+        assert "provision_failed" not in svc._read_state()["Spoolman"]
 
     @pytest.mark.asyncio
     async def test_provisions_absent_opted_in_component(self, tmp_path):

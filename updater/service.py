@@ -43,6 +43,7 @@ from updater.executor import (
     git_has_corruption,
     git_pull,
     git_ref_hash,
+    git_remote_reachable,
     git_repair,
     git_reset_to_hash,
     git_tree_has_path,
@@ -484,15 +485,38 @@ class UpdateService:
             and (c.path is None or not c.path.exists())
         ]
 
-    def needs_provision(self) -> bool:
-        """True if provision_missing() would clone something (cheap filesystem check)."""
-        return bool(self._missing_provisions())
+    async def _unattended_provisions(self) -> list[ComponentConfig]:
+        """Missing components to install unprompted: no failed try, remote reachable."""
+        state = await asyncio.to_thread(self._read_state)
+        todo: list[ComponentConfig] = []
+        for c in self._missing_provisions():
+            comp = state.get(c.name)
+            if isinstance(comp, dict) and comp.get("provision_failed"):
+                self._log.info("%s: last install failed - waiting for Update", c.name)
+            elif not await git_remote_reachable(c.url or ""):
+                # Offline devices must never sit behind the install overlay.
+                self._log.info("%s: remote unreachable - not installing", c.name)
+            else:
+                todo.append(c)
+        return todo
+
+    async def _set_provision_failed(self, name: str, failed: bool) -> None:
+        """Persist the install outcome; a failure stops unattended retries."""
+
+        def mutate(state: dict) -> None:
+            comp = _ensure_comp(state, name)
+            if failed:
+                comp["provision_failed"] = True
+            else:
+                comp.pop("provision_failed", None)
+
+        await self._mutate_state(mutate)
 
     async def provision_missing(
         self, on_busy: Callable[[bool], None] | None = None
     ) -> bool:
         """Clone absent install_if_missing components; True if deferred by a held lock."""
-        missing = self._missing_provisions()
+        missing = await self._unattended_provisions()
         if not missing:
             return False
         with process_lock() as acquired:
@@ -1709,6 +1733,7 @@ class UpdateService:
     ) -> bool:
         """Undo the partial install, log, and report failure."""
         await self._undo_provision(component, hooked)
+        await self._set_provision_failed(component.name, True)
         self._history("install_failed", component.name, reason=reason)
         self._log.warning(
             "%s: provision failed (%s), partial clone removed", component.name, reason
@@ -1788,6 +1813,7 @@ class UpdateService:
             if reason:
                 return await self._fail_provision(component, reason, hooked)
 
+            await self._set_provision_failed(component.name, False)
             self._history("install_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
             return True
