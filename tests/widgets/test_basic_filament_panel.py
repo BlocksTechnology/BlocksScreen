@@ -7,7 +7,9 @@ This crash class only shows on widget *destruction*, which ordinary tests never
 exercise, so these tests force it.
 """
 
+import importlib.util
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from PyQt6 import QtWidgets, sip
@@ -37,6 +39,18 @@ sys.modules.setdefault("lib.panels.widgets.popupDialogWidget", _popup_stub)
 _button_stub = MagicMock()
 _button_stub.BlocksCustomButton = QtWidgets.QPushButton
 sys.modules.setdefault("lib.utils.blocks_button", _button_stub)
+
+# Other conftests register session-wide stubs for these (a plain QComboBox and
+# a bare MagicMock) that lack the API BasicFilamentPanel uses; force the real ones.
+_src = Path(__file__).resolve().parents[2] / "BlocksScreen"
+for _name, _rel in (
+    ("lib.utils.blocks_combobox", "lib/utils/blocks_combobox.py"),
+    ("lib.panels.widgets.Common.basePopup", "lib/panels/widgets/Common/basePopup.py"),
+):
+    _spec = importlib.util.spec_from_file_location(_name, _src / _rel)
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    sys.modules[_name] = _mod
 
 import pytest  # noqa: E402
 
