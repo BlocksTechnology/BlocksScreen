@@ -282,7 +282,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 btn.clicked.connect(partial(self.open_pre_gate_popup, _filament_type))
             self.Basic_fp_check_btn.show()
             self._lbl_clr.show()
+            self._lbl_pos.set_editable(True)
             self.mmu_configured = True
+            self.Vlayout.setSpacing(10)
 
         self._mmu_state = mmu_state
         if mmu_state.filament_pos == FilamentPos.LOADED:
@@ -408,6 +410,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self._lbl_pos.select_option("Unknown")
         self._pos_committed = self._lbl_pos.text()
         self._lbl_pos.on_edit.connect(self.on_pos_change)
+        self._lbl_pos.set_editable(False)
 
         self._lbl_clr = BlocksField(self, "Color:", "upper")
         self._apply_color_swatch("")
@@ -584,6 +587,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.Basic_fp_check_btn.setObjectName("Basic_fp_check_btn")
         self.Vlayout.addWidget(self.Basic_fp_check_btn)
         self.Basic_fp_check_btn.hide()
+        self.Vlayout.setSpacing(40)
 
         self.HLayout.addWidget(
             self.buttons_frame, 0, QtCore.Qt.AlignmentFlag.AlignCenter
