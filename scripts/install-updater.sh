@@ -27,8 +27,7 @@ BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 
 # Venv-mutating commands run as blocks: root-owned dists break later pip-as-blocks runs.
 _as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
-# Atomic root install: a power cut must never leave a truncated-but-present file
-# (the [ -f ] self-heal guards would then never rewrite it).
+# Atomic root install: a truncated file would defeat the [ -f ] self-heal guards.
 _install_atomic() {
     local mode="$1" src="$2" dst="$3"
     sudo install -m "$mode" "$src" "${dst}.new" && sudo mv -Tf "${dst}.new" "$dst"
@@ -97,8 +96,7 @@ else
 fi
 # Daemon self-restart target; never in components.yaml.
 _emit_svc_rules BlocksScreen-updater.service
-# Spoolman is provisioned on demand; enable rules needed for its first clean start
-# (hooks/Spoolman.sh uses `enable --now`; sudoers args must match exactly).
+# Spoolman enable rules: hooks/Spoolman.sh runs enable --now, args must match exactly.
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable Spoolman.service\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now Spoolman.service\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl disable --now Spoolman.service\n' >>"$SUDOERS_TMP"

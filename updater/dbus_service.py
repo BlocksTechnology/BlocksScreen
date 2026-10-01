@@ -18,11 +18,7 @@ from updater.service import UpdateService
 
 _log = logging.getLogger(__name__)
 _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
-# Poll again this soon while a git fetch is failing: a boot-time DNS miss must not hide updates for a full poll interval.
 _FETCH_RETRY_INTERVAL_S = 300.0
-# Retries while boot reconcile holds the process lock.
-_PROVISION_RETRIES = 10
-_PROVISION_RETRY_S = 3.0
 
 
 class DbusProgressCallback:
@@ -107,10 +103,9 @@ class UpdaterInterface(
         raise NotImplementedError
 
     def __init__(self) -> None:
-        """Wire the service and busy state, then spawn the boot, poll, and self-heal tasks."""
+        """Set busy before export so the UI's first get_busy sees a boot install."""
         super().__init__()
         self._svc = UpdateService(callback=DbusProgressCallback(self))
-        # Set before export so the UI's first get_busy sees a boot install.
         self._boot_busy: bool = self._svc.needs_provision()
         self._busy: bool = self._boot_busy
         self._provisioning: bool = self._boot_busy
@@ -119,7 +114,7 @@ class UpdaterInterface(
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
         self._invalid_requests: int = 0
-        self._spawn(self._svc.reconcile(), name="boot_reconcile")
+        self._reconcile_task = self._spawn(self._svc.reconcile(), name="boot_reconcile")
         self._spawn(self._svc.background_prime_nrestarts(), name="boot_prime_nrestarts")
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
         self._spawn(self._svc.supervise_ui(), name="supervise_ui")
@@ -140,14 +135,6 @@ class UpdaterInterface(
         exc = task.exception()
         if exc is not None:
             _log.error("task %r failed", task.get_name(), exc_info=exc)
-
-    async def _provision_with_retry(self) -> bool:
-        """Retry while boot reconcile's lock defers provisioning; True if still deferred."""
-        for _ in range(_PROVISION_RETRIES):
-            if not await self._svc.provision_missing(self._provision_busy):
-                return False
-            await asyncio.sleep(_PROVISION_RETRY_S)
-        return True
 
     def _provision_busy(self, busy: bool) -> None:
         self._set_provisioning(busy)
@@ -225,14 +212,14 @@ class UpdaterInterface(
         self.status_ready.emit((json_payload,))
 
     async def _periodic_status_check(self) -> None:
-        """Emit status shortly after startup, then at the poll interval - or sooner while fetches fail."""
+        """Provision once; emit status per poll, sooner on fetch failure or deferral."""
         if not self._boot_busy:
             await asyncio.sleep(3.0)
         while True:
             try:
                 if not self._provisioned:
-                    # Once per start; re-armed only by a lock deferral or an error.
-                    deferred = await self._provision_with_retry()
+                    await asyncio.wait({self._reconcile_task})
+                    deferred = await self._svc.provision_missing(self._provision_busy)
                     self._provisioned = not deferred
                     _log.info("provisioning pass done (deferred=%s)", deferred)
                 self._release_boot_busy()
@@ -244,6 +231,9 @@ class UpdaterInterface(
             if self._svc.has_fetch_failures():
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)
                 _log.info("fetch failures pending - re-polling in %.0fs", interval)
+            elif not self._provisioned:
+                interval = min(_FETCH_RETRY_INTERVAL_S, interval)
+                _log.info("provisioning deferred - re-polling in %.0fs", interval)
             await asyncio.sleep(interval)
 
     @sdbus.dbus_method_async(result_signature="b")
@@ -260,7 +250,7 @@ class UpdaterInterface(
         """D-Bus method: fire-and-forget; reply is sent immediately, update runs as a task."""
         if self._busy:
             return False
-        if not self._validate_component_name(name):  # SEC: reject unknown components
+        if not self._validate_component_name(name):
             _log.warning("update_component called with unknown component %r", name)
             return False
         self._set_busy(busy=True)
@@ -272,7 +262,7 @@ class UpdaterInterface(
         """D-Bus method: fire-and-forget; reply is sent immediately, recover runs as a task."""
         if self._busy:
             return False
-        if not self._validate_component_name(name):  # SEC: reject unknown components
+        if not self._validate_component_name(name):
             _log.warning("recover called with unknown component %r", name)
             return False
         self._set_busy(busy=True)
@@ -299,7 +289,6 @@ class UpdaterInterface(
             with process_lock() as acquired:
                 if not acquired:
                     _log.warning("%s: a CLI run holds the lock; skipping", label)
-                    # Surface the rejection so the UI toasts instead of going silent.
                     self.error.emit((target, "another update is running"))
                     return False
                 ran = True
@@ -311,13 +300,11 @@ class UpdaterInterface(
         return ran
 
     async def _run_update_all(self) -> None:
-        """Update dirty components under the process lock, then a background apt pass."""
+        """Update dirty components; no background apt if a restart may SIGKILL dpkg."""
         ran = await self._run_with_lock(
             self._update_all_locked, "update_all", "updater"
         )
-        # Silent apt pass only if we held the lock; else the CLI run owns apt.
         if ran and self._svc.daemon_restart_pending:
-            # A restart SIGKILL could land inside dpkg.
             _log.info("background apt upgrade skipped: daemon restart pending")
         elif ran:
             self._spawn(
@@ -325,7 +312,7 @@ class UpdaterInterface(
             )
 
     async def _update_all_locked(self) -> None:
-        """Update only the components whose status is dirty."""
+        """Update dirty components and errored git repos (update self-heals those)."""
         statuses = await self._svc.check_status()
         dirty = {
             name
@@ -335,7 +322,6 @@ class UpdaterInterface(
             or s.has_local_changes
             or s.needs_install
             or s.branch_mismatch
-            # Errored git repos included: the update flow self-heals them.
             or (s.error is not None and s.kind != "apt")
         }
         if dirty:
@@ -373,7 +359,7 @@ class UpdaterInterface(
 
     @sdbus.dbus_method_async()
     async def cancel(self) -> None:
-        """D-Bus method: cancel the running update or recover task and wait for cleanup."""
+        """D-Bus method: cancel the task, then wait (not re-cancel) for its rollback."""
         if self._provisioning:
             _log.info("cancel() ignored: component install in progress")
             return
@@ -385,7 +371,6 @@ class UpdaterInterface(
                 cancelled_tasks.append(task)
                 _log.info("cancelled task %r", name)
         if cancelled_tasks:
-            # asyncio.wait never re-cancels: rollback isn't interrupted again.
             _done, pending = await asyncio.wait(cancelled_tasks, timeout=150.0)
             if pending:
                 _log.error(

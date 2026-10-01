@@ -1759,7 +1759,9 @@ class TestProvisionMissingComponent:
             patch(
                 "updater.service.wait_for_service_active", return_value=False
             ) as mock_wait,
-            patch("updater.service.disable_service", return_value=(True, "")) as mock_stop,
+            patch(
+                "updater.service.disable_service", return_value=(True, "")
+            ) as mock_stop,
             patch("updater.service.shutil.rmtree") as mock_rmtree,
         ):
             svc = UpdateService(callback=cb)
@@ -1793,7 +1795,9 @@ class TestProvisionMissingComponent:
             patch(
                 "updater.service.wait_for_http_ready", return_value=False
             ) as mock_health,
-            patch("updater.service.disable_service", return_value=(True, "")) as mock_stop,
+            patch(
+                "updater.service.disable_service", return_value=(True, "")
+            ) as mock_stop,
             patch("updater.service.shutil.rmtree") as mock_rmtree,
         ):
             svc = UpdateService(callback=cb)
@@ -1804,6 +1808,73 @@ class TestProvisionMissingComponent:
         mock_stop.assert_called_once_with("newcomp.service")
         mock_rmtree.assert_called_once()
         assert cb.on_error.call_args[0][1] == "restart"
+
+    @pytest.mark.asyncio
+    async def test_failure_before_hook_leaves_service_alone(self, tmp_path):
+        """The hook never ran, so there is no unit of ours to disable."""
+        comp = self._comp(tmp_path, service="newcomp.service")
+        with (
+            patch("updater.service.git_clone", return_value=(False, "boom")),
+            patch("updater.service.disable_service") as mock_stop,
+            patch("updater.service.shutil.rmtree") as mock_rmtree,
+        ):
+            svc = UpdateService(callback=MagicMock())
+            svc._components = [comp]
+            assert await svc.update_component("newcomp") is False
+        mock_stop.assert_not_called()
+        mock_rmtree.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error_after_hook_disables_service(self, tmp_path):
+        comp = self._comp(tmp_path, service="newcomp.service")
+        cb = MagicMock()
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch(
+                "updater.service.UpdateService._provision_restart_service",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch(
+                "updater.service.disable_service", return_value=(True, "")
+            ) as mock_stop,
+            patch("updater.service.shutil.rmtree") as mock_rmtree,
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            assert await svc.update_component("newcomp") is False
+        mock_stop.assert_called_once_with("newcomp.service")
+        mock_rmtree.assert_called_once()
+        assert cb.on_error.call_args[0][1] == "unexpected_error"
+
+    @pytest.mark.asyncio
+    async def test_cancel_during_hook_disables_service(self, tmp_path):
+        """A daemon stop mid-hook must not leave the unit enabled on a deleted clone."""
+        comp = self._comp(tmp_path, service="newcomp.service")
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", side_effect=asyncio.CancelledError),
+            patch(
+                "updater.service.disable_service", return_value=(True, "")
+            ) as mock_stop,
+            patch("updater.service.shutil.rmtree") as mock_rmtree,
+        ):
+            svc = UpdateService(callback=MagicMock())
+            svc._components = [comp]
+            with pytest.raises(asyncio.CancelledError):
+                await svc.update_component("newcomp")
+        mock_stop.assert_called_once_with("newcomp.service")
+        mock_rmtree.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_provision_succeeds_when_health_ready(self, tmp_path):
@@ -2440,9 +2511,7 @@ class TestDeferredRestart:
                 "updater.service.verify_updater_importable",
                 new=AsyncMock(return_value=True),
             ),
-            patch(
-                "updater.service.restart_service_noblock", return_value=(False, "x")
-            ),
+            patch("updater.service.restart_service_noblock", return_value=(False, "x")),
         ):
             svc = self._svc_with_ui()
             await svc._apply_deferred_restart()

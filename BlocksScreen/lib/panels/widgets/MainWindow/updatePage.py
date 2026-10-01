@@ -161,7 +161,7 @@ class UpdatePage(QtWidgets.QWidget):
         return super().resizeEvent(a0)
 
     def _needs_update(self, status: ComponentStatus) -> bool:
-        # Mirrors daemon dirty-set: errored git repos self-heal; apt errors don't.
+        """Mirror the daemon's dirty set: errored git repos count, apt errors don't."""
         return bool(
             status.commits_behind
             or status.packages_upgradable > 0
@@ -331,7 +331,7 @@ class UpdatePage(QtWidgets.QWidget):
         )
 
     def handle_status_ready(self, json_str: str) -> None:
-        """Update component statuses from a JSON payload and refresh the list."""
+        """Parse statuses per entry so one bad entry can't blank the list; refresh."""
         self.update_all_btn.setEnabled(True)
         _log.debug("handle_status_ready: busy=%s", self._busy)
         try:
@@ -339,10 +339,8 @@ class UpdatePage(QtWidgets.QWidget):
         except (json.JSONDecodeError, TypeError) as exc:
             _log.error("handle_status_ready: bad payload '%s'", exc)
             _log.debug(json_str)
-            # Keep the last good list but tell the user it may be stale.
             self._show_toast("Status update failed - tap refresh to retry")
             return
-        # Build per-component so one malformed entry can't blank the whole list.
         self._statuses = {}
         for name, fields in data.items():
             try:
@@ -443,7 +441,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._show_update_confirm()
 
     def _show_update_confirm(self) -> None:
-        # Dialogs parented to the page outlive close(); drop the previous one.
+        """Show the confirm dialog; delete the previous one, which outlives close()."""
         if self._update_confirm_popup is not None:
             self._update_confirm_popup.deleteLater()
         popup = BasePopup(self, floating=True)
@@ -485,7 +483,7 @@ class UpdatePage(QtWidgets.QWidget):
         if self._busy_timeout_timer.isActive():
             self._busy_timeout_timer.start()
         self._overlay_shown = True
-        # Latch: a later step from another component must not re-arm the flash path.
+        # Latched: a later step of another component must not clear it.
         self._restart_pending |= name == "BlocksScreen" and step == total
         overlay_msg = (
             f"Installing {name}: {label}" if self._provisioning else f"{name}: {label}"
@@ -662,7 +660,6 @@ class UpdatePage(QtWidgets.QWidget):
         self._progress_label.setWordWrap(True)
         self._progress_label.hide()
 
-        # Touch target size: minimum 44×44 px per WCAG; set to 60px tall for comfort
         self._cancel_btn = BlocksCustomButton(self._loadwidget)
         self._cancel_btn.setMinimumSize(QtCore.QSize(240, 60))
         self._cancel_btn.setMaximumSize(QtCore.QSize(320, 60))

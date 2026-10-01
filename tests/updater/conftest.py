@@ -4,6 +4,7 @@ Mocks sdbus before any updater.dbus_service import so tests run
 withouth a real D-Bus session bus.
 """
 
+import asyncio
 import sys
 from unittest.mock import AsyncMock, MagicMock
 
@@ -76,3 +77,11 @@ def svc():
     s.status_ready = MagicMock()
     s.error = MagicMock()
     return s
+
+
+@pytest.fixture
+async def reconciled(svc):
+    """svc whose boot reconcile already finished, so the periodic check can provision."""
+    svc._reconcile_task = asyncio.get_running_loop().create_future()
+    svc._reconcile_task.set_result(None)
+    return svc

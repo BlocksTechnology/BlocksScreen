@@ -41,12 +41,7 @@ _ESCALATE_AFTER = 2
 
 
 class UpdaterWorker(QtCore.QObject):
-    """Async D-Bus client for the blockscreen updater daemon.
-
-    Owns an asyncio event loop on a dedicated daemon thread.
-    All D-Bus operations execute as coroutines on that loop.
-    Results are bridged back to Qt via pyqtSignals
-    """
+    """Updater D-Bus client on a private asyncio thread, bridged to Qt via signals."""
 
     status_ready = QtCore.pyqtSignal(str)
     step_complete = QtCore.pyqtSignal(str, int, int)
@@ -57,7 +52,7 @@ class UpdaterWorker(QtCore.QObject):
     busy_changed = QtCore.pyqtSignal(bool)
     provisioning_changed = QtCore.pyqtSignal(bool)
     daemon_unavailable = QtCore.pyqtSignal()
-    update_rejected = QtCore.pyqtSignal()  # daemon refused the request (already busy)
+    update_rejected = QtCore.pyqtSignal()
     request_reconnect = QtCore.pyqtSignal()
     proxy_connected = QtCore.pyqtSignal()
 
@@ -76,7 +71,6 @@ class UpdaterWorker(QtCore.QObject):
         self._reconnect_task: asyncio.Task | None = None
         self._shutting_down: bool = False
         self._last_activity: float = 0.0
-        # Unique bus name of the live daemon; a change means it restarted.
         self._daemon_owner: str = ""
         # For replay_busy(): this thread starts before MainWindow wires its slots.
         self._last_busy: bool = False
@@ -84,7 +78,6 @@ class UpdaterWorker(QtCore.QObject):
         self._provisioning_signals: int = 0
         self._owner_task: asyncio.Task | None = None
         self._escalated: bool = False
-        # Serializes the reconnect and owner-watch entry points into _connect().
         self._init_lock = asyncio.Lock()
         self._thread = threading.Thread(
             target=self._run_loop, daemon=True, name="UpdaterAsyncLoop"
@@ -98,7 +91,7 @@ class UpdaterWorker(QtCore.QObject):
         return task
 
     def _run_loop(self) -> None:
-        """Entry point for the asyncio daemon thread."""
+        """Thread entry: run the loop; the owner watch outlives listener teardown."""
         asyncio.set_event_loop(self._loop)
         # Recreated per thread: an asyncio.Lock binds to the loop of its first await.
         self._init_lock = asyncio.Lock()
@@ -110,7 +103,6 @@ class UpdaterWorker(QtCore.QObject):
             if not self._shutting_down:
                 self._restart_loop_thread(delay=10.0)
             return
-        # Outlives _async_initialize's listener teardown: it is what triggers it.
         self._owner_task = self._loop.create_task(
             self._watch_daemon_owner(), name="updater_owner_watch"
         )
@@ -155,13 +147,12 @@ class UpdaterWorker(QtCore.QObject):
             await self._connect()
 
     async def _connect(self) -> None:
-        """Connect proxy and start all signal listener tasks."""
+        """Supersede any pending retry, connect the proxy and start the listeners."""
         from updater.dbus_service import UpdaterInterface
 
         if self._busy_false_event is not None:
             self._busy_false_event.set()
         self._busy_false_event = asyncio.Event()
-        # This attempt supersedes a pending backoff retry; a failure below re-arms one.
         pending, self._reconnect_task = self._reconnect_task, None
         if pending is not None and pending is not asyncio.current_task():
             pending.cancel()
@@ -203,18 +194,15 @@ class UpdaterWorker(QtCore.QObject):
             await asyncio.sleep(0)
 
         try:
-            # Bounded: an unresponsive daemon holding an open socket must not hang reconnect forever.
             async with asyncio.timeout(10):
                 busy = await self._proxy.get_busy()
         except (sdbus.SdBusBaseError, TimeoutError) as exc:
-            # Proxy is lazy; this first call proves the daemon is reachable.
             _log.warning("get_busy failed on (re)connect: %s - scheduling retry", exc)
             self.daemon_unavailable.emit()
             self._schedule_reconnect()
             return
 
-        # Reset only once the daemon answers: new_proxy() is lazy and always "succeeds",
-        # so resetting earlier pins backoff at 5s and starves the escalation threshold.
+        # Reset only now: new_proxy() is lazy, so an earlier reset pins backoff at 5s.
         self._reconnect_attempt = 0
         self._escalated = False
         self._daemon_owner = await self._name_owner()
@@ -274,11 +262,7 @@ class UpdaterWorker(QtCore.QObject):
                 self._schedule_reconnect()
 
     def _schedule_reconnect(self) -> None:
-        """Schedule _async_initialize retry with exponential backoff.
-
-        Idempotent: if a reconnect is already pending this is a no-op, so it is
-        safe to call from every failing listener without spawning duplicate tasks.
-        """
+        """Schedule a backoff retry of _async_initialize; no-op while one is pending."""
         if self._reconnecting:
             return
         self._reconnecting = True
@@ -300,17 +284,12 @@ class UpdaterWorker(QtCore.QObject):
             _log.warning("_schedule_reconnect called outside running loop - skipped")
 
     async def _delayed_reconnect(self, delay: float) -> None:
-        """Sleep for ``delay`` seconds then re-run ``_async_initialize``.
-
-        Every exit path clears ``_reconnecting`` explicitly rather than via finally:
-        _async_initialize may legitimately re-arm it, and finally would clobber that.
-        """
+        """Sleep then reconnect; no finally, so a re-armed _reconnecting survives."""
         try:
             await asyncio.sleep(delay)
             if self._shutting_down:
                 self._reconnecting = False
                 return
-            # Nothing owns the name after several tries: activation itself is failing.
             if (
                 self._reconnect_attempt >= _ESCALATE_AFTER
                 and not await self._name_owner()
@@ -323,20 +302,12 @@ class UpdaterWorker(QtCore.QObject):
                 self._reconnecting = False
             raise
         except Exception:  # noqa: BLE001
-            # Never leave the latch stuck: it would silence every future reconnect.
             self._reconnecting = False
             _log.error("reconnect attempt failed - rescheduling", exc_info=True)
             self._schedule_reconnect()
 
-    # --- Daemon lifecycle tracking ----------------------------------
-
     async def _watch_daemon_owner(self) -> None:
-        """Resync on every owner change of the daemon's bus name (crash + systemd restart).
-
-        Signal match rules use the well-known name, so listeners survive a restart -
-        but the new instance never re-emits busy_changed, leaving a mid-update UI stuck
-        until the 6-minute busy watchdog. This turns that into a millisecond recovery.
-        """
+        """Resync on owner change: a restarted daemon never re-emits busy_changed."""
         resync = False  # the first seed races updater_init's own connect
         while not self._shutting_down:
             try:
@@ -345,7 +316,6 @@ class UpdaterWorker(QtCore.QObject):
                     # Seeded after subscribing so no change can slip through the gap.
                     owner = await self._name_owner()
                     if resync and owner and owner != self._daemon_owner:
-                        # Restarted while the watch was down: no signal will report it.
                         await self._async_initialize(owner)
                     else:
                         self._daemon_owner = owner
@@ -355,20 +325,19 @@ class UpdaterWorker(QtCore.QObject):
                             continue
                         if not new_owner:
                             self._daemon_owner = ""
-                            # No retry: systemd restarts it; a failing call escalates.
+                            # systemd never restarts a clean stop; the retry revives it.
                             _log.error("updater daemon left the bus - awaiting restart")
                             self.daemon_unavailable.emit()
+                            self._schedule_reconnect()
                             continue
                         _log.warning(
                             "updater daemon restarted (owner=%s) - resyncing", new_owner
                         )
-                        # _async_initialize owns _daemon_owner: setting it here would
-                        # make its own duplicate-resync guard skip this connect.
+                        # _daemon_owner is set by _async_initialize, or its guard skips.
                         await self._async_initialize(new_owner)
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001
-                # Losing the watch must not be terminal: it is the fast recovery path.
                 _log.error("daemon owner watch failed - retrying in 10s", exc_info=True)
             # Also covers a stream that ends without raising, which would else hot-spin.
             if not self._shutting_down:
@@ -382,15 +351,13 @@ class UpdaterWorker(QtCore.QObject):
                     _DAEMON_BUS_NAME
                 )
         except (sdbus.SdBusBaseError, TimeoutError, OSError, ImportError):
-            # NameHasNoOwner for an activatable-but-stopped unit lands here too.
             _log.debug("GetNameOwner(%s) failed", _DAEMON_BUS_NAME, exc_info=True)
             return ""
 
     async def _escalate_restart(self) -> None:
-        """Ask systemd once to start a unit it has given up on (stale unit without StartLimitIntervalSec=0)."""
+        """Ask systemd once (latched until connect) to restart a unit it gave up on."""
         if self._escalated:
             return
-        # Latched until the next successful connect so a dead unit is not hammered.
         self._escalated = True
         _log.error(
             "daemon absent after %d attempts - asking systemd to start %s",
@@ -423,7 +390,6 @@ class UpdaterWorker(QtCore.QObject):
             async with asyncio.timeout(30):
                 _, err = await proc.communicate()
         except TimeoutError:
-            # Reap it: an orphaned sudo would hold the PIPE and the child slot forever.
             _log.error("systemctl %s timed out - killing", label)
             with suppress(ProcessLookupError):
                 proc.kill()
@@ -445,8 +411,6 @@ class UpdaterWorker(QtCore.QObject):
             self.daemon_unavailable.emit()
             return False
         return True
-
-    # --- Public API (QT -> asyncio thread) ---------------------------
 
     def trigger_update(self, name: str = "") -> None:
         """Queue an update; name='' updates all components."""
@@ -510,15 +474,8 @@ class UpdaterWorker(QtCore.QObject):
             _log.error("asyncio loop is closed, daemon is unavailable")
             self.daemon_unavailable.emit()
 
-    # --- Internal coroutines ---------------------------------------
-
     def _handle_proxy_error(self, exc: Exception, method: str) -> None:
-        """Log a D-Bus call failure, emit daemon_unavailable, and schedule a reconnect.
-
-        While a reconnect is already pending the emit is suppressed: the UI's
-        daemon-unavailable handler triggers a status refresh, which would fail
-        and re-emit here - an endless toast/request storm without this guard.
-        """
+        """Log a failed call; emit daemon_unavailable unless reconnecting; retry."""
         _log.error("%s D-Bus call failed: %s", method, exc)
         if not self._reconnecting:
             self.daemon_unavailable.emit()
@@ -573,8 +530,6 @@ class UpdaterWorker(QtCore.QObject):
             await self._proxy.bless_healthy(name, "")
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "bless_healthy")
-
-    # --- Signal listeners ------------------------------------------
 
     async def _listen_status_ready(self) -> None:
         """Forward status_ready D-Bus signals to the Qt status_ready signal."""
@@ -643,12 +598,7 @@ class UpdaterWorker(QtCore.QObject):
             self.provisioning_changed.emit(provisioning)
 
     async def _busy_watchdog(self) -> None:
-        """Emit daemon_unavailable after _BUSY_IDLE_LIMIT seconds of daemon silence.
-
-        Any progress signal (step_complete, component_done, error, busy_changed)
-        refreshes the deadline via _touch_activity, so the watchdog only fires
-        when a busy daemon stops reporting entirely - not on long updates.
-        """
+        """Emit daemon_unavailable after _BUSY_IDLE_LIMIT s of no daemon progress."""
         if self._busy_false_event is None:
             _msg = "_busy_false_event not initialized"
             raise RuntimeError(_msg)

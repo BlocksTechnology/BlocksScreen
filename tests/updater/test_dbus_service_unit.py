@@ -274,6 +274,7 @@ class TestStatusPendingFlag:
         assert svc._status_pending is False
 
 
+@pytest.mark.usefixtures("reconciled")
 class TestPollIntervalUsage:
     @pytest.mark.asyncio
     async def test_periodic_status_check_uses_poll_interval(self, svc):
@@ -357,7 +358,11 @@ class TestBootProvisionBusy:
         mock_svc.needs_provision.return_value = missing
         with (
             patch.object(dbus_service, "UpdateService", return_value=mock_svc),
-            patch.object(dbus_service.UpdaterDbusService, "_spawn", MagicMock()),
+            patch.object(
+                dbus_service.UpdaterDbusService,
+                "_spawn",
+                MagicMock(side_effect=lambda coro, **_: coro.close()),
+            ),
         ):
             return dbus_service.UpdaterDbusService()
 
@@ -367,6 +372,7 @@ class TestBootProvisionBusy:
         assert self._build(missing)._busy is missing
 
     @pytest.mark.asyncio
+    @pytest.mark.usefixtures("reconciled")
     async def test_boot_busy_skips_initial_sleep_and_releases(self, svc):
         """Missing component: provision runs at once (no 3 s sleep), then busy drops."""
         from updater import dbus_service
@@ -389,59 +395,42 @@ class TestBootProvisionBusy:
         assert svc._busy is False
 
 
-class TestProvisionRetry:
+@pytest.mark.usefixtures("reconciled")
+class TestBootProvision:
     @pytest.mark.asyncio
-    async def test_retries_while_lock_defers_then_stops(self, svc):
-        """Deferred provisioning (lock held by boot reconcile) is retried, not left for the next poll."""
+    @pytest.mark.parametrize("raised", [False, True])
+    async def test_provisions_only_after_boot_reconcile(self, svc, raised):
+        """Reconcile holds the process lock: provisioning first would always defer."""
+        gate = asyncio.get_running_loop().create_future()
+        svc._reconcile_task = gate
+        svc._boot_busy = True  # skip the initial 3 s sleep
+        svc._svc.poll_interval = 3600.0
+        task = asyncio.create_task(svc._periodic_status_check())
+        await asyncio.sleep(0.05)
+        svc._svc.provision_missing.assert_not_awaited()
+
+        if raised:
+            gate.set_exception(RuntimeError("reconcile crashed"))
+        else:
+            gate.set_result(None)
+        await asyncio.sleep(0.05)
+        svc._svc.provision_missing.assert_awaited_once()
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        if raised:
+            gate.exception()
+
+    async def _run_polls(self, svc, polls: int) -> list[float]:
         from updater import dbus_service
 
-        svc._svc.provision_missing = AsyncMock(side_effect=[True, True, False])
+        svc._boot_busy = True  # skip the initial 3 s sleep
         sleeps: list[float] = []
 
         async def fake_sleep(delay):
             sleeps.append(delay)
-
-        with patch.object(dbus_service.asyncio, "sleep", fake_sleep):
-            await svc._provision_with_retry()
-
-        assert svc._svc.provision_missing.await_count == 3
-        assert sleeps == [dbus_service._PROVISION_RETRY_S] * 2
-
-    @pytest.mark.asyncio
-    async def test_failed_install_is_not_retried(self, svc):
-        """A tried-and-failed install (offline, broken unit) runs once, not 10 times."""
-        from updater import dbus_service
-
-        svc._svc.needs_provision = MagicMock(return_value=True)  # dir still absent
-        svc._svc.provision_missing = AsyncMock(return_value=False)
-
-        with patch.object(dbus_service.asyncio, "sleep", AsyncMock()):
-            assert await svc._provision_with_retry() is False
-
-        svc._svc.provision_missing.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_gives_up_after_bounded_retries(self, svc):
-        """A lock that never frees must not loop forever."""
-        from updater import dbus_service
-
-        svc._svc.provision_missing = AsyncMock(return_value=True)
-
-        with patch.object(dbus_service.asyncio, "sleep", AsyncMock()):
-            assert await svc._provision_with_retry() is True
-
-        assert svc._svc.provision_missing.await_count == dbus_service._PROVISION_RETRIES
-
-    async def _run_polls(self, svc, polls: int) -> None:
-        from updater import dbus_service
-
-        svc._boot_busy = True  # skip the initial 3 s sleep
-        calls = 0
-
-        async def fake_sleep(_delay):
-            nonlocal calls
-            calls += 1
-            if calls >= polls:
+            if len(sleeps) >= polls:
                 raise asyncio.CancelledError
 
         with (
@@ -449,22 +438,27 @@ class TestProvisionRetry:
             pytest.raises(asyncio.CancelledError),
         ):
             await svc._periodic_status_check()
+        return sleeps
 
     @pytest.mark.asyncio
     async def test_failed_install_not_retried_on_later_polls(self, svc):
         """Boot tries once; later polls never re-clone (user Update does)."""
+        svc._svc.poll_interval = 86_400.0
         svc._svc.provision_missing = AsyncMock(return_value=False)
-        await self._run_polls(svc, polls=3)
+        sleeps = await self._run_polls(svc, polls=3)
         svc._svc.provision_missing.assert_awaited_once()
+        assert sleeps == [86_400.0] * 3
 
     @pytest.mark.asyncio
-    async def test_still_deferred_after_retries_is_tried_on_next_poll(self, svc):
+    async def test_deferred_provision_repolls_soon_then_stops(self, svc):
+        """A lock deferral is retried at the retry interval, not left for a full poll."""
         from updater import dbus_service
 
-        svc._svc.provision_missing = AsyncMock(return_value=True)
-        with patch.object(dbus_service, "_PROVISION_RETRIES", 1):
-            await self._run_polls(svc, polls=3)
+        svc._svc.poll_interval = 86_400.0
+        svc._svc.provision_missing = AsyncMock(side_effect=[True, False])
+        sleeps = await self._run_polls(svc, polls=3)
         assert svc._svc.provision_missing.await_count == 2
+        assert sleeps == [dbus_service._FETCH_RETRY_INTERVAL_S, 86_400.0, 86_400.0]
 
 
 class TestProvisioningFlag:

@@ -60,30 +60,26 @@ from updater.locking import process_lock, restart_sentinel_path
 from updater.models import ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
-# SD-backed batch map name->pre-update hash; present at boot = revert those repos.
+# name -> pre-update hash; present at boot = revert those repos.
 _INFLIGHT_PATH = Path.home() / ".cache" / "blockscreen" / "updater_inflight.json"
-# Self-heal fault marker: present = fast recovery saturated (golden also looped).
+# Present = fast recovery saturated (golden also looped).
 _FAULT_MARKER_PATH = Path.home() / ".cache" / "blockscreen" / "selfheal_fault.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
-# Upgradable-count cache written by check_apt_status; stale after any apt upgrade.
 _APT_STATUS_CACHE = Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json"
-# Cap the history so a device running for years cannot fill the SD card.
 _HISTORY_MAX_BYTES = 1_000_000
 _HISTORY_KEEP_LINES = 2000
 
-# Circuit-breaker backoff for network ops (apt, git fetch): skip while cooling down so a failure can't storm-retry.
+# Failure backoff for network ops (apt and git fetch) so they can't storm-retry.
 _APT_BACKOFF_BASE_S = 30.0
 _APT_BACKOFF_MAX_S = 1800.0
 _APT_PERMANENT_COOLDOWN_S = 3600.0
-# apt-get update interval on the background poll, and floor between user-triggered refreshes.
+# apt-get update TTL on the poll, and the floor between forced refreshes.
 _APT_LIST_TTL_S = 86_400.0
 _APT_LIST_FORCE_TTL_S = 300.0
 _FETCH_BACKOFF_BASE_S = 30.0
 _FETCH_BACKOFF_MAX_S = 900.0
 
-# Self-heal: NRestarts polling interval (seconds) for crash-loop detection.
 _NRESTARTS_POLL_INTERVAL_S = 15.0
-# Trailing window for crash-loop detection: 5+ restarts in 180 seconds.
 _NRESTARTS_WINDOW_S = 180.0
 _NRESTARTS_THRESHOLD = 5
 
@@ -117,7 +113,7 @@ def _move_untracked(src: Path, dst: Path, entries: list[str]) -> list[str]:
     for rel in entries:
         target = dst / rel
         if os.path.lexists(target):
-            continue  # the fresh clone wins
+            continue
         try:
             (src / rel).rename(target)
         except OSError:
@@ -159,27 +155,24 @@ class _Backoff:
 # git's empty tree as provisioning prev_hash: diff hooks see all files as new.
 _GIT_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
-# UI services (our D-Bus client): no-block restart so self-update can't kill the batch.
+# No-block restart: restarting our own D-Bus client must not kill the batch.
 _UI_SERVICE = "BlocksScreen.service"
 _FIRE_AND_FORGET_SERVICES = frozenset({_UI_SERVICE})
-# Fallback klipper unit for restart_klipper if no klipper component is configured.
 _KLIPPER_SERVICE = "klipper.service"
 
-# Self-heal: the UI component name (components.yaml) that the supervisor watches.
 _UI_COMPONENT = "BlocksScreen"
 # A requested daemon restart that has not happened by now is assumed lost.
 _RESTART_PENDING_TTL_S = 600.0
-# Marker file proving updater exists: absence at target ref aborts update (lack bricks Type=notify host with no self-heal).
+# Absent at the target ref = abort: a Type=notify host without it crash-loops.
 _UPDATER_MARKER = "updater/dbus_service.py"
-# Forward-heal always targets the curated-stable channel, not the configured branch.
+# Forward-heal targets the curated stable channel, not the configured branch.
 _HEAL_REMOTE_REF = "origin/main"
-# Settle window after a rung (debounce plus margin) so a new build can bless first.
+# Debounce plus margin so a new build can bless itself first.
 _RECOVERY_SETTLE_S = 90.0
-# Slow forward-heal cadence base and jitter spread (seconds), per fleet OTA practice.
 _FORWARD_HEAL_BASE_S = 1800.0
 _FORWARD_HEAL_JITTER_S = 300.0
 
-# Deploy flag for BlocksScreen-deploy.path: runs install-updater.sh in its own cgroup.
+# Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
 
 
@@ -252,7 +245,7 @@ class UpdateService:
         self._apt_backoff = _Backoff(
             _APT_BACKOFF_BASE_S, _APT_BACKOFF_MAX_S, _APT_PERMANENT_COOLDOWN_S
         )
-        # -inf, not 0.0: time.monotonic()'s epoch is undefined and can be near-zero on a freshly booted host, which would make a real "never refreshed" sentinel look recent.
+        # -inf: monotonic() may start near 0 on a fresh boot, faking a recent refresh.
         self._apt_list_time: float = float("-inf")
         self._fetch_backoff: dict[str, _Backoff] = {}
         self._state_path = _STATE_PATH
@@ -260,7 +253,6 @@ class UpdateService:
         self._history_path = _HISTORY_PATH
         self._fault_marker_path = _FAULT_MARKER_PATH
         self._log = logging.getLogger("updater")
-        # Self-heal: trailing-window sample ring for crash-loop detection.
         self._nrestarts_samples: dict[str, list[tuple[float, int]]] = {}
         self._restart_pending_until = 0.0
 
@@ -289,14 +281,14 @@ class UpdateService:
         """Run apt-get update: the upgradable count reads local lists and is stale without it."""
         now = time.monotonic()
         ttl = _APT_LIST_FORCE_TTL_S if force else _APT_LIST_TTL_S
-        # A held lock means an update is already running, and it refreshes the lists itself.
+        # A held lock = an update is running, and it refreshes the lists itself.
         if (
             (now - self._apt_list_time) < ttl
             or self._apt_backoff.cooling_down()
             or self._apt_lock.locked()
         ):
             return
-        # Rate-limit attempts, not successes, so an offline box cannot retry on every refresh.
+        # Stamp attempts, not successes: an offline box must not retry every refresh.
         self._apt_list_time = now
         async with self._apt_lock:
             ok, err = await apt_update()
@@ -305,7 +297,6 @@ class UpdateService:
 
     def has_fetch_failures(self) -> bool:
         """True while any component's git fetch is failing (entry is popped on success)."""
-        # No _git_lock: a plain dict truthiness read has no await point, so it cannot interleave.
         return bool(self._fetch_backoff)
 
     async def check_status(self, force: bool = False) -> dict[str, ComponentStatus]:
@@ -316,12 +307,10 @@ class UpdateService:
             """Fetch and record one component's status into the results dict."""
             if c.kind == "apt":
                 await self._refresh_apt_lists(force)
-                # force bypasses the apt cache, mirroring the git fetch TTL bypass.
                 status = await check_apt_status(
                     cache_ttl_seconds=0 if force else 86_400, exclude=c.apt_exclude
                 )
             elif c.path is None or not c.path.exists():
-                # Missing opted-in comps surface as needs_install; rest stay skipped.
                 if c.install_if_missing and c.url:
                     results[c.name] = ComponentStatus(name=c.name, needs_install=True)
                 return
@@ -337,7 +326,6 @@ class UpdateService:
                 status = await check_git_status(
                     c.name, c.path, c.branch, c.version, skip_fetch
                 )
-                # Record success; back off a failing fetch per-component so it can't storm the poll.
                 if not skip_fetch:
                     async with self._git_lock:
                         if status.error is None:
@@ -422,11 +410,10 @@ class UpdateService:
         batch: list[ComponentConfig],
         provision: list[ComponentConfig],
     ) -> bool:
-        """Run apt updates, then provisioning, then the git batch; AND all results."""
+        """Run apt, provisioning, then the git batch (its UI restart must come last)."""
         ok = True
         for c in apt:
             ok = await self._run_apt_update(c) and ok
-        # Provision first: the batch ends with a fire-and-forget UI restart, so a component installed after it stays invisible until next reboot.
         for c in provision:
             ok = await self._provision_component(c) and ok
         if batch:
@@ -448,7 +435,6 @@ class UpdateService:
         self, batch: list[ComponentConfig], offline: set[str]
     ) -> bool:
         """Drop offline components from the batch, erroring each individually."""
-        # An unreachable remote drops only that component, never the whole update.
         ok = True
         for c in [c for c in batch if c.name in offline]:
             batch.remove(c)
@@ -457,12 +443,11 @@ class UpdateService:
 
     async def _filter_nonrepo_batch(self, batch: list[ComponentConfig]) -> bool:
         """Drop non-git-repo dirs, quarantining installable ones for a fresh clone."""
-        # A dir without .git (tarball install) errors individually, not the batch.
         ok = True
         for c in [c for c in batch if not is_git_repo(c.path)]:
             batch.remove(c)
             if c.install_if_missing and c.url and await self._quarantine_nonrepo(c):
-                continue  # path is now absent: the provision pass below clones fresh
+                continue
             self._log.error("%s: %s is not a git repository - skipping", c.name, c.path)
             ok = self._cb_error_done(
                 c.name, "not a git repository - reinstall required"
@@ -471,7 +456,6 @@ class UpdateService:
 
     async def _filter_dead_branch_batch(self, batch: list[ComponentConfig]) -> bool:
         """Drop components whose effective upstream ref (configured or current) is gone."""
-        # A dead ref (configured or deleted current branch) must not abort the batch.
         ok = True
         for c in batch.copy():
             branch = c.branch
@@ -529,18 +513,16 @@ class UpdateService:
         self, sorted_components: list[ComponentConfig]
     ) -> set[str]:
         """Fetch every existing git component up-front (network phase)."""
-        # Non-repo dirs excluded: their fetch failure is not "offline" (see update_all).
+        # Non-repos excluded: their fetch failure does not mean offline.
         targets = [
             c
             for c in sorted_components
             if c.kind == "git" and c.path is not None and is_git_repo(c.path)
         ]
         offline: set[str] = set()
-        # Lock guards only _fetch_times; git_fetch runs outside it (as check_status).
         for c in targets:
             now = time.monotonic()
             async with self._git_lock:
-                # Skip if fetched <30s ago; apply phase still skips its own fetch.
                 recent = now - self._fetch_times.get(c.name, float("-inf")) < 30
             if recent:
                 continue
@@ -579,11 +561,10 @@ class UpdateService:
         async with self._state_lock:
             state = await asyncio.to_thread(self._read_state)
             for name, ph in prev.items():
-                # Merge: replacing the entry would wipe the self-heal anchors (last_good/golden).
+                # Merge, not replace: keeps the self-heal anchors (last_good/golden).
                 _ensure_comp(state, name)["prev_hash"] = ph
             if not await asyncio.to_thread(self._write_state, state):
                 return False
-            # Mark in-flight so a pre-commit power cut is reverted on next boot.
             if not await asyncio.to_thread(self._write_inflight, prev.copy()):
                 return False
         return True
@@ -720,7 +701,6 @@ class UpdateService:
                 await self._drop_component(
                     m, "restart", alive, prev, touched, pending_revert
                 )
-            # Members reverted: bring the service back up on the old code.
             if not await self._restart_one(c.service):
                 self._log.error("%s did not recover after revert", c.service)
             restarted.remove(c.service)
@@ -736,7 +716,6 @@ class UpdateService:
         seen: set[str],
     ) -> bool:
         """Bounce klipper once for restart_klipper components, reverting them on failure."""
-        # Bounce klipper once for restart_klipper components that aren't klipper.
         klipper_svc = self._klipper_service()
         requesters = [
             c for c in alive if c.restart_klipper and c.service != klipper_svc
@@ -753,14 +732,13 @@ class UpdateService:
             await self._drop_component(
                 m, "restart", alive, prev, touched, pending_revert
             )
-            # Service runs new code: revert it to old code unless a surviving component shares the service.
+            # Revert-restart its service unless a surviving component shares it.
             shared = any(o.service == m.service for o in alive)
             if m.service and m.service in restarted and not shared:
                 if not await self._restart_one(m.service):
                     self._log.error("%s did not recover after revert", m.service)
                 restarted.remove(m.service)
         restarted.remove(klipper_svc)
-        # Requesters reverted: try to bring klipper back up.
         if not await self._restart_one(klipper_svc):
             self._log.error("%s did not recover after revert", klipper_svc)
         return failed
@@ -774,7 +752,6 @@ class UpdateService:
         pending_revert: dict[str, str],
     ) -> tuple[bool, list[ComponentConfig]]:
         """Restart each unique service once, reverting all components behind a failed one."""
-        # Restart each unique service once; failure reverts all components behind it and re-restarts onto old code.
         self._log.info("git batch: restart phase")
         seen: set[str] = set()
         svc_failed, ui_components = await self._batch_restart_services(
@@ -807,7 +784,6 @@ class UpdateService:
             self._cb("on_step", c.name, 4, 4)
             if c.service:
                 ui_services.add(c.service)
-        # klipper/RF50 hold config the UI reads at startup: refresh it too.
         if any(c.restart_ui for c in alive):
             if _UI_SERVICE not in ui_services:
                 self._cb("on_step", _UI_COMPONENT, 4, 4)  # UI holds its overlay
@@ -831,7 +807,6 @@ class UpdateService:
         alive, sec_failed = await self._security_check_batch(alive, prev)
         failed = failed or sec_failed
         if not alive:
-            # Nothing staged: drop the marker (avoids a spurious boot revert).
             await asyncio.to_thread(self._clear_inflight)
             return None
         return alive, prev, failed
@@ -873,7 +848,7 @@ class UpdateService:
         )
         touched: list[ComponentConfig] = []
         restarted: list[str] = []
-        # Repos whose revert failed: kept in in-flight marker so boot reconcile retries them, not committed survivors.
+        # Failed reverts stay in the inflight marker for the boot reconcile.
         pending_revert: dict[str, str] = {}
         committed = False
         try:
@@ -952,7 +927,6 @@ class UpdateService:
                 self._log.error(
                     "abort: %s reset to %s failed", c.name, prev[c.name][:12]
                 )
-        # Only unresolved repos stay in the marker for a boot-time retry.
         await self._settle_inflight(pending)
         revert_ok = not pending
         restart_ok = True
@@ -1071,7 +1045,6 @@ class UpdateService:
         if _DEPLOY_FLAG.is_symlink():
             _DEPLOY_FLAG.unlink()
         _DEPLOY_FLAG.touch()
-        # Persist the dirent so a power cut right after this can't drop the flag.
         self._fsync_dir(_DEPLOY_FLAG.parent)
 
     async def recover(self, name: str, hard: bool = False) -> bool:
@@ -1131,7 +1104,7 @@ class UpdateService:
             comp = _ensure_comp(state, name)
             comp["last_good"] = hash_val
             if not _is_sha(comp.get("golden")):
-                comp["golden"] = hash_val  # seed once, or repair a corrupt golden
+                comp["golden"] = hash_val
             comp["fast_attempt"] = 0
             comp["nrestarts_baseline"] = nrestarts_baseline
             comp.pop("last_failed_remote", None)
@@ -1151,7 +1124,7 @@ class UpdateService:
     def _check_crash_loop(self, name: str, nrestarts: int) -> bool:
         """Return True if NRestarts rose by >= 5 within the trailing 180s window."""
         if name not in self._nrestarts_samples:
-            self._nrestarts_samples[name] = []  # fresh device: start tracking now
+            self._nrestarts_samples[name] = []
         samples = self._nrestarts_samples[name]
         now = time.monotonic()
         window_start = now - _NRESTARTS_WINDOW_S
@@ -1198,7 +1171,6 @@ class UpdateService:
             lambda s: _ensure_comp(s, name).update(fast_attempt=attempt)
         )
         comp_state = (await asyncio.to_thread(self._read_state)).get(name, {})
-        # entry-counter write above may not have persisted; state may still be corrupt
         if not isinstance(comp_state, dict):
             comp_state = {}
         if attempt == 1:
@@ -1243,7 +1215,6 @@ class UpdateService:
             if not tip:
                 self._log.warning("recovery rung 2: %s unresolved", _HEAL_REMOTE_REF)
                 return False
-            # Never heal the host onto a pre-updater tip (would re-brick, not fix).
             if name == _UI_COMPONENT and not await git_tree_has_path(
                 component.path, tip, _UPDATER_MARKER
             ):
@@ -1307,7 +1278,6 @@ class UpdateService:
                 if self._check_crash_loop(_UI_COMPONENT, nrestarts):
                     await self._handle_crash_loop(nrestarts)
             except Exception:  # noqa: BLE001
-                # One bad pass must not kill crash-loop supervision for good.
                 self._log.error("supervise_ui pass failed", exc_info=True)
 
     async def _handle_crash_loop(self, nrestarts: int) -> None:
@@ -1352,11 +1322,10 @@ class UpdateService:
         async with self._git_lock:
             ok_fetch, _ = await git_fetch(component.path)
             if not ok_fetch:
-                return None  # offline: connectivity gate
+                return None
             tip = await git_ref_hash(component.path, _HEAL_REMOTE_REF)
         if not tip or tip == comp_state.get("last_failed_remote"):
-            return None  # no new stable tip since the last failure
-        # Never heal onto a pre-updater tip; by SHA, as a later fetch may move the ref.
+            return None
         if not await git_tree_has_path(component.path, tip, _UPDATER_MARKER):
             self._log.warning(
                 "forward-heal: %s lacks the updater package - skipping",
@@ -1373,7 +1342,7 @@ class UpdateService:
             return False
         raw = comp_state.get("fast_attempt", 0)
         if not (isinstance(raw, int) and not isinstance(raw, bool)) or raw < 2:
-            return False  # healthy, not yet in deep fallback, or corrupt counter
+            return False
         target = await self._forward_heal_target(comp_state)
         if target is None:
             return False
@@ -1430,7 +1399,7 @@ class UpdateService:
             await self._reconcile_locked()
 
     async def _revert_inflight(self) -> None:
-        """Revert any update cut off mid-flight by a power loss before it committed."""
+        """Revert power-cut batches; failed reverts stay in the marker for retry."""
         inflight = await asyncio.to_thread(self._read_inflight)
         if not inflight:
             return
@@ -1439,10 +1408,9 @@ class UpdateService:
             len(inflight),
         )
         by_name = {c.name: c for c in self._components}
-        unresolved: dict[str, str] = {}  # reverts that failed: kept for next-boot retry
+        unresolved: dict[str, str] = {}
         for name, prev_hash in inflight.items():
             comp = by_name.get(name)
-            # Gone component/path or invalid hash can never revert: drop (bounds retries).
             if comp is None or comp.path is None or not comp.path.exists():
                 continue
             if not _GIT_SHA_RE.match(prev_hash):
@@ -1450,7 +1418,7 @@ class UpdateService:
                 continue
             async with self._git_lock:
                 if await git_get_hash(comp.path) == prev_hash:
-                    continue  # already at the pre-update commit
+                    continue
                 rok, _ = await git_reset_to_hash(comp.path, prev_hash)
                 self._history("boot_rollback", name, ok=rok, reverted_to=prev_hash[:12])
                 self._log.warning(
@@ -1460,8 +1428,7 @@ class UpdateService:
                     rok,
                 )
                 if not rok:
-                    unresolved[name] = prev_hash  # keep marker so next boot retries
-        # Clear on full success; else persist only the still-failing entries (retry).
+                    unresolved[name] = prev_hash
         if unresolved:
             await asyncio.to_thread(self._write_inflight, unresolved)
         else:
@@ -1475,7 +1442,6 @@ class UpdateService:
             if await git_get_hash(c.path) != "":
                 return False
             self._log.warning("reconcile: %s HEAD unreadable - repairing", c.name)
-            # No configured branch: git_repair derives the repo's own default.
             ok, msg = await git_repair(c.path, c.branch)
             if ok and await git_get_hash(c.path) != "":
                 self._history("boot_repair", c.name, detail=msg[:80])
@@ -1509,7 +1475,6 @@ class UpdateService:
             if not hook_ok:
                 self._log.warning("%s: post-reclone hook failed: %s", c.name, hook_err)
         except Exception:  # noqa: BLE001
-            # Best-effort: a hook crash must not kill the rest of boot heal.
             self._log.warning("%s: post-reclone hook raised", c.name, exc_info=True)
 
     async def _reconcile_locked(self) -> None:
@@ -1522,7 +1487,6 @@ class UpdateService:
                 continue
             if await self._boot_repair_component(c):
                 recloned.append(c)
-        # Reclone drops in-repo artifacts; rebuild them best-effort outside _git_lock.
         for c in recloned:
             await self._boot_reclone_hook(c)
         await self._reconcile_self_heal_state()
@@ -1582,7 +1546,6 @@ class UpdateService:
         if ok:
             await asyncio.to_thread(self._clear_inflight)
         else:
-            # A failed revert keeps the marker so boot _revert_inflight retries it.
             self._log.warning("rollback: revert failed - keeping in-flight marker")
         if component.service and not await self._safe_restart(
             component.service, component.health_url
@@ -1609,7 +1572,7 @@ class UpdateService:
         pip_path = self._component_pip_cache[cache_key]
 
         if pip_path == PIP:
-            # No venv: PEP 668 blocks system pip; component installer owns deps.
+            # No venv: PEP 668 blocks system pip; the component's installer owns deps.
             self._log.info(
                 "%s: no component venv - skipping dep install", component.name
             )
@@ -1619,12 +1582,11 @@ class UpdateService:
             return (True, "no requirements.txt")
         mode = req.stat().st_mode & 0o777
         if mode & 0o002:
-            # SEC: world-writable only; group-writable is permitted (blocksscreen group is trusted)
+            # Group-writable is fine: the blocksscreen group is trusted.
             return (False, "world-writable permissions")
 
-        # Keep pip current (best-effort: a failed upgrade must not block reqs).
         await _run([pip_path, "install", "--upgrade", "pip", "--quiet"], timeout=120.0)
-        # Generous: one aarch64 source build (no wheel) easily exceeds 120s on a Pi.
+        # One aarch64 source build (no wheel) can exceed 120s on a Pi.
         return await _run(
             [pip_path, "install", "-r", str(req), "--quiet"], timeout=600.0
         )
@@ -1703,7 +1665,6 @@ class UpdateService:
         except OSError as exc:
             self._log.error("quarantine of %s failed: %s", path, exc)
             return None
-        # The venv moved with the dir: a cached pip path would now dangle.
         self._component_pip_cache.pop(str(path), None)
         return dest
 
@@ -1727,12 +1688,17 @@ class UpdateService:
         if component.path is not None:
             await asyncio.to_thread(shutil.rmtree, component.path, ignore_errors=True)
 
-    async def _fail_provision(self, component: ComponentConfig, reason: str) -> bool:
-        """Remove the partial clone, log, and report failure."""
-        if component.service and reason in ("hook", "restart"):
-            # The hook may have enabled it: it would crash-loop on the deleted dir.
+    async def _undo_provision(self, component: ComponentConfig, hooked: bool) -> None:
+        """Drop the clone, first disabling a hook-enabled unit (else it crash-loops)."""
+        if hooked and component.service:
             await disable_service(component.service)
         await self._remove_clone(component)
+
+    async def _fail_provision(
+        self, component: ComponentConfig, reason: str, hooked: bool = False
+    ) -> bool:
+        """Undo the partial install, log, and report failure."""
+        await self._undo_provision(component, hooked)
         self._history("install_failed", component.name, reason=reason)
         self._log.warning(
             "%s: provision failed (%s), partial clone removed", component.name, reason
@@ -1768,6 +1734,7 @@ class UpdateService:
             return self._cb_error_done(component.name, "no clone url")
         self._log.info("%s: provisioning via clone %s", component.name, component.url)
         self._history("install_start", component.name, url=component.url)
+        hooked = False
         try:
             self._cb("on_step", component.name, 1, 4)
             ok, err = await git_clone(component.url, component.path, component.branch)
@@ -1789,6 +1756,7 @@ class UpdateService:
                 return await self._fail_provision(component, "deps")
 
             self._cb("on_step", component.name, 3, 4)
+            hooked = True
             hook_ok, hook_err = await self._ping_while(
                 run_hook(
                     component.name,
@@ -1803,12 +1771,12 @@ class UpdateService:
             )
             if not hook_ok:
                 self._log.error("%s: provision hook: %s", component.name, hook_err)
-                return await self._fail_provision(component, "hook")
+                return await self._fail_provision(component, "hook", hooked)
 
             self._cb("on_step", component.name, 4, 4)
             reason = await self._provision_restart_service(component)
             if reason:
-                return await self._fail_provision(component, reason)
+                return await self._fail_provision(component, reason, hooked)
 
             self._history("install_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
@@ -1818,14 +1786,15 @@ class UpdateService:
                 "%s: provision cancelled, removing partial clone", component.name
             )
             await self._shielded(
-                self._remove_clone(component), f"{component.name} provision-cleanup"
+                self._undo_provision(component, hooked),
+                f"{component.name} provision-cleanup",
             )
             raise
         except Exception:  # noqa: BLE001
             self._log.error(
                 "%s: unexpected error during provision", component.name, exc_info=True
             )
-            return await self._fail_provision(component, "unexpected_error")
+            return await self._fail_provision(component, "unexpected_error", hooked)
 
     async def _reclone_into_tmp(self, component: ComponentConfig, tmp: Path) -> bool:
         """Clone (+ optional version pin) into a temp dir; rmtree + False on failure."""
@@ -1855,7 +1824,7 @@ class UpdateService:
                 await asyncio.to_thread(os.rename, path, old)
             await asyncio.to_thread(os.rename, tmp, path)
         except OSError as exc:
-            if not path.exists() and old.exists():  # restore after a half-done swap
+            if not path.exists() and old.exists():
                 with contextlib.suppress(OSError):
                     await asyncio.to_thread(os.rename, old, path)
             await asyncio.to_thread(shutil.rmtree, tmp, ignore_errors=True)
@@ -1872,7 +1841,7 @@ class UpdateService:
         """Carry untracked files (.config, venvs, symlinks) into the fresh tree."""
         entries = None
         # The fresh index is used as the old one may be the corrupt part.
-        with contextlib.suppress(OSError):  # a spawn failure must not undo the swap
+        with contextlib.suppress(OSError):
             entries = await git_untracked_paths(old, path / ".git")
         if entries is None:
             self._log.warning(
@@ -1890,13 +1859,12 @@ class UpdateService:
         path = component.path
         tmp = path.parent / f".{path.name}.reclone-tmp"
         old = path.parent / f".{path.name}.reclone-old"
-        for stale in (tmp, old):  # clear orphans from a crashed prior reclone
+        for stale in (tmp, old):
             await asyncio.to_thread(shutil.rmtree, stale, ignore_errors=True)
         if not await self._reclone_into_tmp(component, tmp):
             return False
         if not await self._reclone_swap(component, path, tmp, old):
             return False
-        # An in-repo venv may not have been carried over: re-resolve pip.
         self._component_pip_cache.pop(str(path), None)
         self._history("reclone", component.name, url=component.url)
         self._log.warning("%s: recloned successfully", component.name)
@@ -1932,7 +1900,7 @@ class UpdateService:
                 rok, rmsg = await git_repair(component.path)
                 if rok:
                     self._history("repair", component.name, detail=rmsg[:80])
-                elif await self._reclone_component(component):  # deepest rung
+                elif await self._reclone_component(component):
                     self._history("repair", component.name, detail="recloned")
                 else:
                     return (False, "corrupt")
@@ -1942,11 +1910,9 @@ class UpdateService:
         self, component: ComponentConfig, ref: str, tip: str
     ) -> tuple[bool, str] | None:
         """Pre-checkout guards: dead upstream branch + updater-marker brick guard."""
-        # A deleted upstream branch must fail here, not strand the repo mid-switch.
         if component.branch and not tip:
             return (False, f"branch {ref} not found - fix components.yaml")
 
-        # Updater host must never checkout code lacking updater: Type=notify unit lacks sd_notify READY causes crash loop with no self-heal.
         if component.name == _UI_COMPONENT:
             target = component.version or tip
             if not target or not await git_tree_has_path(
@@ -1966,9 +1932,7 @@ class UpdateService:
         """Checkout target branch, then hard-reset to the guarded tip / version-pin / soft-pull."""
         if component.path is None:
             return (False, "path not found")
-        # Switch to the target branch FIRST so reset/pull act on the right branch.
         if component.branch:
-            # hard mode forces past untracked collisions (build artifacts).
             force = component.reset_mode == "hard"
             ok, err = await git_checkout(component.path, component.branch, force=force)
             if not ok:
@@ -1976,7 +1940,6 @@ class UpdateService:
                 return (False, "branch")
 
         if component.reset_mode == "hard":
-            # Reset the (now current) branch to its remote tip, discarding divergence.
             ok, err = (
                 await git_reset_to_hash(component.path, tip)
                 if tip
@@ -1994,7 +1957,6 @@ class UpdateService:
                 self._log.error("%s: version pin failed: %s", component.name, err)
                 return (False, "version")
         elif component.reset_mode != "hard":
-            # Soft mode: fast-forward (branch already checked out, or default).
             ok, err = await git_pull(component.path)
             if not ok:
                 self._log.error("%s: git_pull failed: %s", component.name, err)
@@ -2046,7 +2008,6 @@ class UpdateService:
             if component.install_if_missing and component.url:
                 return await self._provision_component(component)
             return self._cb_error_done(component.name, "path not found")
-        # Non-repo dir (e.g. pre-updater tarball install): nothing to update or revert.
         if not is_git_repo(component.path):
             if (
                 component.install_if_missing
@@ -2072,7 +2033,7 @@ class UpdateService:
             return self._cb_error_done(component.name, "prev_hash empty"), ""
         async with self._state_lock:
             state = await asyncio.to_thread(self._read_state)
-            # Merge: replacing the entry would wipe the self-heal anchors (last_good/golden).
+            # Merge, not replace: keeps the self-heal anchors (last_good/golden).
             _ensure_comp(state, component.name)["prev_hash"] = prev_hash
             if not await asyncio.to_thread(self._write_state, state):
                 return (
@@ -2093,7 +2054,6 @@ class UpdateService:
         ok, reason = await _assert_https_remote(component.path)
         if not ok:
             self._log.error("SEC-4 remote check failed: %s", reason)
-            # Nothing staged: drop the marker (avoids a spurious boot revert).
             await asyncio.to_thread(self._clear_inflight)
             return self._cb_error_done(component.name, "insecure remote"), ""
         self._history("update_start", component.name, prev_hash=prev_hash[:12])
@@ -2114,7 +2074,6 @@ class UpdateService:
             ):
                 await asyncio.to_thread(self._clear_inflight)
                 return self._cb_error_done(component.name, stage_reason), ""
-            # checkout/reset/pin/pull may have moved the tree: full rollback.
             await self._rollback(component, prev_hash, stage_reason)
             return False, ""
 
@@ -2153,7 +2112,6 @@ class UpdateService:
         ):
             await self._rollback(component, prev_hash, "restart")
             return False, ""
-        # Bounce klipper too when requested and it isn't the component's own service.
         klipper_svc = self._klipper_service()
         if (
             component.restart_klipper
@@ -2167,7 +2125,6 @@ class UpdateService:
     async def _fire_and_forget_restart(self, component: ComponentConfig) -> None:
         """Post-commit: kick self/UI/klipper-config restart without waiting."""
         fire_and_forget = component.service in _FIRE_AND_FORGET_SERVICES
-        # Self/UI service: queue the restart only after success is recorded.
         if fire_and_forget and component.service:
             self._log.info(
                 "%s updated; fire-and-forget restart of %s (no wait)",
@@ -2175,7 +2132,6 @@ class UpdateService:
                 component.service,
             )
             await restart_service_noblock(component.service)
-        # klipper/RF50 hold config the UI reads at startup: refresh it too.
         elif component.restart_ui:
             self._log.info(
                 "%s updated (restart_ui); fire-and-forget restart of %s",
@@ -2326,7 +2282,6 @@ class UpdateService:
             data = json.loads(self._state_path.read_text())
         except (OSError, ValueError):
             return {}
-        # Valid JSON of the wrong shape (torn/corrupt write) must read as empty.
         return data if isinstance(data, dict) else {}
 
     def _read_inflight(self) -> dict[str, str]:
@@ -2337,7 +2292,6 @@ class UpdateService:
             return {}
         if not isinstance(data, dict):
             return {}
-        # Drop corrupt entries so a torn write can't crash the boot revert.
         return {k: v for k, v in data.items() if isinstance(k, str) and _is_sha(v)}
 
     def _write_inflight(self, mapping: dict[str, str]) -> bool:
@@ -2374,7 +2328,6 @@ class UpdateService:
         """Atomically write the self-heal state file (temp, fsync, replace)."""
         try:
             self._state_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            # SEC: atomic write via temp file prevents symlink attacks and partial writes
             with tempfile.NamedTemporaryFile(
                 mode="w",
                 dir=self._state_path.parent,
@@ -2382,7 +2335,6 @@ class UpdateService:
                 prefix=".updater_state_",
             ) as f:
                 f.write(json.dumps(data, indent=2))
-                # fsync file+dir so the rollback point survives a power cut.
                 f.flush()
                 os.fsync(f.fileno())
                 temp_path = Path(f.name)
@@ -2428,7 +2380,7 @@ class UpdateService:
             self._apt_failed(err)
             return
         self._apt_list_time = time.monotonic()
-        # Honor the apt excludes: a silent background kernel/firmware bump is the brick risk they prevent.
+        # A silent kernel/firmware bump is exactly the brick the excludes prevent.
         exclude = tuple(
             pat for c in self._components if c.kind == "apt" for pat in c.apt_exclude
         )
@@ -2438,7 +2390,7 @@ class UpdateService:
             self._apt_failed(err)
             return
         self._apt_backoff.reset()
-        # Drop the count cache: the sweep upgraded, so the UI would keep showing pending packages.
+        # The sweep upgraded: drop the count cache or the UI keeps showing pending.
         _APT_STATUS_CACHE.unlink(missing_ok=True)
         self._log.info("background apt upgrade: packages done")
         autoremove_ok, autoremove_err = await apt_autoremove()

@@ -251,14 +251,19 @@ class TestDaemonOwnerWatch:
         worker._async_initialize.assert_awaited_once_with(":1.5")
 
     @pytest.mark.asyncio
-    async def test_owner_lost_emits_unavailable_without_resync(self, worker, qtbot):
+    async def test_owner_lost_emits_unavailable_and_schedules_reconnect(
+        self, worker, qtbot
+    ):
+        """systemd never restarts a clean stop, so the worker must retry on its own."""
         received = []
         worker.daemon_unavailable.connect(lambda: received.append(True))
         worker._async_initialize = AsyncMock()
+        worker._schedule_reconnect = MagicMock()
         with self._patch_dbus(worker, ":1.5", [(_BUS, ":1.5", "")]):
             await worker._watch_daemon_owner()
         assert received == [True]
         worker._async_initialize.assert_not_awaited()
+        worker._schedule_reconnect.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_other_names_and_repeat_owner_ignored(self, worker):
