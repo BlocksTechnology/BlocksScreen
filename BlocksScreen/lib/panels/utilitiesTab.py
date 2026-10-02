@@ -23,11 +23,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
     )
-    subscribe_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        [list, "PyQt_PyObject"],
-        [str, "PyQt_PyObject"],
-        name="on-subscribe-config",
-    )
     update_available: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="update-available"
     )
@@ -124,13 +119,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # --- Websocket/Printer Signals ---
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
-
-        self.subscribe_config[str, "PyQt_PyObject"].connect(
-            self.printer.on_subscribe_config
-        )
-        self.subscribe_config[list, "PyQt_PyObject"].connect(
-            self.printer.on_subscribe_config
-        )
 
     def ask_input_shaper(self) -> None:
         """Ask whether to run the automatic input shaper."""
