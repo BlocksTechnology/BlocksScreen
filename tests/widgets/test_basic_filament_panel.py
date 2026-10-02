@@ -102,11 +102,13 @@ def test_destroying_panel_is_clean(qapp, mock_printer, mock_cfg):
     # Reaching here means ~BasicFilamentPanel ran without a double-free.
 
 
-def _mmu_state(pos, action="Idle", color=""):
+def _mmu_state(pos, action="Idle", color="", tool=0, gate=0):
     gate_info = SimpleNamespace(color=color, status=None)
     return SimpleNamespace(
         filament_pos=pos,
         action=action,
+        tool=tool,
+        gate=gate,
         current_gate_info=gate_info,
     )
 
@@ -145,3 +147,24 @@ def test_position_not_editable_while_printing(panel):
 def test_color_swatch_accepts_names(panel):
     panel._apply_color_swatch("red")
     assert panel._lbl_clr.text() == ""
+
+
+def test_accepted_position_change_emits_mmu_recover(panel):
+    panel.on_mmu_state_changed(_mmu_state(FilamentPos.LOADED))
+    emitted = []
+    panel.run_gcode.connect(emitted.append)
+    panel._lbl_pos.select_option("Unloaded")
+    panel.on_pos_change()
+    panel.confirm_pos_popup.accepted.emit()
+    assert emitted == ["MMU_RECOVER TOOL=0 GATE=0 LOADED=0"]
+
+
+def test_rejected_position_change_reverts_without_gcode(panel):
+    panel.on_mmu_state_changed(_mmu_state(FilamentPos.LOADED))
+    emitted = []
+    panel.run_gcode.connect(emitted.append)
+    panel._lbl_pos.select_option("Unloaded")
+    panel.on_pos_change()
+    panel.confirm_pos_popup.rejected.emit()
+    assert emitted == []
+    assert panel._lbl_pos.text() == "Loaded"
