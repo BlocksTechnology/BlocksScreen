@@ -172,6 +172,7 @@ _HEAL_REMOTE_REF = "origin/main"
 _RECOVERY_SETTLE_S = 90.0
 _FORWARD_HEAL_BASE_S = 1800.0
 _FORWARD_HEAL_JITTER_S = 300.0
+_OFFLINE_PROVISION_TRIES = 6  # ~30 min of 300s polls, for late Wi-Fi
 
 # Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
@@ -257,6 +258,8 @@ class UpdateService:
         self._nrestarts_samples: dict[str, list[tuple[float, int]]] = {}
         self._restart_pending_until = 0.0
         self._reconciled = False
+        self._offline_provision_tries = 0
+        self.printing = False
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -285,7 +288,8 @@ class UpdateService:
         ttl = _APT_LIST_FORCE_TTL_S if force else _APT_LIST_TTL_S
         # A held lock = an update is running, and it refreshes the lists itself.
         if (
-            (now - self._apt_list_time) < ttl
+            self.printing
+            or (now - self._apt_list_time) < ttl
             or self._apt_backoff.cooling_down()
             or self._apt_lock.locked()
         ):
@@ -321,9 +325,12 @@ class UpdateService:
                 async with self._git_lock:
                     last = self._fetch_times.get(c.name, float("-inf"))
                     breaker = self._fetch_backoff.get(c.name)
-                    skip_fetch = not force and (
-                        (now - last) < self._FETCH_TTL
-                        or (breaker is not None and breaker.cooling_down())
+                    skip_fetch = self.printing or (
+                        not force
+                        and (
+                            (now - last) < self._FETCH_TTL
+                            or (breaker is not None and breaker.cooling_down())
+                        )
                     )
                 status = await check_git_status(
                     c.name, c.path, c.branch, c.version, skip_fetch
@@ -485,10 +492,11 @@ class UpdateService:
             and (c.path is None or not c.path.exists())
         ]
 
-    async def _unattended_provisions(self) -> list[ComponentConfig]:
-        """Missing components to install unprompted: no failed try, remote reachable."""
+    async def _unattended_provisions(self) -> tuple[list[ComponentConfig], bool]:
+        """Missing components to install unprompted, and whether an offline one should retry."""
         state = await asyncio.to_thread(self._read_state)
         todo: list[ComponentConfig] = []
+        offline = False
         for c in self._missing_provisions():
             comp = state.get(c.name)
             if isinstance(comp, dict) and comp.get("provision_failed"):
@@ -496,9 +504,18 @@ class UpdateService:
             elif not await git_remote_reachable(c.url or ""):
                 # Offline devices must never sit behind the install overlay.
                 self._log.info("%s: remote unreachable - not installing", c.name)
+                offline = True
             else:
                 todo.append(c)
-        return todo
+        if offline:
+            self._offline_provision_tries += 1
+            if self._offline_provision_tries >= _OFFLINE_PROVISION_TRIES:
+                self._log.info(
+                    "remote still unreachable after %d tries - waiting for Update",
+                    self._offline_provision_tries,
+                )
+                offline = False
+        return todo, offline
 
     async def _set_provision_failed(self, name: str, failed: bool) -> None:
         """Persist the install outcome; a failure stops unattended retries."""
@@ -515,10 +532,13 @@ class UpdateService:
     async def provision_missing(
         self, on_busy: Callable[[bool], None] | None = None
     ) -> bool:
-        """Clone absent install_if_missing components; True if deferred by a held lock."""
-        missing = await self._unattended_provisions()
+        """Clone absent install_if_missing components; True to retry (lock, offline, printing)."""
+        if self.printing:
+            self._log.info("provision_missing: printer is printing, deferring")
+            return True
+        missing, retry = await self._unattended_provisions()
         if not missing:
-            return False
+            return retry
         with process_lock() as acquired:
             if not acquired:
                 self._log.info("provision_missing: update in progress, deferring")
@@ -533,7 +553,7 @@ class UpdateService:
             finally:
                 if on_busy:
                     on_busy(False)
-        return False
+        return retry
 
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig]
@@ -1362,6 +1382,8 @@ class UpdateService:
 
     async def _forward_heal_once(self) -> bool:
         """One forward-heal pass: attempt the new origin/main tip if we are in fallback."""
+        if self.printing:
+            return False
         state = await asyncio.to_thread(self._read_state)
         comp_state = state.get(_UI_COMPONENT, {})
         if not isinstance(comp_state, dict):
@@ -1725,7 +1747,14 @@ class UpdateService:
     async def _undo_provision(self, component: ComponentConfig, hooked: bool) -> None:
         """Drop the clone, first disabling a hook-enabled unit (else it crash-loops)."""
         if hooked and component.service:
-            await disable_service(component.service)
+            ok, err = await disable_service(component.service)
+            if not ok:
+                self._log.error(
+                    "%s: could not disable %s (%s); unit stays enabled",
+                    component.name,
+                    component.service,
+                    err,
+                )
         await self._remove_clone(component)
 
     async def _fail_provision(
@@ -2408,6 +2437,9 @@ class UpdateService:
         """Silent apt update, upgrade, and autoremove honoring the apt excludes."""
         if self._apt_backoff.cooling_down():
             self._log.debug("apt cooling down; skipping background upgrade")
+            return
+        if self.printing:
+            self._log.info("background apt upgrade skipped: printer is printing")
             return
         self._log.info("background apt upgrade: starting")
         ok, err = await apt_update()

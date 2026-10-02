@@ -33,6 +33,7 @@ def _make_worker():
     w._last_busy = False
     w._last_provisioning = False
     w._provisioning_signals = 0
+    w._printing = None
     w._daemon_owner = ""
     w._owner_task = None
     w._escalated = False
@@ -580,3 +581,31 @@ class TestPollProvisioning:
         worker._proxy.get_provisioning = slow_poll
         await worker._poll_provisioning(True)
         assert worker._last_provisioning is False
+
+
+class TestSetPrinting:
+    def test_only_changes_are_sent(self, worker):
+        with patch(
+            "asyncio.run_coroutine_threadsafe", side_effect=lambda c, loop: c.close()
+        ) as mock_rctf:
+            worker.trigger_set_printing(True)
+            worker.trigger_set_printing(True)
+        mock_rctf.assert_called_once()
+        assert worker._printing is True
+
+    @pytest.mark.asyncio
+    async def test_unknown_state_is_not_sent(self, worker):
+        worker._proxy.set_printing = AsyncMock()
+        await worker._call_set_printing()
+        worker._proxy.set_printing.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_old_daemon_without_method_is_ignored(self, worker):
+        import sdbus
+
+        worker._printing = True
+        worker._proxy.set_printing = AsyncMock(
+            side_effect=sdbus.SdBusBaseError("unknown method")
+        )
+        await worker._call_set_printing()
+        assert not worker._reconnecting

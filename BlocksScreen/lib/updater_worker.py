@@ -76,6 +76,8 @@ class UpdaterWorker(QtCore.QObject):
         self._last_busy: bool = False
         self._last_provisioning: bool = False
         self._provisioning_signals: int = 0
+        # None = unknown, so a fresh UI never clears the daemon's flag
+        self._printing: bool | None = None
         self._owner_task: asyncio.Task | None = None
         self._escalated: bool = False
         self._init_lock = asyncio.Lock()
@@ -206,6 +208,7 @@ class UpdaterWorker(QtCore.QObject):
         self._reconnect_attempt = 0
         self._escalated = False
         self._daemon_owner = await self._name_owner()
+        await self._call_set_printing()
 
         if busy:
             self._busy_false_event.clear()
@@ -445,6 +448,14 @@ class UpdaterWorker(QtCore.QObject):
             return
         self._submit(self._call_bless(name))
 
+    def trigger_set_printing(self, printing: bool) -> None:
+        """Forward job state so the daemon defers unattended work; resent on reconnect."""
+        if printing == self._printing:
+            return
+        self._printing = printing
+        if self._proxy is not None:
+            self._submit(self._call_set_printing())
+
     def shutdown(self) -> None:
         """Cancel all tasks and stop the event loop; close() runs in _run_loop after stop."""
         self._shutting_down = True
@@ -530,6 +541,16 @@ class UpdaterWorker(QtCore.QObject):
             await self._proxy.bless_healthy(name, "")
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "bless_healthy")
+
+    async def _call_set_printing(self) -> None:
+        """Send the latest job state; daemons predating set_printing just log it."""
+        if self._printing is None:
+            return
+        try:
+            async with asyncio.timeout(5):
+                await self._proxy.set_printing(self._printing)
+        except (sdbus.SdBusBaseError, TimeoutError) as exc:
+            _log.debug("set_printing failed: %s", exc)
 
     async def _listen_status_ready(self) -> None:
         """Forward status_ready D-Bus signals to the Qt status_ready signal."""

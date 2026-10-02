@@ -21,6 +21,7 @@ _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
 _FETCH_RETRY_INTERVAL_S = 300.0
 _RECONCILE_RETRY_S = 5.0
 _BOOT_DELAY_S = 3.0
+_SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
 
 
 class DbusProgressCallback:
@@ -136,10 +137,21 @@ class UpdaterInterface(
     async def shutdown(self) -> None:
         """Cancel background tasks, including late spawns, before the loop closes."""
         self._closing = True
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _SHUTDOWN_DRAIN_S
         while pending := [t for t in self._background_tasks if not t.done()]:
+            if (remaining := deadline - loop.time()) <= 0:
+                _log.warning(
+                    "shutdown: %d task(s) still running after %.0fs; "
+                    "boot heal reverts any in-flight update",
+                    len(pending),
+                    _SHUTDOWN_DRAIN_S,
+                )
+                return
             for task in pending:
                 task.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
+            # gather would wait out shielded rollbacks
+            await asyncio.wait(pending, timeout=remaining)
 
     async def _boot_reconcile(self) -> None:
         """Run the boot heal; retry in the background while the lock is held."""
@@ -289,6 +301,13 @@ class UpdaterInterface(
         self._spawn(self._run_recover(name, hard), name=f"recover_{name}")
         return True
 
+    @sdbus.dbus_method_async(input_signature="b")
+    async def set_printing(self, printing: bool) -> None:
+        """D-Bus method: the UI reports an active job; unattended work waits for it."""
+        if printing != self._svc.printing:
+            _log.info("printing -> %s", printing)
+            self._svc.printing = printing
+
     @sdbus.dbus_method_async(input_signature="ss", result_signature="b")
     async def bless_healthy(self, name: str, hash_val: str) -> bool:
         """D-Bus method: bless a component as healthy (known-good)."""
@@ -303,7 +322,7 @@ class UpdaterInterface(
         label: str,
         target: str,
     ) -> bool:
-        """Run work() under the cross-process lock, always clearing busy; True if the lock was held."""
+        """Run work() under the cross-process lock, then clear busy; True if the lock was held."""
         ran = False
         try:
             with process_lock() as acquired:
@@ -317,7 +336,9 @@ class UpdaterInterface(
         except Exception as exc:  # noqa: BLE001
             _log.error("_run_%s failed: %s", label, exc, exc_info=True)
         finally:
-            self._set_busy(busy=False)
+            # a running install owns busy
+            if ran or not self._provisioning:
+                self._set_busy(busy=False)
         return ran
 
     async def _run_update_all(self) -> None:

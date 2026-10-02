@@ -286,6 +286,16 @@ class TestHandleStatusReady:
             page.handle_status_ready(_make_payload())
 
 
+class TestPrintingChanged:
+    def test_job_state_reaches_the_daemon(self, page, qtbot):
+        with qtbot.waitSignal(page.printing_changed, timeout=200) as blocker:
+            page.set_printing_state("state", "paused")
+        assert blocker.args == [True]
+        with qtbot.waitSignal(page.printing_changed, timeout=200) as blocker:
+            page.set_printing_state("state", "complete")
+        assert blocker.args == [False]
+
+
 class TestHandleBusyChanged:
     def test_true_shows_loading(self, page):
         page.show_loading = MagicMock()
@@ -369,6 +379,14 @@ class TestHandleBusyChanged:
         page.handle_busy_changed(False)
         assert not page._busy_timeout_timer.isActive()
 
+    def test_busy_timeout_explains_dropped_overlay(self, page):
+        page.show_loading = MagicMock()
+        page._show_toast = MagicMock()
+        page.handle_busy_changed(True)
+        page._on_busy_timeout()
+        assert page._busy is False
+        page._show_toast.assert_called_once()
+
 
 class TestUpdateAllClicked:
     def test_emits_request_update_with_empty_string(self, page, qtbot):
@@ -447,7 +465,7 @@ class TestDaemonUnavailable:
         page._show_toast.assert_called_once()
         args = page._show_toast.call_args[0]
         assert "unavailable" in args[0].lower()
-        assert "restart" in args[0].lower()
+        assert "retrying" in args[0].lower()
 
     def test_daemon_unavailable_disables_update_btn(self, page):
         page.show_loading = MagicMock()

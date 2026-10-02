@@ -458,6 +458,12 @@ class TestProvisioningFlag:
 
 class TestMethodReturnValues:
     @pytest.mark.asyncio
+    async def test_set_printing_reaches_service(self, svc):
+        svc._svc.printing = False
+        await svc.set_printing(True)
+        assert svc._svc.printing is True
+
+    @pytest.mark.asyncio
     async def test_update_all_rejected_when_busy_returns_false(self, svc):
         """Return False when busy without calling underlying service."""
         svc._busy = True
@@ -573,6 +579,16 @@ class TestLockHeldSurfacesError:
         svc.error.emit.assert_called_once_with(("klipper", "another update is running"))
         svc._svc.recover.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_lock_miss_keeps_busy_owned_by_install(self, svc):
+        """A user task losing the lock to an install must not drop its overlay."""
+        svc._provision_busy(True)
+        with patch("updater.dbus_service.process_lock", self._held_lock()):
+            await svc._run_update_all()
+        assert svc._busy is True
+        svc._provision_busy(False)
+        assert svc._busy is False
+
 
 class TestBootReconcileRetry:
     @pytest.mark.asyncio
@@ -646,3 +662,27 @@ class TestShutdown:
         await asyncio.gather(task, return_exceptions=True)
         assert task.cancelled()
         assert ran == []
+
+    @pytest.mark.asyncio
+    async def test_shielded_rollback_cannot_outlast_stop_timeout(
+        self, svc, monkeypatch
+    ):
+        """systemd SIGKILLs at 90s; shutdown must return first, even mid-rollback."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_SHUTDOWN_DRAIN_S", 0.05)
+        release = asyncio.Event()
+
+        async def stubborn():
+            while not release.is_set():
+                try:
+                    await release.wait()
+                except asyncio.CancelledError:
+                    continue
+
+        task = svc._spawn(stubborn(), name="update_all")
+        await asyncio.sleep(0)
+        await asyncio.wait_for(svc.shutdown(), timeout=1.0)
+        assert not task.done()
+        release.set()
+        await task

@@ -17,6 +17,7 @@ from updater.models import ComponentStatus
 
 _log = logging.getLogger(__name__)
 _DESCRIBE_SUFFIX = re.compile(r"-(\d+)-g[0-9a-f]+$")
+_SAFE_STATES = frozenset({"standby", "complete", "cancelled", "error", ""})
 
 
 def _compact_version(describe: str) -> str:
@@ -42,6 +43,9 @@ class UpdatePage(QtWidgets.QWidget):
     )
     disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="disable-popups"
+    )
+    printing_changed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="printing-changed"
     )
 
     _STEP_LABELS: typing.ClassVar[MappingProxyType[int, str]] = MappingProxyType(
@@ -103,7 +107,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._restart_grace_timer.timeout.connect(self._dismiss_after_restart_grace)
         self._stale_overlay_timer: QtCore.QTimer = QtCore.QTimer(self)
         self._stale_overlay_timer.setSingleShot(True)
-        self._stale_overlay_timer.setInterval(10000)
+        self._stale_overlay_timer.setInterval(60000)
         self._stale_overlay_timer.timeout.connect(self._dismiss_stale_overlay)
         self._update_confirm_popup: BasePopup | None = None
         self.show_loading(True)
@@ -112,9 +116,10 @@ class UpdatePage(QtWidgets.QWidget):
         self._status_debounce.start(500)
 
     def set_printing_state(self, key: str, value: str) -> None:
-        """Cache the printer state so update safety checks can block mid-print updates."""
+        """Cache the printer state so updates, ours and the daemon's, wait out a job."""
         if key == "state":
             self._printing_state = value
+            self.printing_changed.emit(value not in _SAFE_STATES)
 
     def set_heater_target(self, name: str, prop: str, value: float) -> None:
         """Track heater targets; update is blocked if any heater is above 40 °C."""
@@ -136,6 +141,9 @@ class UpdatePage(QtWidgets.QWidget):
             self._overlay_shown = False
             self.show_loading(False)
             self.call_load_panel.emit(False, "", False)
+            self._show_toast(
+                "Still working in the background - tap refresh to check status"
+            )
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """Rebuild cards and request a fresh status poll each time the page becomes visible."""
@@ -428,7 +436,6 @@ class UpdatePage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="on-update-all-clicked")
     def on_update_all_clicked(self) -> None:
         """Guard against updates during a print or with hot heaters; otherwise show confirm dialog."""
-        _SAFE_STATES = {"standby", "complete", "cancelled", "error", ""}
         if self._printing_state not in _SAFE_STATES:
             self._show_toast(f"Printer {self._printing_state} - update deferred")
             return
@@ -538,7 +545,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._cancel_btn.hide()
         self.show_loading(False)
         self._show_toast(
-            "Updater unavailable, restarting it automatically ...",
+            "Updater unavailable, retrying ...",
             success=False,
         )
         self.update_all_btn.setEnabled(False)
