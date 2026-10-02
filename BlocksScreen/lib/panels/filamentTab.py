@@ -947,8 +947,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._previous_gate_states[gate_info.index] = current_state
 
             if previous_state is False and current_state is True:
-                self.popup_gates.append({"gate": gate_info.index})
-                self.handle_popup()
+                if len(mmu_state.gates) > 1:
+                    self.popup_gates.append({"gate": gate_info.index})
+                    self.handle_popup()
             elif previous_state is True and gate_info.status == GateStatus.EMPTY:
                 self._clear_gate_map(gate_info)
 
