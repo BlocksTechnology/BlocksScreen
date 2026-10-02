@@ -134,6 +134,7 @@ elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC
     sudo systemctl unmask BlocksScreen.service 2>/dev/null || true
 fi
 sudo systemctl daemon-reload
+# Every run on purpose: a linked-but-disabled UI unit is a blank screen with no SSH recovery.
 sudo systemctl enable BlocksScreen.service 2>/dev/null || echo_warn "could not enable BlocksScreen.service"
 echo_ok "BlocksScreen.service is a symlink - hook no longer needs sudo cp"
 

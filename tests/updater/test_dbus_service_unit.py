@@ -462,6 +462,7 @@ class TestMethodReturnValues:
         svc._svc.printing = False
         await svc.set_printing(True)
         assert svc._svc.printing is True
+        assert svc._printing_watch is None
 
     @pytest.mark.asyncio
     async def test_update_all_rejected_when_busy_returns_false(self, svc):
@@ -549,6 +550,74 @@ class TestMethodReturnValues:
         await svc._run_update_all()
         await asyncio.sleep(0)  # let a spawned task run
         assert svc._svc.background_apt_upgrade.called is apt_spawned
+
+
+class TestPrintingWatch:
+    """The printing flag lives only as long as the caller's bus name."""
+
+    @pytest.fixture
+    def bus(self, svc):
+        bus = MagicMock()
+        bus.match_signal_async = AsyncMock(return_value=MagicMock())
+        svc._dbus = MagicMock(attached_bus=bus)
+        svc._svc.printing = False
+        return bus
+
+    @pytest.fixture
+    def has_owner(self):
+        with (
+            patch("updater.dbus_service._caller", return_value=":1.5"),
+            patch("updater.dbus_service.FreedesktopDbus") as fd,
+        ):
+            fd.return_value.name_has_owner = AsyncMock(return_value=True)
+            yield fd.return_value.name_has_owner
+
+    @staticmethod
+    async def _owner_changed(bus, name: str, new: str = "") -> None:
+        msg = MagicMock()
+        msg.get_contents.return_value = (name, ":1.5", new)
+        bus.match_signal_async.call_args.args[4](msg)
+        for _ in range(3):
+            await asyncio.sleep(0)
+
+    @pytest.mark.asyncio
+    async def test_cleared_when_sender_leaves(self, svc, bus, has_owner):
+        await svc.set_printing(True)
+        await asyncio.sleep(0)
+        assert svc._svc.printing is True
+        await self._owner_changed(bus, ":1.5")
+        assert svc._svc.printing is False
+        assert svc._printing_watch is None
+        bus.match_signal_async.return_value.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_other_names_ignored(self, svc, bus, has_owner):
+        await svc.set_printing(True)
+        await asyncio.sleep(0)
+        await self._owner_changed(bus, ":1.9")
+        await self._owner_changed(bus, ":1.5", new=":1.6")
+        assert svc._svc.printing is True
+        assert not svc._printing_watch.done()
+
+    @pytest.mark.asyncio
+    async def test_sender_gone_before_subscribe_clears(self, svc, bus, has_owner):
+        has_owner.return_value = False
+        await svc.set_printing(True)
+        for _ in range(3):
+            await asyncio.sleep(0)
+        assert svc._svc.printing is False
+        bus.match_signal_async.return_value.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_report_replaces_previous_watch(self, svc, bus, has_owner):
+        await svc.set_printing(True)
+        await asyncio.sleep(0)
+        first = svc._printing_watch
+        await svc.set_printing(False)
+        await asyncio.sleep(0)
+        assert first.cancelled()
+        assert svc._printing_watch is None
+        assert svc._svc.printing is False
 
 
 class TestLockHeldSurfacesError:

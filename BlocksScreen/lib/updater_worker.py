@@ -6,7 +6,7 @@ import asyncio
 import logging
 import threading
 import time
-from contextlib import aclosing, suppress
+from contextlib import closing, suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -35,8 +35,9 @@ _BUSY_IDLE_LIMIT = 360.0
 
 _DAEMON_BUS_NAME = "com.blockscreen.Updater"
 _UPDATER_UNIT = "BlocksScreen-updater.service"
+_BUS_DRIVER = "org.freedesktop.DBus"
 
-# Reconnect attempts before asking systemd to start a unit it has given up on.
+# 2 = ~20 s absent (5 s + 15 s retries) before asking systemd to start the unit.
 _ESCALATE_AFTER = 2
 
 
@@ -314,21 +315,30 @@ class UpdaterWorker(QtCore.QObject):
         resync = False  # the first seed races updater_init's own connect
         while not self._shutting_down:
             try:
-                signals = _dbus_daemon(self._system_bus).name_owner_changed
-                async with aclosing(aiter(signals)) as stream:
-                    # Seeded after subscribing so no change can slip through the gap.
+                changes: asyncio.Queue = asyncio.Queue()
+                # Raw match: sdbus signal iterators only subscribe on first __anext__.
+                slot = await self._system_bus.match_signal_async(
+                    _BUS_DRIVER,
+                    "/org/freedesktop/DBus",
+                    _BUS_DRIVER,
+                    "NameOwnerChanged",
+                    changes.put_nowait,
+                )
+                with closing(slot):
                     owner = await self._name_owner()
                     if resync and owner and owner != self._daemon_owner:
                         await self._async_initialize(owner)
                     else:
                         self._daemon_owner = owner
                     resync = True
-                    async for name, _old, new_owner in stream:
+                    while not self._shutting_down:
+                        msg = await changes.get()
+                        name, _old, new_owner = msg.get_contents()
                         if name != _DAEMON_BUS_NAME or new_owner == self._daemon_owner:
                             continue
                         if not new_owner:
                             self._daemon_owner = ""
-                            # systemd never restarts a clean stop; the retry revives it.
+                            # Retry bus-activates a stopped unit; only mask keeps it off.
                             _log.error("updater daemon left the bus - awaiting restart")
                             self.daemon_unavailable.emit()
                             self._schedule_reconnect()
@@ -342,7 +352,6 @@ class UpdaterWorker(QtCore.QObject):
                 raise
             except Exception:  # noqa: BLE001
                 _log.error("daemon owner watch failed - retrying in 10s", exc_info=True)
-            # Also covers a stream that ends without raising, which would else hot-spin.
             if not self._shutting_down:
                 await asyncio.sleep(10.0)
 

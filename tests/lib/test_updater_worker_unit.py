@@ -42,30 +42,6 @@ def _make_worker():
     return w
 
 
-class _FakeDbus:
-    """Stand-in for FreedesktopDbus yielding a scripted NameOwnerChanged stream."""
-
-    def __init__(self, owner="", events=(), stop=None):
-        self._owner = owner
-        self._events = list(events)
-        self._stop = stop
-
-    async def get_name_owner(self, service_name):
-        return self._owner
-
-    @property
-    def name_owner_changed(self):
-        events, stop = self._events, self._stop
-
-        async def _gen():
-            for event in events:
-                yield event
-            if stop is not None:
-                stop()
-
-        return _gen()
-
-
 def _dbus_module(fake):
     """Inject a fake sdbus_async.dbus_daemon (tests/network/conftest stubs the parent)."""
     mod = SimpleNamespace(FreedesktopDbus=lambda bus=None: fake)
@@ -233,20 +209,49 @@ class TestWatchdog:
         assert received == [True]
 
 
+class _Msg:
+    """NameOwnerChanged message; a callable payload runs on read (stop or fail)."""
+
+    def __init__(self, contents):
+        self._contents = contents
+
+    def get_contents(self):
+        return self._contents() if callable(self._contents) else self._contents
+
+
 class TestDaemonOwnerWatch:
     """Crash recovery: NameOwnerChanged resync instead of the 6-minute busy watchdog."""
 
     @staticmethod
-    def _patch_dbus(worker, owner="", events=()):
-        def _stop():
-            worker._shutting_down = True
+    def _subscribe(worker, *batches, owner=""):
+        """Each subscribe delivers the next batch before the seed; returns the slots."""
+        slots = []
+        pending = iter(batches)
 
-        return _dbus_module(_FakeDbus(owner=owner, events=events, stop=_stop))
+        async def _match(*args):
+            for event in next(pending):
+                args[4](_Msg(event))
+            slots.append(MagicMock())
+            return slots[-1]
+
+        worker._system_bus.match_signal_async = _match
+        return slots, _dbus_module(
+            MagicMock(get_name_owner=AsyncMock(return_value=owner))
+        )
+
+    @staticmethod
+    def _stop(worker):
+        def _read():
+            worker._shutting_down = True
+            return ("org.other.Thing", "", "")
+
+        return _read
 
     @pytest.mark.asyncio
     async def test_new_owner_triggers_resync(self, worker):
         worker._async_initialize = AsyncMock()
-        with self._patch_dbus(worker, "", [(_BUS, "", ":1.5")]):
+        _, dbus = self._subscribe(worker, [(_BUS, "", ":1.5"), self._stop(worker)])
+        with dbus:
             await worker._watch_daemon_owner()
         # Owner passed through, not stored here: _async_initialize owns that field.
         worker._async_initialize.assert_awaited_once_with(":1.5")
@@ -255,12 +260,15 @@ class TestDaemonOwnerWatch:
     async def test_owner_lost_emits_unavailable_and_schedules_reconnect(
         self, worker, qtbot
     ):
-        """systemd never restarts a clean stop, so the worker must retry on its own."""
+        """A stopped unit is bus-activated again by the retry, so the worker retries."""
         received = []
         worker.daemon_unavailable.connect(lambda: received.append(True))
         worker._async_initialize = AsyncMock()
         worker._schedule_reconnect = MagicMock()
-        with self._patch_dbus(worker, ":1.5", [(_BUS, ":1.5", "")]):
+        _, dbus = self._subscribe(
+            worker, [(_BUS, ":1.5", ""), self._stop(worker)], owner=":1.5"
+        )
+        with dbus:
             await worker._watch_daemon_owner()
         assert received == [True]
         worker._async_initialize.assert_not_awaited()
@@ -270,53 +278,50 @@ class TestDaemonOwnerWatch:
     async def test_other_names_and_repeat_owner_ignored(self, worker):
         worker._async_initialize = AsyncMock()
         events = [("org.other.Thing", "", ":1.9"), (_BUS, ":1.5", ":1.5")]
-        with self._patch_dbus(worker, ":1.5", events):
+        _, dbus = self._subscribe(worker, [*events, self._stop(worker)], owner=":1.5")
+        with dbus:
             await worker._watch_daemon_owner()
         worker._async_initialize.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_watch_survives_stream_failure(self, worker):
+    async def test_subscribes_before_seeding(self, worker):
+        """Seeding first would miss a restart landing between seed and subscribe."""
+        slots, _ = self._subscribe(worker, [self._stop(worker)])
+        seen = []
+
+        async def _owner(_name):
+            seen.append(len(slots))
+            return ""
+
+        with _dbus_module(MagicMock(get_name_owner=_owner)):
+            await worker._watch_daemon_owner()
+        assert seen == [1]
+
+    @pytest.mark.asyncio
+    async def test_watch_survives_subscribe_failure(self, worker):
         """Losing the watch must retry, not kill the fast recovery path."""
-        worker._async_initialize = AsyncMock()
-
-        class _Broken(_FakeDbus):
-            @property
-            def name_owner_changed(self):
-                raise RuntimeError("bus dropped")
-
-        fake = _Broken()
+        worker._system_bus.match_signal_async = AsyncMock(
+            side_effect=RuntimeError("bus dropped")
+        )
 
         async def _sleep(_delay):
             worker._shutting_down = True
 
-        with _dbus_module(fake), patch("asyncio.sleep", _sleep):
+        with patch("asyncio.sleep", _sleep):
             await worker._watch_daemon_owner()  # must return, not raise
 
     @pytest.mark.asyncio
-    async def test_stream_closed_when_body_raises(self, worker):
-        """Abandoning the generator without aclose leaks its match slot until GC."""
-        closed = []
-
-        async def _gen():
-            try:
-                yield (_BUS, "", ":1.9")
-                yield (_BUS, "", ":1.10")
-            finally:
-                closed.append(True)
-
-        class _Leaky(_FakeDbus):
-            @property
-            def name_owner_changed(self):
-                return _gen()
-
+    async def test_slot_closed_when_body_raises(self, worker):
+        """An unclosed match slot keeps queueing signals until GC."""
         worker._async_initialize = AsyncMock(side_effect=RuntimeError("boom"))
+        slots, dbus = self._subscribe(worker, [(_BUS, "", ":1.9"), (_BUS, "", ":1.10")])
 
         async def _sleep(_delay):
             worker._shutting_down = True
 
-        with _dbus_module(_Leaky()), patch("asyncio.sleep", _sleep):
+        with dbus, patch("asyncio.sleep", _sleep):
             await worker._watch_daemon_owner()
-        assert closed == [True]
+        slots[0].close.assert_called_once_with()
         worker._async_initialize.assert_awaited_once_with(":1.9")
 
     @pytest.mark.asyncio
@@ -324,15 +329,17 @@ class TestDaemonOwnerWatch:
     async def test_reseed_after_gap_resyncs_new_owner(self, worker, reseed, resyncs):
         """A restart while the watch was down emits no signal: the re-seed must catch it."""
         worker._async_initialize = AsyncMock()
-        fake = _FakeDbus()
-        fake.get_name_owner = AsyncMock(side_effect=[":1.5", reseed])
-        sleeps = []
 
-        async def _sleep(delay):
-            sleeps.append(delay)
-            worker._shutting_down = len(sleeps) >= 2
+        def _drop():
+            raise RuntimeError("bus dropped")
 
-        with _dbus_module(fake), patch("asyncio.sleep", _sleep):
+        _, dbus = self._subscribe(worker, [_drop], [self._stop(worker)])
+        fake = MagicMock(get_name_owner=AsyncMock(side_effect=[":1.5", reseed]))
+
+        async def _sleep(_delay):
+            pass
+
+        with dbus, _dbus_module(fake), patch("asyncio.sleep", _sleep):
             await worker._watch_daemon_owner()
         if resyncs:
             worker._async_initialize.assert_awaited_once_with(reseed)

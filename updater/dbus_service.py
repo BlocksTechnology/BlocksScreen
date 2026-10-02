@@ -7,10 +7,13 @@ import dataclasses
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from contextlib import closing
 from functools import partial
 from pathlib import Path
 
 import sdbus
+from sdbus.sd_bus_internals import SdBusMessage
+from sdbus_async.dbus_daemon import FreedesktopDbus
 
 from updater.locking import process_lock
 from updater.models import ComponentStatus
@@ -22,6 +25,15 @@ _FETCH_RETRY_INTERVAL_S = 300.0
 _RECONCILE_RETRY_S = 5.0
 _BOOT_DELAY_S = 3.0
 _SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
+_BUS_DRIVER = "org.freedesktop.DBus"
+
+
+def _caller() -> str:
+    """Unique bus name of the current D-Bus caller; empty outside a method call."""
+    try:
+        return sdbus.get_current_message().sender or ""
+    except LookupError:
+        return ""
 
 
 class DbusProgressCallback:
@@ -117,6 +129,7 @@ class UpdaterInterface(
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
         self._invalid_requests: int = 0
+        self._printing_watch: asyncio.Task | None = None
         self._reconcile_task = self._spawn(
             self._boot_reconcile(), name="boot_reconcile"
         )
@@ -304,9 +317,42 @@ class UpdaterInterface(
     @sdbus.dbus_method_async(input_signature="b")
     async def set_printing(self, printing: bool) -> None:
         """D-Bus method: the UI reports an active job; unattended work waits for it."""
+        if self._printing_watch is not None:
+            self._printing_watch.cancel()
+            self._printing_watch = None
+        sender = _caller()
+        if printing and sender:
+            self._printing_watch = self._spawn(
+                self._release_printing_on_exit(sender), name="printing_watch"
+            )
         if printing != self._svc.printing:
             _log.info("printing -> %s", printing)
             self._svc.printing = printing
+
+    async def _release_printing_on_exit(self, sender: str) -> None:
+        """Clear printing once its sender leaves the bus, like a logind inhibitor."""
+        bus = self._dbus.attached_bus
+        left = asyncio.Event()
+
+        def _on_owner_changed(msg: SdBusMessage) -> None:
+            name, _old, new = msg.get_contents()
+            if name == sender and not new:
+                left.set()
+
+        slot = await bus.match_signal_async(
+            _BUS_DRIVER,
+            "/org/freedesktop/DBus",
+            _BUS_DRIVER,
+            "NameOwnerChanged",
+            _on_owner_changed,
+        )
+        with closing(slot):
+            # Checked after subscribing so an exit in between is not missed.
+            if await FreedesktopDbus(bus).name_has_owner(sender):
+                await left.wait()
+        _log.warning("printing client %s left the bus - clearing printing", sender)
+        self._printing_watch = None
+        self._svc.printing = False
 
     @sdbus.dbus_method_async(input_signature="ss", result_signature="b")
     async def bless_healthy(self, name: str, hash_val: str) -> bool:

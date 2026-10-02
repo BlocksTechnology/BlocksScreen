@@ -533,7 +533,7 @@ class UpdateService:
         self, on_busy: Callable[[bool], None] | None = None
     ) -> bool:
         """Clone absent install_if_missing components; True to retry (lock, offline, printing)."""
-        if self.printing:
+        if self.printing and self._missing_provisions():
             self._log.info("provision_missing: printer is printing, deferring")
             return True
         missing, retry = await self._unattended_provisions()

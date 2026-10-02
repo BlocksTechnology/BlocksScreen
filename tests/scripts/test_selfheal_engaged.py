@@ -64,6 +64,11 @@ def test_dead_daemon_hands_rollback_back(tmp_path: Path) -> None:
     assert not _engaged(tmp_path, state, daemon_active=False)
 
 
+def test_saturated_ladder_hands_rollback_back(tmp_path: Path) -> None:
+    (tmp_path / "selfheal_fault.json").write_text("{}")
+    assert not _engaged(tmp_path, {"BlocksScreen": {"fast_attempt": 3}})
+
+
 def test_start_script_consults_helper_before_rolling_back() -> None:
     text = (_SCRIPTS / "BlocksScreen-start.sh").read_text()
     assert text.index("bs_selfheal_engaged") < text.index('reset --hard "$_last_good"')

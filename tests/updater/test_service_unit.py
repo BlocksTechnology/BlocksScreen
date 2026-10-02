@@ -2086,6 +2086,14 @@ class TestProvisionMissing:
         on_busy.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_printing_with_nothing_missing_stops_polling(self, tmp_path):
+        (tmp_path / "Spoolman").mkdir()
+        svc = UpdateService()
+        svc._components = [self._comp(tmp_path)]
+        svc.printing = True
+        assert await svc.provision_missing() is False
+
+    @pytest.mark.asyncio
     async def test_unreachable_remote_skips_without_busy(self, tmp_path, reachable):
         # Offline devices: no overlay, no clone; re-poll for late Wi-Fi, then stop.
         reachable.return_value = False

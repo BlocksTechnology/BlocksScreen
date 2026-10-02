@@ -168,10 +168,11 @@ bs_ensure_usb_max_current() {
     return 0
 }
 
-# True while a live updater daemon runs its UI recovery ladder (fast_attempt > 0). $1 = state file, $2 = python.
+# True while a live updater daemon runs its UI recovery ladder (fast_attempt > 0, not saturated). $1 = state file, $2 = python.
 bs_selfheal_engaged() {
     local state="$1" py="$2"
     [ -f "$state" ] && [ -x "$py" ] || return 1
+    [ -f "${state%/*}/selfheal_fault.json" ] && return 1
     systemctl is-active --quiet BlocksScreen-updater.service 2>/dev/null || return 1
     "$py" - "$state" 2>/dev/null <<'PY'
 import json, sys

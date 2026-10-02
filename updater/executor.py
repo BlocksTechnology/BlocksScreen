@@ -1085,7 +1085,7 @@ async def verify_updater_importable(component_path: Path | None) -> bool:
 
 
 async def disable_service(name: str | None) -> tuple[bool, str]:
-    """Stop and disable a systemd service."""
+    """Stop and disable a systemd service (sudoers allows only Spoolman.service)."""
     if name is None:
         return (False, "service name is None")
     if not _SERVICE_RE.match(name):
