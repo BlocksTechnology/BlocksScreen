@@ -29,11 +29,16 @@ class _SdBusBaseError(Exception):
     pass
 
 
+class _DbusUnknownMethodError(_SdBusBaseError):
+    pass
+
+
 @pytest.fixture(scope="module", autouse=True)
 def mock_sdbus():
     mock = MagicMock()
     mock.sd_bus_open_user = MagicMock(return_value=MagicMock())
     mock.SdBusBaseError = _SdBusBaseError
+    mock.dbus_exceptions.DbusUnknownMethodError = _DbusUnknownMethodError
     with pytest.MonkeyPatch.context() as mp:
         for key in (
             "sdbus",

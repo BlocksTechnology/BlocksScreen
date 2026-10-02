@@ -607,12 +607,42 @@ class TestSetPrinting:
         worker._proxy.set_printing.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_old_daemon_without_method_is_ignored(self, worker):
+    async def test_old_daemon_without_method_is_not_retried(self, worker):
         import sdbus
 
         worker._printing = True
         worker._proxy.set_printing = AsyncMock(
-            side_effect=sdbus.SdBusBaseError("unknown method")
+            side_effect=sdbus.dbus_exceptions.DbusUnknownMethodError("unknown method")
         )
         await worker._call_set_printing()
+        worker._proxy.set_printing.assert_awaited_once()
+        assert not worker._reconnecting
+
+    @pytest.mark.asyncio
+    async def test_failed_send_is_retried_with_the_current_state(self, worker):
+        import sdbus
+
+        sent = []
+
+        async def send(printing):
+            sent.append(printing)
+            if len(sent) == 1:
+                worker._printing = False
+                raise sdbus.SdBusBaseError("timeout")
+
+        worker._printing = True
+        worker._proxy.set_printing = send
+        with patch("asyncio.sleep", new=AsyncMock()):
+            await worker._call_set_printing()
+        assert sent == [True, False]
+
+    @pytest.mark.asyncio
+    async def test_gives_up_after_three_tries(self, worker):
+        import sdbus
+
+        worker._printing = True
+        worker._proxy.set_printing = AsyncMock(side_effect=sdbus.SdBusBaseError("down"))
+        with patch("asyncio.sleep", new=AsyncMock()):
+            await worker._call_set_printing()
+        assert worker._proxy.set_printing.await_count == 3
         assert not worker._reconnecting

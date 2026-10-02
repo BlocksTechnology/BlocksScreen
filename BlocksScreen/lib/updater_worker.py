@@ -209,7 +209,8 @@ class UpdaterWorker(QtCore.QObject):
         self._reconnect_attempt = 0
         self._escalated = False
         self._daemon_owner = await self._name_owner()
-        await self._call_set_printing()
+        # A task so its retries never hold _init_lock.
+        self._track_task(asyncio.create_task(self._call_set_printing()))
 
         if busy:
             self._busy_false_event.clear()
@@ -552,14 +553,19 @@ class UpdaterWorker(QtCore.QObject):
             self._handle_proxy_error(exc, "bless_healthy")
 
     async def _call_set_printing(self) -> None:
-        """Send the latest job state; daemons predating set_printing just log it."""
-        if self._printing is None:
-            return
-        try:
-            async with asyncio.timeout(5):
-                await self._proxy.set_printing(self._printing)
-        except (sdbus.SdBusBaseError, TimeoutError) as exc:
-            _log.debug("set_printing failed: %s", exc)
+        """Send the current job state, retried so a lost call cannot leave it stale."""
+        for _ in range(3):
+            if self._printing is None:
+                return
+            try:
+                async with asyncio.timeout(5):
+                    await self._proxy.set_printing(self._printing)
+                return
+            except sdbus.dbus_exceptions.DbusUnknownMethodError:
+                return  # daemon predates set_printing
+            except (sdbus.SdBusBaseError, TimeoutError) as exc:
+                _log.warning("set_printing failed: %s", exc)
+            await asyncio.sleep(5)
 
     async def _listen_status_ready(self) -> None:
         """Forward status_ready D-Bus signals to the Qt status_ready signal."""
