@@ -8,6 +8,7 @@ from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_field import BlocksField
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -62,6 +63,19 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         self.setCurrentIndex(0)
 
+        self.confirm_pos_popup = BasePopup(self, False, True)
+        self.confirm_pos_popup.set_message(
+            "Change the filament position?\n\n"
+            "This overrides the printer's filament state.\n"
+            "Only confirm if it matches where the filament\n"
+            "actually is in the printer."
+        )
+        self._pos_pending = ""
+        self.confirm_pos_popup.accepted.connect(
+            lambda: self._accept_pos_change(self._pos_pending)
+        )
+        self.confirm_pos_popup.rejected.connect(self._reject_pos_change)
+
         self.popup = Popup(self)
 
         if self.cfg.has_section("filament_presence"):
@@ -70,18 +84,19 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         else:
             self.filament_sensor = None
 
-        self.filament_page_load_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.load_page))
-        )
-        self.load_header_back_button.clicked.connect(self.back_button)
-        self.filament_page_unload_btn.clicked.connect(
+        self.Basic_fp_load_btn.clicked.connect(self._on_load_clicked)
+        self.Basic_fp_unload_btn.clicked.connect(
             lambda: self.unload_filament(toolhead=0, temp=250)
         )
+        self.fcp_back_button.clicked.connect(self.back_button)
 
         self.printer.unload_filament_update.connect(self.on_unload_filament)
         self.printer.load_filament_update.connect(self.on_load_filament)
         self.printer.filament_switch_sensor_update.connect(
             self.on_filament_sensor_update
+        )
+        self.Basic_fp_check_btn.clicked.connect(
+            lambda: self.run_gcode.emit("MMU_CHECK_GATE")
         )
         self.printer.print_stats_update[str, str].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
@@ -106,7 +121,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             if filament_type and i.value.name in filament_type:
                 filament_type = i
                 break
-        self._lbl_mat.setText(filament_type.value.name)
+        self._lbl_mat.set_right_text(filament_type.value.name)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -115,34 +130,30 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         """slot to handle print stats updates changing back button behavior"""
         if "state" in field:
             self.state = value
+            self._refresh_check_btn()
+            self._refresh_pos_editable()
             if value in ("printing", "paused"):
                 try:
                     self.main_back_button.disconnect()
-                    self.filament_page_load_btn.disconnect()
                 except TypeError:
                     pass
 
                 self.main_back_button.clicked.connect(
                     lambda: self.request_change_tab.emit(0)
                 )
-                self.filament_page_load_btn.clicked.connect(
-                    lambda: self.load_filament(0, FilamentTypes.UNKNOWN)
-                )
 
             else:
                 try:
                     self.main_back_button.disconnect()
-                    self.filament_page_load_btn.disconnect()
                 except TypeError:
                     pass
                 self.main_back_button.clicked.connect(lambda: self.request_back.emit())
-                self.filament_page_load_btn.clicked.connect(
-                    partial(self.change_page, self.indexOf(self.load_page))
-                )
 
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
         """slot to handle filament sensor updates"""
+        if self.mmu_configured:
+            return
         if parameter == "filament_detected":
             if not isinstance(value, bool):
                 self.filament_state = self.FilamentStates.UNKNOWN
@@ -200,9 +211,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 message="Filament is already loaded.",
             )
             return
-        self.run_gcode.emit(
-            f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
-        )
+        if not self._in_print:
+            self.run_gcode.emit(
+                f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
+            )
         if not self.mmu_configured:
             self.call_load_panel.emit(True, "Loading", True)
             self.run_gcode.emit("LOAD_FILAMENT")
@@ -227,9 +239,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             )
             return
         self.find_routine_objects()
-        self.run_gcode.emit(
-            f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
-        )
+        if not self._in_print:
+            self.run_gcode.emit(
+                f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
+            )
 
         if not self.mmu_configured:
             self.call_load_panel.emit(True, "Unloading", True)
@@ -237,6 +250,12 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             return
         self.load_popup.show()
         self.run_gcode.emit("MMU_EJECT")
+
+    def _on_load_clicked(self) -> None:
+        if self._in_print:
+            self.load_filament(0, FilamentTypes.UNKNOWN)
+            return
+        self.change_page(self.indexOf(self.fcp))
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
         """Emit filament_selected so the pre-gate popup can confirm the gate before loading."""
@@ -262,15 +281,48 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                     pass
 
                 btn.clicked.connect(partial(self.open_pre_gate_popup, _filament_type))
+            self.Basic_fp_check_btn.show()
+            self._lbl_clr.show()
             self.mmu_configured = True
+            self.Vlayout.setSpacing(10)
 
         self._mmu_state = mmu_state
-        if mmu_state.filament_pos == FilamentPos.UNKNOWN:
-            self.filament_state = self.FilamentStates.UNKNOWN
+        if mmu_state.filament_pos == FilamentPos.LOADED:
+            self.filament_state = self.FilamentStates.LOADED
         elif mmu_state.filament_pos == FilamentPos.UNLOADED:
             self.filament_state = self.FilamentStates.UNLOADED
         else:
-            self.filament_state = self.FilamentStates.LOADED
+            self.filament_state = self.FilamentStates.UNKNOWN
+        self._refresh_pos_editable()
+        gate_info = mmu_state.current_gate_info
+        self._apply_color_swatch(gate_info.color if gate_info else "")
+
+    def _apply_color_swatch(self, color_str: str) -> None:
+        text = (color_str or "").strip()
+        hex_text = text.lstrip("#")
+        if len(hex_text) == 8:
+            hex_text = hex_text[:6]
+        color = QtGui.QColor(f"#{hex_text}")
+        if not color.isValid() and text:
+            color = QtGui.QColor(text)
+        if color.isValid():
+            self._lbl_clr.set_right_text("")
+            self._lbl_clr.set_right_stylesheet(
+                "min-width: 146px; min-height: 46px;"
+                "border-radius: 8px;"
+                f"background: rgb({color.red()},{color.green()},{color.blue()});"
+                "border: 2px solid rgba(255,255,255,80);"
+            )
+        else:
+            self._lbl_clr.set_right_text("✕")
+            self._lbl_clr.set_right_stylesheet(
+                "min-width: 146px; min-height: 46px;"
+                "border-radius: 8px;"
+                "background: rgb(40,40,40);"
+                "border: 2px dashed rgba(255,255,255,80);"
+                "color: #e8445a;"
+                "font-size: 28px; font-weight: bold;"
+            )
 
     @property
     def _gate_has_filament(self) -> bool:
@@ -285,19 +337,20 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         )
 
     @property
+    def _in_print(self) -> bool:
+        return self.state in ("printing", "paused")
+
+    @property
     def filament_state(self):
         return self._filament_state
 
     @filament_state.setter
     def filament_state(self, update: FilamentStates) -> None:
         self._filament_state = update
-        _idle = not self._mmu_busy
-        _loaded = update is self.FilamentStates.LOADED
-        _unloaded = update is self.FilamentStates.UNLOADED
-        self.filament_page_unload_btn.setEnabled(_idle and not _unloaded)
-        self.filament_page_load_btn.setEnabled(
-            _idle and not _loaded and self._gate_has_filament
-        )
+        self.Basic_fp_load_btn.setEnabled(update is not self.FilamentStates.LOADED)
+        self.Basic_fp_unload_btn.setEnabled(update is not self.FilamentStates.UNLOADED)
+        if self._lbl_pos.select_option(update.name.capitalize()):
+            self._pos_committed = self._lbl_pos.text()
 
     def change_page(self, index: int) -> None:
         """Switch this stacked widget to the page at *index*."""
@@ -322,50 +375,57 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             return True
         return "gcode_macro UNLOAD_FILAMENT" in _available_objects
 
+    def on_pos_change(self) -> None:
+        """Ask to confirm a user-picked position, reverting it if declined."""
+        new_pos = self._lbl_pos.text()
+        if new_pos == self._pos_committed:
+            return
+        self._pos_pending = new_pos
+        self.confirm_pos_popup.open()
+
+    def _accept_pos_change(self, new_pos: str) -> None:
+        self._pos_committed = new_pos
+        n = 1 if new_pos == "Loaded" else 0
+        self.run_gcode.emit(f"MMU_RECOVER TOOL=0 GATE=0 LOADED={n}")
+
+    def _reject_pos_change(self) -> None:
+        self._lbl_pos.select_option(self._pos_committed)
+
+    def _refresh_check_btn(self) -> None:
+        self.Basic_fp_check_btn.setEnabled(not self._in_print)
+
+    def _refresh_pos_editable(self) -> None:
+        self._lbl_pos.set_editable(
+            self.mmu_configured and self.state != "printing" and not self._mmu_busy
+        )
+
     def _setupInfoBox(self):
         root = BlocksCustomFrame(parent=self.filament_control_page)
-        root.setMinimumSize(QtCore.QSize(600, 80))
-        root.setMaximumSize(QtCore.QSize(600, 80))
+        root.setMinimumSize(QtCore.QSize(350, 300))
         root.setObjectName("root")
 
         font = QtGui.QFont()
         font.setPointSize(15)
 
-        hozlay = QtWidgets.QHBoxLayout(root)
+        hozlay = QtWidgets.QVBoxLayout(root)
 
-        self.filament_page_info_title_6 = QtWidgets.QLabel(self)
-        self.filament_page_info_title_6.setMinimumSize(QtCore.QSize(0, 0))
-        self.filament_page_info_title_6.setMaximumSize(QtCore.QSize(170, 60))
-        self.filament_page_info_title_6.setFont(font)
-        self.filament_page_info_title_6.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.filament_page_info_title_6.setObjectName("filament_page_info_title_6")
+        self._lbl_mat = BlocksField(self, "Material:", "bottom")
 
-        font = QtGui.QFont()
-        font.setPointSize(13)
+        self._lbl_pos = BlocksField(self, "Position:", None, "DropDownMenu")
+        self._lbl_pos.set_placeholder("Unknown")
+        self._lbl_pos.set_options(["Loaded", "Unloaded"])
+        self._lbl_pos.select_option("Unknown")
+        self._pos_committed = self._lbl_pos.text()
+        self._lbl_pos.on_edit.connect(self.on_pos_change)
+        self._lbl_pos.set_editable(False)
 
-        self._lbl_mat = QtWidgets.QLabel(self)
-        self._lbl_mat.setMinimumSize(QtCore.QSize(0, 60))
-        self._lbl_mat.setMaximumSize(QtCore.QSize(16777215, 60))
-        self._lbl_mat.setFont(font)
-        self._lbl_mat.setStyleSheet("color:white")
-        self._lbl_mat.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self._lbl_mat.setObjectName("_lbl_mat")
+        self._lbl_clr = BlocksField(self, "Color:", "upper")
+        self._apply_color_swatch("")
+        self._lbl_clr.hide()
 
-        self.line_2 = QtWidgets.QFrame(self)
-        self.line_2.setStyleSheet("color:white")
-        self.line_2.setFrameShape(QtWidgets.QFrame.Shape.VLine)
-        self.line_2.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.line_2.setObjectName("line_2")
-
-        self.filament_page_info_title_6.setText("Filament Type: ")
-        self._lbl_mat.setText("...")
-
-        hozlay.addWidget(self.filament_page_info_title_6)
-        hozlay.addWidget(self.line_2)
         hozlay.addWidget(self._lbl_mat)
-
+        hozlay.addWidget(self._lbl_pos)
+        hozlay.addWidget(self._lbl_clr)
         return root
 
     def _setup_ui(self) -> None:
@@ -398,8 +458,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         )
 
         self.filament_control_page.setSizePolicy(sizePolicy)
-        self.filament_control_page.setMinimumSize(QtCore.QSize(710, 400))
-        self.filament_control_page.setMaximumSize(QtCore.QSize(720, 420))
+        self.filament_control_page.setFixedSize(QtCore.QSize(710, 400))
         self.filament_control_page.setObjectName("filament_control_page")
 
         self.verticalLayout = QtWidgets.QVBoxLayout(self.filament_control_page)
@@ -420,8 +479,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         self.verticalLayout.addItem(spacerItem)
 
-        self.filament_page_header_layout = QtWidgets.QHBoxLayout()
-        self.filament_page_header_layout.addItem(spacerItem1)
+        self.Basic_fp_header_layout = QtWidgets.QHBoxLayout()
+        self.Basic_fp_header_layout.addItem(spacerItem1)
 
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Maximum
@@ -433,22 +492,18 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         font.setFamily("Momcake")
         font.setPointSize(24)
 
-        self.filament_page_header_title = QtWidgets.QLabel(
-            parent=self.filament_control_page
-        )
-        self.filament_page_header_title.setSizePolicy(sizePolicy)
-        self.filament_page_header_title.setMinimumSize(QtCore.QSize(0, 60))
-        self.filament_page_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
-        self.filament_page_header_title.setFont(font)
-        self.filament_page_header_title.setStyleSheet(
+        self.Basic_fp_header_title = QtWidgets.QLabel(parent=self.filament_control_page)
+        self.Basic_fp_header_title.setSizePolicy(sizePolicy)
+        self.Basic_fp_header_title.setMinimumSize(QtCore.QSize(0, 60))
+        self.Basic_fp_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
+        self.Basic_fp_header_title.setFont(font)
+        self.Basic_fp_header_title.setStyleSheet(
             "background: transparent; color: white;"
         )
-        self.filament_page_header_title.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.Basic_fp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
-        self.filament_page_header_layout.addWidget(
-            self.filament_page_header_title,
+        self.Basic_fp_header_layout.addWidget(
+            self.Basic_fp_header_title,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
@@ -474,56 +529,16 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
         )
         self.main_back_button.setObjectName("main_back_button")
-        self.filament_page_header_layout.addWidget(self.main_back_button)
+        self.Basic_fp_header_layout.addWidget(self.main_back_button)
 
-        spacerItem2 = QtWidgets.QSpacerItem(
-            20,
-            40,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
-        spacerItem3 = QtWidgets.QSpacerItem(
-            20,
-            40,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
-        spacerItem4 = QtWidgets.QSpacerItem(
-            20,
-            26,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-        )
-        spacerItem5 = QtWidgets.QSpacerItem(
-            60,
-            20,
-            QtWidgets.QSizePolicy.Policy.Maximum,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-        )
-        spacerItem6 = QtWidgets.QSpacerItem(
-            20,
-            40,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
-        spacerItem7 = QtWidgets.QSpacerItem(
-            20,
-            40,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
-        self.verticalLayout.addLayout(self.filament_page_header_layout)
-        self.verticalLayout.addItem(spacerItem2)
+        self.verticalLayout.addLayout(self.Basic_fp_header_layout)
 
-        self.verticalLayout_3 = QtWidgets.QVBoxLayout()
-        self.verticalLayout_3.setObjectName("verticalLayout_3")
-        self.verticalLayout_3.addItem(spacerItem6)
+        self.HLayout = QtWidgets.QHBoxLayout()
+        self.HLayout.setObjectName("HLayout")
 
-        self.verticalLayout_3.addWidget(
+        self.HLayout.addWidget(
             self._setupInfoBox(), 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
-
-        self.verticalLayout_3.addItem(spacerItem3)
 
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
@@ -537,43 +552,54 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
 
-        self.horizontalLayout = QtWidgets.QHBoxLayout()
-        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.buttons_frame = BlocksCustomFrame(parent=self.filament_control_page)
+        self.buttons_frame.setFixedSize(QtCore.QSize(290, 300))
+        self.buttons_frame.setObjectName("buttons_frame")
 
-        self.filament_page_load_btn = BlocksCustomButton(
-            parent=self.filament_control_page
-        )
-        self.filament_page_load_btn.setSizePolicy(sizePolicy)
-        self.filament_page_load_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.filament_page_load_btn.setMaximumSize(QtCore.QSize(250, 80))
-        self.filament_page_load_btn.setFont(font)
-        self.filament_page_load_btn.setProperty(
+        self.Vlayout = QtWidgets.QVBoxLayout(self.buttons_frame)
+        self.Vlayout.setObjectName("Vlayout")
+        self.Vlayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        self.Basic_fp_load_btn = BlocksCustomButton(parent=self.filament_control_page)
+        self.Basic_fp_load_btn.setSizePolicy(sizePolicy)
+        self.Basic_fp_load_btn.setFixedSize(QtCore.QSize(250, 80))
+        self.Basic_fp_load_btn.setFont(font)
+        self.Basic_fp_load_btn.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"),
         )
-        self.filament_page_load_btn.setObjectName("filament_page_load_btn")
-        self.horizontalLayout.addWidget(self.filament_page_load_btn)
+        self.Basic_fp_load_btn.setObjectName("Basic_fp_load_btn")
+        self.Vlayout.addWidget(self.Basic_fp_load_btn)
 
-        self.filament_page_unload_btn = BlocksCustomButton(
-            parent=self.filament_control_page
-        )
-
-        self.filament_page_unload_btn.setSizePolicy(sizePolicy)
-        self.filament_page_unload_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.filament_page_unload_btn.setMaximumSize(QtCore.QSize(250, 80))
-        self.filament_page_unload_btn.setFont(font)
-        self.filament_page_unload_btn.setProperty(
+        self.Basic_fp_unload_btn = BlocksCustomButton(parent=self.filament_control_page)
+        self.Basic_fp_unload_btn.setSizePolicy(sizePolicy)
+        self.Basic_fp_unload_btn.setFixedSize(QtCore.QSize(250, 80))
+        self.Basic_fp_unload_btn.setFont(font)
+        self.Basic_fp_unload_btn.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/filament_related/media/btn_icons/unload_filament.svg"),
         )
-        self.filament_page_unload_btn.setObjectName("filament_page_unload_btn")
+        self.Basic_fp_unload_btn.setObjectName("Basic_fp_unload_btn")
+        self.Vlayout.addWidget(self.Basic_fp_unload_btn)
 
-        self.horizontalLayout.addWidget(self.filament_page_unload_btn)
-        self.verticalLayout_3.addLayout(self.horizontalLayout)
-        self.verticalLayout.addLayout(self.verticalLayout_3)
+        self.Basic_fp_check_btn = BlocksCustomButton(parent=self.filament_control_page)
+        self.Basic_fp_check_btn.setSizePolicy(sizePolicy)
+        self.Basic_fp_check_btn.setFixedSize(QtCore.QSize(250, 80))
+        self.Basic_fp_check_btn.setFont(font)
+        self.Basic_fp_check_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/filament_related/media/btn_icons/check gate 1.svg"),
+        )
+        self.Basic_fp_check_btn.setObjectName("Basic_fp_check_btn")
+        self.Vlayout.addWidget(self.Basic_fp_check_btn)
+        self.Basic_fp_check_btn.hide()
+        self.Vlayout.setSpacing(40)
 
-        self.verticalLayout.addItem(spacerItem4)
-        self.verticalLayout.addItem(spacerItem7)
+        self.HLayout.addWidget(
+            self.buttons_frame, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        self.verticalLayout.addLayout(self.HLayout)
+
         self.addWidget(self.filament_control_page)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -582,14 +608,15 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
 
-        self.load_page = QtWidgets.QWidget()
-        self.load_page.setSizePolicy(sizePolicy)
-        self.load_page.setMinimumSize(QtCore.QSize(710, 400))
-        self.load_page.setMaximumSize(QtCore.QSize(720, 420))
-        self.load_page.setSizeIncrement(QtCore.QSize(1, 1))
-        self.load_page.setObjectName("load_page")
+        # fcp = filament choose Page
+        self.fcp = QtWidgets.QWidget()
+        self.fcp.setSizePolicy(sizePolicy)
+        self.fcp.setMinimumSize(QtCore.QSize(710, 400))
+        self.fcp.setMaximumSize(QtCore.QSize(720, 420))
+        self.fcp.setSizeIncrement(QtCore.QSize(1, 1))
+        self.fcp.setObjectName("fcp")
 
-        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.load_page)
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.fcp)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
         self.verticalLayout_2.addItem(
             QtWidgets.QSpacerItem(
@@ -600,9 +627,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             )
         )
 
-        self.load_page_header_layout = QtWidgets.QHBoxLayout()
-        self.load_page_header_layout.setObjectName("load_page_header_layout")
-        self.load_page_header_layout.addItem(spacerItem5)
+        self.fcp_header_layout = QtWidgets.QHBoxLayout()
+        self.fcp_header_layout.setObjectName("fcp_header_layout")
 
         font = QtGui.QFont()
         font.setFamily("Momcake")
@@ -615,28 +641,26 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
 
-        self.load_header_page_title = QtWidgets.QLabel(parent=self.load_page)
-        self.load_header_page_title.setMinimumSize(QtCore.QSize(0, 60))
-        self.load_header_page_title.setFont(font)
-        self.load_header_page_title.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.load_header_page_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.load_header_page_title.setObjectName("load_header_page_title")
+        self.fcp_header_title = QtWidgets.QLabel(parent=self.fcp)
+        self.fcp_header_title.setMinimumSize(QtCore.QSize(0, 60))
+        self.fcp_header_title.setFont(font)
+        self.fcp_header_title.setStyleSheet("background: transparent; color: white;")
+        self.fcp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.fcp_header_title.setObjectName("fcp_header_title")
 
-        self.load_page_header_layout.addWidget(self.load_header_page_title)
+        self.fcp_header_layout.addWidget(self.fcp_header_title)
 
-        self.load_header_back_button = IconButton(parent=self.load_page)
-        self.load_header_back_button.setSizePolicy(sizePolicy)
-        self.load_header_back_button.setMinimumSize(QtCore.QSize(60, 60))
-        self.load_header_back_button.setMaximumSize(QtCore.QSize(60, 60))
-        self.load_header_back_button.setProperty(
+        self.fcp_back_button = IconButton(parent=self.fcp)
+        self.fcp_back_button.setSizePolicy(sizePolicy)
+        self.fcp_back_button.setMinimumSize(QtCore.QSize(60, 60))
+        self.fcp_back_button.setMaximumSize(QtCore.QSize(60, 60))
+        self.fcp_back_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
         )
-        self.load_header_back_button.setObjectName("load_header_back_button")
-        self.load_page_header_layout.addWidget(self.load_header_back_button)
+        self.fcp_back_button.setObjectName("fcp_back_button")
+        self.fcp_header_layout.addWidget(self.fcp_back_button)
 
-        self.verticalLayout_2.addLayout(self.load_page_header_layout)
+        self.verticalLayout_2.addLayout(self.fcp_header_layout)
         spacerItem9 = QtWidgets.QSpacerItem(
             20,
             40,
@@ -652,10 +676,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
 
-        self.load_page_content_layout = QtWidgets.QGridLayout()
-        self.load_page_content_layout.setContentsMargins(5, 5, 5, 5)
-        self.load_page_content_layout.setHorizontalSpacing(6)
-        self.load_page_content_layout.setObjectName("load_page_content_layout")
+        self.fcp_content_layout = QtWidgets.QGridLayout()
+        self.fcp_content_layout.setContentsMargins(5, 5, 5, 5)
+        self.fcp_content_layout.setHorizontalSpacing(6)
+        self.fcp_content_layout.setObjectName("fcp_content_layout")
 
         filament_buttons = [
             (
@@ -714,7 +738,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
 
         for obj_name, text, pixmap_path, row, col, _filament_type in filament_buttons:
-            btn = BlocksCustomButton(parent=self.load_page)
+            btn = BlocksCustomButton(parent=self.fcp)
             btn.setMinimumSize(QtCore.QSize(200, 80))
             btn.setMaximumSize(QtCore.QSize(200, 80))
             btn.setFont(font)
@@ -725,10 +749,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             )
             btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap_path))
             btn.setObjectName(obj_name)
-            self.load_page_content_layout.addWidget(btn, row, col, 1, 1)
+            self.fcp_content_layout.addWidget(btn, row, col, 1, 1)
             self.filament_buttons_list.append((btn, _filament_type))
 
-        self.verticalLayout_2.addLayout(self.load_page_content_layout)
+        self.verticalLayout_2.addLayout(self.fcp_content_layout)
 
         spacerItem20 = QtWidgets.QSpacerItem(
             20,
@@ -737,12 +761,13 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
         self.verticalLayout_2.addItem(spacerItem20)
-        self.addWidget(self.load_page)
+        self.addWidget(self.fcp)
 
         self.setCurrentIndex(0)
 
-        self.filament_page_header_title.setText("Filament Control")
-        self.filament_page_load_btn.setText("Load")
-        self.filament_page_unload_btn.setText("Unload")
-        self.load_header_page_title.setText("Load Filament")
-        self.load_header_back_button.setText("Back")
+        self.Basic_fp_header_title.setText("Filament Control")
+        self.Basic_fp_load_btn.setText("Load")
+        self.Basic_fp_unload_btn.setText("Unload")
+        self.Basic_fp_check_btn.setText("Check gate")
+        self.fcp_header_title.setText("Load Filament")
+        self.fcp_back_button.setText("Back")
