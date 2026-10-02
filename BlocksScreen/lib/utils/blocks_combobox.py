@@ -71,25 +71,32 @@ class _TouchRowDelegate(QtWidgets.QStyledItemDelegate):
 class BlocksComboBox(QtWidgets.QComboBox):
     """Themed QComboBox with touch-sized rows."""
 
-    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
+    def __init__(
+        self, parent: QtWidgets.QWidget | None = None, *, open_up: bool = False
+    ) -> None:
         super().__init__(parent)
+        self._open_up = open_up
         # ::item stylesheet rules need a real QListView.
         self.setView(QtWidgets.QListView(self))
         self.setStyleSheet(_STYLE)
         self.setItemDelegate(_TouchRowDelegate(self))
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        self.setMinimumSize(QtCore.QSize(200, 50))
+        self.setMinimumSize(QtCore.QSize(150, 50))
         self.setMaximumHeight(50)
 
     def showPopup(self) -> None:
-        """Open the list below the button, never above."""
+        """Open the list below the button, or above it"""
         super().showPopup()
         popup = self.findChild(QtWidgets.QFrame)
         if popup is not None:
             # Opaque square fill: no white corners without a compositor.
             popup.setStyleSheet("background: #10242E;")
-            below = self.mapToGlobal(self.rect().bottomLeft()).y()
-            popup.move(popup.x(), below)
+            if self._open_up:
+                top = self.mapToGlobal(self.rect().topLeft()).y()
+                popup.move(popup.x(), top - popup.height())
+            else:
+                below = self.mapToGlobal(self.rect().bottomLeft()).y()
+                popup.move(popup.x(), below)
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         """Paint with the current text centered."""
@@ -98,6 +105,8 @@ class BlocksComboBox(QtWidgets.QComboBox):
         opt = QtWidgets.QStyleOptionComboBox()
         self.initStyleOption(opt)
         text = opt.currentText
+        if self.currentIndex() < 0:
+            text = self.placeholderText()
         opt.currentText = ""
         painter.drawComplexControl(QtWidgets.QStyle.ComplexControl.CC_ComboBox, opt)
         rect = self.style().subControlRect(
@@ -114,4 +123,18 @@ class BlocksComboBox(QtWidgets.QComboBox):
         with QtCore.QSignalBlocker(self):
             self.clear()
             self.addItems(options)
-            self.setCurrentIndex(max(self.findText(current), 0))
+            index = self.findText(current)
+            if index < 0 and not self.placeholderText():
+                index = 0
+            self.setCurrentIndex(index)
+
+    def select_option(self, text: str) -> bool:
+        """Select the option"""
+        if self.placeholderText() and text in ("", self.placeholderText()):
+            self.setCurrentIndex(-1)
+            return True
+        index = self.findText(text)
+        if index < 0:
+            return False
+        self.setCurrentIndex(index)
+        return True
