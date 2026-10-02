@@ -17,7 +17,6 @@ from updater.models import ComponentStatus
 
 _log = logging.getLogger(__name__)
 _DESCRIBE_SUFFIX = re.compile(r"-(\d+)-g[0-9a-f]+$")
-_SAFE_STATES = frozenset({"standby", "complete", "cancelled", "error", ""})
 
 
 def _compact_version(describe: str) -> str:
@@ -43,9 +42,6 @@ class UpdatePage(QtWidgets.QWidget):
     )
     disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="disable-popups"
-    )
-    printing_changed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        bool, name="printing-changed"
     )
 
     _STEP_LABELS: typing.ClassVar[MappingProxyType[int, str]] = MappingProxyType(
@@ -116,10 +112,9 @@ class UpdatePage(QtWidgets.QWidget):
         self._status_debounce.start(500)
 
     def set_printing_state(self, key: str, value: str) -> None:
-        """Cache the printer state so updates, ours and the daemon's, wait out a job."""
+        """Cache the printer state so update safety checks can block mid-print updates."""
         if key == "state":
             self._printing_state = value
-            self.printing_changed.emit(value not in _SAFE_STATES)
 
     def set_heater_target(self, name: str, prop: str, value: float) -> None:
         """Track heater targets; update is blocked if any heater is above 40 °C."""
@@ -436,6 +431,7 @@ class UpdatePage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="on-update-all-clicked")
     def on_update_all_clicked(self) -> None:
         """Guard against updates during a print or with hot heaters; otherwise show confirm dialog."""
+        _SAFE_STATES = {"standby", "complete", "cancelled", "error", ""}
         if self._printing_state not in _SAFE_STATES:
             self._show_toast(f"Printer {self._printing_state} - update deferred")
             return

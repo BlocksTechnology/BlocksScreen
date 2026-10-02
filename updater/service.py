@@ -50,6 +50,7 @@ from updater.executor import (
     git_untracked_paths,
     is_git_repo,
     is_service_active,
+    klipper_printing,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -259,7 +260,6 @@ class UpdateService:
         self._restart_pending_until = 0.0
         self._reconciled = False
         self._offline_provision_tries = 0
-        self.printing = False
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -282,13 +282,13 @@ class UpdateService:
         """Return (name, kind) pairs for all registered components."""
         return [(c.name, c.kind) for c in self._components]
 
-    async def _refresh_apt_lists(self, force: bool) -> None:
+    async def _refresh_apt_lists(self, force: bool, printing: bool) -> None:
         """Run apt-get update: the upgradable count reads local lists and is stale without it."""
         now = time.monotonic()
         ttl = _APT_LIST_FORCE_TTL_S if force else _APT_LIST_TTL_S
         # A held lock = an update is running, and it refreshes the lists itself.
         if (
-            self.printing
+            printing
             or (now - self._apt_list_time) < ttl
             or self._apt_backoff.cooling_down()
             or self._apt_lock.locked()
@@ -308,11 +308,12 @@ class UpdateService:
     async def check_status(self, force: bool = False) -> dict[str, ComponentStatus]:
         """Concurrently check status of all components."""
         results: dict[str, ComponentStatus] = {}
+        printing = await klipper_printing()
 
         async def _check_one(c: ComponentConfig) -> None:
             """Fetch and record one component's status into the results dict."""
             if c.kind == "apt":
-                await self._refresh_apt_lists(force)
+                await self._refresh_apt_lists(force, printing)
                 status = await check_apt_status(
                     cache_ttl_seconds=0 if force else 86_400, exclude=c.apt_exclude
                 )
@@ -325,7 +326,7 @@ class UpdateService:
                 async with self._git_lock:
                     last = self._fetch_times.get(c.name, float("-inf"))
                     breaker = self._fetch_backoff.get(c.name)
-                    skip_fetch = self.printing or (
+                    skip_fetch = printing or (
                         not force
                         and (
                             (now - last) < self._FETCH_TTL
@@ -533,7 +534,7 @@ class UpdateService:
         self, on_busy: Callable[[bool], None] | None = None
     ) -> bool:
         """Clone absent install_if_missing components; True to retry (lock, offline, printing)."""
-        if self.printing and self._missing_provisions():
+        if self._missing_provisions() and await klipper_printing():
             self._log.info("provision_missing: printer is printing, deferring")
             return True
         missing, retry = await self._unattended_provisions()
@@ -1382,14 +1383,14 @@ class UpdateService:
 
     async def _forward_heal_once(self) -> bool:
         """One forward-heal pass: attempt the new origin/main tip if we are in fallback."""
-        if self.printing:
-            return False
         state = await asyncio.to_thread(self._read_state)
         comp_state = state.get(_UI_COMPONENT, {})
         if not isinstance(comp_state, dict):
             return False
         raw = comp_state.get("fast_attempt", 0)
         if not (isinstance(raw, int) and not isinstance(raw, bool)) or raw < 2:
+            return False
+        if await klipper_printing():
             return False
         target = await self._forward_heal_target(comp_state)
         if target is None:
@@ -2438,7 +2439,7 @@ class UpdateService:
         if self._apt_backoff.cooling_down():
             self._log.debug("apt cooling down; skipping background upgrade")
             return
-        if self.printing:
+        if await klipper_printing():
             self._log.info("background apt upgrade skipped: printer is printing")
             return
         self._log.info("background apt upgrade: starting")

@@ -11,8 +11,12 @@ from updater.models import ComponentStatus
 def page(qapp):
     """UpdatePage instance with all heavy UI deps mocked."""
     patches = [
-        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.LoadingOverlayWidget"),
-        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BlocksCustomButton"),
+        patch(
+            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.LoadingOverlayWidget"
+        ),
+        patch(
+            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BlocksCustomButton"
+        ),
         patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.IconButton"),
     ]
     for p in patches:
@@ -286,16 +290,6 @@ class TestHandleStatusReady:
             page.handle_status_ready(_make_payload())
 
 
-class TestPrintingChanged:
-    def test_job_state_reaches_the_daemon(self, page, qtbot):
-        with qtbot.waitSignal(page.printing_changed, timeout=200) as blocker:
-            page.set_printing_state("state", "paused")
-        assert blocker.args == [True]
-        with qtbot.waitSignal(page.printing_changed, timeout=200) as blocker:
-            page.set_printing_state("state", "complete")
-        assert blocker.args == [False]
-
-
 class TestHandleBusyChanged:
     def test_true_shows_loading(self, page):
         page.show_loading = MagicMock()
@@ -447,13 +441,13 @@ class TestHandleStepComplete:
     def test_emits_call_load_panel_with_step_message(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("klipper", 1, 4)
-        assert blocker.args == [True, "klipper: fetching",False]
+        assert blocker.args == [True, "klipper: fetching", False]
         page._progress_label.setText.assert_called_with("Step 1/4")
 
     def test_unknown_steps_falls_back_to_working(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("moonraker", 99, 4)
-        assert blocker.args == [True, "moonraker: working",False]
+        assert blocker.args == [True, "moonraker: working", False]
         page._progress_label.setText.assert_called_with("Step 99/4")
 
 
@@ -532,7 +526,9 @@ class TestBadStatusPayload:
 
 class TestConfirmPopupCleanup:
     def test_second_confirm_deletes_previous_popup(self, page):
-        with patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BasePopup") as popup_cls:
+        with patch(
+            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BasePopup"
+        ) as popup_cls:
             first = MagicMock()
             second = MagicMock()
             popup_cls.side_effect = [first, second]

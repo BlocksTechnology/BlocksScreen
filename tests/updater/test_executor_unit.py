@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shutil
 import time
@@ -41,6 +42,7 @@ from updater.executor import (
     git_prune_extra_remotes,
     git_untracked_paths,
     enable_service,
+    klipper_printing,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -1443,3 +1445,68 @@ class TestWaitForHttpReady:
         ):
             assert await wait_for_http_ready("http://127.0.0.1:7912/x") is True
         assert probe.call_count == 2
+
+
+class TestKlipperPrinting:
+    @staticmethod
+    async def _serve(sock: Path, reply: bytes) -> asyncio.Server:
+        async def handle(reader, writer):
+            await reader.readuntil(b"\x03")
+            writer.write(reply)
+            await writer.drain()
+            await reader.read()
+            writer.close()
+
+        return await asyncio.start_unix_server(handle, sock)
+
+    @staticmethod
+    def _state(state: str) -> bytes:
+        status = {"print_stats": {"state": state}}
+        body = {"id": 1, "result": {"eventtime": 1.0, "status": status}}
+        return json.dumps(body).encode() + b"\x03"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("state", "active"),
+        [
+            ("printing", True),
+            ("paused", True),
+            ("standby", False),
+            ("complete", False),
+            ("cancelled", False),
+            ("error", False),
+        ],
+    )
+    async def test_state(self, tmp_path, state, active):
+        sock = tmp_path / "k.sock"
+        async with await self._serve(sock, self._state(state)):
+            assert await klipper_printing(sock) is active
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "reply",
+        [
+            b"garbage\x03",
+            b'{"id": 1, "error": {"message": "Klippy not ready"}}\x03',
+            b"[]\x03",
+            b'{"id": 1',
+        ],
+    )
+    async def test_bad_reply_is_idle(self, tmp_path, reply):
+        sock = tmp_path / "k.sock"
+        async with await self._serve(sock, reply):
+            assert await klipper_printing(sock) is False
+
+    @pytest.mark.asyncio
+    async def test_missing_socket_is_idle(self, tmp_path):
+        assert await klipper_printing(tmp_path / "absent.sock") is False
+
+    @pytest.mark.asyncio
+    async def test_unresponsive_klipper_times_out_idle(self, tmp_path):
+        async def handle(reader, writer):
+            await reader.read()
+            writer.close()
+
+        sock = tmp_path / "k.sock"
+        async with await asyncio.start_unix_server(handle, sock):
+            assert await klipper_printing(sock, timeout=0.05) is False

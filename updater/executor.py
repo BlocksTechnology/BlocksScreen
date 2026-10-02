@@ -34,6 +34,7 @@ SYSTEMCTL = "/usr/bin/systemctl"
 DPKG = "/usr/bin/dpkg"
 # Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
 APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
+KLIPPY_SOCK = Path("~/printer_data/comms/klippy.sock").expanduser()
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_SHA_RE = re.compile(r"^[a-f0-9]{7,40}$")
@@ -1041,6 +1042,38 @@ def _http_probe(url: str) -> bool:
         return False
     finally:
         conn.close()
+
+
+async def klipper_printing(sock: Path = KLIPPY_SOCK, timeout: float = 2.0) -> bool:
+    """True while Klipper reports a printing or paused job; unreachable means idle."""
+    req = {
+        "id": 1,
+        "method": "objects/query",
+        "params": {"objects": {"print_stats": ["state"]}},
+    }
+    try:
+        async with asyncio.timeout(timeout):
+            reader, writer = await asyncio.open_unix_connection(sock)
+            try:
+                writer.write(json.dumps(req).encode() + b"\x03")
+                await writer.drain()
+                reply = json.loads((await reader.readuntil(b"\x03"))[:-1])
+            finally:
+                writer.close()
+                await writer.wait_closed()
+        state = reply["result"]["status"]["print_stats"]["state"]
+    except (
+        OSError,
+        TimeoutError,
+        EOFError,
+        ValueError,
+        LookupError,
+        TypeError,
+        asyncio.LimitOverrunError,
+    ) as exc:
+        logger.debug("klipper print state unavailable: %r", exc)
+        return False
+    return state in ("printing", "paused")
 
 
 async def wait_for_http_ready(

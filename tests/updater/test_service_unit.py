@@ -147,7 +147,9 @@ class TestCheckStatus:
         assert skip_fetch is False, "force=True must not skip the fetch"
 
     @pytest.mark.asyncio
-    async def test_printing_skips_fetch_even_when_forced(self, tmp_path: Path):
+    async def test_printing_skips_fetch_even_when_forced(
+        self, tmp_path: Path, printing
+    ):
         fake_path = tmp_path / "klipper"
         fake_path.mkdir()
         component = ComponentConfig(name="klipper", kind="git", path=fake_path)
@@ -159,7 +161,7 @@ class TestCheckStatus:
             patch("updater.service.check_git_status", return_value=fake) as mock_check,
         ):
             svc = UpdateService()
-            svc.printing = True
+            printing.return_value = True
             await svc.check_status(force=True)
         *_, skip_fetch = mock_check.call_args.args
         assert skip_fetch is True
@@ -167,9 +169,7 @@ class TestCheckStatus:
     @pytest.mark.asyncio
     async def test_printing_skips_apt_list_refresh(self):
         with patch("updater.service.apt_update", AsyncMock()) as mock_update:
-            svc = UpdateService()
-            svc.printing = True
-            await svc._refresh_apt_lists(force=True)
+            await UpdateService()._refresh_apt_lists(force=True, printing=True)
         mock_update.assert_not_called()
 
     @pytest.mark.asyncio
@@ -369,7 +369,7 @@ class TestGitUpdate:
             call("klipper", 2, 4),
             call("klipper", 3, 4),
             call("klipper", 4, 4),
-            call("BlocksScreen", 4, 4),  # restart_ui: UI holds its overlay
+            call("BlocksScreen", 4, 4),
         ]
 
     @pytest.mark.asyncio
@@ -2074,24 +2074,27 @@ class TestProvisionMissing:
         )
 
     @pytest.mark.asyncio
-    async def test_printing_defers_without_probing(self, tmp_path, reachable):
+    async def test_printing_defers_without_probing(self, tmp_path, reachable, printing):
         on_busy = MagicMock()
         with patch.object(UpdateService, "_provision_component") as mock_prov:
             svc = UpdateService()
             svc._components = [self._comp(tmp_path)]
-            svc.printing = True
+            printing.return_value = True
             assert await svc.provision_missing(on_busy) is True
         reachable.assert_not_called()
         mock_prov.assert_not_called()
         on_busy.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_printing_with_nothing_missing_stops_polling(self, tmp_path):
+    async def test_printing_with_nothing_missing_stops_polling(
+        self, tmp_path, printing
+    ):
         (tmp_path / "Spoolman").mkdir()
         svc = UpdateService()
         svc._components = [self._comp(tmp_path)]
-        svc.printing = True
+        printing.return_value = True
         assert await svc.provision_missing() is False
+        printing.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_unreachable_remote_skips_without_busy(self, tmp_path, reachable):
@@ -3172,9 +3175,9 @@ class TestBackgroundAptUpgrade:
         mock_up.assert_awaited_once_with(exclude=("^linux-image", "^firmware-"))
 
     @pytest.mark.asyncio
-    async def test_printing_skips_upgrade(self):
+    async def test_printing_skips_upgrade(self, printing):
         svc = UpdateService()
-        svc.printing = True
+        printing.return_value = True
         with patch("updater.service.apt_update", AsyncMock()) as mock_update:
             await svc.background_apt_upgrade()
         mock_update.assert_not_called()

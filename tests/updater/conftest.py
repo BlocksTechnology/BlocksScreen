@@ -6,7 +6,7 @@ withouth a real D-Bus session bus.
 
 import asyncio
 import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -27,14 +27,18 @@ def mock_sdbus():
     mock.DbusInterfaceCommonAsync = _FakeDbusBase
     mock.dbus_signal_async = lambda *a, **kw: lambda fn: fn
     mock.dbus_method_async = lambda *a, **kw: lambda fn: fn
-    mock.get_current_message.side_effect = LookupError
     with pytest.MonkeyPatch.context() as mp:
         for key in ("sdbus", "updater", "updater.dbus_service"):
             mp.delitem(sys.modules, key, raising=False)
         mp.setitem(sys.modules, "sdbus", mock)
-        mp.setitem(sys.modules, "sdbus.sd_bus_internals", mock.sd_bus_internals)
-        mp.setitem(sys.modules, "sdbus_async.dbus_daemon", MagicMock())
         yield mock
+
+
+@pytest.fixture(autouse=True)
+def printing():
+    """Klipper idle unless a test sets return_value; never dials a real klippy.sock."""
+    with patch("updater.service.klipper_printing", AsyncMock(return_value=False)) as m:
+        yield m
 
 
 @pytest.fixture
@@ -76,7 +80,6 @@ def svc():
     s._closing = False
     s._status_check_in_progress = False
     s._status_pending = False
-    s._printing_watch = None
     s.busy_changed = MagicMock()
     s.provisioning_changed = MagicMock()
     s.status_ready = MagicMock()

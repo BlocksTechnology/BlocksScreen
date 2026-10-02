@@ -300,9 +300,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.request_update.connect(self.updater_worker.trigger_update)
         self.update_page.request_status.connect(self.updater_worker.trigger_status)
         self.update_page.request_cancel.connect(self.updater_worker.trigger_cancel)
-        self.update_page.printing_changed.connect(
-            self.updater_worker.trigger_set_printing
-        )
         self.update_page.update_available.connect(self.on_update_available)
         self.update_page.call_load_panel.connect(self.show_loadscreen)
         self.update_page.disable_popups.connect(self.popup_toggle)

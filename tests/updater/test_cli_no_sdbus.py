@@ -6,6 +6,7 @@ import asyncio
 import builtins
 import fcntl
 import sys
+from unittest.mock import patch
 
 import pytest
 
@@ -19,11 +20,15 @@ def _no_sdbus(monkeypatch):
             raise ModuleNotFoundError("No module named 'sdbus'")
         return real_import(name, *args, **kwargs)
 
-    for mod in [m for m in sys.modules if m == "updater" or m.startswith("updater.")]:
-        monkeypatch.delitem(sys.modules, mod, raising=False)
-    monkeypatch.delitem(sys.modules, "sdbus", raising=False)
-    monkeypatch.setattr(builtins, "__import__", fake_import)
-    yield
+    # patch.dict also drops the copies re-imported here, which delitem would leave behind.
+    with patch.dict(sys.modules):
+        for mod in [
+            m for m in sys.modules if m == "updater" or m.startswith("updater.")
+        ]:
+            del sys.modules[mod]
+        sys.modules.pop("sdbus", None)
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        yield
 
 
 def test_cli_module_imports_without_sdbus(_no_sdbus):
