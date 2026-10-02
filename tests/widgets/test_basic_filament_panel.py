@@ -10,6 +10,7 @@ exercise, so these tests force it.
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from PyQt6 import QtWidgets, sip
@@ -54,6 +55,8 @@ for _name, _rel in (
 
 import pytest  # noqa: E402
 
+from devices.amu.models import FilamentPos  # noqa: E402
+
 from BlocksScreen.lib.panels.widgets.FilamentTab.basicFilamentPanel import (  # noqa: E402
     BasicFilamentPanel,
 )
@@ -97,3 +100,48 @@ def test_destroying_panel_is_clean(qapp, mock_printer, mock_cfg):
     panel.deleteLater()
     qapp.processEvents()
     # Reaching here means ~BasicFilamentPanel ran without a double-free.
+
+
+def _mmu_state(pos, action="Idle", color=""):
+    gate_info = SimpleNamespace(color=color, status=None)
+    return SimpleNamespace(
+        filament_pos=pos,
+        action=action,
+        current_gate_info=gate_info,
+    )
+
+
+@pytest.fixture
+def panel(qtbot, mock_printer, mock_cfg):
+    panel = BasicFilamentPanel(mock_printer, mock_cfg)
+    qtbot.addWidget(panel)
+    return panel
+
+
+def test_check_button_enabled_when_loaded(panel):
+    panel.on_mmu_state_changed(_mmu_state(FilamentPos.LOADED))
+    assert panel.Basic_fp_check_btn.isEnabled()
+    panel.on_print_stats_update("state", "printing")
+    assert not panel.Basic_fp_check_btn.isEnabled()
+
+
+def test_sensor_without_mmu_updates_position(panel):
+    panel.filament_sensor = "presence"
+    panel.on_filament_sensor_update("presence", "filament_detected", True)
+    assert panel._lbl_pos.text() == "Loaded"
+
+
+def test_position_not_editable_while_printing(panel):
+    panel.on_mmu_state_changed(_mmu_state(FilamentPos.LOADED))
+    assert not panel._lbl_pos._right.isHidden()
+    panel.on_print_stats_update("state", "printing")
+    assert panel._lbl_pos._right.isHidden()
+    panel.on_print_stats_update("state", "paused")
+    assert not panel._lbl_pos._right.isHidden()
+    panel.on_mmu_state_changed(_mmu_state(FilamentPos.LOADED, action="Loading"))
+    assert panel._lbl_pos._right.isHidden()
+
+
+def test_color_swatch_accepts_names(panel):
+    panel._apply_color_swatch("red")
+    assert panel._lbl_clr.text() == ""

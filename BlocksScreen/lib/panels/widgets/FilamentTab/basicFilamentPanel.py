@@ -131,6 +131,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if "state" in field:
             self.state = value
             self._refresh_check_btn()
+            self._refresh_pos_editable()
             if value in ("printing", "paused"):
                 try:
                     self.main_back_button.disconnect()
@@ -282,7 +283,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 btn.clicked.connect(partial(self.open_pre_gate_popup, _filament_type))
             self.Basic_fp_check_btn.show()
             self._lbl_clr.show()
-            self._lbl_pos.set_editable(True)
             self.mmu_configured = True
             self.Vlayout.setSpacing(10)
 
@@ -293,17 +293,19 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             self.filament_state = self.FilamentStates.UNLOADED
         else:
             self.filament_state = self.FilamentStates.UNKNOWN
-        if self._lbl_pos.select_option(self.filament_state.name.capitalize()):
-            self._pos_committed = self._lbl_pos.text()
+        self._refresh_pos_editable()
         gate_info = mmu_state.current_gate_info
         self._apply_color_swatch(gate_info.color if gate_info else "")
 
-    def _apply_color_swatch(self, hex_str: str) -> None:
-        hex_text = (hex_str or "").strip().lstrip("#")
+    def _apply_color_swatch(self, color_str: str) -> None:
+        text = (color_str or "").strip()
+        hex_text = text.lstrip("#")
         if len(hex_text) == 8:
             hex_text = hex_text[:6]
-        if len(hex_text) == 6:
-            color = QtGui.QColor(f"#{hex_text}")
+        color = QtGui.QColor(f"#{hex_text}")
+        if not color.isValid() and text:
+            color = QtGui.QColor(text)
+        if color.isValid():
             self._lbl_clr.set_right_text("")
             self._lbl_clr.set_right_stylesheet(
                 "min-width: 146px; min-height: 46px;"
@@ -347,6 +349,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self._filament_state = update
         self.Basic_fp_load_btn.setEnabled(update is not self.FilamentStates.LOADED)
         self.Basic_fp_unload_btn.setEnabled(update is not self.FilamentStates.UNLOADED)
+        if self._lbl_pos.select_option(update.name.capitalize()):
+            self._pos_committed = self._lbl_pos.text()
 
     def change_page(self, index: int) -> None:
         """Switch this stacked widget to the page at *index*."""
@@ -388,8 +392,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self._lbl_pos.select_option(self._pos_committed)
 
     def _refresh_check_btn(self) -> None:
-        self.Basic_fp_check_btn.setEnabled(
-            not self._in_print and self.filament_state is not self.FilamentStates.LOADED
+        self.Basic_fp_check_btn.setEnabled(not self._in_print)
+
+    def _refresh_pos_editable(self) -> None:
+        self._lbl_pos.set_editable(
+            self.mmu_configured and self.state != "printing" and not self._mmu_busy
         )
 
     def _setupInfoBox(self):
@@ -530,7 +537,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.HLayout.setObjectName("HLayout")
 
         self.HLayout.addWidget(
-            self._setupInfoBox(), QtCore.Qt.AlignmentFlag.AlignHCenter
+            self._setupInfoBox(), 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
 
         sizePolicy = QtWidgets.QSizePolicy(
@@ -552,7 +559,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.Vlayout = QtWidgets.QVBoxLayout(self.buttons_frame)
         self.Vlayout.setObjectName("Vlayout")
         self.Vlayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.Vlayout.setSpacing(10)
 
         self.Basic_fp_load_btn = BlocksCustomButton(parent=self.filament_control_page)
         self.Basic_fp_load_btn.setSizePolicy(sizePolicy)
@@ -640,7 +646,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.fcp_header_title.setFont(font)
         self.fcp_header_title.setStyleSheet("background: transparent; color: white;")
         self.fcp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.fcp_header_title.setObjectName("load_header_page_title")
+        self.fcp_header_title.setObjectName("fcp_header_title")
 
         self.fcp_header_layout.addWidget(self.fcp_header_title)
 
@@ -651,7 +657,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.fcp_back_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
         )
-        self.fcp_back_button.setObjectName("load_header_back_button")
+        self.fcp_back_button.setObjectName("fcp_back_button")
         self.fcp_header_layout.addWidget(self.fcp_back_button)
 
         self.verticalLayout_2.addLayout(self.fcp_header_layout)
