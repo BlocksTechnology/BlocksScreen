@@ -382,12 +382,17 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
 
         text_avail_width = max(target_width - left_reserved - right_reserved, 50)
 
-        single_line_width = fm.horizontalAdvance(item.text)
+        collapsed_h = int(item.height * 1.1)
+        lines = item.text.split("\n")
+        # paint() insets the row by 2px per side before fitting lines
+        max_lines = max(1, (collapsed_h - 4) // fm.lineSpacing())
 
-        item.needs_expansion = single_line_width > text_avail_width
+        item.needs_expansion = len(lines) > max_lines or any(
+            fm.horizontalAdvance(line) > text_avail_width for line in lines
+        )
 
         if not item.is_expanded:
-            return QtCore.QSize(target_width, int(item.height * 1.1))
+            return QtCore.QSize(target_width, collapsed_h)
 
         text_rect = fm.boundingRect(
             QtCore.QRect(0, 0, int(text_avail_width), 0),
@@ -421,7 +426,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if item.allow_expand and item.needs_expansion:
             item.right_icon = self._expand_arrow(item.is_expanded)
 
-        # Background Color
         pressed_color = QtGui.QColor("#1A8FBF")
         pressed_color.setAlpha(90 if item.selected else 20)
 
@@ -429,9 +433,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         painter.setBrush(pressed_color)
         painter.fillPath(path, pressed_color)
 
-        # Geometry Calc
-
-        # ICON SPACEEE
         ellipse_size = item.height * 0.8
         ellipse_margin = (item.height - ellipse_size) / 2
         ellipse_rect = QtCore.QRectF(
@@ -503,14 +504,14 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             - left_margin
         )
 
-        text = item.text.replace("\n", "")
-        # Logic: If not expanded, OR if expansion is not needed, draw single line
         if not item.is_expanded:
-            max_main_text_width = right_text_x - left_margin
-            text = metrics.elidedText(
-                text,
-                QtCore.Qt.TextElideMode.ElideRight,
-                int(max_main_text_width),
+            max_main_text_width = int(right_text_x - left_margin)
+            max_lines = max(1, int(text_rect.height()) // metrics.lineSpacing())
+            text = "\n".join(
+                metrics.elidedText(
+                    line, QtCore.Qt.TextElideMode.ElideRight, max_main_text_width
+                )
+                for line in item.text.split("\n")[:max_lines]
             )
             painter.drawText(
                 text_rect,
@@ -518,13 +519,12 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 text,
             )
         else:
-            # Expanded mode
             painter.drawText(
                 text_rect,
                 QtCore.Qt.AlignmentFlag.AlignLeft
                 | QtCore.Qt.AlignmentFlag.AlignVCenter
                 | QtCore.Qt.TextFlag.TextWordWrap,
-                text,
+                item.text,
             )
 
         if item.right_text:
