@@ -198,3 +198,18 @@ class TestExpandArrow:
         x, y = _arrow_center(option)
         assert _tap(delegate, model, 0, x, y, option) is True
         assert model.data(model.index(0), EntryListModel.ExpandRole) is False
+
+
+class TestNeedsExpansion:
+    def _size_hint(self, delegate, text):
+        item = ListItem(text=text, height=ROW_H)
+        model = EntryListModel([item])
+        delegate.sizeHint(_option(0), model.index(0))
+        return item
+
+    def test_short_single_line_fits(self, delegate):
+        assert self._size_hint(delegate, "A").needs_expansion is False
+
+    def test_more_lines_than_row_holds_needs_expansion(self, delegate):
+        text = "\n".join("line" for _ in range(20))
+        assert self._size_hint(delegate, text).needs_expansion is True
