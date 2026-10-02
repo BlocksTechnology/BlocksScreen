@@ -6,6 +6,8 @@ from pathlib import Path
 
 @dataclass
 class ComponentConfig:
+    """One components.yaml entry; restart_ui/restart_klipper add that restart."""
+
     name: str
     kind: str
     path: Path | None = None
@@ -17,15 +19,15 @@ class ComponentConfig:
     apt_exclude: tuple[str, ...] = ()
     url: str | None = None
     install_if_missing: bool = False
-    # Restart BlocksScreen on update even when the component's service differs.
     restart_ui: bool = False
-    # Restart klipper on update even when the component's own service differs.
     restart_klipper: bool = False
     health_url: str | None = None
 
 
 @dataclass(frozen=True)
 class ComponentStatus:
+    """Point-in-time update status of one component."""
+
     name: str
     kind: str = "git"
     commits_behind: int = 0
@@ -37,7 +39,5 @@ class ComponentStatus:
     error: str | None = None
     has_local_changes: bool = False
     needs_install: bool = False
-    # Checked-out branch differs from configured branch (switch needed).
     branch_mismatch: bool = False
-    # Actual checked-out branch, surfaced for debugging branch switches.
     current_branch: str = ""

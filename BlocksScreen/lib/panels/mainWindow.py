@@ -283,6 +283,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel.disable_popups.connect(self.popup_toggle)
         self.updater_worker.status_ready.connect(self.update_page.handle_status_ready)
         self.updater_worker.busy_changed.connect(self.update_page.handle_busy_changed)
+        self.updater_worker.provisioning_changed.connect(
+            self.update_page.handle_provisioning_changed
+        )
+        self.updater_worker.replay_busy()
         self.updater_worker.daemon_unavailable.connect(self.on_updater_unavailable)
         self.updater_worker.daemon_unavailable.connect(
             self.update_page.handle_daemon_unavailable

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 UPDATER_SERVICE = "BlocksScreen-updater.service"
 
-# Hook budget: a deps-heavy hook (Spoolman uv sync) runs minutes; timeout = abort.
+# Spoolman's uv sync runs for minutes; a timeout aborts the hook.
 HOOK_TIMEOUT = 600.0
 
 GIT = "/usr/bin/git"
@@ -34,6 +34,7 @@ SYSTEMCTL = "/usr/bin/systemctl"
 DPKG = "/usr/bin/dpkg"
 # Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
 APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
+KLIPPY_SOCK = Path("~/printer_data/comms/klippy.sock").expanduser()
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_SHA_RE = re.compile(r"^[a-f0-9]{7,40}$")
@@ -76,12 +77,11 @@ def _kill_proc_group(proc, sig):
 
 
 async def _reap(proc, sig: int, grace: float) -> bool:
-    """Signal the group and drain within grace; True if the process is gone."""
+    """Signal the group, then drain (wait() hangs on a paused pipe); True if gone."""
     if proc.returncode is None:
         _kill_proc_group(proc, sig)
     if proc.stdin is not None and not proc.stdin.is_closing():
-        proc.stdin.close()  # retires the cancelled feed's drain future, else it logs BrokenPipeError
-    # Must drain not wait(): a cancelled communicate() leaves the reader paused above its 128KB buffer, so the pipe never sees EOF and wait() never wakes.
+        proc.stdin.close()  # else the cancelled feed's drain logs BrokenPipeError
     try:
         await asyncio.wait_for(proc.communicate(), timeout=grace)
     except TimeoutError:
@@ -90,22 +90,20 @@ async def _reap(proc, sig: int, grace: float) -> bool:
 
 
 def _make_clean_env() -> dict[str, str]:
-    """Build a minimal sanitized environment for updater subprocesses."""
+    """Build a minimal env without session bus/XDG vars or unsafe SUDO_ vars."""
     env: dict[str, str] = {}
     for key in (
         "PATH",
         "HOME",
         "USER",
-        # SEC: session bus + XDG runtime vars excluded; hooks must not use them.
         "TMPDIR",
     ):
         val = os.environ.get(key)
         if val is not None:
             env[key] = val
     env["GIT_TERMINAL_PROMPT"] = "0"
-    # git_fetch's broken-ref self-heal and the apt parser match English messages
+    # git/apt error parsing matches English text.
     env["LC_ALL"] = "C"
-    # SEC: only copy safe SUDO_ vars; reject SUDO_ASKPASS and others
     safe_sudo = {"SUDO_USER", "SUDO_UID", "SUDO_GID"}
     for key, val in os.environ.items():
         if key in safe_sudo:
@@ -265,7 +263,6 @@ async def _commits_behind_or_error(
     commits_behind = await git_commits_behind(path, remote_ref)
     if commits_behind != -1:
         return commits_behind, None
-    # a configured branch whose origin ref is gone is a config error, not transient
     if branch and not await git_ref_hash(path, remote_ref):
         return -1, ComponentStatus(
             name=name,
@@ -297,7 +294,6 @@ async def check_git_status(
         remote_ref = f"origin/{branch}"
     else:
         remote_ref = f"origin/{current_branch}" if current_branch else "origin/HEAD"
-    # Configured branch != checked-out branch: needs an update to switch.
     branch_mismatch = bool(branch) and current_branch != branch
     commits_behind, err = await _commits_behind_or_error(
         path, name, branch, version, remote_ref, current_hash, current_branch
@@ -379,7 +375,7 @@ async def git_prune_extra_remotes(path: Path) -> None:
         return
     extras = [r for r in output.splitlines() if r and r != "origin"]
     if not extras:
-        return  # No extra remotes to remove
+        return
     for remote in extras:
         ok, err = await _run([GIT, "remote", "remove", remote], cwd=path, timeout=10.0)
         if ok:
@@ -457,6 +453,14 @@ async def git_clone(
     return await _run(cmd, timeout=300.0)
 
 
+async def git_remote_reachable(url: str, timeout: float = 15.0) -> bool:
+    """True if the https remote answers ls-remote in time (cheap offline probe)."""
+    if not _GIT_URL_RE.match(url):
+        return False
+    ok, _ = await _run([GIT, "ls-remote", url, "HEAD"], timeout=timeout)
+    return ok
+
+
 async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[bool, str]:
     """Hard-reset repo at path directly to prev_hash (no fetch)."""
     if not path:
@@ -488,7 +492,6 @@ _GIT_CORRUPT_SIGNATURES = (
 
 # Quarantine dir inside .git/objects so it never appears as untracked.
 _QUARANTINE_DIRNAME = "objects-corrupt"
-# fsck names corrupt objects by path (.git/objects/ab/<38hex>) or 40-hex SHA.
 _GIT_OBJ_PATH_RE = re.compile(r"objects/([0-9a-f]{2})/([0-9a-f]{38})")
 _GIT_OBJ_SHA_RE = re.compile(r"\b([0-9a-f]{40})\b")
 
@@ -512,7 +515,7 @@ def _prune_empty_loose_objects(objects: Path) -> int:
     removed = 0
     for sub in objects.iterdir():
         if len(sub.name) != 2 or not sub.is_dir():
-            continue  # loose objects live in 2-hex-char subdirs only
+            continue
         for obj in sub.iterdir():
             try:
                 if obj.is_file() and obj.stat().st_size == 0:
@@ -531,7 +534,7 @@ async def _quarantine_corrupt_objects(path: Path) -> int:
         timeout=120.0,
     )
     if ok:
-        return 0  # fsck --full clean: corruption is elsewhere (e.g. a packfile)
+        return 0
     objects = path / ".git" / "objects"
     quarantine = objects / _QUARANTINE_DIRNAME
     candidates: set[Path] = set()
@@ -548,7 +551,7 @@ async def _quarantine_corrupt_objects(path: Path) -> int:
     moved = 0
     for obj in candidates:
         if not obj.is_file():
-            continue  # e.g. a "missing blob" object that does not exist on disk
+            continue
         try:
             dest = quarantine / obj.parent.name
             dest.mkdir(parents=True, exist_ok=True)
@@ -719,8 +722,8 @@ async def git_default_branch(path: Path | None) -> str:
 
 
 async def git_describe(path: Path, ref: str | None = None) -> str:
-    """Return the nearest tag for ref (or HEAD), or empty string."""
-    cmd = [GIT, "describe", "--tags", "--abbrev=0"]
+    """Return `tag-N-gHASH` (or a bare hash without tags) for ref or HEAD; empty on error."""
+    cmd = [GIT, "describe", "--tags", "--always"]
     if ref:
         cmd.append(ref)
     ok, output = await _run(cmd, cwd=path, timeout=10.0)
@@ -743,9 +746,8 @@ async def git_checkout(
     if current_branch == branch:
         return (True, "already on branch")
 
-    # force: overwrite untracked collisions (e.g. build artifacts) that block a switch.
     cmd = [GIT, "checkout", "-f", branch] if force else [GIT, "checkout", branch]
-    # Generous: a big checkout on slow SD can pass 10s; SIGTERM = half-written tree.
+    # A timeout SIGTERM half-writes the tree: be generous on slow SD.
     return await _run(cmd, cwd=path, timeout=60.0)
 
 
@@ -833,10 +835,9 @@ async def check_apt_status(
 
 
 def _apt_env() -> dict[str, str]:
-    """Return the apt subprocess env: noninteractive frontend, needrestart disabled."""
+    """Return the apt env: noninteractive, no needrestart prompt (it hangs upgrades)."""
     env = _make_clean_env()
     env["DEBIAN_FRONTEND"] = "noninteractive"
-    # needrestart can otherwise open an interactive prompt mid-upgrade and hang.
     env["NEEDRESTART_MODE"] = "a"
     return env
 
@@ -920,7 +921,7 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
 def classify_apt_error(err: str) -> str:
     """Classify an apt failure: 'permanent' won't clear by retrying, 'transient' might."""
     lowered = err.lower()
-    # A missing apt helper self-heals once bootstrap installs it: retry, never a 1h cooldown.
+    # Missing helper: bootstrap installs it, so retry instead of a 1h cooldown.
     if str(APT_HELPER).lower() in lowered and (
         "command not found" in lowered or "no such file" in lowered
     ):
@@ -966,14 +967,16 @@ async def run_hook(
     prev_hash: str,
     timeout: float = 60.0,
 ) -> tuple[bool, str]:
-    """Run the per-component update hook if it exists."""
-    hook = (_HOOKS_DIR / f"{name}.sh").resolve()  # SEC: resolve symlinks
+    """Run the component's update hook if present, refusing paths outside hooks/."""
+    hook = (_HOOKS_DIR / f"{name}.sh").resolve()
     try:
-        hook.relative_to(_HOOKS_DIR.resolve())  # SEC: prevent path traversal
+        hook.relative_to(_HOOKS_DIR.resolve())
     except ValueError:
         return (False, "hook path escapes hooks directory")
     if not hook.exists():
         return (True, "no hook")
+    if not os.access(hook, os.X_OK):
+        return (False, "hook not executable")
     env = _make_clean_env()
     env.update(
         {
@@ -993,6 +996,13 @@ async def enable_service(name: str | None) -> tuple[bool, str]:
     if not _SERVICE_RE.match(name):
         return (False, f"service name {name!r} is invalid")
     return await _run([SUDO, SYSTEMCTL, "enable", name], timeout=15.0)
+
+
+async def is_service_active(name: str) -> bool:
+    """One-shot systemctl is-active probe."""
+    if not _SERVICE_RE.match(name):
+        return False
+    return (await _run([SYSTEMCTL, "is-active", name], timeout=10.0))[0]
 
 
 async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:
@@ -1034,13 +1044,50 @@ def _http_probe(url: str) -> bool:
         conn.close()
 
 
-async def wait_for_http_ready(url: str, timeout: float = 120.0) -> bool:
-    """Poll a component's loopback health URL until it returns 2xx or timeout."""
+async def klipper_printing(sock: Path = KLIPPY_SOCK, timeout: float = 2.0) -> bool:
+    """True while Klipper reports a printing or paused job; unreachable means idle."""
+    req = {
+        "id": 1,
+        "method": "objects/query",
+        "params": {"objects": {"print_stats": ["state"]}},
+    }
+    try:
+        async with asyncio.timeout(timeout):
+            reader, writer = await asyncio.open_unix_connection(sock)
+            try:
+                writer.write(json.dumps(req).encode() + b"\x03")
+                await writer.drain()
+                reply = json.loads((await reader.readuntil(b"\x03"))[:-1])
+            finally:
+                writer.close()
+                await writer.wait_closed()
+        state = reply["result"]["status"]["print_stats"]["state"]
+    except (
+        OSError,
+        TimeoutError,
+        EOFError,
+        ValueError,
+        LookupError,
+        TypeError,
+        asyncio.LimitOverrunError,
+    ) as exc:
+        logger.debug("klipper print state unavailable: %r", exc)
+        return False
+    return state in ("printing", "paused")
+
+
+async def wait_for_http_ready(
+    url: str, timeout: float = 120.0, *, service: str | None = None
+) -> bool:
+    """Poll a health URL until 2xx or timeout; fail fast if `service` leaves active."""
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         if await asyncio.to_thread(_http_probe, url):
             logger.info("health check ok: %s", url)
             return True
+        if service and not await is_service_active(service):
+            logger.warning("service %r left active during health check", service)
+            return False
         if asyncio.get_running_loop().time() >= deadline:
             logger.warning("health check timed out after %.0fs: %s", timeout, url)
             return False
@@ -1070,13 +1117,22 @@ async def verify_updater_importable(component_path: Path | None) -> bool:
     return ok
 
 
+async def disable_service(name: str | None) -> tuple[bool, str]:
+    """Stop and disable a systemd service (sudoers allows only Spoolman.service)."""
+    if name is None:
+        return (False, "service name is None")
+    if not _SERVICE_RE.match(name):
+        return (False, f"service name {name!r} is invalid")
+    return await _run([SUDO, SYSTEMCTL, "disable", "--now", name], timeout=30.0)
+
+
 async def restart_service(name: str | None) -> tuple[bool, str]:
     """Restart a systemd service, recovering from a start-limit hit."""
     if name is None:
         return (False, "service name is None")
     if not _SERVICE_RE.match(name):
         return (False, f"service name {name!r} is invalid")
-    # 120s timeout: Type=notify unit READY wait (up to 90s default TimeoutStartSec) plus margin for slow cold UI start.
+    # Type=notify READY wait (90s TimeoutStartSec default) plus slow-start margin.
     ok, err = await _run([SUDO, SYSTEMCTL, "restart", name], timeout=120.0)
     if ok:
         return (True, "")

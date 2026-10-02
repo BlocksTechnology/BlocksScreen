@@ -21,7 +21,7 @@ _HEALTH_URL_RE = re.compile(
 _SERVICE_BANNED = set("/\\;&|$`") | {" ", "\t"}
 OVERRIDE_PATH = Path("~/printer_data/config/blockscreen_updater.yaml").expanduser()
 
-# Unioned into EVERY apt component: a kernel/firmware bump is unrecoverable on a 1-partition no-SSH Pi.
+# Unioned into every apt component: a kernel/firmware bump bricks a no-SSH Pi.
 _KERNEL_FIRMWARE_EXCLUDES: tuple[str, ...] = (
     "^linux-image",
     "^linux-headers",
@@ -53,7 +53,6 @@ def _parse_git_branch(name: str, raw_branch: object) -> tuple[str | None, bool]:
     if raw_branch is None:
         return None, True
     branch = str(raw_branch)
-    # Strip a stray remote prefix: `origin/x` would fetch `origin/origin/x`.
     if branch.startswith("origin/"):
         logger.warning(
             "Component %r branch %r has an 'origin/' prefix - stripping it",
@@ -92,7 +91,6 @@ def _parse_health_url(name: str, url: object) -> str | None:
 def _parse_reset_mode(name: str, reset_mode: object) -> str:
     """Return 'hard'/'soft'; unknown values fall back to 'hard' (fleet default)."""
     if reset_mode not in ("hard", "soft"):
-        # An unknown value must not silently take the soft path (fleet default is hard).
         logger.warning(
             "Component %r has invalid reset_mode %r - using 'hard'",
             name,
@@ -169,7 +167,6 @@ def _validate_apt_component(name: str, data: dict) -> ComponentConfig:
     apt_exclude: tuple[str, ...] = ()
     if isinstance(raw_exclude, list):
         apt_exclude = tuple(str(p) for p in raw_exclude if isinstance(p, str))
-    # Kernel/firmware guard is non-negotiable: prepend it, drop any duplicates.
     apt_exclude = _KERNEL_FIRMWARE_EXCLUDES + tuple(
         p for p in apt_exclude if p not in _KERNEL_FIRMWARE_EXCLUDES
     )
@@ -290,7 +287,6 @@ def _build_configs(raw_components: list[dict]) -> list[ComponentConfig]:
         cfg = _validate_component(entry)
         if cfg is not None:
             configs.append(cfg)
-    # Auto-inject system apt component if none configured in YAML.
     if not any(c.kind == "apt" for c in configs):
         configs.insert(
             0,
@@ -309,7 +305,7 @@ def load_components() -> tuple[list[ComponentConfig], float]:
     try:
         import yaml  # noqa: PLC0415
 
-        # A truncated install (interrupted pip, power cut) still imports but exposes only dunders.
+        # A truncated install (power cut mid-pip) imports but exposes only dunders.
         _ = (yaml.safe_load, yaml.YAMLError)
     except (ImportError, AttributeError):
         logger.exception("PyYAML missing or broken; updater idle until venv repair")

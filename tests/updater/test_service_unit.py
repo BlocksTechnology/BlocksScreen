@@ -14,9 +14,11 @@ from updater.service import LoggingCallback, UpdateService
 
 @pytest.fixture(autouse=True)
 def _isolate_inflight(tmp_path_factory, monkeypatch):
-    """Keep the in-flight marker out of the real cache for every test in this file."""
+    """Keep the in-flight marker, state and history out of the real cache."""
     marker = tmp_path_factory.mktemp("inflight") / "updater_inflight.json"
     monkeypatch.setattr(updater_service, "_INFLIGHT_PATH", marker)
+    monkeypatch.setattr(updater_service, "_STATE_PATH", marker.with_name("state.json"))
+    monkeypatch.setattr(updater_service, "_HISTORY_PATH", marker.with_name("h.jsonl"))
 
 
 class TestLoggingCallback:
@@ -143,6 +145,32 @@ class TestCheckStatus:
             await svc.check_status(force=True)
         *_, skip_fetch = mock_check.call_args.args
         assert skip_fetch is False, "force=True must not skip the fetch"
+
+    @pytest.mark.asyncio
+    async def test_printing_skips_fetch_even_when_forced(
+        self, tmp_path: Path, printing
+    ):
+        fake_path = tmp_path / "klipper"
+        fake_path.mkdir()
+        component = ComponentConfig(name="klipper", kind="git", path=fake_path)
+        fake = ComponentStatus(name="klipper", commits_behind=0)
+        with (
+            patch(
+                "updater.service.load_components", return_value=([component], 3600.0)
+            ),
+            patch("updater.service.check_git_status", return_value=fake) as mock_check,
+        ):
+            svc = UpdateService()
+            printing.return_value = True
+            await svc.check_status(force=True)
+        *_, skip_fetch = mock_check.call_args.args
+        assert skip_fetch is True
+
+    @pytest.mark.asyncio
+    async def test_printing_skips_apt_list_refresh(self):
+        with patch("updater.service.apt_update", AsyncMock()) as mock_update:
+            await UpdateService()._refresh_apt_lists(force=True, printing=True)
+        mock_update.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ttl_suppresses_fetch_without_force(self, tmp_path: Path):
@@ -341,6 +369,7 @@ class TestGitUpdate:
             call("klipper", 2, 4),
             call("klipper", 3, 4),
             call("klipper", 4, 4),
+            call("BlocksScreen", 4, 4),
         ]
 
     @pytest.mark.asyncio
@@ -1753,10 +1782,14 @@ class TestProvisionMissingComponent:
                 return_value=(True, ""),
             ),
             patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.is_service_active", return_value=False),
             patch("updater.service.restart_service", return_value=(True, "")),
             patch(
                 "updater.service.wait_for_service_active", return_value=False
             ) as mock_wait,
+            patch(
+                "updater.service.disable_service", return_value=(True, "")
+            ) as mock_stop,
             patch("updater.service.shutil.rmtree") as mock_rmtree,
         ):
             svc = UpdateService(callback=cb)
@@ -1764,6 +1797,7 @@ class TestProvisionMissingComponent:
             ok = await svc.update_component("newcomp")
         assert ok is False
         mock_wait.assert_called_once()
+        mock_stop.assert_called_once_with("newcomp.service")
         mock_rmtree.assert_called_once()
         assert cb.on_error.call_args[0][1] == "restart"
 
@@ -1783,11 +1817,15 @@ class TestProvisionMissingComponent:
                 return_value=(True, ""),
             ),
             patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.is_service_active", return_value=False),
             patch("updater.service.restart_service", return_value=(True, "")),
             patch("updater.service.wait_for_service_active", return_value=True),
             patch(
                 "updater.service.wait_for_http_ready", return_value=False
             ) as mock_health,
+            patch(
+                "updater.service.disable_service", return_value=(True, "")
+            ) as mock_stop,
             patch("updater.service.shutil.rmtree") as mock_rmtree,
         ):
             svc = UpdateService(callback=cb)
@@ -1795,8 +1833,92 @@ class TestProvisionMissingComponent:
             ok = await svc.update_component("newcomp")
         assert ok is False
         mock_health.assert_called_once()
+        mock_stop.assert_called_once_with("newcomp.service")
         mock_rmtree.assert_called_once()
         assert cb.on_error.call_args[0][1] == "restart"
+
+    @pytest.mark.asyncio
+    async def test_failure_before_hook_leaves_service_alone(self, tmp_path):
+        """The hook never ran, so there is no unit of ours to disable."""
+        comp = self._comp(tmp_path, service="newcomp.service")
+        with (
+            patch("updater.service.git_clone", return_value=(False, "boom")),
+            patch("updater.service.disable_service") as mock_stop,
+            patch("updater.service.shutil.rmtree") as mock_rmtree,
+        ):
+            svc = UpdateService(callback=MagicMock())
+            svc._components = [comp]
+            assert await svc.update_component("newcomp") is False
+        mock_stop.assert_not_called()
+        mock_rmtree.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error_after_hook_disables_service(self, tmp_path):
+        comp = self._comp(tmp_path, service="newcomp.service")
+        cb = MagicMock()
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch(
+                "updater.service.UpdateService._provision_restart_service",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch(
+                "updater.service.disable_service", return_value=(True, "")
+            ) as mock_stop,
+            patch("updater.service.shutil.rmtree") as mock_rmtree,
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            assert await svc.update_component("newcomp") is False
+        mock_stop.assert_called_once_with("newcomp.service")
+        mock_rmtree.assert_called_once()
+        assert cb.on_error.call_args[0][1] == "unexpected_error"
+
+    @pytest.mark.asyncio
+    async def test_cancel_during_hook_disables_service(self, tmp_path):
+        """A daemon stop mid-hook must not leave the unit enabled on a deleted clone."""
+        comp = self._comp(tmp_path, service="newcomp.service")
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", side_effect=asyncio.CancelledError),
+            patch(
+                "updater.service.disable_service", return_value=(True, "")
+            ) as mock_stop,
+            patch("updater.service.shutil.rmtree") as mock_rmtree,
+        ):
+            svc = UpdateService(callback=MagicMock())
+            svc._components = [comp]
+            with pytest.raises(asyncio.CancelledError):
+                await svc.update_component("newcomp")
+        mock_stop.assert_called_once_with("newcomp.service")
+        mock_rmtree.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_failed_disable_is_logged(self, tmp_path):
+        """A missing sudoers rule must not leave an enabled unit on a deleted clone silently."""
+        comp = self._comp(tmp_path, service="newcomp.service")
+        with (
+            patch(
+                "updater.service.disable_service", return_value=(False, "sudo denied")
+            ),
+            patch("updater.service.shutil.rmtree") as mock_rmtree,
+        ):
+            svc = UpdateService(callback=MagicMock())
+            svc._log = MagicMock()
+            await svc._undo_provision(comp, hooked=True)
+        mock_rmtree.assert_called_once()
+        svc._log.error.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_provision_succeeds_when_health_ready(self, tmp_path):
@@ -1814,6 +1936,7 @@ class TestProvisionMissingComponent:
                 return_value=(True, ""),
             ),
             patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.is_service_active", return_value=False),
             patch("updater.service.restart_service", return_value=(True, "")),
             patch("updater.service.wait_for_service_active", return_value=True),
             patch(
@@ -1826,9 +1949,38 @@ class TestProvisionMissingComponent:
             svc._components = [comp]
             ok = await svc.update_component("newcomp")
         assert ok is True
-        mock_health.assert_called_once_with("http://127.0.0.1:7912/health")
+        mock_health.assert_called_once_with(
+            "http://127.0.0.1:7912/health", service="newcomp.service"
+        )
         mock_rmtree.assert_not_called()
         cb.on_component_done.assert_called_with("newcomp", True)
+
+    @pytest.mark.asyncio
+    async def test_provision_skips_restart_when_hook_started_service(self, tmp_path):
+        comp = self._comp(
+            tmp_path,
+            service="newcomp.service",
+            health_url="http://127.0.0.1:7912/health",
+        )
+        cb = MagicMock()
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.is_service_active", return_value=True),
+            patch("updater.service.restart_service") as mock_restart,
+            patch("updater.service.wait_for_http_ready", return_value=True),
+            patch("updater.service.enable_service", return_value=(True, "")),
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            ok = await svc.update_component("newcomp")
+        assert ok is True
+        mock_restart.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_check_status_reports_needs_install(self, tmp_path):
@@ -1904,6 +2056,13 @@ class TestProvisionMissingComponent:
 class TestProvisionMissing:
     """provision_missing clones absent opted-in components outside a user Update."""
 
+    @pytest.fixture(autouse=True)
+    def reachable(self):
+        with patch(
+            "updater.service.git_remote_reachable", AsyncMock(return_value=True)
+        ) as probe:
+            yield probe
+
     def _comp(self, tmp_path: Path, *, name: str = "Spoolman") -> ComponentConfig:
         return ComponentConfig(
             name=name,
@@ -1913,6 +2072,93 @@ class TestProvisionMissing:
             url=f"https://github.com/test/{name}",
             install_if_missing=True,
         )
+
+    @pytest.mark.asyncio
+    async def test_printing_defers_without_probing(self, tmp_path, reachable, printing):
+        on_busy = MagicMock()
+        with patch.object(UpdateService, "_provision_component") as mock_prov:
+            svc = UpdateService()
+            svc._components = [self._comp(tmp_path)]
+            printing.return_value = True
+            assert await svc.provision_missing(on_busy) is True
+        reachable.assert_not_called()
+        mock_prov.assert_not_called()
+        on_busy.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_printing_with_nothing_missing_stops_polling(
+        self, tmp_path, printing
+    ):
+        (tmp_path / "Spoolman").mkdir()
+        svc = UpdateService()
+        svc._components = [self._comp(tmp_path)]
+        printing.return_value = True
+        assert await svc.provision_missing() is False
+        printing.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unreachable_remote_skips_without_busy(self, tmp_path, reachable):
+        # Offline devices: no overlay, no clone; re-poll for late Wi-Fi, then stop.
+        reachable.return_value = False
+        on_busy = MagicMock()
+        tries = updater_service._OFFLINE_PROVISION_TRIES
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            svc._components = [self._comp(tmp_path)]
+            retries = [await svc.provision_missing(on_busy) for _ in range(tries)]
+        assert retries == [True] * (tries - 1) + [False]
+        mock_prov.assert_not_called()
+        on_busy.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_late_wifi_installs_on_retry(self, tmp_path, reachable):
+        reachable.side_effect = [False, True]
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            svc._components = [self._comp(tmp_path)]
+            assert await svc.provision_missing() is True
+            assert await svc.provision_missing() is False
+        mock_prov.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_failed_install_never_retried_unattended(self, tmp_path, reachable):
+        # A broken install must not re-run under the overlay on every boot.
+        on_busy = MagicMock()
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            svc._components = [self._comp(tmp_path)]
+            await svc._set_provision_failed("Spoolman", True)
+            assert await svc.provision_missing(on_busy) is False
+        mock_prov.assert_not_called()
+        on_busy.assert_not_called()
+        reachable.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_fail_sets_flag_and_success_clears_it(self, tmp_path):
+        comp = self._comp(tmp_path)
+        with patch("updater.service.git_clone", return_value=(False, "offline")):
+            svc = UpdateService()
+            assert await svc._provision_component(comp) is False
+        assert svc._read_state()["Spoolman"]["provision_failed"] is True
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch.object(
+                UpdateService, "_install_dependencies", return_value=(True, "")
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+        ):
+            assert await svc._provision_component(comp) is True
+        assert "provision_failed" not in svc._read_state()["Spoolman"]
 
     @pytest.mark.asyncio
     async def test_provisions_absent_opted_in_component(self, tmp_path):
@@ -1925,9 +2171,20 @@ class TestProvisionMissing:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            did = await svc.provision_missing()
-        assert did is True
+            deferred = await svc.provision_missing()
+        assert deferred is False
         mock_prov.assert_awaited_once_with(comp)
+
+    @pytest.mark.asyncio
+    async def test_failed_install_is_not_reported_as_deferred(self, tmp_path):
+        comp = self._comp(tmp_path)
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component", return_value=False),
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            assert await svc.provision_missing() is False
 
     @pytest.mark.asyncio
     async def test_present_component_is_never_provisioned(self, tmp_path):
@@ -1939,8 +2196,8 @@ class TestProvisionMissing:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            did = await svc.provision_missing()
-        assert did is False
+            deferred = await svc.provision_missing()
+        assert deferred is False
         mock_prov.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1953,8 +2210,8 @@ class TestProvisionMissing:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            did = await svc.provision_missing()
-        assert did is False
+            deferred = await svc.provision_missing()
+        assert deferred is False
         mock_prov.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1967,9 +2224,32 @@ class TestProvisionMissing:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            did = await svc.provision_missing()
-        assert did is False
+            deferred = await svc.provision_missing()
+        assert deferred is True
         mock_prov.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_runs_pending_boot_heal_before_cloning(self, tmp_path):
+        # Batches overwrite the in-flight marker, so the deferred heal must go first.
+        comp = self._comp(tmp_path)
+        order: list[str] = []
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(
+                UpdateService,
+                "_reconcile_locked",
+                side_effect=lambda: order.append("heal"),
+            ),
+            patch.object(
+                UpdateService,
+                "_provision_component",
+                side_effect=lambda c: order.append("clone") or True,
+            ),
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            await svc.provision_missing()
+        assert order == ["heal", "clone"]
 
 
 class TestReclone:
@@ -2199,9 +2479,43 @@ class TestReconcile:
         ):
             svc = UpdateService()
             svc._components = [comp]
-            await svc.reconcile()
+            assert await svc.reconcile() is False
         mock_hash.assert_not_called()
         mock_repair.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_runs_once_per_process(self):
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_reconcile_locked") as mock_heal,
+        ):
+            svc = UpdateService()
+            assert await svc.reconcile() is True
+            assert await svc.reconcile() is True
+            await svc.reconcile_if_pending()
+        mock_heal.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_busy_lock_leaves_heal_pending(self):
+        # A skipped boot heal must still run for the next lock holder, not be dropped.
+        with patch.object(UpdateService, "_reconcile_locked") as mock_heal:
+            svc = UpdateService()
+            with patch("updater.service.process_lock", lambda: nullcontext(False)):
+                assert await svc.reconcile() is False
+            mock_heal.assert_not_called()
+            await svc.reconcile_if_pending()
+        mock_heal.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_crashing_heal_does_not_rerun(self):
+        with patch.object(
+            UpdateService, "_reconcile_locked", side_effect=RuntimeError("boom")
+        ) as mock_heal:
+            svc = UpdateService()
+            with pytest.raises(RuntimeError):
+                await svc.reconcile_if_pending()
+            await svc.reconcile_if_pending()
+        mock_heal.assert_awaited_once()
 
 
 class TestWriteStateDurability:
@@ -2361,6 +2675,7 @@ class TestDeferredRestart:
         mock_restart.assert_not_called()
         mock_verify.assert_not_called()
         assert not sentinel.exists()  # consumed
+        assert svc.daemon_restart_pending is True
 
     @pytest.mark.asyncio
     async def test_code_restarts_only_when_importable(self, tmp_path: Path):
@@ -2372,11 +2687,36 @@ class TestDeferredRestart:
                 "updater.service.verify_updater_importable",
                 new=AsyncMock(return_value=True),
             ),
-            patch("updater.service.restart_service_noblock") as mock_restart,
+            patch(
+                "updater.service.restart_service_noblock", return_value=(True, "")
+            ) as mock_restart,
         ):
             svc = self._svc_with_ui()
             await svc._apply_deferred_restart()
         mock_restart.assert_called_once_with("BlocksScreen-updater.service")
+        assert svc.daemon_restart_pending is True
+
+    @pytest.mark.asyncio
+    async def test_failed_restart_request_is_not_pending(self, tmp_path: Path):
+        sentinel = tmp_path / "updater-restart-needed"
+        sentinel.write_text("code\n")
+        with (
+            patch("updater.service.restart_sentinel_path", return_value=sentinel),
+            patch(
+                "updater.service.verify_updater_importable",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("updater.service.restart_service_noblock", return_value=(False, "x")),
+        ):
+            svc = self._svc_with_ui()
+            await svc._apply_deferred_restart()
+        assert svc.daemon_restart_pending is False
+
+    def test_restart_pending_expires(self):
+        svc = self._svc_with_ui()
+        svc._mark_restart_pending()
+        with patch("updater.service.time.monotonic", return_value=1e12):
+            assert svc.daemon_restart_pending is False
 
     @pytest.mark.asyncio
     async def test_code_skips_restart_when_not_importable(self, tmp_path: Path):
@@ -2394,6 +2734,7 @@ class TestDeferredRestart:
             svc = self._svc_with_ui()
             await svc._apply_deferred_restart()
         mock_restart.assert_not_called()
+        assert svc.daemon_restart_pending is False
 
     def test_read_clear_sentinel_install_outranks_code(self, tmp_path: Path):
         sentinel = tmp_path / "updater-restart-needed"
@@ -2832,6 +3173,14 @@ class TestBackgroundAptUpgrade:
         ):
             await svc.background_apt_upgrade()
         mock_up.assert_awaited_once_with(exclude=("^linux-image", "^firmware-"))
+
+    @pytest.mark.asyncio
+    async def test_printing_skips_upgrade(self, printing):
+        svc = UpdateService()
+        printing.return_value = True
+        with patch("updater.service.apt_update", AsyncMock()) as mock_update:
+            await svc.background_apt_upgrade()
+        mock_update.assert_not_called()
 
 
 class TestReviewHardeningFixes:

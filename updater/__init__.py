@@ -1,6 +1,7 @@
+"""Updater package; dbus_service stays unimported so the CLI runs without sdbus."""
+
 from .components import load_components
 
-# dbus_service (imports sdbus) intentionally not imported here: CLI runs without sdbus.
 from .executor import (
     apt_update,
     apt_upgrade,
@@ -21,11 +22,9 @@ from .models import ComponentConfig, ComponentStatus
 from .service import LoggingCallback, ProgressCallback, UpdateService
 
 __all__ = [
-    # Components
     "ComponentConfig",
     "ComponentStatus",
     "load_components",
-    # Executor
     "apt_update",
     "apt_upgrade",
     "check_apt_status",
@@ -40,7 +39,6 @@ __all__ = [
     "git_remote_url",
     "git_reset_to_hash",
     "restart_service",
-    # Service
     "LoggingCallback",
     "ProgressCallback",
     "UpdateService",

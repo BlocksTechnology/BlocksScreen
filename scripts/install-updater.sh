@@ -4,10 +4,12 @@ set -euo pipefail
 Red='\033[0;31m'
 Green='\033[0;32m'
 Blue='\033[0;34m'
+Yellow='\033[0;33m'
 Normal='\033[0m'
 
 echo_info() { printf "${Blue}%s${Normal}\n" "$1"; }
 echo_ok() { printf "${Green}%s${Normal}\n" "$1"; }
+echo_warn() { printf "${Yellow}%s${Normal}\n" "$1"; }
 echo_error() { printf "${Red}%s${Normal}\n" "$1"; }
 
 # Root and blocks both run this: O_CREAT on the other's file in sticky /tmp is denied, a read-only open is not.
@@ -25,8 +27,7 @@ BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 
 # Venv-mutating commands run as blocks: root-owned dists break later pip-as-blocks runs.
 _as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
-# Atomic root install: a power cut must never leave a truncated-but-present file
-# (the [ -f ] self-heal guards would then never rewrite it).
+# Atomic root install: a truncated file would defeat the [ -f ] self-heal guards.
 _install_atomic() {
     local mode="$1" src="$2" dst="$3"
     sudo install -m "$mode" "$src" "${dst}.new" && sudo mv -Tf "${dst}.new" "$dst"
@@ -95,10 +96,10 @@ else
 fi
 # Daemon self-restart target; never in components.yaml.
 _emit_svc_rules BlocksScreen-updater.service
-# Spoolman is provisioned on demand; enable rules needed for its first clean start
-# (hooks/Spoolman.sh uses `enable --now`; sudoers args must match exactly).
+# Spoolman enable rules: hooks/Spoolman.sh runs enable --now, args must match exactly.
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable Spoolman.service\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now Spoolman.service\n' >>"$SUDOERS_TMP"
+printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl disable --now Spoolman.service\n' >>"$SUDOERS_TMP"
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
     echo_ok "Sudoers rules installed"
@@ -125,7 +126,7 @@ _BS_SVC_SRC="$BS_PATH/scripts/BlocksScreen.service"
 _BS_SVC_DEST="/etc/systemd/system/BlocksScreen.service"
 if [[ ! -f "$_BS_SVC_SRC" ]]; then
     # Never remove the running unit without a replacement; the device has no SSH recovery.
-    echo_info "WARN: $_BS_SVC_SRC missing, leaving existing BlocksScreen.service intact"
+    echo_warn "$_BS_SVC_SRC missing, leaving existing BlocksScreen.service intact"
 elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC_SRC")" ]]; then
     # Atomic replace via temp symlink + rename: the unit is never absent.
     sudo ln -sfn "$_BS_SVC_SRC" "${_BS_SVC_DEST}.new"
@@ -133,6 +134,8 @@ elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC
     sudo systemctl unmask BlocksScreen.service 2>/dev/null || true
 fi
 sudo systemctl daemon-reload
+# Every run on purpose: a linked-but-disabled UI unit is a blank screen with no SSH recovery.
+sudo systemctl enable BlocksScreen.service 2>/dev/null || echo_warn "could not enable BlocksScreen.service"
 echo_ok "BlocksScreen.service is a symlink - hook no longer needs sudo cp"
 
 echo_info "Setting up apt cache directory for blocks user ..."

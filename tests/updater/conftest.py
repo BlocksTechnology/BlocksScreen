@@ -4,8 +4,9 @@ Mocks sdbus before any updater.dbus_service import so tests run
 withouth a real D-Bus session bus.
 """
 
+import asyncio
 import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -33,6 +34,13 @@ def mock_sdbus():
         yield mock
 
 
+@pytest.fixture(autouse=True)
+def printing():
+    """Klipper idle unless a test sets return_value; never dials a real klippy.sock."""
+    with patch("updater.service.klipper_printing", AsyncMock(return_value=False)) as m:
+        yield m
+
+
 @pytest.fixture
 def svc():
     """UpdaterDbusService with mocked UpdateService and signals."""
@@ -49,6 +57,9 @@ def svc():
     )
     mock_svc.recover = AsyncMock()
     mock_svc.has_fetch_failures = MagicMock(return_value=False)
+    mock_svc.provision_missing = AsyncMock(return_value=False)
+    mock_svc.reconcile = AsyncMock(return_value=True)
+    mock_svc.reconcile_if_pending = AsyncMock()
     mock_svc._components = [
         ComponentConfig(name="moonraker", kind="git"),
         ComponentConfig(name="klipper", kind="git"),
@@ -63,10 +74,22 @@ def svc():
     s = UpdaterDbusService.__new__(UpdaterDbusService)
     s._svc = mock_svc
     s._busy = False
+    s._provisioning = False
+    s._provisioned = False
     s._background_tasks = set()
+    s._closing = False
     s._status_check_in_progress = False
     s._status_pending = False
     s.busy_changed = MagicMock()
+    s.provisioning_changed = MagicMock()
     s.status_ready = MagicMock()
     s.error = MagicMock()
     return s
+
+
+@pytest.fixture
+async def reconciled(svc):
+    """svc whose boot reconcile already finished, so the periodic check can provision."""
+    svc._reconcile_task = asyncio.get_running_loop().create_future()
+    svc._reconcile_task.set_result(None)
+    return svc

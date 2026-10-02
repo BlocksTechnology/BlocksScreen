@@ -564,6 +564,19 @@ class TestSupervisor:
 
 
 class TestForwardHeal:
+    def test_forward_heal_waits_while_printing(self, tmp_path, printing):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": {"prev_hash": "old", "fast_attempt": 3}})
+            printing.return_value = True
+            with patch("updater.service.git_fetch") as m_fetch:
+                ok = await svc._forward_heal_once()
+            assert not ok
+            m_fetch.assert_not_called()
+
+        asyncio.run(run_test())
+
     def test_forward_heal_skips_when_not_in_fallback(self, tmp_path):
         async def run_test():
             svc = UpdateService()

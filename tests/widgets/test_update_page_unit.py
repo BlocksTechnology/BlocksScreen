@@ -11,8 +11,12 @@ from updater.models import ComponentStatus
 def page(qapp):
     """UpdatePage instance with all heavy UI deps mocked."""
     patches = [
-        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.LoadingOverlayWidget"),
-        patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BlocksCustomButton"),
+        patch(
+            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.LoadingOverlayWidget"
+        ),
+        patch(
+            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BlocksCustomButton"
+        ),
         patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.IconButton"),
     ]
     for p in patches:
@@ -133,6 +137,12 @@ class TestVersionString:
     def test_git_falls_back_to_unknown_when_no_remote(self, page):
         s = _make_status(current_version="v0.1.0", remote_version="")
         assert page._version_string(s) == "v0.1.0 → unknown"
+
+    def test_same_tag_commits_ahead_stay_distinguishable(self, page):
+        s = _make_status(
+            current_version="v1.0.0-12-gabc1234", remote_version="v1.0.0-15-gdef5678"
+        )
+        assert page._version_string(s) == "v1.0.0+12 → v1.0.0+15"
 
     def test_system_returns_updates_available(self, page):
         s = _make_status(kind="system", packages_upgradable=12)
@@ -307,12 +317,22 @@ class TestHandleBusyChanged:
         with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
             page.handle_busy_changed(False)
 
-    def test_false_emits_call_load_panel_when_overlay_shown(self, page, qtbot):
+    def test_false_holds_overlay_until_status_ready(self, page, qtbot):
         page.show_loading = MagicMock()
         page._overlay_shown = True
-        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+        with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
             page.handle_busy_changed(False)
-        assert blocker.args == [False, "",False]
+        assert page._overlay_shown is True
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_status_ready(_make_payload())
+        assert blocker.args == [False, "", False]
+        assert page._overlay_shown is False
+
+    def test_stale_overlay_fallback_dismisses(self, page, qtbot):
+        page._overlay_shown = True
+        page._busy = False
+        with qtbot.waitSignal(page.call_load_panel, timeout=200):
+            page._dismiss_stale_overlay()
         assert page._overlay_shown is False
 
     def test_true_starts_elapsed_timer(self, page):
@@ -325,7 +345,7 @@ class TestHandleBusyChanged:
         page.show_loading = MagicMock()
         page.handle_busy_changed(True)
         page._elapsed_time_label.show.assert_called_once()
-        page._cancel_btn.show.assert_called_once()
+        page._cancel_btn.setVisible.assert_called_once_with(True)
 
     def test_false_stops_elapsed_timer(self, page):
         page.show_loading = MagicMock()
@@ -353,6 +373,14 @@ class TestHandleBusyChanged:
         page.handle_busy_changed(False)
         assert not page._busy_timeout_timer.isActive()
 
+    def test_busy_timeout_explains_dropped_overlay(self, page):
+        page.show_loading = MagicMock()
+        page._show_toast = MagicMock()
+        page.handle_busy_changed(True)
+        page._on_busy_timeout()
+        assert page._busy is False
+        page._show_toast.assert_called_once()
+
 
 class TestUpdateAllClicked:
     def test_emits_request_update_with_empty_string(self, page, qtbot):
@@ -370,7 +398,7 @@ class TestCancelButton:
     def test_cancel_btn_visible_only_when_busy(self, page):
         page.show_loading = MagicMock()
         page.handle_busy_changed(True)
-        page._cancel_btn.show.assert_called()
+        page._cancel_btn.setVisible.assert_called_with(True)
         page._cancel_btn.reset_mock()
         page.handle_busy_changed(False)
         page._cancel_btn.hide.assert_called()
@@ -413,13 +441,13 @@ class TestHandleStepComplete:
     def test_emits_call_load_panel_with_step_message(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("klipper", 1, 4)
-        assert blocker.args == [True, "klipper: fetching",False]
+        assert blocker.args == [True, "klipper: fetching", False]
         page._progress_label.setText.assert_called_with("Step 1/4")
 
     def test_unknown_steps_falls_back_to_working(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("moonraker", 99, 4)
-        assert blocker.args == [True, "moonraker: working",False]
+        assert blocker.args == [True, "moonraker: working", False]
         page._progress_label.setText.assert_called_with("Step 99/4")
 
 
@@ -431,7 +459,7 @@ class TestDaemonUnavailable:
         page._show_toast.assert_called_once()
         args = page._show_toast.call_args[0]
         assert "unavailable" in args[0].lower()
-        assert "restart" in args[0].lower()
+        assert "retrying" in args[0].lower()
 
     def test_daemon_unavailable_disables_update_btn(self, page):
         page.show_loading = MagicMock()
@@ -498,7 +526,9 @@ class TestBadStatusPayload:
 
 class TestConfirmPopupCleanup:
     def test_second_confirm_deletes_previous_popup(self, page):
-        with patch("BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BasePopup") as popup_cls:
+        with patch(
+            "BlocksScreen.lib.panels.widgets.MainWindow.updatePage.BasePopup"
+        ) as popup_cls:
             first = MagicMock()
             second = MagicMock()
             popup_cls.side_effect = [first, second]
@@ -506,3 +536,100 @@ class TestConfirmPopupCleanup:
             page._show_update_confirm()
         first.deleteLater.assert_called_once()
         second.deleteLater.assert_not_called()
+
+
+class TestBootProvisioning:
+    def test_declared_provisioning_shows_installing_message(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page.handle_provisioning_changed(True)
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_busy_changed(True)
+        assert blocker.args == [True, "Missing component, installing ...", False]
+
+    def test_provisioning_after_busy_still_shows_message(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_provisioning_changed(True)
+        assert blocker.args == [True, "Missing component, installing ...", False]
+
+    def test_undeclared_busy_is_not_an_install(self, page, qtbot):
+        page.show_loading = MagicMock()
+        with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
+            page.handle_busy_changed(True)
+        assert page._provisioning is False
+
+    def test_provision_steps_name_the_component(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page.handle_provisioning_changed(True)
+        page.handle_busy_changed(True)
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_step_complete("Spoolman", 1, 4)
+        assert blocker.args == [True, "Installing Spoolman: cloning", False]
+
+    def test_user_update_keeps_update_labels(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page._overlay_shown = True
+        page.handle_busy_changed(True)
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_step_complete("klipper", 1, 4)
+        assert blocker.args == [True, "klipper: fetching", False]
+
+    def test_provisioning_clears_when_busy_ends(self, page):
+        page.show_loading = MagicMock()
+        page.handle_provisioning_changed(True)
+        page.handle_busy_changed(True)
+        page.handle_busy_changed(False)
+        assert page._provisioning is False
+
+
+class TestRestartPending:
+    def test_ui_restart_step_holds_overlay(self, page):
+        page.handle_step_complete("BlocksScreen", 4, 4)
+        assert page._restart_pending is True
+
+    def test_later_step_does_not_clear_the_latch(self, page):
+        page.handle_step_complete("BlocksScreen", 4, 4)
+        page.handle_step_complete("updater", 2, 4)
+        assert page._restart_pending is True
+
+    def test_new_busy_period_clears_the_latch(self, page):
+        page.show_loading = MagicMock()
+        page.handle_step_complete("BlocksScreen", 4, 4)
+        page.handle_busy_changed(True)
+        assert page._restart_pending is False
+
+
+class TestDismissTimers:
+    def test_busy_true_stops_pending_dismiss_timers(self, page):
+        page.show_loading = MagicMock()
+        page._overlay_shown = True
+        page.handle_busy_changed(True)
+        page.handle_busy_changed(False)
+        assert page._stale_overlay_timer.isActive()
+        page.handle_busy_changed(True)
+        assert not page._stale_overlay_timer.isActive()
+        assert not page._restart_grace_timer.isActive()
+
+    def test_restart_grace_uses_the_reusable_timer(self, page):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page.handle_step_complete("BlocksScreen", 4, 4)
+        page.handle_busy_changed(False)
+        assert page._restart_grace_timer.isActive()
+        assert not page._stale_overlay_timer.isActive()
+
+
+class TestCancelHiddenWhileProvisioning:
+    def test_provisioning_busy_hides_cancel(self, page):
+        page.show_loading = MagicMock()
+        page.handle_provisioning_changed(True)
+        page.handle_busy_changed(True)
+        page._cancel_btn.setVisible.assert_called_with(False)
+
+    def test_provisioning_after_busy_hides_cancel(self, page):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page._cancel_btn.reset_mock()
+        page.handle_provisioning_changed(True)
+        page._cancel_btn.hide.assert_called_once()
