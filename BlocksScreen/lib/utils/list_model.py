@@ -352,15 +352,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         item: ListItem = index.data(QtCore.Qt.ItemDataRole.UserRole)
         target_width = option.rect.width()
 
-        base_h = item.height
-        ellipse_size = base_h * 0.8
-
-        right_reserved = base_h
-
-        left_reserved = 10
-        if item.left_icon:
-            left_reserved = (base_h * 0.1) + ellipse_size + 8 + _TEXT_LEFT_PADDING
-
         if item._lfontsize > 0 and item._lfontsize != option.font.pointSize():
             f = QtGui.QFont(option.font)
             f.setPointSize(item._lfontsize)
@@ -368,6 +359,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         else:
             fm = option.fontMetrics
 
+        right_text_w = 0
         if item.right_text:
             if item._rfontsize > 0 and item._rfontsize != option.font.pointSize():
                 fr = QtGui.QFont(option.font)
@@ -375,17 +367,17 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 fmr = QtGui.QFontMetrics(fr)
             else:
                 fmr = option.fontMetrics
-            right_reserved += fmr.horizontalAdvance(item.right_text) + 10
-
-        if item.right_icon:
-            right_reserved += ellipse_size
-
-        text_avail_width = max(target_width - left_reserved - right_reserved, 50)
+            right_text_w = fmr.horizontalAdvance(item.right_text)
 
         collapsed_h = int(item.height * 1.1)
+        text_rect = self._text_rect(
+            item,
+            QtCore.QRect(option.rect.x(), option.rect.y(), target_width, collapsed_h),
+            right_text_w,
+        )
+        text_avail_width = max(int(text_rect.width()), 50)
         lines = item.text.split("\n")
-        # paint() insets the row by 2px per side before fitting lines
-        max_lines = max(1, (collapsed_h - 4) // fm.lineSpacing())
+        max_lines = max(1, int(text_rect.height()) // fm.lineSpacing())
 
         item.needs_expansion = len(lines) > max_lines or any(
             fm.horizontalAdvance(line) > text_avail_width for line in lines
@@ -394,14 +386,33 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if not item.is_expanded:
             return QtCore.QSize(target_width, collapsed_h)
 
-        text_rect = fm.boundingRect(
-            QtCore.QRect(0, 0, int(text_avail_width), 0),
+        bounds = fm.boundingRect(
+            QtCore.QRect(0, 0, text_avail_width, 0),
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextWordWrap,
             item.text,
         )
 
-        final_height = max(item.height, text_rect.height() - 1)
+        final_height = max(item.height, bounds.height() - 1)
         return QtCore.QSize(target_width, int(final_height * 1.2))
+
+    @staticmethod
+    def _text_rect(
+        item: ListItem, row: QtCore.QRect, right_text_w: int
+    ) -> QtCore.QRectF:
+        """Main-text area of *row*, shared by sizeHint and paint so overflow matches elision."""
+        rect = row.adjusted(2, 2, -2, -2)
+        icon = item.height * 0.8
+        left = rect.left() + 10 + (icon + _TEXT_LEFT_PADDING if item.left_icon else 0)
+        right = rect.right() - item.height * 0.1 - icon - right_text_w - 10
+        return QtCore.QRectF(left, rect.top(), right - left, rect.height())
+
+    @staticmethod
+    def _collapsed_lines(text: str, max_lines: int) -> list[str]:
+        """Lines a collapsed row draws; overflow folds into the last so elision marks the cut."""
+        lines = text.split("\n")
+        if len(lines) > max_lines:
+            lines[max_lines - 1 :] = [" ".join(lines[max_lines - 1 :])]
+        return lines
 
     def paint(
         self,
@@ -448,7 +459,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             )
             painter.drawPixmap(ellipse_rect.toRect(), icon_scaled)
 
-        left_margin = 10
         left_icon_rect = QtCore.QRectF(
             rect.left() + ellipse_margin,
             rect.top() + ellipse_margin,
@@ -466,22 +476,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 left_pixmap = self._get_scaled(item.left_icon, icon_size)
             painter.drawPixmap(left_icon_rect.toRect(), left_pixmap)
 
-        text_margin = int(
-            rect.right() - ellipse_size - ellipse_margin - rect.height() * 0.10
-        )
-
-        text_left = (
-            rect.left()
-            + left_margin
-            + (left_icon_rect.width() + _TEXT_LEFT_PADDING if item.left_icon else 0)
-        )
-        text_rect = QtCore.QRectF(
-            text_left,
-            rect.top(),
-            text_margin - text_left,
-            rect.height(),
-        )
-
         painter.setPen(QtGui.QColor(255, 255, 255))
 
         _font = painter.font()
@@ -497,21 +491,17 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
 
         right_metrics = QtGui.QFontMetrics(right_font)
 
-        right_text_x = (
-            ellipse_rect.right()
-            - right_metrics.horizontalAdvance(item.right_text)
-            - left_icon_rect.width()
-            - left_margin
+        text_rect = self._text_rect(
+            item, option.rect, right_metrics.horizontalAdvance(item.right_text)
         )
 
         if not item.is_expanded:
-            max_main_text_width = int(right_text_x - left_margin)
             max_lines = max(1, int(text_rect.height()) // metrics.lineSpacing())
             text = "\n".join(
                 metrics.elidedText(
-                    line, QtCore.Qt.TextElideMode.ElideRight, max_main_text_width
+                    line, QtCore.Qt.TextElideMode.ElideRight, int(text_rect.width())
                 )
-                for line in item.text.split("\n")[:max_lines]
+                for line in self._collapsed_lines(item.text, max_lines)
             )
             painter.drawText(
                 text_rect,
@@ -531,7 +521,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.setFont(right_font)
             painter.setPen(QtGui.QColor(160, 160, 160))
             painter.drawText(
-                int(right_text_x),
+                int(text_rect.right()),
                 int(
                     ellipse_rect.top()
                     + (ellipse_rect.height() + right_metrics.ascent()) / 2

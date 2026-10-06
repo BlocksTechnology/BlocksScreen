@@ -213,3 +213,28 @@ class TestNeedsExpansion:
     def test_more_lines_than_row_holds_needs_expansion(self, delegate):
         text = "\n".join("line" for _ in range(20))
         assert self._size_hint(delegate, text).needs_expansion is True
+
+    def test_overflow_uses_paint_text_width(self, delegate):
+        item = ListItem(text="", height=ROW_H, left_icon=QtGui.QPixmap(1, 1))
+        row = QtCore.QRect(0, 0, ROW_W, int(ROW_H * 1.1))
+        width = int(EntryDelegate._text_rect(item, row, 0).width())
+        fm = _option(0).fontMetrics
+        fits = "x"
+        while fm.horizontalAdvance(fits + "x") <= width:
+            fits += "x"
+        model = EntryListModel([item])
+        for text, expected in ((fits, False), (fits + "x", True)):
+            item.text = text
+            delegate.sizeHint(_option(0), model.index(0))
+            assert item.needs_expansion is expected
+
+
+class TestCollapsedLines:
+    def test_lines_that_fit_are_kept(self):
+        assert EntryDelegate._collapsed_lines("a\nb", 2) == ["a", "b"]
+
+    def test_overflow_folds_into_last_line(self):
+        assert EntryDelegate._collapsed_lines("a\nb\nc\nd", 2) == ["a", "b c d"]
+
+    def test_single_line_row_joins_everything(self):
+        assert EntryDelegate._collapsed_lines("a\nb", 1) == ["a b"]
