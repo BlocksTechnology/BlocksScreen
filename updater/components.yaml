@@ -30,7 +30,7 @@ components:
     type: git
     path: ~/RF50-Klipper
     url: https://github.com/BlocksTechnology/RF50-Klipper
-    branch: Release-2.0
+    branch: feat/amu-configs
     service: klipper.service
     reset_mode: hard
     order: 10
