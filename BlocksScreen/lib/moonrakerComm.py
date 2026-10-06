@@ -923,10 +923,11 @@ class MoonAPI(QtCore.QObject):
         )
 
     def get_spool(self, spool_id: int, callback) -> bool:
-        """Request spool data from Moonraker's Spoolman proxy"""
-        return self._ws.send_request(
-            method="server.spoolman.get_spool",
-            params={"spool_id": spool_id},
+        """Request one spool through the Spoolman proxy; there is no get_spool RPC."""
+        return self.spoolman_proxy(
+            request_method="GET",
+            path=f"/v1/spool/{spool_id}",
+            use_v2_response=False,
             callback=callback,
         )
 

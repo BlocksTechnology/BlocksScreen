@@ -89,7 +89,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self._strip_path.addRoundedRect(QtCore.QRectF(self._strip_rect), 5, 5)
 
     def update_entry(self, gate_info: GateInfo, fm: FilamentPos):
-        # color_rgb is Happy Hare's parsed form, so w3c names like "red" work too
+        # color_rgb is Happy-Hare's parsed form, so w3c names like "red" work too.
         has_color = bool(gate_info.color)
         color = (
             QtGui.QColor.fromRgbF(*gate_info.color_rgb)
@@ -195,7 +195,7 @@ class SpoolCarousel(QtWidgets.QWidget):
         self._update_arrows()
 
     def addSpool(self, gate_info: GateInfo, fm: FilamentPos):
-        """Adds or updates a spool button in the carousel"""
+        """Add or update the spool button for a gate."""
         existing = self._by_id.get(gate_info.index)
         if existing is not None:
             existing.update_entry(gate_info, fm)
@@ -245,18 +245,14 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.right_arrow.setEnabled(self._offset + self.VISIBLE < len(self.buttons))
 
     def selectedIndex(self) -> int:
-        """returns the index of the currently selected button, or -1 if none is selected"""
+        """Return the checked button's index, or -1."""
         btn = self.button_group.checkedButton()
         if btn:
             return self.buttons.index(btn)
         return -1
 
     def selectIndex(self, idx: int):
-        """select a button by index
-
-        Args:
-            idx (int): the index of the button to select
-        """
+        """Check the button at *idx* and scroll it into view."""
         if 0 <= idx < len(self.buttons):
             self.buttons[idx].setChecked(True)
             if idx < self._offset:
@@ -274,10 +270,10 @@ class SpoolInfoPanel(QtWidgets.QWidget):
     checkRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
     request_keypad = QtCore.pyqtSignal(
         "PyQt_PyObject", str, str, str, int, name="request-keyboard"
-    )  # value, slot index, caller widget
+    )
     colorSwatchClicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="color-swatch-clicked"
-    )  # current color hex
+    )
     colorSelected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="color-selected"
     )
@@ -317,7 +313,6 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         info_col.setContentsMargins(0, 0, 0, 0)
         info_col.setSpacing(12)
 
-        # header: gate name / status
         header = QtWidgets.QHBoxLayout()
         header.setSpacing(12)
 
@@ -386,7 +381,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         info_col.addLayout(fields)
         info_col.addStretch(1)
 
-        # fixed width so status text can never push the divider/buttons around
+        # Fixed width so long status text cannot shift the buttons.
         info_widget = QtWidgets.QWidget()
         info_widget.setLayout(info_col)
         info_widget.setFixedWidth(300)
@@ -437,28 +432,26 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         root.addLayout(btn_grid)
 
     def setFilamentStatus(self, mmu_state):
-        """Updates the active gate index from the mmu state."""
+        """Track the active gate from MMU state."""
         self.Gate = mmu_state.gate
 
-    @staticmethod
-    def _button_states_for_status(status: GateStatus):
-        """Base (load, unload, purge, cut) enabled-states from gate status alone."""
-        match status:
-            case GateStatus.AVAILABLE | GateStatus.AVAILABLE_FROM_BUFFER:
-                return True, False, True, True
-            case GateStatus.EMPTY:
-                return False, False, True, True
-            case _:  # GateStatus.UNKNOWN
-                return True, True, False, True
+    def clear_slot(self, *, can_unload: bool) -> None:
+        """Show no gate selected; Happy-Hare's bare gate commands have no target."""
+        self._slot_index = -1
+        self._lbl_gate.setText("Gate —")
+        self._lbl_status.setText(self._UNKNOWN_TEXT)
+        self._lbl_temp.setText("—")
+        self._lbl_mat.setText("—")
+        self._set_color("")
+        for w in (self._lbl_temp, self._swatch, self._lbl_mat):
+            w.setEnabled(False)
+        self._btn_load.setEnabled(False)
+        self._btn_unload.setEnabled(can_unload)
+        self._btn_purge.setEnabled(False)
+        self._btn_cut.setEnabled(False)
 
     def update_for_slot(self, index: int, btn: Spoll_button) -> None:
-        """Update the detail panel and action buttons for the selected gate slot.
-
-        Args:
-            index: The index of the selected button/gate.
-            btn: The selected button, carrying a GateInfo snapshot and
-                FilamentPos for that gate.
-        """
+        """Show *btn*'s gate and enable only the actions valid for it."""
         self._slot_index = index
         color = btn.color
         r, g, b = color.red(), color.green(), color.blue()
@@ -467,21 +460,19 @@ class SpoolInfoPanel(QtWidgets.QWidget):
 
         gate_info = btn.gate_info
         status = gate_info.status if gate_info is not None else GateStatus.UNKNOWN
-        en_load, en_unload, en_purge, en_cut = self._button_states_for_status(status)
         text = self._STATUS_TEXT.get(status, self._UNKNOWN_TEXT)
 
         is_active_gate = index == self.Gate
         filament_pos = btn.filament_pos
-
-        # filament_pos is MMU-wide, so it only describes the active gate
-        if not is_active_gate or filament_pos == FilamentPos.UNLOADED:
-            en_unload = False
-        else:
-            en_unload, en_load, en_purge = True, False, False
-            if filament_pos == FilamentPos.LOADED:
-                text = self._LOADED_TEXT
-            else:
-                text = self._STUCK_TEXT
+        loaded = is_active_gate and filament_pos != FilamentPos.UNLOADED
+        can_check = is_active_gate and filament_pos == FilamentPos.UNLOADED
+        can_feed = can_check and status != GateStatus.EMPTY
+        if loaded:
+            text = (
+                self._LOADED_TEXT
+                if filament_pos == FilamentPos.LOADED
+                else self._STUCK_TEXT
+            )
 
         spool_id = gate_info.spool_id if gate_info is not None else -1
         if spool_id != -1:
@@ -490,7 +481,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
                 f" · Spool ID {spool_id}</span>"
             )
 
-        # fields are read-only while the gate is bound to a spoolman spool
+        # Spoolman owns the fields of a bound gate.
         editable = gate_info is not None and spool_id == -1
         for w in (self._lbl_temp, self._swatch, self._lbl_mat):
             w.setEnabled(editable)
@@ -510,10 +501,10 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         color_hex = f"{r:02X}{g:02X}{b:02X}" if gate_info and gate_info.color else ""
         self._set_color(color_hex)
 
-        self._btn_load.setEnabled(en_load)
-        self._btn_unload.setEnabled(en_unload)
-        self._btn_purge.setEnabled(en_purge)
-        self._btn_cut.setEnabled(en_cut)
+        self._btn_load.setEnabled(can_feed)
+        self._btn_unload.setEnabled(loaded)
+        self._btn_purge.setEnabled(can_feed)
+        self._btn_cut.setEnabled(can_check)
         self.update()
 
     def _apply_swatch(self, color: QtGui.QColor | None) -> None:
@@ -535,11 +526,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             )
 
     def set_selected_color(self, hex_str: str) -> None:
-        """Show a color picked for the current gate and emit ``colorSelected``.
-
-        Args:
-            hex_str: The picked color as a hex string, with or without ``#``.
-        """
+        """Show the picked colour and emit colorSelected."""
         self._set_color(hex_str)
         self.colorSelected.emit(self._color_hex)
 

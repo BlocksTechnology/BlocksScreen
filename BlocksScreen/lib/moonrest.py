@@ -76,17 +76,28 @@ class MoonRest:
         """Fetch server info from Moonraker."""
         return self.get_request(method="server/info")
 
+    def _spoolman_proxy(self, request_method: str, path: str, body=None):
+        """POST server/spoolman/proxy; Moonraker registers no per-spool REST route."""
+        payload = {
+            "request_method": request_method,
+            "path": path,
+            "use_v2_response": False,
+        }
+        if body is not None:
+            payload["body"] = body
+        return self.post_request("server/spoolman/proxy", json=payload)
+
     def get_spool(self, spool_id: int) -> dict | None:
-        """Spoolman spool via Moonraker, None on error."""
-        response = self.get_request(f"server/spoolman/spool/{spool_id}")
+        """Spoolman spool via the Moonraker proxy, None on error."""
+        response = self._spoolman_proxy("GET", f"/v1/spool/{spool_id}")
         if not isinstance(response, dict):
             return None
         return response.get("result")
 
     def set_spool_used_weight(self, spool_id: int, weight: float) -> bool:
-        """Set a spool's used_weight; True on success."""
-        response = self.post_request(
-            f"server/spoolman/spool/{spool_id}", json={"used_weight": weight}
+        """Set a spool's used_weight via the Moonraker proxy; True on success."""
+        response = self._spoolman_proxy(
+            "PATCH", f"/v1/spool/{spool_id}", body={"used_weight": weight}
         )
         return response is not None
 

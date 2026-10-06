@@ -1,6 +1,6 @@
 import typing
 
-from devices.amu import AMUManager
+from devices.amu import AMUManager, FilamentPos, MMUState
 from lib.panels.widgets.FilamentTab.amuWidgets import SpoolCarousel, SpoolInfoPanel
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_frame import BlocksCustomFrame
@@ -9,11 +9,10 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class AMUpage(QtWidgets.QStackedWidget):
+    _SELECT_DEBOUNCE_MS = 700
+
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
-    )
-    request_gate_map: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="request-gate-map"
     )
     request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [str, int, "PyQt_PyObject"],
@@ -37,53 +36,30 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.current_index = -1
         self.amu_manager: AMUManager = amu_manager
         self.load_popup = load_popup
+        self.status = None
+        self._pending_gate = -1
+        self._select_timer = QtCore.QTimer(self)
+        self._select_timer.setSingleShot(True)
+        self._select_timer.setInterval(self._SELECT_DEBOUNCE_MS)
+        self._select_timer.timeout.connect(self._send_select)
         self._build_ui()
 
         self.main_back_button.clicked.connect(self.request_back)
 
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self.on_mmu_state_changed(self.amu_manager.get_state())
-        self.info_panel.colorSelected.connect(
-            lambda hx: self.amu_manager.set_gate_color(self.current_index, hx)
-        )
+        self.info_panel.colorSelected.connect(self._on_color_selected)
         self.info_panel.colorSwatchClicked.connect(
             lambda hx: self.request_color_wheel.emit(
                 hx, self.info_panel.set_selected_color
             )
         )
-        self.info_panel._lbl_mat.editingFinished.connect(
-            lambda: self.amu_manager.set_gate_material(
-                self.current_index, self.info_panel._lbl_mat.text().strip("º")
-            )
-        )
-        self.info_panel._lbl_temp.editingFinished.connect(
-            lambda: self.amu_manager.set_gate_temp(
-                self.current_index,
-                int(self.info_panel._lbl_temp.text().strip("º") or 0),
-            )
-        )
-        self.info_panel._lbl_temp.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Temperature",
-                int(self.info_panel._lbl_temp.text().strip("º")),
-                self._on_gate_temp_change,
-                0,
-                500,
-            )
-        )
+        self.info_panel._lbl_mat.editingFinished.connect(self._on_material_edited)
+        self.info_panel._lbl_temp.editingFinished.connect(self._on_temp_edited)
+        self.info_panel._lbl_temp.clicked.connect(self._open_temp_numpad)
         self.info_panel.request_keypad.connect(self.request_keyboard)
-        self.info_panel.loadRequested.connect(
-            lambda: {
-                self.amu_manager.load_gate(),
-                self.load_popup.show(),
-            }
-        )
-        self.info_panel.unloadRequested.connect(
-            lambda: {
-                self.amu_manager.unload(),
-                self.load_popup.show(),
-            }
-        )
+        self.info_panel.loadRequested.connect(self._on_load)
+        self.info_panel.unloadRequested.connect(self._on_unload)
         self.info_panel.ejectRequested.connect(self.amu_manager.eject_gate)
         self.info_panel.checkRequested.connect(self.amu_manager.check_gate)
 
@@ -93,7 +69,7 @@ class AMUpage(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """Rewire the back button between "request_back" and "change to tab 0" based on print state."""
+        """Point the back button at request_back while printing, else at tab 0."""
         if isinstance(value, str) and "state" in field:
             self.state = value
             if value in ("printing", "pausing", "paused", "resuming"):
@@ -114,38 +90,87 @@ class AMUpage(QtWidgets.QStackedWidget):
                 self.main_back_button.clicked.connect(lambda: self.request_back.emit())
 
     def on_mmu_state_changed(self, mmu_state):
-        """Refresh the carousel and the info panel's selected gate from live MMU state."""
-        if mmu_state is None:
-            return
+        """Sync the carousel and info panel to live MMU state."""
+        prev = self.status
         self.status = mmu_state
-        for i in range(len(mmu_state.gates)):
-            self.carousel.addSpool(mmu_state.gates[i], mmu_state.filament_pos)
-        self.update()
-        self._on_selection(mmu_state.gate)
+        if mmu_state is None:
+            self.current_index = -1
+            self.info_panel.clear_slot(can_unload=False)
+            return
+        # apply_diff reuses the gates tuple when no gate_* key changed.
+        if (
+            prev is None
+            or mmu_state.gates is not prev.gates
+            or mmu_state.filament_pos != prev.filament_pos
+        ):
+            for gate_info in mmu_state.gates:
+                self.carousel.addSpool(gate_info, mmu_state.filament_pos)
+            self.update()
+        self._on_selection(mmu_state)
 
     def _select_gate(self, idx: int):
         self.carousel.selectIndex(self.current_index)
-        self.amu_manager.select_gate(idx)
+        self._pending_gate = idx
+        self._select_timer.start()
 
-    def _on_selection(self, idx: int):
-        if idx < 0 or idx >= len(self.carousel.buttons):
+    def _send_select(self) -> None:
+        self.amu_manager.select_gate(self._pending_gate)
+
+    def _on_selection(self, mmu_state: MMUState) -> None:
+        idx = mmu_state.gate
+        if not 0 <= idx < len(self.carousel.buttons):
+            self.current_index = -1
+            self.info_panel.clear_slot(
+                can_unload=mmu_state.filament_pos != FilamentPos.UNLOADED
+            )
             return
         btn = self.carousel.buttons[idx]
         self.current_index = idx
-        self.info_panel.setFilamentStatus(self.status)
+        self.info_panel.setFilamentStatus(mmu_state)
         self.info_panel.update_for_slot(idx, btn)
         self.carousel.selectIndex(idx)
+
+    def _gate_temp(self) -> int | None:
+        try:
+            return round(float(self.info_panel._lbl_temp.text().strip("º")))
+        except ValueError:
+            return None
 
     def _on_gate_temp_change(self, _name: str, value: int) -> None:
         self.info_panel._lbl_temp.setText(str(value))
         self.info_panel._lbl_temp.editingFinished.emit()
 
+    def _open_temp_numpad(self) -> None:
+        self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+            "Temperature", self._gate_temp() or 0, self._on_gate_temp_change, 0, 500
+        )
+
+    def _on_temp_edited(self) -> None:
+        temp = self._gate_temp()
+        if temp is not None:
+            self.amu_manager.set_gate_temp(self.current_index, temp)
+
+    def _on_material_edited(self) -> None:
+        material = self.info_panel._lbl_mat.text().strip()
+        if material != "—":
+            self.amu_manager.set_gate_material(self.current_index, material)
+
+    def _on_color_selected(self, hex_str: str) -> None:
+        self.amu_manager.set_gate_color(self.current_index, hex_str)
+
+    def _on_load(self) -> None:
+        if self.amu_manager.load_gate() and self.load_popup is not None:
+            self.load_popup.show()
+
+    def _on_unload(self) -> None:
+        if self.amu_manager.unload() and self.load_popup is not None:
+            self.load_popup.show()
+
     def _build_ui(self):
         self.setMinimumSize(700, 420)
-        self.setObjectName("fans_page")
+        self.setObjectName("amu_page")
         widget = QtWidgets.QWidget(parent=self)
         widget.setMinimumSize(700, 420)
-        self.setObjectName("temperature_page")
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         widget.setObjectName("filament_control_page")
         self.verticalLayout = QtWidgets.QVBoxLayout()

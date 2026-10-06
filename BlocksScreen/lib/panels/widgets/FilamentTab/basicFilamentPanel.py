@@ -44,7 +44,13 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             return f"<{self.__class__.__name__}.{self._name_}>"
 
     def __init__(
-        self, printer: Printer, cfg, parent=None, *, load_popup: BasePopup | None = None
+        self,
+        printer: Printer,
+        cfg,
+        parent=None,
+        *,
+        amu_manager,
+        load_popup: BasePopup | None = None,
     ) -> None:
         super().__init__(parent)
         self.printer = printer
@@ -57,6 +63,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.filament_buttons_list = []
         self.mmu_configured = False
         self.load_popup = load_popup
+        self.amu_manager = amu_manager
         self._mmu_state = None
         self._setup_ui()
         self.filament_state = self.FilamentStates.UNKNOWN
@@ -219,8 +226,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             self.call_load_panel.emit(True, "Loading", True)
             self.run_gcode.emit("LOAD_FILAMENT")
             return
-        self.load_popup.show()
-        self.run_gcode.emit("MMU_LOAD")
+        if self.amu_manager.load_gate() and self.load_popup is not None:
+            self.load_popup.show()
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
@@ -248,8 +255,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             self.call_load_panel.emit(True, "Unloading", True)
             self.run_gcode.emit("UNLOAD_FILAMENT")
             return
-        self.load_popup.show()
-        self.run_gcode.emit("MMU_EJECT")
+        if self.amu_manager.unload() and self.load_popup is not None:
+            self.load_popup.show()
 
     def _on_load_clicked(self) -> None:
         if self._in_print:
@@ -385,8 +392,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
     def _accept_pos_change(self, new_pos: str) -> None:
         self._pos_committed = new_pos
-        n = 1 if new_pos == "Loaded" else 0
-        self.run_gcode.emit(f"MMU_RECOVER TOOL=0 GATE=0 LOADED={n}")
+        self.amu_manager.recover_single_gate(new_pos == "Loaded")
 
     def _reject_pos_change(self) -> None:
         self._lbl_pos.select_option(self._pos_committed)

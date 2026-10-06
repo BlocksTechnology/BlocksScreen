@@ -8,7 +8,7 @@ import pytest
 from PyQt6 import QtCore
 
 from BlocksScreen.lib import moonrakerComm
-from BlocksScreen.lib.moonrakerComm import OneShotTokenError
+from BlocksScreen.lib.moonrakerComm import MoonAPI, OneShotTokenError
 
 
 class TestOneShotTokenError:
@@ -192,3 +192,30 @@ class TestReconnectCycle:
         ws.on_close(None, 1006, "gone")
         qtbot.wait(50)
         connect.assert_not_called()
+
+
+@pytest.fixture
+def api():
+    """MoonAPI over a stub socket; it parents itself to ws, so ws must be a QObject."""
+    sock = QtCore.QObject()
+    sock.send_request = MagicMock(return_value=True)
+    return MoonAPI(sock)
+
+
+class TestGetSpool:
+    def test_goes_through_the_proxy(self, api) -> None:
+        api.get_spool(42, None)
+        params = api._ws.send_request.call_args.kwargs
+        assert params["method"] == "server.spoolman.proxy"
+        assert params["params"] == {
+            "use_v2_response": False,
+            "request_method": "GET",
+            "path": "/v1/spool/42",
+        }
+
+    def test_passes_the_callback_through(self, api) -> None:
+        def cb(_result):
+            return None
+
+        api.get_spool(1, cb)
+        assert api._ws.send_request.call_args.kwargs["callback"] is cb
