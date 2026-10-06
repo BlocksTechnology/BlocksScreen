@@ -24,13 +24,6 @@ if typing.TYPE_CHECKING:
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-HEAVY_SPOOL_THRESHOLD_G: float = 1000.0
-HEAVY_SPEED_MM_S: float = 100.0
-# Must match mmu_gear max_velocity in printer.cfg.
-BASE_GEAR_SPEED_MM_S: float = 300.0
-_HEAVY_SPEED_PERCENT: int = max(1, round(HEAVY_SPEED_MM_S / BASE_GEAR_SPEED_MM_S * 100))
-_DEFAULT_SPEED_PERCENT: int = 100
-
 CONFIG_PATH: Path = Path("~/printer_data/config/printer.cfg").expanduser()
 
 
@@ -61,9 +54,6 @@ class AMUManager(QtCore.QObject):
     pre_gate_changed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, bool, name="pre-gate-changed"
     )
-    spool_fetched: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        int, dict, name="spool-fetched"
-    )
 
     def __init__(self, ws: MoonWebSocket, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
@@ -71,7 +61,6 @@ class AMUManager(QtCore.QObject):
         self._ws = ws
         self._mmu_state: MMUState | None = None
         self._pre_gate_sensors: dict[int, bool] = {}
-        self.spool_fetched.connect(self._apply_spool_data)
 
     def _gate_map(self, gate: int, **params: object) -> bool:
         """Emit MMU_GATE_MAP for one gate; False when no gate is selected yet."""
@@ -87,27 +76,6 @@ class AMUManager(QtCore.QObject):
         )
         self.run_gcode_signal.emit(f"MMU_GATE_MAP GATE={gate}{args} QUIET=1")
         return True
-
-    def _apply_spool_data(self, gate: int, data: dict) -> None:
-        """Set the gate's gear speed from a Spoolman payload's remaining weight."""
-        if data.get("id", -1) == -1:
-            logger.warning("Spool payload for gate %d carries no id", gate)
-            return
-        remaining = data.get("remaining_weight")
-        if remaining is not None:
-            self._apply_speed_profile(gate, float(remaining))
-
-    def _apply_speed_profile(self, gate: int, remaining_weight: float) -> None:
-        """Slow the gear for a heavy spool and restore it once the spool is light."""
-        if self._mmu_state is None or not 0 <= gate < len(self._mmu_state.gates):
-            return
-        wanted = (
-            _HEAVY_SPEED_PERCENT
-            if remaining_weight > HEAVY_SPOOL_THRESHOLD_G
-            else _DEFAULT_SPEED_PERCENT
-        )
-        if self._mmu_state.gates[gate].speed_override != wanted:
-            self._gate_map(gate, SPEED=wanted)
 
     def toggle_amu_system(self, activate: bool) -> None:
         """Swap the printer.cfg variant, restarting on change; emits amu_toggled."""
@@ -132,21 +100,6 @@ class AMUManager(QtCore.QObject):
         """Return True if the AMU is configured, reporting, and not MMU-disabled."""
         state = self._mmu_state
         return self.is_amu_configured() and state is not None and state.enabled
-
-    def fetch_spool(self, gate: int, spool_id: int) -> None:
-        """Fetch *spool_id* from Spoolman and emit spool_fetched; no-op when off."""
-        if self._mmu_state is None:
-            return
-        if self._mmu_state.spoolman_support is SpoolmanSupport.OFF:
-            return
-        if spool_id == -1:
-            return
-
-        def _on_result(result: dict | None) -> None:
-            if result is not None:
-                self.spool_fetched.emit(gate, result)
-
-        self._ws.api.get_spool(spool_id, _on_result)
 
     def set_gate_info(
         self,
@@ -184,22 +137,20 @@ class AMUManager(QtCore.QObject):
         self._gate_map(gate, COLOR=color.lstrip("#"))
 
     def set_gate_spool(self, gate: int, spool_id: int) -> None:
-        """Bind *gate* to a Spoolman spool (-1 unbinds) and fetch its data."""
-        if self._gate_map(gate, SPOOLID=spool_id) and spool_id != -1:
-            self.fetch_spool(gate, spool_id)
+        """Bind *gate* to a Spoolman spool; -1 unbinds."""
+        self._gate_map(gate, SPOOLID=spool_id)
 
     def assign_spool(self, gate: int, spool: dict) -> None:
-        """Map *gate* from a Spoolman spool payload and apply it without a refetch."""
+        """Map *gate* from a Spoolman spool payload."""
         filament = spool.get("filament") or {}
-        if self.set_gate_info(
+        self.set_gate_info(
             gate,
             filament.get("material") or "",
             filament.get("color_hex") or "",
             spool.get("id", -1),
             filament_name=filament.get("name") or "",
             temperature=filament.get("settings_extruder_temp"),
-        ):
-            self._apply_spool_data(gate, spool)
+        )
 
     def update_spool_weight(self, gate: int, used_weight: float) -> None:
         """Push *used_weight* to Spoolman for the spool at *gate*."""
@@ -238,22 +189,34 @@ class AMUManager(QtCore.QObject):
         self.run_gcode_signal.emit("MMU_RESET CONFIRM=1")
 
     def _selected_gate_unloaded(self) -> GateInfo | None:
-        """Return the selected gate when it is a real gate with nothing loaded."""
+        """Return the selected gate when the MMU is enabled, homed and unloaded."""
         state = self._mmu_state
-        if state is None or state.filament_pos != FilamentPos.UNLOADED:
+        if (
+            state is None
+            or not (state.enabled and state.is_homed)
+            or state.filament_pos != FilamentPos.UNLOADED
+        ):
             return None
         return state.current_gate_info
 
     def load_gate(self) -> bool:
         """Load filament from the selected gate by sending MMU_LOAD; True if sent."""
         if self._selected_gate_unloaded() is None:
-            logger.warning("Ignoring MMU_LOAD: no unloaded gate selected")
+            logger.warning("Ignoring MMU_LOAD: no homed, unloaded gate selected")
             return False
         self.run_gcode_signal.emit("MMU_LOAD")
         return True
 
     def unload(self) -> bool:
         """Unload the currently loaded filament by sending MMU_UNLOAD; True if sent."""
+        state = self._mmu_state
+        if (
+            state is None
+            or not state.enabled
+            or state.filament_pos == FilamentPos.UNLOADED
+        ):
+            logger.warning("Ignoring MMU_UNLOAD: MMU disabled or nothing loaded")
+            return False
         self.run_gcode_signal.emit("MMU_UNLOAD")
         return True
 

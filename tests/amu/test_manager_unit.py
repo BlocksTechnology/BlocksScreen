@@ -354,8 +354,16 @@ class TestGcodeSignals:
             assert manager.load_gate() is True
         assert blocker.args == ["MMU_LOAD"]
 
+    # Happy-Hare drops MMU_LOAD when disabled or unhomed (mmu.py:6936).
     @pytest.mark.parametrize(
-        "overrides", [None, {"filament_pos": 10}, {"filament_pos": 0, "gate": -1}]
+        "overrides",
+        [
+            None,
+            {"filament_pos": 10},
+            {"filament_pos": 0, "gate": -1},
+            {"filament_pos": 0, "enabled": False},
+            {"filament_pos": 0, "is_homed": False},
+        ],
     )
     def test_load_gate_refused(self, manager, qtbot, overrides) -> None:
         if overrides is not None:
@@ -364,9 +372,20 @@ class TestGcodeSignals:
             assert manager.load_gate() is False
 
     def test_unload(self, manager, qtbot) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
             assert manager.unload() is True
         assert blocker.args == ["MMU_UNLOAD"]
+
+    # Happy-Hare drops MMU_UNLOAD when disabled or already unloaded (mmu.py:6981).
+    @pytest.mark.parametrize(
+        "overrides", [None, {"filament_pos": 0}, {"enabled": False}]
+    )
+    def test_unload_refused(self, manager, qtbot, overrides) -> None:
+        if overrides is not None:
+            manager.update_mmu_state(_status(**overrides))
+        with qtbot.assertNotEmitted(manager.run_gcode_signal):
+            assert manager.unload() is False
 
     def test_eject_gate(self, manager, qtbot) -> None:
         manager.update_mmu_state(_status(filament_pos=0))
@@ -398,7 +417,13 @@ class TestGcodeSignals:
 
     # MMU_CHECK_GATE runs a full unload first when filament is loaded.
     @pytest.mark.parametrize(
-        "overrides", [None, {"filament_pos": 10}, {"filament_pos": 0, "gate": -2}]
+        "overrides",
+        [
+            None,
+            {"filament_pos": 10},
+            {"filament_pos": 0, "gate": -2},
+            {"filament_pos": 0, "is_homed": False},
+        ],
     )
     def test_check_gate_refused(self, manager, qtbot, overrides) -> None:
         if overrides is not None:
@@ -582,44 +607,6 @@ class TestIsAMUActive:
         assert mgr.is_amu_active() is False
 
 
-class TestSpoolManFetch:
-    def test_noop_when_mmu_state_none(self, manager, qtbot) -> None:
-        with qtbot.assertNotEmitted(manager.spool_fetched):
-            manager.fetch_spool(0, 42)
-        manager._ws.api.get_spool.assert_not_called()
-
-    def test_noop_when_spoolman_off(self, manager, qtbot) -> None:
-        status = {**_FULL_STATUS_WITH_SPOOLMAN, "spoolman_support": "off"}
-        manager.update_mmu_state(status)
-        with qtbot.assertNotEmitted(manager.spool_fetched):
-            manager.fetch_spool(0, 42)
-        manager._ws.api.get_spool.assert_not_called()
-
-    def test_emit_spool_fetched_on_sucess(self, manager, qtbot) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        spool_data = {"id": 42, "filament": {"name": "PLA"}, "used_weight": 50.0}
-        manager.fetch_spool(0, 42)
-        callback = manager._ws.api.get_spool.call_args.args[1]
-        with qtbot.waitSignal(manager.spool_fetched) as blocker:
-            callback(spool_data)
-        assert blocker.args[0] == 0
-        assert blocker.args[1] == spool_data
-
-    def test_no_emit_on_ws_failure(self, manager, qtbot) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.fetch_spool(0, 42)
-        callback = manager._ws.api.get_spool.call_args.args[1]
-        with qtbot.assertNotEmitted(manager.spool_fetched):
-            callback(None)
-
-    # -1 is Happy-Hare's "no spool", not a Spoolman id.
-    def test_noop_when_spool_id_unset(self, manager, qtbot) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        with qtbot.assertNotEmitted(manager.spool_fetched):
-            manager.fetch_spool(0, -1)
-        manager._ws.api.get_spool.assert_not_called()
-
-
 class TestUpdateSpoolWeight:
     # gates[-1] wraps, so an unselected gate hit the last gate's spool.
     @pytest.mark.parametrize("gate", [-1, -2, 2, 99])
@@ -689,18 +676,7 @@ class TestLoadCellUpdate:
         assert not hasattr(manager, "gate_weight_updated")
 
 
-class TestApplySpoolData:
-    # Happy-Hare's _spoolman_sync owns the gate map; writing it here races it.
-    def test_emits_no_gcode(self, manager, qtbot) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        with qtbot.assertNotEmitted(manager.run_gcode_signal):
-            manager._apply_spool_data(0, _SPOOL_DATA)
-
-    # A spool callback can land after on_klippy_state() dropped the state.
-    def test_noop_when_mmu_state_none(self, manager) -> None:
-        manager._apply_spool_data(0, _SPOOL_DATA)
-        assert manager.get_state() is None
-
+class TestGcodeQuoting:
     # User-typed Spoolman text must survive Klipper's shlex parse as one value.
     @pytest.mark.parametrize(
         ("name", "color"),
@@ -726,51 +702,6 @@ class TestApplySpoolData:
         assert params["COLOR"] == color.lstrip("#")
         assert params["SPOOLID"] == "42"
 
-    def test_triggered_by_spool_fetched_signal(self, manager, qtbot) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.fetch_spool(0, 42)
-        callback = manager._ws.api.get_spool.call_args.args[1]
-        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
-            callback({**_SPOOL_DATA, "remaining_weight": 1500.0})
-        assert blocker.args == ["MMU_GATE_MAP GATE=0 SPEED=33 TEMP=0 QUIET=1"]
-
-    def test_payload_without_id_is_dropped(self, manager, qtbot) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        with qtbot.assertNotEmitted(manager.run_gcode_signal):
-            manager._apply_spool_data(0, {"remaining_weight": 1500.0})
-
-    @staticmethod
-    def _speed_gcode(manager, remaining_weight, speed_override) -> list[str]:
-        manager.update_mmu_state(_status(gate_speed_override=[speed_override, 100]))
-        data = {k: v for k, v in _SPOOL_DATA.items() if k != "remaining_weight"}
-        if remaining_weight is not None:
-            data["remaining_weight"] = remaining_weight
-        signals = []
-        manager.run_gcode_signal.connect(signals.append)
-        manager._apply_spool_data(0, data)
-        return signals
-
-    @pytest.mark.parametrize("remaining_weight", [1000.1, 1500.0, 5000.0])
-    def test_heavy_spool_slows_the_gear(self, manager, remaining_weight) -> None:
-        assert self._speed_gcode(manager, remaining_weight, 100) == [
-            "MMU_GATE_MAP GATE=0 SPEED=33 TEMP=0 QUIET=1"
-        ]
-
-    @pytest.mark.parametrize("remaining_weight", [0.0, 950.0, 1000.0])
-    def test_light_spool_restores_full_speed(self, manager, remaining_weight) -> None:
-        assert self._speed_gcode(manager, remaining_weight, 33) == [
-            "MMU_GATE_MAP GATE=0 SPEED=100 TEMP=0 QUIET=1"
-        ]
-
-    @pytest.mark.parametrize(
-        ("remaining_weight", "speed_override"),
-        [(None, 100), (None, 33), (950.0, 100), (1500.0, 33)],
-    )
-    def test_speed_already_right_emits_nothing(
-        self, manager, remaining_weight, speed_override
-    ) -> None:
-        assert self._speed_gcode(manager, remaining_weight, speed_override) == []
-
 
 class TestAssignSpool:
     @staticmethod
@@ -787,15 +718,6 @@ class TestAssignSpool:
             "SPOOLID=42 TEMP=215 QUIET=1"
         ]
 
-    # The picker already holds the payload, so no Spoolman round trip.
-    def test_applies_payload_without_refetch(self, manager) -> None:
-        self._gcode(manager, 1, _SPOOL_DATA)
-        manager._ws.api.get_spool.assert_not_called()
-
-    def test_heavy_spool_slows_the_gear(self, manager) -> None:
-        gcode = self._gcode(manager, 1, {**_SPOOL_DATA, "remaining_weight": 1500.0})
-        assert gcode[1:] == ["MMU_GATE_MAP GATE=1 SPEED=33 TEMP=0 QUIET=1"]
-
     # Spoolman sends null for an unset extruder temp.
     def test_null_temp_lets_happy_hare_default_it(self, manager) -> None:
         filament = {**_SPOOL_DATA["filament"], "settings_extruder_temp": None}
@@ -803,34 +725,4 @@ class TestAssignSpool:
         assert "TEMP" not in gcode
 
     def test_unselected_gate_emits_nothing(self, manager) -> None:
-        heavy = {**_SPOOL_DATA, "remaining_weight": 1500.0}
-        assert self._gcode(manager, -1, heavy) == []
-
-
-class TestSetGateSpoolAutoFetch:
-    def test_calls_fetch_spool_when_activate(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.set_gate_spool(0, 42)
-        manager._ws.api.get_spool.assert_called_once()
-        assert manager._ws.api.get_spool.call_args.args[0] == 42
-
-    def test_skips_fetch_when_spool_id_minus_one(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.set_gate_spool(0, -1)
-        manager._ws.api.get_spool.assert_not_called()
-
-    def test_skips_fetch_when_no_state(self, manager) -> None:
-        manager.set_gate_spool(0, 42)
-        manager._ws.api.get_spool.assert_not_called()
-
-    def test_skips_fetch_when_spoolman_off(self, manager) -> None:
-        status = {**_FULL_STATUS_WITH_SPOOLMAN, "spoolman_support": "off"}
-        manager.update_mmu_state(status)
-        manager.set_gate_spool(0, 42)
-        manager._ws.api.get_spool.assert_not_called()
-
-    # No MMU_GATE_MAP was sent, so caching a spool for it would lie.
-    def test_skips_fetch_when_gate_unselected(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.set_gate_spool(-1, 42)
-        manager._ws.api.get_spool.assert_not_called()
+        assert self._gcode(manager, -1, _SPOOL_DATA) == []

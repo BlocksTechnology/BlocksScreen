@@ -127,6 +127,14 @@ def test_check_button_enabled_when_loaded(panel):
     assert not panel.Basic_fp_check_btn.isEnabled()
 
 
+# Happy-Hare refuses MMU_LOAD from a mid-path position; a sensorless printer must still load.
+@pytest.mark.parametrize(("mmu", "enabled"), [(True, False), (False, True)])
+def test_load_button_in_unknown_position(panel, mmu, enabled):
+    panel.mmu_configured = mmu
+    panel.filament_state = panel.FilamentStates.UNKNOWN
+    assert panel.Basic_fp_load_btn.isEnabled() is enabled
+
+
 def test_sensor_without_mmu_updates_position(panel):
     panel.filament_sensor = "presence"
     panel.on_filament_sensor_update("presence", "filament_detected", True)

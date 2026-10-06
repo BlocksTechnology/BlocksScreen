@@ -354,7 +354,12 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @filament_state.setter
     def filament_state(self, update: FilamentStates) -> None:
         self._filament_state = update
-        self.Basic_fp_load_btn.setEnabled(update is not self.FilamentStates.LOADED)
+        # Happy-Hare only loads from UNLOADED; a sensorless non-MMU printer stays UNKNOWN.
+        self.Basic_fp_load_btn.setEnabled(
+            update is self.FilamentStates.UNLOADED
+            if self.mmu_configured
+            else update is not self.FilamentStates.LOADED
+        )
         self.Basic_fp_unload_btn.setEnabled(update is not self.FilamentStates.UNLOADED)
         if self._lbl_pos.select_option(update.name.capitalize()):
             self._pos_committed = self._lbl_pos.text()
