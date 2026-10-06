@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import logging
 import shlex
 import typing
@@ -16,7 +15,6 @@ from .models import (
     GateInfo,
     GateStatus,
     MMUState,
-    SpoolInfo,
     SpoolmanSupport,
 )
 
@@ -40,8 +38,8 @@ def _gcode_value(value: object) -> str:
     """Quote a value for Klipper's shlex-based extended gcode parser."""
     if isinstance(value, float):
         value = round(value)
-    # Klipper cuts the line at ';' before shlex runs, even inside quotes.
-    text = " ".join(str(value).replace(";", " ").split())
+    # A raw newline would end the gcode line.
+    text = " ".join(str(value).split())
     return shlex.quote(text)
 
 
@@ -75,16 +73,13 @@ class AMUManager(QtCore.QObject):
         self._pre_gate_sensors: dict[int, bool] = {}
         self.spool_fetched.connect(self._apply_spool_data)
 
-    def _gate_map(
-        self, gate: int, *, reset_temp: bool = False, **params: object
-    ) -> bool:
+    def _gate_map(self, gate: int, **params: object) -> bool:
         """Emit MMU_GATE_MAP for one gate; False when no gate is selected yet."""
         if gate < 0:
             logger.warning("Ignoring gate command for unselected gate %d", gate)
             return False
-        # Omitted TEMP resets to default_extruder_temp; TEMP=0 keeps the current one.
-        if params.get("TEMP") is None and not reset_temp:
-            params["TEMP"] = 0
+        # TEMP=0 keeps the current temp; TEMP=None omits it, resetting to the default.
+        params.setdefault("TEMP", 0)
         args = "".join(
             f" {key}={_gcode_value(value)}"
             for key, value in params.items()
@@ -94,27 +89,13 @@ class AMUManager(QtCore.QObject):
         return True
 
     def _apply_spool_data(self, gate: int, data: dict) -> None:
-        """Cache a Spoolman payload under its spool id; Happy-Hare owns the gate map."""
-        if self._mmu_state is None:
-            return
-        spool_id = data.get("id", -1)
-        if spool_id == -1:
+        """Set the gate's gear speed from a Spoolman payload's remaining weight."""
+        if data.get("id", -1) == -1:
             logger.warning("Spool payload for gate %d carries no id", gate)
             return
-        bed_temp = (data.get("filament") or {}).get("settings_bed_temp")
-        used = data.get("used_weight")
         remaining = data.get("remaining_weight")
-        spools = dict(self._mmu_state.spools)
-        spools[spool_id] = SpoolInfo(
-            spool_id=spool_id,
-            used_weight_g=None if used is None else float(used),
-            remaining_weight=None if remaining is None else float(remaining),
-            bed_temp=None if bed_temp is None else int(bed_temp),
-        )
-        self._mmu_state = dataclasses.replace(self._mmu_state, spools=spools)
         if remaining is not None:
             self._apply_speed_profile(gate, float(remaining))
-        self.mmu_state_changed.emit(self._mmu_state)
 
     def _apply_speed_profile(self, gate: int, remaining_weight: float) -> None:
         """Slow the gear for a heavy spool and restore it once the spool is light."""
@@ -179,7 +160,6 @@ class AMUManager(QtCore.QObject):
         """Map every field of *gate*; a None temperature takes Happy-Hare's default."""
         return self._gate_map(
             gate,
-            reset_temp=temperature is None,
             NAME=filament_name,
             MATERIAL=material,
             COLOR=color.lstrip("#"),
@@ -189,9 +169,7 @@ class AMUManager(QtCore.QObject):
 
     def clear_gate(self, gate: int) -> None:
         """Blank a gate's map entry the way Happy-Hare resets one."""
-        self._gate_map(
-            gate, reset_temp=True, NAME="", MATERIAL="", COLOR="", SPOOLID=-1
-        )
+        self._gate_map(gate, NAME="", MATERIAL="", COLOR="", SPOOLID=-1, TEMP=None)
 
     def set_gate_material(self, gate: int, material: str) -> None:
         """Set the material of *gate*, keeping its temperature."""
@@ -211,7 +189,7 @@ class AMUManager(QtCore.QObject):
             self.fetch_spool(gate, spool_id)
 
     def assign_spool(self, gate: int, spool: dict) -> None:
-        """Map *gate* from a Spoolman spool payload and cache it without a refetch."""
+        """Map *gate* from a Spoolman spool payload and apply it without a refetch."""
         filament = spool.get("filament") or {}
         if self.set_gate_info(
             gate,

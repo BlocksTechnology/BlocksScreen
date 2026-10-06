@@ -7,7 +7,6 @@ from .models import (
     GateInfo,
     GateStatus,
     MMUState,
-    SpoolInfo,
     SpoolmanSupport,
 )
 
@@ -19,6 +18,5 @@ __all__: list[str] = [
     "GateInfo",
     "GateStatus",
     "MMUState",
-    "SpoolInfo",
     "SpoolmanSupport",
 ]

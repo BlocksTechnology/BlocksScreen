@@ -126,8 +126,7 @@ class AMUpage(QtWidgets.QStackedWidget):
             return
         btn = self.carousel.buttons[idx]
         self.current_index = idx
-        self.info_panel.setFilamentStatus(mmu_state)
-        self.info_panel.update_for_slot(idx, btn)
+        self.info_panel.update_for_slot(btn)
         self.carousel.selectIndex(idx)
 
     def _gate_temp(self) -> int | None:

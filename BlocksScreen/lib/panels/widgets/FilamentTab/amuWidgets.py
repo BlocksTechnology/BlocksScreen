@@ -289,9 +289,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
     def __init__(self, amu_manager, parent=None):
         super().__init__(parent)
         self.amu_manager = amu_manager
-        self._slot_index = -1
         self._color_hex = ""
-        self.Gate = -1
         self._build_ui()
 
     def _build_ui(self):
@@ -431,13 +429,8 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         btn_grid.addWidget(self._btn_cut, 1, 1)
         root.addLayout(btn_grid)
 
-    def setFilamentStatus(self, mmu_state):
-        """Track the active gate from MMU state."""
-        self.Gate = mmu_state.gate
-
     def clear_slot(self, *, can_unload: bool) -> None:
         """Show no gate selected; Happy-Hare's bare gate commands have no target."""
-        self._slot_index = -1
         self._lbl_gate.setText("Gate —")
         self._lbl_status.setText(self._UNKNOWN_TEXT)
         self._lbl_temp.setText("—")
@@ -450,9 +443,8 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         self._btn_purge.setEnabled(False)
         self._btn_cut.setEnabled(False)
 
-    def update_for_slot(self, index: int, btn: Spoll_button) -> None:
-        """Show *btn*'s gate and enable only the actions valid for it."""
-        self._slot_index = index
+    def update_for_slot(self, btn: Spoll_button) -> None:
+        """Show the selected gate *btn*; bare HH gate commands act only on it."""
         color = btn.color
         r, g, b = color.red(), color.green(), color.blue()
 
@@ -462,10 +454,9 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         status = gate_info.status if gate_info is not None else GateStatus.UNKNOWN
         text = self._STATUS_TEXT.get(status, self._UNKNOWN_TEXT)
 
-        is_active_gate = index == self.Gate
         filament_pos = btn.filament_pos
-        loaded = is_active_gate and filament_pos != FilamentPos.UNLOADED
-        can_check = is_active_gate and filament_pos == FilamentPos.UNLOADED
+        loaded = filament_pos != FilamentPos.UNLOADED
+        can_check = not loaded
         can_feed = can_check and status != GateStatus.EMPTY
         if loaded:
             text = (

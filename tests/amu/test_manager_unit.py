@@ -7,7 +7,7 @@ import pytest
 from PyQt6 import QtCore
 
 from BlocksScreen.devices.amu.manager import AMUManager
-from BlocksScreen.devices.amu.models import MMUState, SpoolInfo
+from BlocksScreen.devices.amu.models import MMUState
 from tests.amu.conftest import (
     COMMENTED_CFG as _COMMENTED_CFG,
 )
@@ -17,8 +17,8 @@ from tests.amu.conftest import (
 
 
 def _klipper_parse(rawparams: str) -> dict[str, str]:
-    """Klipper's gcode.py:206 comment cut plus _get_extended_params (gcode.py:266)."""
-    lexer = shlex.shlex(rawparams.split(";", 1)[0], posix=True)
+    """Klipper's _get_extended_params (gcode.py:266); its ';' cut only derives cmd."""
+    lexer = shlex.shlex(rawparams, posix=True)
     lexer.whitespace_split = True
     lexer.commenters = "#;"
     return {k.upper(): v for k, v in (arg.split("=", 1) for arg in lexer)}
@@ -192,15 +192,6 @@ class TestUpdateMMUState:
         manager.update_mmu_state(_FULL_STATUS)
         with qtbot.waitSignal(manager.mmu_state_changed):
             manager.update_mmu_state({"tool": 1})
-
-    def test_from_status_parses_gate_speed_override(self, manager) -> None:
-        manager.update_mmu_state({**_FULL_STATUS, "gate_speed_override": [100, 80]})
-        gates = manager.get_state().gates
-        assert (gates[0].speed_override, gates[1].speed_override) == (100, 80)
-
-    def test_from_status_gate_speed_override_defaults_to_100(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS)
-        assert manager.get_state().gates[0].speed_override == 100
 
     def test_from_status_parses_endless_spool_groups(self, manager) -> None:
         data = {**_FULL_STATUS, "endless_spool_groups": [0, 1, 3, 0]}
@@ -695,7 +686,6 @@ class TestLoadCellUpdate:
             manager.on_object_updated(
                 "load_cell", "load_cell_mmu_0", {"force_g": 150.0}
             )
-        assert manager.get_state().spools == {}
         assert not hasattr(manager, "gate_weight_updated")
 
 
@@ -711,7 +701,7 @@ class TestApplySpoolData:
         manager._apply_spool_data(0, _SPOOL_DATA)
         assert manager.get_state() is None
 
-    # User-typed Spoolman text must survive Klipper's ';' cut and shlex.
+    # User-typed Spoolman text must survive Klipper's shlex parse as one value.
     @pytest.mark.parametrize(
         ("name", "color"),
         [
@@ -732,51 +722,22 @@ class TestApplySpoolData:
         gcode = blocker.args[0]
         assert "\n" not in gcode
         params = _klipper_parse(gcode.removeprefix("MMU_GATE_MAP "))
-        assert params["NAME"] == " ".join(name.replace(";", " ").split())
+        assert params["NAME"] == " ".join(name.split())
         assert params["COLOR"] == color.lstrip("#")
         assert params["SPOOLID"] == "42"
-
-    def test_caches_spool_under_its_id(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager._apply_spool_data(0, _SPOOL_DATA)
-        assert manager.get_state().spools[42] == SpoolInfo(
-            spool_id=42, used_weight_g=50.0, remaining_weight=950.0, bed_temp=60
-        )
-
-    def test_reachable_through_spool_for_gate(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager._apply_spool_data(0, _SPOOL_DATA)
-        assert manager.get_state().spool_for_gate(0).used_weight_g == 50.0
 
     def test_triggered_by_spool_fetched_signal(self, manager, qtbot) -> None:
         manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
         manager.fetch_spool(0, 42)
         callback = manager._ws.api.get_spool.call_args.args[1]
-        with qtbot.waitSignal(manager.mmu_state_changed) as blocker:
-            callback(_SPOOL_DATA)
-        assert blocker.args == [manager.get_state()]
-        assert manager.get_state().spools[42].remaining_weight == 950.0
+        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
+            callback({**_SPOOL_DATA, "remaining_weight": 1500.0})
+        assert blocker.args == ["MMU_GATE_MAP GATE=0 SPEED=33 TEMP=0 QUIET=1"]
 
-    # An id-less payload cannot be keyed.
     def test_payload_without_id_is_dropped(self, manager, qtbot) -> None:
         manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        with qtbot.assertNotEmitted(manager.mmu_state_changed):
-            manager._apply_spool_data(0, {"used_weight": 50.0})
-        assert manager.get_state().spools == {}
-
-    def test_spool_without_filament_block(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        data = {k: v for k, v in _SPOOL_DATA.items() if k != "filament"}
-        manager._apply_spool_data(0, data)
-        spool = manager.get_state().spools[42]
-        assert (spool.bed_temp, spool.used_weight_g) == (None, 50.0)
-
-    def test_mid_usage_spool_no_remaining_weight(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        data = {k: v for k, v in _SPOOL_DATA.items() if k != "remaining_weight"}
-        manager._apply_spool_data(0, data)
-        spool = manager.get_state().spools[42]
-        assert (spool.remaining_weight, spool.bed_temp) == (None, 60)
+        with qtbot.assertNotEmitted(manager.run_gcode_signal):
+            manager._apply_spool_data(0, {"remaining_weight": 1500.0})
 
     @staticmethod
     def _speed_gcode(manager, remaining_weight, speed_override) -> list[str]:
@@ -827,9 +788,8 @@ class TestAssignSpool:
         ]
 
     # The picker already holds the payload, so no Spoolman round trip.
-    def test_caches_payload_without_refetch(self, manager) -> None:
+    def test_applies_payload_without_refetch(self, manager) -> None:
         self._gcode(manager, 1, _SPOOL_DATA)
-        assert manager.get_state().spools[42].remaining_weight == 950.0
         manager._ws.api.get_spool.assert_not_called()
 
     def test_heavy_spool_slows_the_gear(self, manager) -> None:
@@ -842,9 +802,9 @@ class TestAssignSpool:
         (gcode,) = self._gcode(manager, 1, {**_SPOOL_DATA, "filament": filament})
         assert "TEMP" not in gcode
 
-    def test_unselected_gate_maps_and_caches_nothing(self, manager) -> None:
-        assert self._gcode(manager, -1, _SPOOL_DATA) == []
-        assert manager.get_state().spools == {}
+    def test_unselected_gate_emits_nothing(self, manager) -> None:
+        heavy = {**_SPOOL_DATA, "remaining_weight": 1500.0}
+        assert self._gcode(manager, -1, heavy) == []
 
 
 class TestSetGateSpoolAutoFetch:

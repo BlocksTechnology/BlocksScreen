@@ -100,7 +100,7 @@ _SCALAR_COERCE: dict[str, Callable] = {
 
 @dataclass(frozen=True, slots=True)
 class GateInfo:
-    """One gate as Happy-Hare publishes it; Spoolman extras live in SpoolInfo."""
+    """One gate as Happy-Hare publishes it."""
 
     index: int
     status: GateStatus = GateStatus.UNKNOWN
@@ -117,16 +117,6 @@ class GateInfo:
     def is_available(self) -> bool:
         """Return True if the gate has filament available to load."""
         return self.status in (GateStatus.AVAILABLE, GateStatus.AVAILABLE_FROM_BUFFER)
-
-
-@dataclass(frozen=True, slots=True)
-class SpoolInfo:
-    """Spoolman-only spool data; Happy-Hare publishes none of these fields."""
-
-    spool_id: int
-    used_weight_g: float | None = None
-    remaining_weight: float | None = None
-    bed_temp: int | None = None
 
 
 def _gates(arrays: Mapping[str, Sequence], num_gates: int) -> tuple[GateInfo, ...]:
@@ -166,7 +156,6 @@ class MMUState:
     pending_spool_id: int = -1
     operation: str = ""
     sensors: dict[str, bool | None] = dataclasses.field(default_factory=dict)
-    spools: dict[int, SpoolInfo] = dataclasses.field(default_factory=dict)
     endless_spool_groups: tuple[int, ...] = dataclasses.field(default_factory=tuple)
 
     @property
@@ -215,12 +204,6 @@ class MMUState:
         if 0 <= tool < len(self.ttg_map):
             return self.ttg_map[tool]
         return -1
-
-    def spool_for_gate(self, gate: int) -> SpoolInfo | None:
-        """Return the Spoolman data cached for the spool sitting at *gate*, if any."""
-        if not 0 <= gate < len(self.gates):
-            return None
-        return self.spools.get(self.gates[gate].spool_id)
 
     def apply_diff(self, diff: dict) -> MMUState:
         """Return a new MMUState with a notify_status_update diff applied."""

@@ -9,7 +9,6 @@ from BlocksScreen.devices.amu.models import (
     GateInfo,
     GateStatus,
     MMUState,
-    SpoolInfo,
     SpoolmanSupport,
 )
 
@@ -247,13 +246,6 @@ class TestMMUState:
         )
         assert updated.gates[1] == state.gates[1]
 
-    def test_gate_array_diff_leaves_spools_alone(self) -> None:
-        """Spoolman data is keyed by spool id, so no gate array can invalidate it."""
-        state = MMUState.from_status(self._full_status())
-        spools = {42: SpoolInfo(spool_id=42, used_weight_g=50.0, bed_temp=60)}
-        state = dataclasses.replace(state, spools=spools)
-        assert state.apply_diff({"gate_status": [2, 0]}).spools == spools
-
     def test_from_status_parses_speed_override_per_gate(self) -> None:
         state = MMUState.from_status(self._full_status_extended())
         assert (state.gates[0].speed_override, state.gates[1].speed_override) == (
@@ -274,21 +266,6 @@ class TestMMUState:
         state = state.apply_diff({"drying_state": ["complete", "queued"]})
         assert [g.drying_state for g in state.gates] == ["complete", "queued"]
         assert state.gates[0].speed_override == 100
-
-    def test_spool_for_gate(self) -> None:
-        state = MMUState.from_status(self._full_status())
-        spool = SpoolInfo(spool_id=42, used_weight_g=50.0)
-        state = dataclasses.replace(state, spools={42: spool})
-        assert state.spool_for_gate(0) is spool
-
-    # gates[-1] wraps and gate 1 holds spool_id -1, so both must miss.
-    @pytest.mark.parametrize("gate", [-1, 1, 99])
-    def test_spool_for_gate_none(self, gate: int) -> None:
-        state = MMUState.from_status(self._full_status())
-        state = dataclasses.replace(
-            state, spools={42: SpoolInfo(spool_id=42, used_weight_g=50.0)}
-        )
-        assert state.spool_for_gate(gate) is None
 
     def test_apply_diff_num_gates_resizes_gates(self) -> None:
         """A variant switch resizes gates without touching any gate_* array."""
