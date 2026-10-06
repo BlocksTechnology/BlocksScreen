@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
 _TEXT_LEFT_PADDING = 10  # gap between the left icon and the text, all list pages
+_RIGHT_TEXT_GAP = 10  # gap between the elided main text and the right text
 
 
 @dataclass(slots=True)
@@ -352,22 +353,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         item: ListItem = index.data(QtCore.Qt.ItemDataRole.UserRole)
         target_width = option.rect.width()
 
-        if item._lfontsize > 0 and item._lfontsize != option.font.pointSize():
-            f = QtGui.QFont(option.font)
-            f.setPointSize(item._lfontsize)
-            fm = QtGui.QFontMetrics(f)
-        else:
-            fm = option.fontMetrics
-
-        right_text_w = 0
-        if item.right_text:
-            if item._rfontsize > 0 and item._rfontsize != option.font.pointSize():
-                fr = QtGui.QFont(option.font)
-                fr.setPointSize(item._rfontsize)
-                fmr = QtGui.QFontMetrics(fr)
-            else:
-                fmr = option.fontMetrics
-            right_text_w = fmr.horizontalAdvance(item.right_text)
+        font, right_font = self._fonts(item, option.font)
+        fm = QtGui.QFontMetrics(font)
+        right_text_w = QtGui.QFontMetrics(right_font).horizontalAdvance(item.right_text)
 
         collapsed_h = int(item.height * 1.1)
         text_rect = self._text_rect(
@@ -396,22 +384,36 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         return QtCore.QSize(target_width, int(final_height * 1.2))
 
     @staticmethod
+    def _fonts(item: ListItem, base: QtGui.QFont) -> tuple[QtGui.QFont, QtGui.QFont]:
+        """Main and right-text fonts of *item*, shared by sizeHint and paint."""
+        font = QtGui.QFont(base)
+        if item._lfontsize > 0:
+            font.setPointSize(item._lfontsize)
+        right_font = QtGui.QFont(font)
+        if item._rfontsize > 0:
+            right_font.setPointSize(item._rfontsize)
+        return font, right_font
+
+    @staticmethod
     def _text_rect(
         item: ListItem, row: QtCore.QRect, right_text_w: int
     ) -> QtCore.QRectF:
-        """Main-text area of *row*, shared by sizeHint and paint so overflow matches elision."""
+        """Main-text area of *row*; shared so overflow matches what paint elides."""
         rect = row.adjusted(2, 2, -2, -2)
         icon = item.height * 0.8
         left = rect.left() + 10 + (icon + _TEXT_LEFT_PADDING if item.left_icon else 0)
         right = rect.right() - item.height * 0.1 - icon - right_text_w - 10
+        if item.right_text:
+            right -= _RIGHT_TEXT_GAP
         return QtCore.QRectF(left, rect.top(), right - left, rect.height())
 
     @staticmethod
     def _collapsed_lines(text: str, max_lines: int) -> list[str]:
-        """Lines a collapsed row draws; overflow folds into the last so elision marks the cut."""
+        """Collapsed-row lines; overflow lines join the last one, blanks dropped."""
         lines = text.split("\n")
         if len(lines) > max_lines:
-            lines[max_lines - 1 :] = [" ".join(lines[max_lines - 1 :])]
+            tail = [line.strip() for line in lines[max_lines - 1 :] if line.strip()]
+            lines[max_lines - 1 :] = [" ".join(tail)]
         return lines
 
     def paint(
@@ -478,17 +480,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
 
         painter.setPen(QtGui.QColor(255, 255, 255))
 
-        _font = painter.font()
-        if item._lfontsize > 0:
-            _font.setPointSize(item._lfontsize)
+        _font, right_font = self._fonts(item, painter.font())
         painter.setFont(_font)
-
         metrics = QtGui.QFontMetrics(_font)
-
-        right_font = QtGui.QFont(_font)
-        if item._rfontsize > 0:
-            right_font.setPointSize(item._rfontsize)
-
         right_metrics = QtGui.QFontMetrics(right_font)
 
         text_rect = self._text_rect(
@@ -521,7 +515,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.setFont(right_font)
             painter.setPen(QtGui.QColor(160, 160, 160))
             painter.drawText(
-                int(text_rect.right()),
+                int(text_rect.right() + _RIGHT_TEXT_GAP),
                 int(
                     ellipse_rect.top()
                     + (ellipse_rect.height() + right_metrics.ascent()) / 2

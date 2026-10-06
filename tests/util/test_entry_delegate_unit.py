@@ -228,6 +228,27 @@ class TestNeedsExpansion:
             delegate.sizeHint(_option(0), model.index(0))
             assert item.needs_expansion is expected
 
+    @pytest.mark.parametrize(
+        "option_rect",
+        [
+            QtCore.QRect(0, 0, ROW_W, ROW_H),
+            # A real QListView passes the whole viewport, not the row.
+            QtCore.QRect(0, 0, 498, 284),
+        ],
+    )
+    def test_line_count_limit_is_the_collapsed_row(self, delegate, option_rect):
+        option = QtWidgets.QStyleOptionViewItem()
+        option.rect = option_rect
+        item = ListItem(text="", height=ROW_H)
+        row = QtCore.QRect(0, 0, option_rect.width(), int(ROW_H * 1.1))
+        text_h = int(EntryDelegate._text_rect(item, row, 0).height())
+        max_lines = max(1, text_h // option.fontMetrics.lineSpacing())
+        model = EntryListModel([item])
+        for count, expected in ((max_lines, False), (max_lines + 1, True)):
+            item.text = "\n".join("x" * count)
+            delegate.sizeHint(option, model.index(0))
+            assert item.needs_expansion is expected
+
 
 class TestCollapsedLines:
     def test_lines_that_fit_are_kept(self):
@@ -238,3 +259,84 @@ class TestCollapsedLines:
 
     def test_single_line_row_joins_everything(self):
         assert EntryDelegate._collapsed_lines("a\nb", 1) == ["a b"]
+
+    def test_blank_overflow_lines_are_dropped(self):
+        assert EntryDelegate._collapsed_lines("a\n\n\nb", 1) == ["a b"]
+        assert EntryDelegate._collapsed_lines("a\nb\n \nc", 2) == ["a", "b c"]
+
+
+class _RecordingPainter(QtGui.QPainter):
+    """Real painter that also records every drawText call."""
+
+    def __init__(self, device):
+        super().__init__(device)
+        self.calls = []
+
+    def drawText(self, *args):
+        self.calls.append(args)
+        super().drawText(*args)
+
+
+def _paint(delegate, item):
+    """Paint *item* at its sizeHint size; return the recorded drawText calls."""
+    model = EntryListModel([item])
+    size = delegate.sizeHint(_option(0), model.index(0))
+    option = QtWidgets.QStyleOptionViewItem()
+    option.rect = QtCore.QRect(QtCore.QPoint(0, 0), size)
+    image = QtGui.QImage(size, QtGui.QImage.Format.Format_ARGB32)
+    painter = _RecordingPainter(image)
+    try:
+        delegate.paint(painter, option, model.index(0))
+    finally:
+        painter.end()
+    return painter.calls
+
+
+class TestPaint:
+    def test_collapsed_row_folds_overflow_into_elided_last_line(self, delegate):
+        item = ListItem(text="\n".join(f"line {i}" for i in range(20)), height=ROW_H)
+        [(rect, _flags, text)] = _paint(delegate, item)
+        drawn = text.split("\n")
+        max_lines = max(
+            1, int(rect.height()) // QtGui.QFontMetrics(QtGui.QFont()).lineSpacing()
+        )
+        assert item.needs_expansion is True
+        assert len(drawn) == max_lines
+        assert drawn[:-1] == [f"line {i}" for i in range(max_lines - 1)]
+        assert drawn[-1].endswith("…")
+
+    def test_right_text_clears_the_elided_main_text(self, delegate):
+        # Narrow glyphs elide flush to the rect edge, so only the gap separates them.
+        item = ListItem(
+            text="i" * 500,
+            right_text="123 KB",
+            height=ROW_H,
+            left_icon=QtGui.QPixmap(1, 1),
+        )
+        [(rect, _flags, text), (x, _y, right)] = _paint(delegate, item)
+        fm = QtGui.QFontMetrics(QtGui.QFont())
+        assert right == "123 KB"
+        assert text.endswith("…")
+        assert x - (rect.left() + fm.horizontalAdvance(text)) >= 5
+
+    def test_right_text_keeps_its_dev_position(self, delegate):
+        item = ListItem(text="A", right_text="123 KB", height=ROW_H)
+        [_main, (x, _y, _right)] = _paint(delegate, item)
+        rt_w = QtGui.QFontMetrics(QtGui.QFont()).horizontalAdvance("123 KB")
+        # Row inset 2, arrow slot 0.9 * height, 10px margin.
+        assert x == pytest.approx(ROW_W - 1 - 2 - 0.9 * ROW_H - rt_w - 10, abs=1)
+
+    def test_text_size_hint_fits_is_painted_whole(self, delegate):
+        # Left font set, right font not: both must derive the right font the same way.
+        item = ListItem(text="", right_text="123 KB", _lfontsize=20, height=ROW_H)
+        model = EntryListModel([item])
+        fits = ""
+        while True:
+            item.text = fits + "x"
+            delegate.sizeHint(_option(0), model.index(0))
+            if item.needs_expansion:
+                break
+            fits += "x"
+        item.text = fits
+        [(_rect, _flags, painted), _right] = _paint(delegate, item)
+        assert painted == fits
