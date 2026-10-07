@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
 _TEXT_LEFT_PADDING = 10  # gap between the left icon and the text, all list pages
+_RIGHT_TEXT_GAP = 10  # gap between the elided main text and the right text
 
 
 @dataclass(slots=True)
@@ -352,51 +353,68 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         item: ListItem = index.data(QtCore.Qt.ItemDataRole.UserRole)
         target_width = option.rect.width()
 
-        base_h = item.height
-        ellipse_size = base_h * 0.8
+        font, right_font = self._fonts(item, option.font)
+        fm = QtGui.QFontMetrics(font)
+        right_text_w = QtGui.QFontMetrics(right_font).horizontalAdvance(item.right_text)
 
-        right_reserved = base_h
+        collapsed_h = int(item.height * 1.1)
+        text_rect = self._text_rect(
+            item,
+            QtCore.QRect(option.rect.x(), option.rect.y(), target_width, collapsed_h),
+            right_text_w,
+        )
+        text_avail_width = max(int(text_rect.width()), 50)
+        lines = item.text.split("\n")
+        max_lines = max(1, int(text_rect.height()) // fm.lineSpacing())
 
-        left_reserved = 10
-        if item.left_icon:
-            left_reserved = (base_h * 0.1) + ellipse_size + 8 + _TEXT_LEFT_PADDING
-
-        if item._lfontsize > 0 and item._lfontsize != option.font.pointSize():
-            f = QtGui.QFont(option.font)
-            f.setPointSize(item._lfontsize)
-            fm = QtGui.QFontMetrics(f)
-        else:
-            fm = option.fontMetrics
-
-        if item.right_text:
-            if item._rfontsize > 0 and item._rfontsize != option.font.pointSize():
-                fr = QtGui.QFont(option.font)
-                fr.setPointSize(item._rfontsize)
-                fmr = QtGui.QFontMetrics(fr)
-            else:
-                fmr = option.fontMetrics
-            right_reserved += fmr.horizontalAdvance(item.right_text) + 10
-
-        if item.right_icon:
-            right_reserved += ellipse_size
-
-        text_avail_width = max(target_width - left_reserved - right_reserved, 50)
-
-        single_line_width = fm.horizontalAdvance(item.text)
-
-        item.needs_expansion = single_line_width > text_avail_width
+        item.needs_expansion = len(lines) > max_lines or any(
+            fm.horizontalAdvance(line) > text_avail_width for line in lines
+        )
 
         if not item.is_expanded:
-            return QtCore.QSize(target_width, int(item.height * 1.1))
+            return QtCore.QSize(target_width, collapsed_h)
 
-        text_rect = fm.boundingRect(
-            QtCore.QRect(0, 0, int(text_avail_width), 0),
+        bounds = fm.boundingRect(
+            QtCore.QRect(0, 0, text_avail_width, 0),
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextWordWrap,
             item.text,
         )
 
-        final_height = max(item.height, text_rect.height() - 1)
+        final_height = max(item.height, bounds.height() - 1)
         return QtCore.QSize(target_width, int(final_height * 1.2))
+
+    @staticmethod
+    def _fonts(item: ListItem, base: QtGui.QFont) -> tuple[QtGui.QFont, QtGui.QFont]:
+        """Main and right-text fonts of *item*, shared by sizeHint and paint."""
+        font = QtGui.QFont(base)
+        if item._lfontsize > 0:
+            font.setPointSize(item._lfontsize)
+        right_font = QtGui.QFont(font)
+        if item._rfontsize > 0:
+            right_font.setPointSize(item._rfontsize)
+        return font, right_font
+
+    @staticmethod
+    def _text_rect(
+        item: ListItem, row: QtCore.QRect, right_text_w: int
+    ) -> QtCore.QRectF:
+        """Main-text area of *row*; shared so overflow matches what paint elides."""
+        rect = row.adjusted(2, 2, -2, -2)
+        icon = item.height * 0.8
+        left = rect.left() + 10 + (icon + _TEXT_LEFT_PADDING if item.left_icon else 0)
+        right = rect.right() - item.height * 0.1 - icon - right_text_w - 10
+        if item.right_text:
+            right -= _RIGHT_TEXT_GAP
+        return QtCore.QRectF(left, rect.top(), right - left, rect.height())
+
+    @staticmethod
+    def _collapsed_lines(text: str, max_lines: int) -> list[str]:
+        """Collapsed-row lines; overflow lines join the last one, blanks dropped."""
+        lines = text.split("\n")
+        if len(lines) > max_lines:
+            tail = [line.strip() for line in lines[max_lines - 1 :] if line.strip()]
+            lines[max_lines - 1 :] = [" ".join(tail)]
+        return lines
 
     def paint(
         self,
@@ -421,7 +439,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if item.allow_expand and item.needs_expansion:
             item.right_icon = self._expand_arrow(item.is_expanded)
 
-        # Background Color
         pressed_color = QtGui.QColor("#1A8FBF")
         pressed_color.setAlpha(90 if item.selected else 20)
 
@@ -429,9 +446,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         painter.setBrush(pressed_color)
         painter.fillPath(path, pressed_color)
 
-        # Geometry Calc
-
-        # ICON SPACEEE
         ellipse_size = item.height * 0.8
         ellipse_margin = (item.height - ellipse_size) / 2
         ellipse_rect = QtCore.QRectF(
@@ -447,7 +461,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             )
             painter.drawPixmap(ellipse_rect.toRect(), icon_scaled)
 
-        left_margin = 10
         left_icon_rect = QtCore.QRectF(
             rect.left() + ellipse_margin,
             rect.top() + ellipse_margin,
@@ -465,52 +478,24 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 left_pixmap = self._get_scaled(item.left_icon, icon_size)
             painter.drawPixmap(left_icon_rect.toRect(), left_pixmap)
 
-        text_margin = int(
-            rect.right() - ellipse_size - ellipse_margin - rect.height() * 0.10
-        )
-
-        text_left = (
-            rect.left()
-            + left_margin
-            + (left_icon_rect.width() + _TEXT_LEFT_PADDING if item.left_icon else 0)
-        )
-        text_rect = QtCore.QRectF(
-            text_left,
-            rect.top(),
-            text_margin - text_left,
-            rect.height(),
-        )
-
         painter.setPen(QtGui.QColor(255, 255, 255))
 
-        _font = painter.font()
-        if item._lfontsize > 0:
-            _font.setPointSize(item._lfontsize)
+        _font, right_font = self._fonts(item, painter.font())
         painter.setFont(_font)
-
         metrics = QtGui.QFontMetrics(_font)
-
-        right_font = QtGui.QFont(_font)
-        if item._rfontsize > 0:
-            right_font.setPointSize(item._rfontsize)
-
         right_metrics = QtGui.QFontMetrics(right_font)
 
-        right_text_x = (
-            ellipse_rect.right()
-            - right_metrics.horizontalAdvance(item.right_text)
-            - left_icon_rect.width()
-            - left_margin
+        text_rect = self._text_rect(
+            item, option.rect, right_metrics.horizontalAdvance(item.right_text)
         )
 
-        text = item.text.replace("\n", "")
-        # Logic: If not expanded, OR if expansion is not needed, draw single line
         if not item.is_expanded:
-            max_main_text_width = right_text_x - left_margin
-            text = metrics.elidedText(
-                text,
-                QtCore.Qt.TextElideMode.ElideRight,
-                int(max_main_text_width),
+            max_lines = max(1, int(text_rect.height()) // metrics.lineSpacing())
+            text = "\n".join(
+                metrics.elidedText(
+                    line, QtCore.Qt.TextElideMode.ElideRight, int(text_rect.width())
+                )
+                for line in self._collapsed_lines(item.text, max_lines)
             )
             painter.drawText(
                 text_rect,
@@ -518,20 +503,19 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 text,
             )
         else:
-            # Expanded mode
             painter.drawText(
                 text_rect,
                 QtCore.Qt.AlignmentFlag.AlignLeft
                 | QtCore.Qt.AlignmentFlag.AlignVCenter
                 | QtCore.Qt.TextFlag.TextWordWrap,
-                text,
+                item.text,
             )
 
         if item.right_text:
             painter.setFont(right_font)
             painter.setPen(QtGui.QColor(160, 160, 160))
             painter.drawText(
-                int(right_text_x),
+                int(text_rect.right() + _RIGHT_TEXT_GAP),
                 int(
                     ellipse_rect.top()
                     + (ellipse_rect.height() + right_metrics.ascent()) / 2
