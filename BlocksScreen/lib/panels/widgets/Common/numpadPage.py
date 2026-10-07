@@ -152,36 +152,24 @@ class CustomNumpad(QtWidgets.QWidget):
         )
         self.header_layout.addItem(spacerItem1)
 
-        self.numpad_title = BlocksLabel(self)
-        self.numpad_title.setMinimumSize(QtCore.QSize(500, 60))
-        self.numpad_title.setMaximumSize(QtCore.QSize(16777215, 60))
         font = QtGui.QFont()
         font.setPointSize(22)
-        self.numpad_title.setFont(font)
-        self.numpad_title.setAutoFillBackground(False)
-        self.numpad_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        palette = QtGui.QPalette()
-        palette.setColor(palette.ColorRole.Window, QtGui.QColor("#FFFFFF00"))
-        palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
-        self.numpad_title.setPalette(palette)
-        self.numpad_title.setObjectName("numpad_title")
-        self.header_layout.addWidget(
-            self.numpad_title,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
+
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
         )
 
+        self.numpad_title = QtWidgets.QLabel(self)
+        self.numpad_title.setMaximumSize(QtCore.QSize(16777215, 60))
+        self.numpad_title.setFont(font)
+        self.numpad_title.setSizePolicy(sizePolicy)
+        self.numpad_title.setStyleSheet("background: transparent; color: white;")
+        self.numpad_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.numpad_title.setObjectName("numpad_title")
+        self.header_layout.addWidget(self.numpad_title)
+
         self.numpad_back_btn = IconButton(self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.numpad_back_btn.sizePolicy().hasHeightForWidth()
-        )
-        self.numpad_back_btn.setSizePolicy(sizePolicy)
         self.numpad_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.numpad_back_btn.setPixmap(QtGui.QPixmap(":ui/media/btn_icons/back.svg"))
@@ -191,10 +179,7 @@ class CustomNumpad(QtWidgets.QWidget):
             1,
             QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
-        self.numpad_back_btn.rect().setX(self.numpad_back_btn.rect().x() + 60)
 
-        self.header_layout.setStretch(0, 1)
-        self.header_layout.setStretch(1, 0)
         self.main_content_layout.addLayout(self.header_layout, 1)
 
         self.value_and_range_layout = QtWidgets.QVBoxLayout()
