@@ -3,7 +3,7 @@ import typing
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.UtilitiesTab.axisMaintPage import AxisMaintPage
-from lib.panels.widgets.UtilitiesTab.infoPage import InfoPage
+from lib.panels.widgets.UtilitiesTab.configPage import ConfigPage
 from lib.panels.widgets.UtilitiesTab.inputshaperPage import InputShaperPage
 from lib.panels.widgets.UtilitiesTab.ledsPage import LedsPage
 from lib.panels.widgets.UtilitiesTab.routinePage import RoutineCheckPage
@@ -39,7 +39,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     ) -> None:
         super().__init__(parent)
 
-        self.info_page: InfoPage = InfoPage(self)
+        self.config_page: ConfigPage = ConfigPage(self)
         self.leds_page: LedsPage = LedsPage(self)
         self.axes_page: AxisMaintPage = AxisMaintPage(self)
         self.routines_page: RoutineCheckPage = RoutineCheckPage(self)
@@ -69,8 +69,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_axes_btn.clicked.connect(
             lambda: self.change_page(self.indexOf(self.axes_page))
         )
-        self.up_info_btn.clicked.connect(
-            lambda: self.change_page(self.indexOf(self.info_page))
+        self.up_config_btn.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.config_page))
         )
         self.up_routine_check_btn.clicked.connect(
             lambda: self.change_page(self.indexOf(self.routines_page))
@@ -80,7 +80,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         )
 
         # --- Info ---
-        self.info_page.request_back_button.connect(self.request_back)
+        self.config_page.request_back_button.connect(self.request_back)
+        self.config_page.request_restart.connect(self.restart_screen)
 
         # --- LEDs ---
         self.leds_page.request_back_button.connect(self.request_back)
@@ -119,6 +120,11 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # --- Websocket/Printer Signals ---
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
+
+    def restart_screen(self) -> None:
+        """Restart BlocksScreen so config changes read at startup take effect."""
+        if not self.ws.api.restart_service("BlocksScreen"):
+            QtWidgets.QApplication.quit()
 
     def ask_input_shaper(self) -> None:
         """Ask whether to run the automatic input shaper."""
@@ -198,16 +204,16 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_content_layout = QtWidgets.QGridLayout()
         self.up_content_layout.setObjectName("up_content_layout")
 
-        self.up_info_btn = BlocksCustomButton(parent=self.utilitiesPage)
-        self.up_info_btn.setSizePolicy(sizePolicy)
-        self.up_info_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.up_info_btn.setMaximumSize(QtCore.QSize(250, 80))
-        self.up_info_btn.setFont(font)
-        self.up_info_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
+        self.up_config_btn = BlocksCustomButton(parent=self.utilitiesPage)
+        self.up_config_btn.setSizePolicy(sizePolicy)
+        self.up_config_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.up_config_btn.setMaximumSize(QtCore.QSize(250, 80))
+        self.up_config_btn.setFont(font)
+        self.up_config_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/printer_settings.svg")
         )
-        self.up_info_btn.setObjectName("up_info_btn")
-        self.up_content_layout.addWidget(self.up_info_btn, 0, 0, 1, 1)
+        self.up_config_btn.setObjectName("up_config_btn")
+        self.up_content_layout.addWidget(self.up_config_btn, 0, 0, 1, 1)
 
         self.up_leds_btn = BlocksCustomButton(parent=self.utilitiesPage)
         self.up_leds_btn.setSizePolicy(sizePolicy)
@@ -272,7 +278,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # Info
 
-        self.addWidget(self.info_page)
+        self.addWidget(self.config_page)
 
         # Leds Page
 
@@ -295,7 +301,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         _translate = QtCore.QCoreApplication.translate
 
         self.up_title_label.setText(_translate("utilitiesTab", "Utilities"))
-        self.up_info_btn.setText(_translate("utilitiesTab", "Info"))
+        self.up_config_btn.setText(_translate("utilitiesTab", "Settings"))
         self.up_leds_btn.setText(_translate("utilitiesTab", "LED's"))
         self.up_routine_check_btn.setText(_translate("utilitiesTab", "Routine\nCheck"))
         self.up_axes_btn.setText(_translate("utilitiesTab", "Axis\nMaint."))
