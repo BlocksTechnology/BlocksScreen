@@ -256,6 +256,19 @@ def test_re_no_match() -> None:
             Severity.ERROR,
         ),
         (MessageSource.GCODE_ERROR, "gate empty", "Spool Empty", Severity.WARNING),
+        (
+            MessageSource.GCODE_ERROR,
+            "FlowGuard detected a clog.\nReason for trip: Compression stuck after "
+            "409.04 mm motion (triggering parameter: flowguard_max_relief)",
+            "Filament Clog Detected",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "FlowGuard detected a tangle.\nReason for trip: Tension stuck",
+            "Filament Tangle Detected",
+            Severity.ERROR,
+        ),
         # Gcode Echo
         (
             MessageSource.GCODE_ECHO,
