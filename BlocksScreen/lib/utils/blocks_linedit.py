@@ -109,6 +109,9 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         """Draw the text or placeholder."""
         text_rect = self._get_text_rect()
         display_text = self.text()
+        align = (
+            self.alignment() & QtCore.Qt.AlignmentFlag.AlignHorizontal_Mask
+        ) | QtCore.Qt.AlignmentFlag.AlignVCenter
 
         # Apply password masking
         if self._secret and display_text:
@@ -119,8 +122,7 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
             painter.setFont(self.font())
             painter.drawText(
                 text_rect,
-                QtCore.Qt.AlignmentFlag.AlignLeft
-                | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                align,
                 display_text,
             )
         else:
@@ -129,7 +131,6 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
             painter.setFont(self.font())
             painter.drawText(
                 text_rect,
-                QtCore.Qt.AlignmentFlag.AlignLeft
-                | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                align,
                 self._placeholder_str,
             )

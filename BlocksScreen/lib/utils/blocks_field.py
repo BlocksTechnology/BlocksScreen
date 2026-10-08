@@ -2,20 +2,33 @@ import typing
 
 from lib.utils.blocks_combobox import BlocksComboBox
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+BOOLEAN_STATES = {
+    "1": True,
+    "yes": True,
+    "true": True,
+    "on": True,
+    "0": False,
+    "no": False,
+    "false": False,
+    "off": False,
+}
 
 
 class BlocksField(QtWidgets.QWidget):
-    """Label row whose right side is a label, line edit or dropdown."""
+    """Label row whose right side is a label, line edit, dropdown or toggle."""
 
     on_edit = QtCore.pyqtSignal(name="on-edit")
+    clicked = QtCore.pyqtSignal(name="clicked")
 
     def __init__(
         self,
         parent: QtWidgets.QWidget | None = None,
         left_text: str = "",
         line: typing.Literal["bottom", "upper"] | None = None,
-        editable: typing.Literal["LineEdit", "DropDownMenu"] | None = None,
+        editable: typing.Literal["LineEdit", "DropDownMenu", "Toggle"] | None = None,
     ) -> None:
         super().__init__(parent)
         self.line = line
@@ -25,8 +38,14 @@ class BlocksField(QtWidgets.QWidget):
 
     def _create_right_widget(self) -> QtWidgets.QWidget:
         if self.editable == "LineEdit":
+            font = QtGui.QFont()
+            font.setPointSize(13)
             lineedit = BlocksCustomLinEdit(self)
             lineedit.editingFinished.connect(self.on_edit)
+            lineedit.clicked.connect(self.clicked)
+            lineedit.setMinimumSize(QtCore.QSize(150, 50))
+            lineedit.setFont(font)
+            lineedit.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             lineedit.textChanged.connect(self._sync_static_label)
             return lineedit
         if self.editable == "DropDownMenu":
@@ -35,6 +54,12 @@ class BlocksField(QtWidgets.QWidget):
             combo.activated.connect(self.on_edit)
             combo.currentIndexChanged.connect(self._sync_static_label)
             return combo
+        if self.editable == "Toggle":
+            toggle = ToggleAnimatedButton(self)
+            toggle.setMinimumSize(QtCore.QSize(100, 50))
+            toggle.stateChange.connect(self.on_edit)
+            toggle.stateChange.connect(self._sync_static_label)
+            return toggle
         return self._create_label()
 
     def _create_label(self) -> QtWidgets.QLabel:
@@ -78,8 +103,8 @@ class BlocksField(QtWidgets.QWidget):
         sep = None
         if self.line is not None:
             sep = QtWidgets.QFrame(self)
-            sep.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-            sep.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+            sep.setFixedHeight(1)
+            sep.setStyleSheet("background-color: rgba(255, 255, 255, 50);")
 
         if sep and self.line == "upper":
             box.addWidget(sep)
@@ -98,9 +123,13 @@ class BlocksField(QtWidgets.QWidget):
         self._left_lbl.setText(text)
 
     def set_right_text(self, text: str) -> None:
-        """Set the right text"""
+        """Set the right text; a Toggle takes config booleans like "true"/"off"."""
         if self.editable == "DropDownMenu":
             raise TypeError("set_right_text() is not supported for DropDownMenu")
+        if self.editable == "Toggle":
+            states = BOOLEAN_STATES
+            self.set_checked(states.get(text.strip().lower(), False))
+            return
         self._right.setText(text)
 
     def set_right_stylesheet(self, stylesheet: str) -> None:
@@ -118,8 +147,22 @@ class BlocksField(QtWidgets.QWidget):
         self._require("DropDownMenu", "set_placeholder")
         self._right.setPlaceholderText(text)
 
+    def set_checked(self, checked: bool) -> None:
+        """Set the toggle state without emitting on_edit."""
+        self._require("Toggle", "set_checked")
+        with QtCore.QSignalBlocker(self._right):
+            self._right.state = ToggleAnimatedButton.State(checked)
+        self._sync_static_label()
+
+    def is_checked(self) -> bool:
+        """Return True when the toggle is on."""
+        self._require("Toggle", "is_checked")
+        return self._right.state.value
+
     def text(self) -> str:
-        """Return the current right-hand value."""
+        """Return the current right-hand value; a Toggle gives "true"/"false"."""
+        if isinstance(self._right, ToggleAnimatedButton):
+            return "true" if self._right.state.value else "false"
         if isinstance(self._right, QtWidgets.QComboBox):
             return self._right.currentText()
         return self._right.text()
@@ -128,6 +171,8 @@ class BlocksField(QtWidgets.QWidget):
         if self._static_lbl is None:
             return
         text = self.text()
+        if isinstance(self._right, ToggleAnimatedButton):
+            text = "On" if self._right.state.value else "Off"
         if not text and isinstance(self._right, QtWidgets.QComboBox):
             text = self._right.placeholderText()
         self._static_lbl.setText(text)
