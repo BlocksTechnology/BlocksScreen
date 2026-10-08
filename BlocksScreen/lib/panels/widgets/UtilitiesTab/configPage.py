@@ -11,7 +11,11 @@ from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-# Boolean spellings shown as a toggle, saved back in the same style (on, off)
+# TODO: find a better way to hide sections, hardcoded is kinda meh;
+# a section with "hidden: true/yes" is hidden too, without hardcoding
+
+# TODO: screensaver is currenly hidden for numpad dosent have option for float (miliseconds to minutes works)
+
 _BOOL_WORDS = {
     "true": ("true", "false"),
     "false": ("true", "false"),
@@ -21,8 +25,7 @@ _BOOL_WORDS = {
 
 _HIDDEN_ON = {on for on, _off in _BOOL_WORDS.values()}
 
-# TODO: find a better way to hide sections, hardcoded is kinda meh;
-# a section with "hidden: true/yes" is hidden too, without hardcoding
+
 _HIDDEN_SECTIONS = frozenset(
     {
         "filament_presence",
@@ -34,6 +37,9 @@ _HIDDEN_SECTIONS = frozenset(
 
 # Sections shown but not editable
 _READ_ONLY_SECTIONS = frozenset({"server"})
+_DISPLAY_UNITS = {
+    ("screensaver", "timeout"): (60_000, "minutes"),
+}
 
 
 def _pretty(name: str) -> str:
@@ -72,18 +78,18 @@ class ConfigPage(QtWidgets.QWidget):
         self._qwerty.value_selected.connect(self._on_qwerty_value_selected)
         self.config_back_btn.clicked.connect(self.request_back_button.emit)
 
-        self._restart_popup = BasePopup(self, floating=True)
-        self._restart_popup.confirm_button_text("Restart")
-        self._restart_popup.cancel_button_text("Later")
-        self._restart_popup.accepted.connect(self.request_restart.emit)
-        self.config_restart_btn.clicked.connect(
-            lambda: self._ask_restart("Restart the screen?\n\nMay take a few seconds.")
-        )
+        self._leave_popup = BasePopup(self, floating=True)
+        self._leave_popup.confirm_button_text("Restart")
+        self._leave_popup.cancel_button_text("Discard")
+        self._leave_popup.accepted.connect(self._save_and_restart)
+        self._leave_popup.rejected.connect(self._discard_pending)
 
     def setup_config_rows(self) -> None:
         """Build one titled group per config section, one row per option."""
         self._cfg = get_configparser()
         self._bool_words: dict[tuple[str, str], tuple[str, str]] = {}
+        self._saved: dict[tuple[str, str], str] = {}
+        self._pending: dict[tuple[str, str], BlocksField] = {}
         column_rows = [0] * len(self._columns)
 
         for section, options in self._visible_sections():
@@ -131,6 +137,9 @@ class ConfigPage(QtWidgets.QWidget):
     ) -> BlocksField:
         value = self._cfg.config.get(section, option, fallback="") or ""
         label = _pretty(option)
+        unit = _DISPLAY_UNITS.get((section, option))
+        if unit:
+            label = f"{label} ({unit[1]})"
         bool_words = _BOOL_WORDS.get(value.strip().lower())
         if section in _READ_ONLY_SECTIONS:
             editable = None
@@ -144,9 +153,10 @@ class ConfigPage(QtWidgets.QWidget):
             frame, f"{label}:", "bottom" if has_line else None, editable
         )
         field.setFixedHeight(70)
-        field.set_right_text(value)
+        field.set_right_text(self._to_display(section, option, value))
         if editable:
-            field.on_edit.connect(partial(self._save_option, section, option, field))
+            self._saved[(section, option)] = self._field_value(section, option, field)
+            field.on_edit.connect(partial(self._stage_option, section, option, field))
         if editable == "LineEdit":
             field.clicked.connect(partial(self._open_input, f"{title} {label}", field))
         return field
@@ -174,20 +184,70 @@ class ConfigPage(QtWidgets.QWidget):
         field.set_right_text(value)
         field.on_edit.emit()
 
-    def _save_option(self, section: str, option: str, field: BlocksField) -> None:
-        value = field.text()
+    def _field_value(self, section: str, option: str, field: BlocksField) -> str:
         if (section, option) in self._bool_words:
             on, off = self._bool_words[(section, option)]
-            value = on if field.is_checked() else off
-        self._cfg.update_option(section, option, value)
-        self._cfg.save_configuration()
-        self._ask_restart("Setting saved.\n\nRestart the screen to apply it.")
+            return on if field.is_checked() else off
+        return self._to_stored(section, option, field.text())
 
-    def _ask_restart(self, message: str) -> None:
-        if self._restart_popup.isVisible():
+    def _to_display(self, section: str, option: str, value: str) -> str:
+        unit = _DISPLAY_UNITS.get((section, option))
+        if not unit:
+            return value
+        try:
+            shown = int(value) / unit[0]
+        except ValueError:
+            return value
+        return f"{round(shown, 2):g}"
+
+    def _to_stored(self, section: str, option: str, text: str) -> str:
+        unit = _DISPLAY_UNITS.get((section, option))
+        if not unit:
+            return text
+        try:
+            return str(round(float(text) * unit[0]))
+        except ValueError:
+            return text
+
+    def _stage_option(self, section: str, option: str, field: BlocksField) -> None:
+        key = (section, option)
+        if self._field_value(section, option, field) == self._saved[key]:
+            self._pending.pop(key, None)
+        else:
+            self._pending[key] = field
+
+    def _save_pending(self) -> None:
+        if not self._pending:
             return
-        self._restart_popup.set_message(message)
-        self._restart_popup.open()
+        for (section, option), field in self._pending.items():
+            value = self._field_value(section, option, field)
+            self._cfg.update_option(section, option, value)
+            self._saved[(section, option)] = value
+        self._cfg.save_configuration()
+        self._pending.clear()
+
+    def _discard_pending(self) -> None:
+        for (section, option), field in self._pending.items():
+            saved = self._saved[(section, option)]
+            field.set_right_text(self._to_display(section, option, saved))
+        self._pending.clear()
+
+    def _save_and_restart(self) -> None:
+        self._save_pending()
+        self.request_restart.emit()
+
+    def hideEvent(self, a0: QtGui.QHideEvent | None) -> None:
+        """Ask to apply or discard pending edits when the page is left."""
+        super().hideEvent(a0)
+        if a0 is not None and a0.spontaneous():
+            return
+        if not self._pending or self._leave_popup.isVisible():
+            return
+        self._leave_popup.set_message(
+            f"{len(self._pending)} unsaved change(s).\n\n"
+            "Restart the screen to apply them?"
+        )
+        self._leave_popup.open()
 
     def _setup_ui(self) -> None:
         self.setObjectName("config_page")
@@ -214,13 +274,7 @@ class ConfigPage(QtWidgets.QWidget):
         self.config_header_layout = QtWidgets.QHBoxLayout()
         self.config_header_layout.setObjectName("config_header_layout")
 
-        self.config_restart_btn = IconButton(parent=self)
-        self.config_restart_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.config_restart_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.config_restart_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg")
-        )
-        self.config_header_layout.addWidget(self.config_restart_btn)
+        self.config_header_layout.addSpacing(60)
 
         self.config_title_label = QtWidgets.QLabel(parent=self)
         self.config_title_label.setSizePolicy(sizePolicy)
