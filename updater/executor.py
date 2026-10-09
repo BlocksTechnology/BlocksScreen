@@ -27,6 +27,8 @@ HOOK_TIMEOUT = 600.0
 
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
+# A bare --upgrade gave each box whatever pip was newest on its update day; mirrors scripts/requirements-pip.txt.
+PIP_PIN = "pip==26.2.1"
 APT = "/usr/bin/apt"
 APT_MARK = "/usr/bin/apt-mark"
 SUDO = "/usr/bin/sudo"

@@ -1,7 +1,7 @@
 .PHONY: all init init-dev venv run lint format-check security check \
         test test-all test-unit test-network test-ui test-integration test-fast \
         coverage coverage-all coverage-network clean clean-venv \
-        docstrcov rcc rcc-all diagnose help
+        docstrcov rcc rcc-all pr help
 
 .DEFAULT_GOAL := help
 SHELL         := /bin/bash
@@ -15,6 +15,10 @@ TESTS   := tests
 PYTEST_IGNORE  := --ignore=$(TESTS)/network/test_sdbus_integration.py
 PYTEST_FLAGS   ?= -vvv
 NM_INTEGRATION := NM_INTEGRATION_TESTS=1
+
+# Tracked and staged .py files only: untracked local scripts never reach CI, so they must not fail a gate.
+# wildcard drops files deleted from the working tree but still in the index.
+GIT_PY   = $(wildcard $(shell git ls-files -- '*.py'))
 
 PYRCC5  := /usr/bin/pyrcc5
 QRC_DIR := BlocksScreen/lib/ui/resources
@@ -39,8 +43,8 @@ venv: ## Print venv activation command (source manually — subshells cannot exp
 init: ## Install production dependencies
 	$(PIP) install -r scripts/requirements.txt
 
-init-dev: ## Install dev + test dependencies
-	$(PIP) install -r scripts/requirements-dev.txt
+init-dev: ## Install dev + test dependencies (PyQt6 pin comes from requirements.txt)
+	$(PIP) install -r scripts/requirements.txt -r scripts/requirements-dev.txt
 
 # ─────────────────────────────────────────────────────────────────────────────
 ##@ Run
@@ -77,17 +81,21 @@ rcc-all: ## Force recompile all .qrc files
 ##@ Linting & Security
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Stays on the folder like CI: a file list also lints lib/ and devices/, which CI's recursive run skips (no __init__.py).
 lint: ## Run pylint
 	$(PYTHON) -m pylint -j$(shell nproc) --recursive=y $(SRC)/
 
-format-check: ## Verify formatting without modifying files (matches CI exactly)
-	$(PYTHON) -m ruff check --target-version=py311 --config=pyproject.toml
-	$(PYTHON) -m ruff format --diff --target-version=py311 --config=pyproject.toml
+# --force-exclude: without it ruff ignores its exclude list for paths passed explicitly.
+format-check: ## Verify formatting without modifying files (tracked files only)
+	@echo "ruff check + ruff format --diff on $(words $(GIT_PY)) tracked files"
+	@$(PYTHON) -m ruff check --force-exclude --target-version=py311 --config=pyproject.toml $(GIT_PY)
+	@$(PYTHON) -m ruff format --diff --force-exclude --target-version=py311 --config=pyproject.toml $(GIT_PY)
 
-security: ## Run bandit security scan (whole repo, matches CI scope)
-	$(PYTHON) -m bandit -c pyproject.toml -r .
+security: ## Run bandit security scan (tracked files only)
+	@echo "bandit on $(words $(GIT_PY)) tracked files"
+	@$(PYTHON) -m bandit -c pyproject.toml $(GIT_PY)
 
-check: format-check lint security test-fast ## Full pre-push gate (mirrors CI)
+check: format-check lint security test-fast docstrcov ## Full pre-push gate (mirrors CI)
 
 # ─────────────────────────────────────────────────────────────────────────────
 ##@ Tests
@@ -142,17 +150,12 @@ docstrcov: ## Check docstring coverage (fail-under=80%, matches CI)
 	    --fail-under 80 \
 	    --skip-magic --skip-init --skip-private --skip-property
 
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-##@ Diagnostics
+##@ Contributing
 # ─────────────────────────────────────────────────────────────────────────────
 
-# scripts/healthcheck/ is git-ignored (bench-only), so degrade with a hint instead of a shell error.
-diagnose: ## Deep-check a running machine: health, USB forensics, power (scripts/healthcheck/, local-only, needs sudo)
-	@test -x scripts/healthcheck/bs-diag.sh \
-	  || { echo "scripts/healthcheck/ not present on this checkout (bench-only, git-ignored)"; exit 1; }
-	sudo scripts/healthcheck/bs-diag.sh all
+pr: ## Open a PR step by step: title, labels, local gates, review before push
+	@scripts/create-pr.sh
 
 # ─────────────────────────────────────────────────────────────────────────────
 ##@ Cleanup

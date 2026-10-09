@@ -1,17 +1,22 @@
 name: Lint PR Title
 
+# pull_request, not pull_request_target: _target runs the default branch's copy and is
+# blocked by default on public repos from 2026-11-02.
+# Only PRs into dev: their titles become the squash commits; promotion PRs are named freely.
 on:
-  pull_request_target:
-    types: [opened, edited, synchronize]
+  pull_request:
+    branches: [dev]
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   pull-requests: read
 
 jobs:
   lint-pr-title:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: amannn/action-semantic-pull-request@v5
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
