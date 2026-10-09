@@ -38,6 +38,7 @@ from lib.ui.resources.top_bar_resources_rc import *
 from lib.updater_worker import UpdaterWorker
 from lib.utils.blocks_tabwidget import NotificationQTabWidget
 from lib.utils.display_button import DisplayButton
+from lib.utils.fonts import register_momcake
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
@@ -123,6 +124,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
         super().__init__()
         self.config: BlocksScreenConfig = get_configparser()
+        # Before _setup_ui: the topbar .svg icons carry text and paint on first show.
+        register_momcake()
         self._setup_ui()
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
