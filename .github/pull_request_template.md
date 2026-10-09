@@ -6,7 +6,7 @@
 - [ ] Title follows Conventional Commits, e.g. `fix(updater): retry apt lock on timeout`; CI rejects anything else
 - [ ] Opened from a feature, bugfix or refactor branch against **dev**
 - [ ] Labels added and a reviewer requested
-- [ ] `make check` and `make docstrcov` pass
+- [ ] `make check` passes
 - [ ] CI results checked once the PR is open; failing checks mean changes requested
 
 # Description

@@ -95,7 +95,7 @@ security: ## Run bandit security scan (tracked files only)
 	@echo "bandit on $(words $(GIT_PY)) tracked files"
 	@$(PYTHON) -m bandit -c pyproject.toml $(GIT_PY)
 
-check: format-check lint security test-fast ## Full pre-push gate (mirrors CI)
+check: format-check lint security test-fast docstrcov ## Full pre-push gate (mirrors CI)
 
 # ─────────────────────────────────────────────────────────────────────────────
 ##@ Tests

@@ -5,9 +5,8 @@ on:
   # A squash merge creates a SHA no PR run tested; stage can only require checks this run reports.
   push:
     branches: [dev]
+  # Every base, main included, so a hotfix PR is checked like any other.
   pull_request:
-    branches-ignore:
-      - main
 
 permissions:
   contents: read
@@ -60,17 +59,6 @@ jobs:
           python -m pip install -r scripts/requirements-pip.txt
           pip install -r scripts/requirements.txt -r scripts/requirements-dev.txt
 
-      # The fleet installs wheels only (sdbus aside), so a pin without an aarch64 wheel passes CI yet breaks every box.
-      - name: Check pins have bookworm aarch64 wheels
-        if: matrix.test-type == 'security'
-        run: |
-          # Bookworm glibc is 2.36; pip does not expand manylinux tags downwards, so list each one.
-          plats=(--platform manylinux2014_aarch64)
-          for m in $(seq 17 36); do plats+=(--platform "manylinux_2_${m}_aarch64"); done
-          pip install --dry-run --quiet --ignore-installed --only-binary :all: "${plats[@]}" \
-            --python-version 3.11 --implementation cp --abi cp311 \
-            -r <(grep -v '^sdbus' scripts/requirements.txt)
-
       - name: Run ${{ matrix.test-type }}
         env:
           TEST_TYPE: ${{ matrix.test-type }}
@@ -95,6 +83,27 @@ jobs:
               bandit -c pyproject.toml -r . 2>&1 | tee security-output.txt
               ;;
           esac
+
+      # The fleet installs wheels only (sdbus packages aside), so a pin without an aarch64 wheel passes CI yet breaks every box.
+      # After the scan, not before, so a pin failure never hides bandit's result.
+      - name: Check pins are complete and have bookworm aarch64 wheels
+        if: ${{ !cancelled() && matrix.test-type == 'security' }}
+        run: |
+          # Bookworm glibc is 2.36; pip does not expand manylinux tags downwards, so list each one.
+          plats=(--platform manylinux2014_aarch64)
+          for m in $(seq 17 36); do plats+=(--platform "manylinux_2_${m}_aarch64"); done
+          pip install --dry-run --quiet --ignore-installed --only-binary :all: "${plats[@]}" \
+            --python-version 3.11 --implementation cp --abi cp311 --report "$RUNNER_TEMP/closure.json" \
+            -r <(grep -v '^sdbus' scripts/requirements.txt)
+          # Boxes resolve this file with plain pip, so a dependency missing from it floats to whatever is newest.
+          unpinned=$(jq -r --rawfile reqs scripts/requirements.txt '
+            def norm: ascii_downcase | gsub("[-_.]+"; "-");
+            [$reqs | splits("\n") | select(test("^[A-Za-z0-9]")) | split("==")[0] | norm] as $pinned
+            | .install[].metadata.name | norm | select(IN($pinned[]) | not)' "$RUNNER_TEMP/closure.json")
+          if [[ -n $unpinned ]]; then
+            echo "::error file=scripts/requirements.txt::Installed but not pinned with ==: ${unpinned//$'\n'/, }"
+            exit 1
+          fi
 
       - name: Upload ${{ matrix.test-type }} report
         if: always()

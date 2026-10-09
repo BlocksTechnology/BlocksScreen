@@ -8,10 +8,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: stage-signoff
-  cancel-in-progress: true
-
 jobs:
   # No environment: it would wait for the approval it announces, so the webhook is a repository secret.
   notify:
@@ -54,14 +50,18 @@ jobs:
             echo "::warning::HW_TEAMS_WEBHOOK is not set, the Hardware team was not notified"
             exit 0
           fi
-          # Payload {subject, html} feeds a Power Automate flow that posts it to Teams and emails it via Outlook.
-          curl --fail-with-body -sS --retry 3 -H 'Content-Type: application/json' \
+          # Payload {subject, html} feeds a Power Automate flow (Teams webhook trigger) that emails it via Outlook.
+          curl --fail-with-body -sS --retry 3 --max-time 30 -H 'Content-Type: application/json' \
             --data-binary @payload.json "$WEBHOOK"
 
   signoff:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: staging
+    # Only the newest stage tip needs sign-off; notify stays out so every push reports its own range.
+    concurrency:
+      group: stage-signoff
+      cancel-in-progress: true
     steps:
       - name: Record staging sign-off
         run: echo "Staging printers validated $GITHUB_SHA"

@@ -18,7 +18,7 @@ Opens a pull request for the current branch, step by step:
   2. Title        one line, type(scope)!: summary as enforced by the PR title lint; also the
                   commit message when you chose to commit your uncommitted changes
   3. Labels       area label (type and breaking come from the title), reviewers, draft; you are the assignee
-  4. Local gates  optional make check + make docstrcov before anything leaves your machine
+  4. Local gates  optional make check before anything leaves your machine
   5. Description  the PR template in your editor, Changes prefilled from your commits
   6. Review       every commit and setting is shown; nothing is pushed until you type y
 
@@ -36,6 +36,13 @@ if [[ -t 2 && -z ${NO_COLOR:-} ]]; then
     BOLD=$'\e[1m' DIM=$'\e[2m' RED=$'\e[31m' GREEN=$'\e[32m' YELLOW=$'\e[33m' CYAN=$'\e[36m' RESET=$'\e[0m'
 else
     BOLD="" DIM="" RED="" GREEN="" YELLOW="" CYAN="" RESET=""
+fi
+
+# The menus bind fzf's load event and pos() action, both 0.36+; older fzf gets the numbered lists.
+USE_FZF=0
+if [[ -t 0 && -t 2 ]] && command -v fzf >/dev/null &&
+    printf '%s\n' 0.36 "$(fzf --version | cut -d' ' -f1)" | sort -VC; then
+    USE_FZF=1
 fi
 
 # All output goes to stderr so that functions can return values on stdout.
@@ -79,7 +86,7 @@ confirm() {
 menu() {
     local prompt=$1 default=$2 reply i
     local -a options=("${@:3}")
-    if command -v fzf >/dev/null && [[ -t 0 && -t 2 ]]; then
+    if ((USE_FZF)); then
         # The index travels hidden in field 1, so the visible label never has to be parsed back.
         reply=$(for i in "${!options[@]}"; do printf '%d\t%s\n' "$i" "${options[i]}"; done |
             fzf --height=~20 --layout=reverse --no-sort --delimiter='\t' --with-nth=2.. \
@@ -107,7 +114,7 @@ menu() {
 pick() {
     local prompt=$1 reply i joined
     local -a options=("${@:2}") chosen=() numbers=()
-    if command -v fzf >/dev/null && [[ -t 0 && -t 2 ]]; then
+    if ((USE_FZF)); then
         # Enter with nothing marked returns the line under the cursor, hence the "(none)" line on top.
         reply=$(printf '%s\n' "(none)" "${options[@]}" |
             fzf --multi --height=~20 --layout=reverse --no-sort \
@@ -377,8 +384,8 @@ if confirm "Open as a draft (not ready for review yet)?" n; then draft=yes; fi
 # ── 4. Local gates ───────────────────────────────────────────────────────────
 step 4 "Local gates"
 gates="not run"
-if confirm "Run make check and make docstrcov now (the CI gates, a few minutes)?" y; then
-    if make --no-print-directory check docstrcov; then
+if confirm "Run make check now (the CI gates, a few minutes)?" y; then
+    if make --no-print-directory check; then
         # The gates ran on the working tree, so a dirty tree did not test exactly what is pushed.
         if ((dirty)); then
             gates="passed with uncommitted changes"
