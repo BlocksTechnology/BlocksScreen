@@ -17,7 +17,7 @@ Opens a pull request for the current branch, step by step:
   1. Checks       gh login, push access, branch, uncommitted changes, base branch, existing PR
   2. Title        one line, type(scope)!: summary as enforced by the PR title lint; also the
                   commit message when you chose to commit your uncommitted changes
-  3. Labels       area label (type and breaking come from the title), reviewers, draft
+  3. Labels       area label (type and breaking come from the title), reviewers, draft; you are the assignee
   4. Local gates  optional make check + make docstrcov before anything leaves your machine
   5. Description  the PR template in your editor, Changes prefilled from your commits
   6. Review       every commit and setting is shown; nothing is pushed until you type y
@@ -140,10 +140,11 @@ pick() {
     printf '%s' "$joined"
 }
 
-# True when the Summary section has text besides HTML comments, which may span lines.
+# True when Description has text besides its type boxes and HTML comments, which may span lines.
 has_summary() {
     awk '
-        /^## / { in_summary = ($0 == "## Summary"); next }
+        /^#+ / { in_summary = ($0 == "# Description"); next }
+        in_summary && /^- \[[ xX]\] / { next }
         in_summary {
             line = $0; text = ""
             while (line != "") {
@@ -413,7 +414,7 @@ while true; do
     say "    Opening $editor; save and close it to continue."
     sh -c "$editor \"\$1\"" editor "$body" || die "the editor failed; your draft is kept at $body"
     if has_summary "$body"; then break; fi
-    warn "The Summary section is empty; reviewers need the what and the why."
+    warn "The Description has no summary; reviewers need the what and the why."
     confirm "Open the editor again?" y || exit 1
 done
 ok "Description ready"
@@ -426,6 +427,7 @@ row Repository "$repo"
 row Title "$title"
 row Base "$base <- $branch"
 row Labels "${labels_text:-none}"
+row Assignee "$me"
 row Reviewers "${reviewers:-none}"
 row Draft "$draft"
 row "Local gates" "$gates"
@@ -440,7 +442,7 @@ git push -u origin "$branch" ||
     die "push rejected; if origin/$branch has commits you lack, run 'git pull --rebase' and retry (never force-push a shared branch)"
 pushed=1
 
-args=(-R "$repo" --base "$base" --head "$branch" --title "$title" --body-file "$body")
+args=(-R "$repo" --base "$base" --head "$branch" --title "$title" --body-file "$body" --assignee "$me")
 for label in "${apply[@]}"; do args+=(--label "$label"); done
 if [[ -n $reviewers ]]; then args+=(--reviewer "$reviewers"); fi
 if [[ $draft == yes ]]; then args+=(--draft); fi

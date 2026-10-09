@@ -16,6 +16,10 @@ PYTEST_IGNORE  := --ignore=$(TESTS)/network/test_sdbus_integration.py
 PYTEST_FLAGS   ?= -vvv
 NM_INTEGRATION := NM_INTEGRATION_TESTS=1
 
+# Tracked and staged .py files only: untracked local scripts never reach CI, so they must not fail a gate.
+# wildcard drops files deleted from the working tree but still in the index.
+GIT_PY   = $(wildcard $(shell git ls-files -- '*.py'))
+
 PYRCC5  := /usr/bin/pyrcc5
 QRC_DIR := BlocksScreen/lib/ui/resources
 
@@ -77,15 +81,19 @@ rcc-all: ## Force recompile all .qrc files
 ##@ Linting & Security
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Stays on the folder like CI: a file list also lints lib/ and devices/, which CI's recursive run skips (no __init__.py).
 lint: ## Run pylint
 	$(PYTHON) -m pylint -j$(shell nproc) --recursive=y $(SRC)/
 
-format-check: ## Verify formatting without modifying files (matches CI exactly)
-	$(PYTHON) -m ruff check --target-version=py311 --config=pyproject.toml
-	$(PYTHON) -m ruff format --diff --target-version=py311 --config=pyproject.toml
+# --force-exclude: without it ruff ignores its exclude list for paths passed explicitly.
+format-check: ## Verify formatting without modifying files (tracked files only)
+	@echo "ruff check + ruff format --diff on $(words $(GIT_PY)) tracked files"
+	@$(PYTHON) -m ruff check --force-exclude --target-version=py311 --config=pyproject.toml $(GIT_PY)
+	@$(PYTHON) -m ruff format --diff --force-exclude --target-version=py311 --config=pyproject.toml $(GIT_PY)
 
-security: ## Run bandit security scan (whole repo, matches CI scope)
-	$(PYTHON) -m bandit -c pyproject.toml -r .
+security: ## Run bandit security scan (tracked files only)
+	@echo "bandit on $(words $(GIT_PY)) tracked files"
+	@$(PYTHON) -m bandit -c pyproject.toml $(GIT_PY)
 
 check: format-check lint security test-fast ## Full pre-push gate (mirrors CI)
 
