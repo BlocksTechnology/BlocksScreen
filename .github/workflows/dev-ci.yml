@@ -1,32 +1,53 @@
 name: CI-dev-pipeline
 
+# No paths filter: a required check that never starts leaves the PR pending forever.
 on:
+  # A squash merge creates a SHA no PR run tested; stage can only require checks this run reports.
+  push:
+    branches: [dev]
   pull_request:
-    branches:
-      - dev
-    paths-ignore:
-      - "scripts/**"
-      - "BlocksScreen/lib/ui/**"
-      - "extras/**"
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+# PR runs supersede each other; push runs are grouped per SHA so a fast second merge never cancels the first.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    # Explicit bash adds -o pipefail, so `| tee` keeps the tool's exit code.
+    shell: bash
+
 jobs:
   ci-checks:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-26.04 has no Python 3.11.2 build.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        # Debian 12 bookworm python3, what the printers run.
         python-version: ["3.11.2"]
         test-type: [ruff, pylint, pytest, docstrcov, security]
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: scripts/requirements-dev.txt
+          cache-dependency-path: |
+            scripts/requirements.txt
+            scripts/requirements-dev.txt
 
       - name: Install system dependencies
         if: matrix.test-type == 'pytest'
@@ -36,80 +57,53 @@ jobs:
 
       - name: Install dependencies
         run: |
-          echo "Installing dependencies"
-          python -m pip install --upgrade pip
-          pip install -r scripts/requirements-dev.txt
+          python -m pip install -r scripts/requirements-pip.txt
+          pip install -r scripts/requirements.txt -r scripts/requirements-dev.txt
 
-      - name: Run Test ${{ matrix.test-type }}
+      # The fleet installs wheels only (sdbus aside), so a pin without an aarch64 wheel passes CI yet breaks every box.
+      - name: Check pins have bookworm aarch64 wheels
+        if: matrix.test-type == 'security'
         run: |
-          echo "Starting test runs"
-          if [ "${{ matrix.test-type }}" == "ruff" ]; then 
-            echo "Running Formatting Test"
-            ruff check --output-format=github --target-version=py311 --config=pyproject.toml > ruff-output.txt 2>&1
-            ruff format --diff --target-version=py311 --config=pyproject.toml >> ruff-output.txt 2>&1
-            echo "Ruff finished"
-          fi
-          if [ "${{ matrix.test-type }}" == "pylint" ]; then
-            echo "Running Pylint Code Test"
-            pylint -j$(nproc) --recursive=y BlocksScreen/ > pylint-output.txt 2>&1
-            echo "Pylint finished"
-          fi
+          # Bookworm glibc is 2.36; pip does not expand manylinux tags downwards, so list each one.
+          plats=(--platform manylinux2014_aarch64)
+          for m in $(seq 17 36); do plats+=(--platform "manylinux_2_${m}_aarch64"); done
+          pip install --dry-run --quiet --ignore-installed --only-binary :all: "${plats[@]}" \
+            --python-version 3.11 --implementation cp --abi cp311 \
+            -r <(grep -v '^sdbus' scripts/requirements.txt)
 
-          if [ "${{ matrix.test-type }}" == "pytest" ]; then
-            if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then 
-              echo "Running Python unit tests"
-              pytest tests/ --doctest-modules --junitxml=junit/test-results.xml --cov=BlocksScreen/ --cov-report=xml --cov-report=html > pytest-output.txt 2>&1 
-            else
-              echo "No tests directory no need to proceed with tests"
-            fi
-          fi
+      - name: Run ${{ matrix.test-type }}
+        env:
+          TEST_TYPE: ${{ matrix.test-type }}
+        run: |
+          case "$TEST_TYPE" in
+            ruff)
+              rc=0
+              ruff check --output-format=github --target-version=py311 --config=pyproject.toml 2>&1 | tee ruff-output.txt || rc=1
+              ruff format --diff --target-version=py311 --config=pyproject.toml 2>&1 | tee -a ruff-output.txt || rc=1
+              exit $rc
+              ;;
+            pylint)
+              pylint -j"$(nproc)" --recursive=y BlocksScreen/ 2>&1 | tee pylint-output.txt
+              ;;
+            pytest)
+              pytest tests/ --doctest-modules --junitxml=junit/test-results.xml --cov=BlocksScreen/ --cov-report=xml --cov-report=html 2>&1 | tee pytest-output.txt
+              ;;
+            docstrcov)
+              docstr-coverage BlocksScreen/ --exclude '.*/BlocksScreen/lib/ui/.*?$' --fail-under=80 --skip-magic --skip-init --skip-private --skip-property 2>&1 | tee docstrcov-output.txt
+              ;;
+            security)
+              bandit -c pyproject.toml -r . 2>&1 | tee security-output.txt
+              ;;
+          esac
 
-          if [ "${{ matrix.test-type }}" == "docstrcov" ]; then 
-            echo "Running docstring coverage test"
-            docstr-coverage BlocksScreen/ --exclude '.*/BlocksScreen/lib/ui/.*?$' --fail-under=80 --skip-magic --skip-init --skip-private --skip-property > docstr-cov-output.txt 2>&1
-          fi
-
-          if [ "${{matrix.test-type }}" == "security" ]; then
-            echo "Running bandit security test"
-            bandit -c pyproject.toml -r . -f json -o bandit-output.json 2>&1
-          fi
-
-      - name: Upload ruff artifact
-        if: always() && matrix.test-type == 'ruff'
-        uses: actions/upload-artifact@v4
+      - name: Upload ${{ matrix.test-type }} report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ruff-results
-          path: ruff-output.txt
-
-      - name: Upload Pylint Artifacts
-        if: always() && matrix.test-type == 'pylint'
-        uses: actions/upload-artifact@v4
-        with:
-          name: pylint-results
-          path: pylint-output.txt
-
-      - name: Upload Pytest Artifacts
-        if: always() && matrix.test-type == 'pytest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: pytest-results
+          name: ${{ matrix.test-type }}-results
           path: |
-            pytest-output.txt
-            junit/test-results.xml
+            *-output.txt
+            junit/
             coverage.xml
             htmlcov/
-        continue-on-error: true
-
-      - name: Upload docstr coverage report
-        if: always() && matrix.test-type == 'docstrcov'
-        uses: actions/upload-artifact@v4
-        with:
-          name: docstr-coverage
-          path: docstr-cov-output.txt
-
-      - name: Upload bandit security report
-        if: always() && matrix.test-type == 'security'
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-output
-          path: bandit-output.json
+          if-no-files-found: ignore

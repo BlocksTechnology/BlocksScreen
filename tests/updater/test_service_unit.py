@@ -1571,7 +1571,7 @@ class TestInstallDependencies:
 
     @pytest.mark.asyncio
     async def test_runs_pip_when_component_venv_found(self, tmp_path):
-        """Component venv pip: best-effort pip self-upgrade, then reqs install."""
+        """Component venv pip: best-effort pinned pip, then reqs install."""
         comp_path = tmp_path / "mycomp"
         comp_path.mkdir()
         (comp_path / "requirements.txt").write_text("requests\n")
@@ -1589,7 +1589,7 @@ class TestInstallDependencies:
         assert ok is True
         assert mock_run.call_count == 2
         upgrade_cmd = mock_run.call_args_list[0][0][0]
-        assert upgrade_cmd == [venv_pip, "install", "--upgrade", "pip", "--quiet"]
+        assert upgrade_cmd == [venv_pip, "install", updater_service.PIP_PIN, "--quiet"]
         install_cmd = mock_run.call_args_list[1][0][0]
         assert install_cmd[0] == venv_pip
         assert "-r" in install_cmd

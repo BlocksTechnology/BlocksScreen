@@ -1,0 +1,2 @@
+# Separate from requirements.txt so pip is never replaced mid-install; updater/executor.py PIP_PIN must match.
+pip==26.2.1

@@ -1,7 +1,7 @@
 .PHONY: all init init-dev venv run lint format-check security check \
         test test-all test-unit test-network test-ui test-integration test-fast \
         coverage coverage-all coverage-network clean clean-venv \
-        docstrcov rcc rcc-all diagnose help
+        docstrcov rcc rcc-all pr help
 
 .DEFAULT_GOAL := help
 SHELL         := /bin/bash
@@ -39,8 +39,8 @@ venv: ## Print venv activation command (source manually — subshells cannot exp
 init: ## Install production dependencies
 	$(PIP) install -r scripts/requirements.txt
 
-init-dev: ## Install dev + test dependencies
-	$(PIP) install -r scripts/requirements-dev.txt
+init-dev: ## Install dev + test dependencies (PyQt6 pin comes from requirements.txt)
+	$(PIP) install -r scripts/requirements.txt -r scripts/requirements-dev.txt
 
 # ─────────────────────────────────────────────────────────────────────────────
 ##@ Run
@@ -142,17 +142,12 @@ docstrcov: ## Check docstring coverage (fail-under=80%, matches CI)
 	    --fail-under 80 \
 	    --skip-magic --skip-init --skip-private --skip-property
 
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-##@ Diagnostics
+##@ Contributing
 # ─────────────────────────────────────────────────────────────────────────────
 
-# scripts/healthcheck/ is git-ignored (bench-only), so degrade with a hint instead of a shell error.
-diagnose: ## Deep-check a running machine: health, USB forensics, power (scripts/healthcheck/, local-only, needs sudo)
-	@test -x scripts/healthcheck/bs-diag.sh \
-	  || { echo "scripts/healthcheck/ not present on this checkout (bench-only, git-ignored)"; exit 1; }
-	sudo scripts/healthcheck/bs-diag.sh all
+pr: ## Open a PR step by step: title, labels, local gates, review before push
+	@scripts/create-pr.sh
 
 # ─────────────────────────────────────────────────────────────────────────────
 ##@ Cleanup

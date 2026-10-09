@@ -78,6 +78,7 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- scripts/install-updater.sh scripts/bs-apt-helper.sh \
         scripts/BlocksScreen-updater.service scripts/BlocksScreen-bootstrap.service \
         scripts/com.blockscreen.Updater.conf scripts/com.blockscreen.Updater.service \
+        scripts/requirements-pip.txt \
         2>/dev/null; then
     echo "[hook:BlocksScreen] install files changed - setting deploy flag"
     _set_deploy_flag

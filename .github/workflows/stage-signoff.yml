@@ -1,0 +1,22 @@
+name: Stage sign-off
+
+# Approving this run records a `staging` deployment for the stage tip; the Prod and
+# Release Branches rulesets require it before a PR can merge.
+on:
+  push:
+    branches: [stage]
+
+permissions: {}
+
+concurrency:
+  group: stage-signoff
+  cancel-in-progress: true
+
+jobs:
+  signoff:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: staging
+    steps:
+      - name: Record staging sign-off
+        run: echo "Staging printers validated $GITHUB_SHA"

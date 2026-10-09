@@ -19,6 +19,7 @@ from updater.executor import (
     _GIT_SHA_RE,
     HOOK_TIMEOUT,
     PIP,
+    PIP_PIN,
     SYSTEMCTL,
     UPDATER_SERVICE,
     _apt_get_fix_broken,
@@ -1642,7 +1643,7 @@ class UpdateService:
             # Group-writable is fine: the blocksscreen group is trusted.
             return (False, "world-writable permissions")
 
-        await _run([pip_path, "install", "--upgrade", "pip", "--quiet"], timeout=120.0)
+        await _run([pip_path, "install", PIP_PIN, "--quiet"], timeout=120.0)
         # One aarch64 source build (no wheel) can exceed 120s on a Pi.
         return await _run(
             [pip_path, "install", "-r", str(req), "--quiet"], timeout=600.0
