@@ -13,6 +13,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # No environment: it would wait for the approval it announces, so the webhook is a repository secret.
+  notify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Send the change list to the Hardware team
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WEBHOOK: ${{ secrets.HW_TEAMS_WEBHOOK }}
+        run: |
+          before=$(jq -r .before "$GITHUB_EVENT_PATH")
+          if [[ $before =~ ^0+$ ]]; then
+            echo "::notice::stage was created by this push, no previous tip to compare"
+            exit 0
+          fi
+          gh api --paginate "repos/$GITHUB_REPOSITORY/compare/$before...$GITHUB_SHA?per_page=100" \
+            --jq '.commits[].commit.message | split("\n")[0]' > subjects.txt
+          # Squash subjects are the PR titles; @html because they are free text from PR authors.
+          jq -Rn \
+            --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg before "$before" --arg sha "$GITHUB_SHA" --arg actor "$GITHUB_ACTOR" '
+            [inputs] | reverse as $all | ($all | length) as $n | $sha[:8] as $short
+            | (if $n == 1 then "1 change" else "\($n) changes" end) as $count
+            | ($all[:40] | map("<li>" + (@html | sub("\\(#(?<n>[0-9]+)\\)$";
+                "(<a href=\"\($url)/pull/\(.n)\">#\(.n)</a>)")) + "</li>") | join("")) as $items
+            | {
+                subject: "BlocksScreen stage \($short): \($count) to test",
+                html: ("<p>Stage is now at <a href=\"\($url)/commit/\($sha)\">\($short)</a>, pushed by \($actor | @html). "
+                  + "\($count) since the last stage update, newest first:</p><ul>\($items)</ul>"
+                  + (if $n > 40 then "<p>And \($n - 40) older, see the full diff.</p>" else "" end)
+                  + "<p><a href=\"\($url)/compare/\($before)...\($sha)\">Full diff</a> | "
+                  + "<a href=\"\($run)\">Sign-off run</a></p>")
+              }' subjects.txt > payload.json
+          jq -r .html payload.json >> "$GITHUB_STEP_SUMMARY"
+          if [[ -z $WEBHOOK ]]; then
+            echo "::warning::HW_TEAMS_WEBHOOK is not set, the Hardware team was not notified"
+            exit 0
+          fi
+          # Payload {subject, html} feeds a Power Automate flow that posts it to Teams and emails it via Outlook.
+          curl --fail-with-body -sS --retry 3 -H 'Content-Type: application/json' \
+            --data-binary @payload.json "$WEBHOOK"
+
   signoff:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
