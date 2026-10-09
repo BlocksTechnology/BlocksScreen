@@ -11,8 +11,8 @@
 
 # Description
 - [ ] Feature
-- [ ] Bug fix
-- [ ] Code refactor
+- [ ] Bug Fix
+- [ ] Code Refactor
 - [ ] Documentation
 
 <!-- Summary of the changes and the issue they fix. A bug from another PR: reference it as #123.

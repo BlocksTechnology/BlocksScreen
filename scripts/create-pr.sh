@@ -192,7 +192,7 @@ declare -rA TYPE_LABEL=(
     [docs]=documentation [test]=testing [chore]=chore
 )
 # The template's Description checkbox each title type ticks; perf, test and chore have none.
-declare -rA TYPE_BOX=([feat]=Feature [fix]="Bug fix" [refactor]="Code refactor" [docs]=Documentation)
+declare -rA TYPE_BOX=([feat]=Feature [fix]="Bug Fix" [refactor]="Code Refactor" [docs]=Documentation)
 readonly AREAS=(none ui updater network ci dependencies)
 
 branch="" pushed=0 committed=0
