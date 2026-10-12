@@ -1,4 +1,13 @@
-"""Happy-Hare MMU (AMU) backend: state models, gcode manager, printer.cfg toggler."""
+"""AMU / Happy-Hare MMU package.
+
+Architecture:
+    AMUManager (manager.py)
+        └── AMU backend
+    Models (models.py)
+        └── Typed dataclasses and state enums
+    ConfigToggler (config_toggler.py)
+        └── AMU/non-AMU printer.cfg switch
+"""
 
 from .config_toggler import ConfigToggler, ToggleResult
 from .manager import AMUManager
