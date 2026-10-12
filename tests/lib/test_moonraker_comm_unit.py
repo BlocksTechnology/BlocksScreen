@@ -1,6 +1,7 @@
 """Unit tests for moonrakerComm."""
 
 import json
+import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -118,6 +119,42 @@ class TestServerInfoComponents:
         ws.on_open(None)
         self._reply(ws, {"result": {"klippy_state": "ready"}})
         assert states == ["ready", "ready"]
+
+
+class TestRequestCallbacks:
+    def _reply(self, sock, callback, payload: dict) -> None:
+        sock.request_table[9] = ["server.spoolman.proxy", {}, callback]
+        sock.on_message(None, json.dumps({"jsonrpc": "2.0", "id": 9, **payload}))
+
+    def test_result_reaches_callback(self, ws):
+        got = []
+        self._reply(ws, got.append, {"result": {"response": [1], "error": None}})
+        assert got == [{"response": [1], "error": None}]
+
+    def test_jsonrpc_error_reaches_callback(self, ws):
+        got = []
+        err = {"code": 503, "message": "Spoolman server not available"}
+        self._reply(ws, got.append, {"error": err})
+        assert got == [{"error": err}]
+
+    def test_raising_callback_is_logged_not_raised(self, ws, caplog):
+        def boom(_result):
+            raise RuntimeError("boom")
+
+        self._reply(ws, boom, {"result": {}})
+        assert "callback" in caplog.text
+
+    def test_callback_runs_on_gui_thread(self, ws, qtbot):
+        threads = []
+
+        def record(_result):
+            threads.append(threading.current_thread())
+
+        worker = threading.Thread(target=self._reply, args=(ws, record, {"result": {}}))
+        worker.start()
+        worker.join()
+        qtbot.waitUntil(lambda: bool(threads))
+        assert threads == [threading.main_thread()]
 
 
 class TestReconnectCycle:

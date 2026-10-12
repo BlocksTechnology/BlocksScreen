@@ -623,7 +623,36 @@ class TestUpdateSpoolWeight:
     def test_valid_gate_pushes_used_weight(self, manager) -> None:
         manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
         manager.update_spool_weight(0, 250.0)
-        manager._ws.api.update_spool.assert_called_once_with(42, {"used_weight": 250.0})
+        manager._ws.api.update_spool.assert_called_once_with(
+            42, {"used_weight": 250.0}, callback=manager._on_spool_weight_reply
+        )
+
+    @pytest.mark.parametrize("weight", [-5.0, float("nan"), float("inf")])
+    def test_invalid_weight_not_pushed(self, manager, weight, caplog) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        manager.update_spool_weight(0, weight)
+        manager._ws.api.update_spool.assert_not_called()
+        assert "invalid used_weight" in caplog.text
+
+    def test_zero_weight_pushed(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        manager.update_spool_weight(0, 0.0)
+        manager._ws.api.update_spool.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "reply",
+        [
+            {"response": None, "error": {"status_code": 422, "message": "bad"}},
+            {"error": {"code": -32601, "message": "Method not found"}},
+        ],
+    )
+    def test_error_reply_logged(self, manager, reply, caplog) -> None:
+        manager._on_spool_weight_reply(reply)
+        assert "Spoolman weight update failed" in caplog.text
+
+    def test_ok_reply_not_logged(self, manager, caplog) -> None:
+        manager._on_spool_weight_reply({"response": {"id": 42}, "error": None})
+        assert "failed" not in caplog.text
 
     def test_noop_when_mmu_state_none(self, manager) -> None:
         manager.update_spool_weight(0, 250.0)

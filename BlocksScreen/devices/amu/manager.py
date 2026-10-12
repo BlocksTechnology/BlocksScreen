@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import shlex
 import typing
 from pathlib import Path
@@ -170,7 +171,18 @@ class AMUManager(QtCore.QObject):
         spool_id = self._mmu_state.gates[gate].spool_id
         if spool_id == -1:
             return
-        self._ws.api.update_spool(spool_id, {"used_weight": used_weight})
+        if not (math.isfinite(used_weight) and used_weight >= 0):
+            logger.warning("update_spool_weight: invalid used_weight %r", used_weight)
+            return
+        self._ws.api.update_spool(
+            spool_id, {"used_weight": used_weight}, callback=self._on_spool_weight_reply
+        )
+
+    @staticmethod
+    def _on_spool_weight_reply(result: dict | None) -> None:
+        """Log a failed Spoolman weight write."""
+        if isinstance(result, dict) and result.get("error"):
+            logger.warning("Spoolman weight update failed: %s", result["error"])
 
     def home_mmu(self) -> None:
         """Re-select the current tool via MMU_HOME; refused while filament is loaded."""

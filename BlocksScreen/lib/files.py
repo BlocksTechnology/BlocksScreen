@@ -458,7 +458,7 @@ class Files(QtCore.QObject):
         job_id = str(metadata.job_id)
         if job_id in self._job_durations:
             return
-        # Mark before sending: error replies skip the callback.
+        # Mark before sending so an in-flight or failed lookup is not re-requested.
         self._job_durations[job_id] = None
         self.ws.api.history_get_job(
             job_id,
