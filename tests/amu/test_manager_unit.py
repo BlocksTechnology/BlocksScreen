@@ -279,6 +279,11 @@ class TestGcodeSignals:
             manager.set_gate_temp(1, temp)
         assert blocker.args == [f"MMU_GATE_MAP GATE=1 TEMP={round(temp)} QUIET=1"]
 
+    @pytest.mark.parametrize("temp", [0, -1, 0.4])
+    def test_non_positive_temp_emits_no_gcode(self, manager, qtbot, temp) -> None:
+        with qtbot.assertNotEmitted(manager.run_gcode_signal):
+            manager.set_gate_temp(1, temp)
+
     # Omitted TEMP resets the gate to default_extruder_temp (mmu.py:8627).
     @pytest.mark.parametrize(
         ("method", "args"),

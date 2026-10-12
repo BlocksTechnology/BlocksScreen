@@ -138,21 +138,21 @@ def _gates(arrays: Mapping[str, Sequence], num_gates: int) -> tuple[GateInfo, ..
 class MMUState:
     """A full snapshot of the MMU; rebuilt, never mutated, on every status update."""
 
-    enabled: bool
-    is_homed: bool
-    num_gates: int
-    tool: int
-    gate: int
-    filament: str  # "Loaded" | "Unloaded" | "Unknown"
-    filament_pos: FilamentPos
-    action: str
-    bowden_progress: float
-    print_state: str
-    reason_for_pause: str
-    has_bypass: bool
-    spoolman_support: SpoolmanSupport
-    gates: tuple[GateInfo, ...]
-    ttg_map: tuple[int, ...]
+    enabled: bool = False
+    is_homed: bool = False
+    num_gates: int = 0
+    tool: int = -1
+    gate: int = -1
+    filament: str = "Unknown"  # "Loaded" | "Unloaded" | "Unknown"
+    filament_pos: FilamentPos = FilamentPos.UNKNOWN
+    action: str = ""
+    bowden_progress: float = -1.0
+    print_state: str = ""
+    reason_for_pause: str = ""
+    has_bypass: bool = False
+    spoolman_support: SpoolmanSupport = SpoolmanSupport.OFF
+    gates: tuple[GateInfo, ...] = ()
+    ttg_map: tuple[int, ...] = ()
     pending_spool_id: int = -1
     operation: str = ""
     sensors: dict[str, bool | None] = dataclasses.field(default_factory=dict)
@@ -173,31 +173,7 @@ class MMUState:
     @classmethod
     def from_status(cls, data: dict) -> MMUState:
         """Build an MMUState from a full Moonraker mmu status dict."""
-        num_gates = data.get("num_gates", 0)
-        arrays = {field: data.get(key, ()) for key, field in _GATE_ARRAYS.items()}
-        return cls(
-            enabled=data.get("enabled", False),
-            is_homed=data.get("is_homed", False),
-            num_gates=num_gates,
-            tool=data.get("tool", -1),
-            gate=data.get("gate", -1),
-            filament=data.get("filament", "Unknown"),
-            filament_pos=FilamentPos(data.get("filament_pos", FilamentPos.UNKNOWN)),
-            action=data.get("action", ""),
-            bowden_progress=data.get("bowden_progress", -1),
-            print_state=data.get("print_state", ""),
-            reason_for_pause=data.get("reason_for_pause", ""),
-            has_bypass=data.get("has_bypass", False),
-            spoolman_support=SpoolmanSupport(
-                data.get("spoolman_support", SpoolmanSupport.OFF)
-            ),
-            gates=_gates(arrays, num_gates),
-            ttg_map=tuple(data.get("ttg_map", [])),
-            pending_spool_id=data.get("pending_spool_id", -1),
-            operation=data.get("operation", ""),
-            sensors=dict(data.get("sensors", {})),
-            endless_spool_groups=tuple(data.get("endless_spool_groups", [])),
-        )
+        return cls().apply_diff(data)
 
     def gate_for_tool(self, tool: int) -> int:
         """Return the gate mapped to *tool*, or -1 if unmapped."""

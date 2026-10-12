@@ -39,6 +39,12 @@ def _button(
     return btn
 
 
+def _show(
+    panel: SpoolInfoPanel, btn: Spoll_button, *, enabled=True, homed=True
+) -> None:
+    panel.update_for_slot(btn, enabled=enabled, homed=homed)
+
+
 def _actions(panel: SpoolInfoPanel) -> dict[str, bool]:
     return {
         "load": panel._btn_load.isEnabled(),
@@ -57,7 +63,7 @@ def panel(qtbot):
 
 class TestSpoolInfoPanelActions:
     def test_active_gate_unloaded_enables_feed_and_check(self, panel):
-        panel.update_for_slot(_button(1))
+        _show(panel, _button(1))
         assert _actions(panel) == {
             "load": True,
             "unload": False,
@@ -67,7 +73,7 @@ class TestSpoolInfoPanelActions:
 
     def test_active_gate_empty_allows_check_only(self, panel):
         # Nothing to load or eject, but MMU_CHECK_GATE is how an EMPTY gate is re-detected.
-        panel.update_for_slot(_button(1, status=GateStatus.EMPTY))
+        _show(panel, _button(1, status=GateStatus.EMPTY))
         assert _actions(panel) == {
             "load": False,
             "unload": False,
@@ -76,7 +82,7 @@ class TestSpoolInfoPanelActions:
         }
 
     def test_active_gate_loaded_allows_unload_only(self, panel):
-        panel.update_for_slot(_button(1, pos=FilamentPos.LOADED))
+        _show(panel, _button(1, pos=FilamentPos.LOADED))
         assert _actions(panel) == {
             "load": False,
             "unload": True,
@@ -86,13 +92,13 @@ class TestSpoolInfoPanelActions:
         assert panel._lbl_status.text() == panel._LOADED_TEXT
 
     def test_mid_path_filament_shows_stuck_and_allows_unload(self, panel):
-        panel.update_for_slot(_button(1, pos=FilamentPos.IN_BOWDEN))
+        _show(panel, _button(1, pos=FilamentPos.IN_BOWDEN))
         assert _actions(panel)["unload"] is True
         assert panel._lbl_status.text() == panel._STUCK_TEXT
 
     def test_unknown_position_counts_as_loaded(self, panel):
         # UNKNOWN may hide filament in the path, so only unload is safe.
-        panel.update_for_slot(_button(1, pos=FilamentPos.UNKNOWN))
+        _show(panel, _button(1, pos=FilamentPos.UNKNOWN))
         assert _actions(panel) == {
             "load": False,
             "unload": True,
@@ -106,15 +112,27 @@ class TestSpoolInfoPanelActions:
             GateInfo(index=1, status=GateStatus.AVAILABLE, spool_id=7),
             FilamentPos.UNLOADED,
         )
-        panel.update_for_slot(btn)
+        _show(panel, btn)
         assert not panel._lbl_mat.isEnabled()
         assert "Spool ID 7" in panel._lbl_status.text()
+
+    @pytest.mark.parametrize("pos", [FilamentPos.UNLOADED, FilamentPos.LOADED])
+    def test_disabled_mmu_greys_everything(self, panel, pos):
+        _show(panel, _button(1, pos=pos), enabled=False)
+        assert not any(_actions(panel).values())
+        assert not panel._lbl_mat.isEnabled()
+
+    def test_unhomed_mmu_allows_unload_only(self, panel):
+        _show(panel, _button(1), homed=False)
+        assert not any(_actions(panel).values())
+        _show(panel, _button(1, pos=FilamentPos.LOADED), homed=False)
+        assert _actions(panel)["unload"] is True
 
 
 class TestClearSlot:
     @pytest.mark.parametrize("can_unload", [True, False])
     def test_only_unload_follows_the_flag(self, panel, can_unload):
-        panel.update_for_slot(_button(1))
+        _show(panel, _button(1))
         panel.clear_slot(can_unload=can_unload)
         assert _actions(panel) == {
             "load": False,
@@ -125,10 +143,13 @@ class TestClearSlot:
         assert panel._lbl_gate.text() == "Gate —"
 
 
-def _state(gate: int, pos: FilamentPos = FilamentPos.UNLOADED) -> MMUState:
+def _state(
+    gate: int, pos: FilamentPos = FilamentPos.UNLOADED, enabled: bool = True
+) -> MMUState:
     return MMUState.from_status(
         {
-            "enabled": True,
+            "enabled": enabled,
+            "is_homed": True,
             "num_gates": 4,
             "gate": gate,
             "tool": gate,
@@ -173,13 +194,26 @@ class TestAMUpageSelect:
         # gate -2 is Happy-Hare's bypass: no gate is targeted by bare commands.
         page.on_mmu_state_changed(_state(gate=-2, pos=FilamentPos.LOADED))
         assert page.current_index == -1
+        assert page.carousel.selectedIndex() == -1
         assert _actions(page.info_panel)["unload"] is True
         assert _actions(page.info_panel)["load"] is False
+
+    def test_bypass_on_a_disabled_mmu_cannot_unload(self, page):
+        page.on_mmu_state_changed(
+            _state(gate=-2, pos=FilamentPos.LOADED, enabled=False)
+        )
+        assert not any(_actions(page.info_panel).values())
 
     def test_no_state_clears_the_panel(self, page):
         page.on_mmu_state_changed(None)
         assert page.current_index == -1
+        assert page.carousel.selectedIndex() == -1
         assert not any(_actions(page.info_panel).values())
+
+    def test_tap_with_no_active_gate_leaves_nothing_highlighted(self, page):
+        page.on_mmu_state_changed(_state(gate=-1))
+        page.carousel.buttons[2].click()
+        assert page.carousel.selectedIndex() == -1
 
 
 class TestAMUpageActions:

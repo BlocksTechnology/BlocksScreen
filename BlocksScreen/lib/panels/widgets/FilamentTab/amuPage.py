@@ -95,6 +95,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.status = mmu_state
         if mmu_state is None:
             self.current_index = -1
+            self.carousel.selectIndex(-1)
             self.info_panel.clear_slot(can_unload=False)
             return
         # apply_diff reuses the gates tuple when no gate_* key changed.
@@ -120,13 +121,17 @@ class AMUpage(QtWidgets.QStackedWidget):
         idx = mmu_state.gate
         if not 0 <= idx < len(self.carousel.buttons):
             self.current_index = -1
+            self.carousel.selectIndex(-1)
             self.info_panel.clear_slot(
-                can_unload=mmu_state.filament_pos != FilamentPos.UNLOADED
+                can_unload=mmu_state.enabled
+                and mmu_state.filament_pos != FilamentPos.UNLOADED
             )
             return
         btn = self.carousel.buttons[idx]
         self.current_index = idx
-        self.info_panel.update_for_slot(btn)
+        self.info_panel.update_for_slot(
+            btn, enabled=mmu_state.enabled, homed=mmu_state.is_homed
+        )
         self.carousel.selectIndex(idx)
 
     def _gate_temp(self) -> int | None:
@@ -141,7 +146,7 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     def _open_temp_numpad(self) -> None:
         self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-            "Temperature", self._gate_temp() or 0, self._on_gate_temp_change, 0, 500
+            "Temperature", self._gate_temp() or 0, self._on_gate_temp_change, 1, 500
         )
 
     def _on_temp_edited(self) -> None:

@@ -252,15 +252,22 @@ class SpoolCarousel(QtWidgets.QWidget):
         return -1
 
     def selectIndex(self, idx: int):
-        """Check the button at *idx* and scroll it into view."""
-        if 0 <= idx < len(self.buttons):
-            self.buttons[idx].setChecked(True)
-            if idx < self._offset:
-                self._offset = idx
-                self._refresh_visible()
-            elif idx >= self._offset + self.VISIBLE:
-                self._offset = idx - self.VISIBLE + 1
-                self._refresh_visible()
+        """Check and scroll to *idx*; out of range unchecks all."""
+        if not 0 <= idx < len(self.buttons):
+            checked = self.button_group.checkedButton()
+            if checked is not None:
+                # Exclusive groups refuse to uncheck their checked button.
+                self.button_group.setExclusive(False)
+                checked.setChecked(False)
+                self.button_group.setExclusive(True)
+            return
+        self.buttons[idx].setChecked(True)
+        if idx < self._offset:
+            self._offset = idx
+            self._refresh_visible()
+        elif idx >= self._offset + self.VISIBLE:
+            self._offset = idx - self.VISIBLE + 1
+            self._refresh_visible()
 
 
 class SpoolInfoPanel(QtWidgets.QWidget):
@@ -443,7 +450,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         self._btn_purge.setEnabled(False)
         self._btn_cut.setEnabled(False)
 
-    def update_for_slot(self, btn: Spoll_button) -> None:
+    def update_for_slot(self, btn: Spoll_button, *, enabled: bool, homed: bool) -> None:
         """Show the selected gate *btn*; bare HH gate commands act only on it."""
         color = btn.color
         r, g, b = color.red(), color.green(), color.blue()
@@ -456,7 +463,8 @@ class SpoolInfoPanel(QtWidgets.QWidget):
 
         filament_pos = btn.filament_pos
         loaded = filament_pos != FilamentPos.UNLOADED
-        can_check = not loaded
+        # Mirrors the AMUManager guards.
+        can_check = enabled and homed and not loaded
         can_feed = can_check and status != GateStatus.EMPTY
         if loaded:
             text = (
@@ -473,7 +481,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             )
 
         # Spoolman owns the fields of a bound gate.
-        editable = gate_info is not None and spool_id == -1
+        editable = enabled and gate_info is not None and spool_id == -1
         for w in (self._lbl_temp, self._swatch, self._lbl_mat):
             w.setEnabled(editable)
 
@@ -493,7 +501,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         self._set_color(color_hex)
 
         self._btn_load.setEnabled(can_feed)
-        self._btn_unload.setEnabled(loaded)
+        self._btn_unload.setEnabled(enabled and loaded)
         self._btn_purge.setEnabled(can_feed)
         self._btn_cut.setEnabled(can_check)
         self.update()

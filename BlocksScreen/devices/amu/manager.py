@@ -129,7 +129,10 @@ class AMUManager(QtCore.QObject):
         self._gate_map(gate, MATERIAL=material)
 
     def set_gate_temp(self, gate: int, temp: int) -> None:
-        """Set the extruder temperature of *gate*."""
+        """Set *gate*'s temp; skips TEMP<=0 since Happy-Hare reads 0 as "keep"."""
+        if round(temp) <= 0:
+            logger.warning("Ignoring gate %d temperature %s: not positive", gate, temp)
+            return
         self._gate_map(gate, TEMP=temp)
 
     def set_gate_color(self, gate: int, color: str) -> None:
