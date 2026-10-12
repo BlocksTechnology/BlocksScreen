@@ -335,8 +335,12 @@ done
 
 if [[ $commit_mode != none ]]; then
     # Committed here, before the gates, so step 4 tests exactly what gets pushed.
-    if [[ $commit_mode == tracked ]]; then git add -u; fi
-    git commit -q -m "$title" || die "git commit failed (see the error above); nothing was committed"
+    # -a, not git add -u: it stages into a temporary index, so a failed commit keeps the user's staging.
+    if [[ $commit_mode == tracked ]]; then
+        git commit -q -a -m "$title" || die "git commit failed (see the error above); nothing was committed"
+    else
+        git commit -q -m "$title" || die "git commit failed (see the error above); nothing was committed"
+    fi
     committed=1
     ok "Committed $(git log -1 --format='%h %s')"
     commit_count=$(git rev-list --count "origin/$base..HEAD")
