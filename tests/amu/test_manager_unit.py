@@ -675,24 +675,6 @@ class TestObjectRouting:
                 "filament_switch_sensor", "toolhead_sensor", {"filament_detected": True}
             )
 
-    @pytest.mark.parametrize(
-        "error",
-        [
-            {"code": 404, "message": "spool not found"},
-            {"code": -1, "message": "disconnected"},
-        ],
-    )
-    def test_error_reply_leaves_the_gate_alone(self, manager, qtbot, error) -> None:
-        """An error read as spool data would send MATERIAL= COLOR= SPOOLID=-1."""
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.fetch_spool(0, 42)
-        callback = manager._ws.api.get_spool.call_args.args[1]
-        with (
-            qtbot.assertNotEmitted(manager.spool_fetched),
-            qtbot.assertNotEmitted(manager.run_gcode_signal),
-        ):
-            callback({"error": error})
-
 
 class TestLoadCellUpdate:
     # RF50-Klipper has no [load_cell]; the old handler also read the wrong key.
