@@ -42,6 +42,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     klippy_state_signal = QtCore.pyqtSignal(str, name="klippy_state")
     query_server_info_signal = QtCore.pyqtSignal(name="query_server_information")
     server_components_signal = QtCore.pyqtSignal(list, name="server_components")
+    request_reply_signal = QtCore.pyqtSignal(object, object, name="request_reply")
 
     _KLIPPY_NOTIFY_METHODS: typing.ClassVar[frozenset[str]] = frozenset(
         {
@@ -84,6 +85,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         )
 
         self.klippy_state_signal.connect(self.api.request_printer_info)
+        self.request_reply_signal.connect(self._run_callback)
         logger.info("Websocket object initialized")
 
     @property
@@ -201,6 +203,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         _close_message = args[2] if len(args) == 3 else None
         with self._state_lock:
             self.connected = False
+        with self._request_lock:
+            callbacks = [e[2] for e in self.request_table.values() if e[2] is not None]
+            self.request_table.clear()
+        for callback in callbacks:
+            self.request_reply_signal.emit(callback, {"error": "disconnected"})
         self.ws.keep_running = False
         self.connection_lost[str].emit(
             f"code: {_close_status_code} | message {_close_message}"
@@ -302,12 +309,14 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             else:
                 _callback = _entry[2] if len(_entry) > 2 else None
                 if _callback is not None:
-                    if "error" not in response:
-                        _callback(response.get("result"))
-                    else:
+                    if "error" in response:
                         logger.error(
-                            "WS request %s error: %s", _entry[0], response.get("error")
+                            "WS request %s error: %s", _entry[0], response["error"]
                         )
+                        _reply = {"error": response["error"]}
+                    else:
+                        _reply = response.get("result")
+                    self.request_reply_signal.emit(_callback, _reply)
                     return
                 if "error" in response:
                     message_event = WebSocketMessageReceived(
@@ -349,6 +358,14 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 "Unexpected error while creating websocket message event: %s", e
             )
 
+    @QtCore.pyqtSlot(object, object, name="run_callback")
+    def _run_callback(self, callback, reply) -> None:
+        """Run a request callback on the GUI thread; a raise must not kill the app."""
+        try:
+            callback(reply)
+        except Exception:
+            logger.exception("WS request callback %r failed", callback)
+
     def send_request(
         self, method: str, params: dict | None = None, callback=None
     ) -> bool:
@@ -357,9 +374,10 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         Args:
             method (str): Websocket method name
             params (dict, optional): parameters for the websocket method. Defaults to None.
-            callback (callable, optional): Called with ``response["result"]`` when the
-            response arrives. If None, the response is routed as a
-            ``WebSocketMessageReceived`` event to the parent widget. Defaults to None.
+            callback (callable, optional): Called on the GUI thread with
+            ``response["result"]``, or ``{"error": ...}`` on a JSON-RPC error. If None,
+            the response is routed as a ``WebSocketMessageReceived`` event to the
+            parent widget. Defaults to None.
         Returns:
             bool: Whether the method finished and a request was sent
         """
@@ -382,7 +400,14 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             "params": params,
             "id": _rid,
         }
-        _ws.send(json.dumps(packet))
+        try:
+            _ws.send(json.dumps(packet))
+        except (websocket.WebSocketException, OSError) as e:
+            logger.warning("WS request %s not sent: %s", method, e)
+            with self._request_lock:
+                drained = self.request_table.pop(_rid, None) is None
+            # on_close already failed a drained callback; False would answer it twice.
+            return drained and callback is not None
         return True
 
 
@@ -923,10 +948,11 @@ class MoonAPI(QtCore.QObject):
         )
 
     def get_spool(self, spool_id: int, callback) -> bool:
-        """Request spool data from Moonraker's Spoolman proxy"""
-        return self._ws.send_request(
-            method="server.spoolman.get_spool",
-            params={"spool_id": spool_id},
+        """Request one spool through the Spoolman proxy; there is no get_spool RPC."""
+        return self.spoolman_proxy(
+            request_method="GET",
+            path=f"/v1/spool/{spool_id}",
+            use_v2_response=False,
             callback=callback,
         )
 

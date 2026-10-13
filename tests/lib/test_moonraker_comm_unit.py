@@ -1,6 +1,7 @@
 """Unit tests for moonrakerComm."""
 
 import json
+import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -8,7 +9,7 @@ import pytest
 from PyQt6 import QtCore
 
 from BlocksScreen.lib import moonrakerComm
-from BlocksScreen.lib.moonrakerComm import OneShotTokenError
+from BlocksScreen.lib.moonrakerComm import MoonAPI, OneShotTokenError
 
 
 class TestOneShotTokenError:
@@ -120,6 +121,42 @@ class TestServerInfoComponents:
         assert states == ["ready", "ready"]
 
 
+class TestRequestCallbacks:
+    def _reply(self, sock, callback, payload: dict) -> None:
+        sock.request_table[9] = ["server.spoolman.proxy", {}, callback]
+        sock.on_message(None, json.dumps({"jsonrpc": "2.0", "id": 9, **payload}))
+
+    def test_result_reaches_callback(self, ws):
+        got = []
+        self._reply(ws, got.append, {"result": {"response": [1], "error": None}})
+        assert got == [{"response": [1], "error": None}]
+
+    def test_jsonrpc_error_reaches_callback(self, ws):
+        got = []
+        err = {"code": 503, "message": "Spoolman server not available"}
+        self._reply(ws, got.append, {"error": err})
+        assert got == [{"error": err}]
+
+    def test_raising_callback_is_logged_not_raised(self, ws, caplog):
+        def boom(_result):
+            raise RuntimeError("boom")
+
+        self._reply(ws, boom, {"result": {}})
+        assert "callback" in caplog.text
+
+    def test_callback_runs_on_gui_thread(self, ws, qtbot):
+        threads = []
+
+        def record(_result):
+            threads.append(threading.current_thread())
+
+        worker = threading.Thread(target=self._reply, args=(ws, record, {"result": {}}))
+        worker.start()
+        worker.join()
+        qtbot.waitUntil(lambda: bool(threads))
+        assert threads == [threading.main_thread()]
+
+
 class TestReconnectCycle:
     def test_retries_forever_until_connected(self, ws, monkeypatch):
         connect = MagicMock(return_value=False)
@@ -192,3 +229,49 @@ class TestReconnectCycle:
         ws.on_close(None, 1006, "gone")
         qtbot.wait(50)
         connect.assert_not_called()
+
+    def test_close_fails_pending_requests(self, ws, qtbot):
+        ws.ws = MagicMock()
+        got = []
+        ws.request_table[3] = ["server.info", {}, None]
+        ws.request_table[4] = ["server.spoolman.proxy", {}, got.append]
+        ws.on_close(None, 1006, "gone")
+        assert ws.request_table == {}
+        qtbot.waitUntil(lambda: bool(got))
+        assert got == [{"error": "disconnected"}]
+
+    def test_failed_send_returns_false_and_forgets_request(self, ws, monkeypatch):
+        # conftest stubs websocket; an except clause needs a real class
+        monkeypatch.setattr(moonrakerComm.websocket, "WebSocketException", OSError)
+        ws.connected = True
+        ws.ws = MagicMock()
+        ws.ws.send.side_effect = OSError("broken pipe")
+        assert ws.send_request("server.info", callback=MagicMock()) is False
+        assert ws.request_table == {}
+
+
+@pytest.fixture
+def api():
+    """MoonAPI over a stub socket; it parents itself to ws, so ws must be a QObject."""
+    sock = QtCore.QObject()
+    sock.send_request = MagicMock(return_value=True)
+    return MoonAPI(sock)
+
+
+class TestGetSpool:
+    def test_goes_through_the_proxy(self, api) -> None:
+        api.get_spool(42, None)
+        params = api._ws.send_request.call_args.kwargs
+        assert params["method"] == "server.spoolman.proxy"
+        assert params["params"] == {
+            "use_v2_response": False,
+            "request_method": "GET",
+            "path": "/v1/spool/42",
+        }
+
+    def test_passes_the_callback_through(self, api) -> None:
+        def cb(_result):
+            return None
+
+        api.get_spool(1, cb)
+        assert api._ws.send_request.call_args.kwargs["callback"] is cb
