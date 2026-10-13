@@ -231,21 +231,30 @@ echo_info "Installing Python requirements ..."
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 # Older runs of this script ran pip as root; hand those files back or every pip-as-blocks run fails.
 [ -d "$BSENV" ] && sudo find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
-# Best-effort pip self-update; must not block the requirements install below.
-_as_blocks "$BSENV/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
+# Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
+_as_blocks "$BSENV/bin/pip" install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||
+    echo_warn "Pinned pip install FAILED; continuing with the venv's current pip"
 sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
 # xsetroot is used as belt-and-suspenders cursor hiding alongside the Xorg -nocursor server flag.
 sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet x11-xserver-utils 2>/dev/null || true
 # sdbus pinned; --no-binary needs libsystemd-dev; only-if-needed skips satisfied.
-_as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
+# A failure must not abort setup, but it must be visible: a silent one hid the typing==3.7.4.3 break.
+if _as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \
-    -r "$BS_PATH/scripts/requirements.txt" || true
-echo_ok "Python requirements installed"
+    -r "$BS_PATH/scripts/requirements.txt"; then
+    echo_ok "Python requirements installed"
+else
+    echo_warn "Python requirements install FAILED; bs-bootstrap retries it on the next boot"
+fi
 
 # uv: Spoolman's dependency installer (run-from-source); provide it for the hook.
 echo_info "Ensuring uv is available for Spoolman provisioning ..."
-_as_blocks "$BSENV/bin/pip" install --quiet --upgrade uv 2>/dev/null || true
-echo_ok "uv ready"
+# Pinned: Spoolman tracks master, so the uv version is the one lever we hold over how it resolves.
+if _as_blocks "$BSENV/bin/pip" install --quiet uv==0.12.24; then
+    echo_ok "uv ready"
+else
+    echo_warn "uv install FAILED; Spoolman provisioning fails until it is installed"
+fi
 
 echo_info "Pre-generating framebuffer splash cache ..."
 _as_blocks "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
