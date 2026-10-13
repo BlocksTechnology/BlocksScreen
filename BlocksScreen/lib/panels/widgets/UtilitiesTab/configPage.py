@@ -11,11 +11,6 @@ from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-# TODO: find a better way to hide sections, hardcoded is kinda meh;
-# a section with "hidden: true/yes" is hidden too, without hardcoding
-
-# TODO: screensaver is currenly hidden for numpad dosent have option for float (miliseconds to minutes works)
-
 _BOOL_WORDS = {
     "true": ("true", "false"),
     "false": ("true", "false"),
@@ -23,15 +18,10 @@ _BOOL_WORDS = {
     "no": ("yes", "no"),
 }
 
-_HIDDEN_ON = {on for on, _off in _BOOL_WORDS.values()}
-
-
-_HIDDEN_SECTIONS = frozenset(
+# Shown unless the section sets "shown: false"; any other section needs "shown: true"
+_SHOWN_SECTIONS = frozenset(
     {
-        "filament_presence",
-        "usb_manager",
-        "hotspot",
-        "configuration_manager",
+        "server",
     }
 )
 
@@ -39,6 +29,10 @@ _HIDDEN_SECTIONS = frozenset(
 _READ_ONLY_SECTIONS = frozenset({"server"})
 _DISPLAY_UNITS = {
     ("screensaver", "timeout"): (60_000, "minutes"),
+}
+# Whole-number range in display units; a 0 minute timeout keeps the screen blank
+_LIMITS = {
+    ("screensaver", "timeout"): (1, 120),
 }
 
 
@@ -103,12 +97,14 @@ class ConfigPage(QtWidgets.QWidget):
 
     def _visible_sections(self) -> typing.Iterator[tuple[str, list[str]]]:
         for section in self._cfg.sections():
-            if section in _HIDDEN_SECTIONS:
+            default = section in _SHOWN_SECTIONS
+            try:
+                shown = self._cfg.config.getboolean(section, "shown", fallback=default)
+            except ValueError:
+                shown = default
+            if not shown:
                 continue
-            hidden = self._cfg.config.get(section, "hidden", fallback="") or ""
-            if hidden.strip().lower() in _HIDDEN_ON:
-                continue
-            options = [o for o in self._cfg.config.options(section) if o != "hidden"]
+            options = [o for o in self._cfg.config.options(section) if o != "shown"]
             if options:
                 yield section, options
 
@@ -158,12 +154,30 @@ class ConfigPage(QtWidgets.QWidget):
             self._saved[(section, option)] = self._field_value(section, option, field)
             field.on_edit.connect(partial(self._stage_option, section, option, field))
         if editable == "LineEdit":
-            field.clicked.connect(partial(self._open_input, f"{title} {label}", field))
+            field.clicked.connect(
+                partial(self._open_input, f"{title} {label}", section, option, field)
+            )
         return field
 
-    def _open_input(self, name: str, field: BlocksField) -> None:
+    def _open_input(
+        self, name: str, section: str, option: str, field: BlocksField
+    ) -> None:
         self._input_field = field
         value = field.text().strip()
+        limits = _LIMITS.get((section, option))
+        if limits:
+            low, high = limits
+            try:
+                start = min(max(round(float(value)), low), high)
+            except ValueError:
+                start = low
+            self._numpad.set_name(name)
+            self._numpad.set_min_value(low)
+            self._numpad.set_max_value(high)
+            self._numpad.set_enforce_range(True)
+            self._numpad.set_value(start)
+            self._numpad_popup.show()
+            return
         if value.isdigit():
             self._numpad.set_name(name)
             self._numpad.set_value(int(value))
@@ -209,8 +223,22 @@ class ConfigPage(QtWidgets.QWidget):
         except ValueError:
             return text
 
+    def _is_valid(self, section: str, option: str, text: str) -> bool:
+        limits = _LIMITS.get((section, option))
+        if not limits:
+            return True
+        try:
+            value = int(text.strip())
+        except ValueError:
+            return False
+        return limits[0] <= value <= limits[1]
+
     def _stage_option(self, section: str, option: str, field: BlocksField) -> None:
         key = (section, option)
+        if not self._is_valid(section, option, field.text()):
+            field.set_right_text(self._to_display(section, option, self._saved[key]))
+            self._pending.pop(key, None)
+            return
         if self._field_value(section, option, field) == self._saved[key]:
             self._pending.pop(key, None)
         else:

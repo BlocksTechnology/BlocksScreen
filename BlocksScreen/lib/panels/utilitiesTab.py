@@ -123,8 +123,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def restart_screen(self) -> None:
         """Restart BlocksScreen so config changes read at startup take effect."""
-        if not self.ws.api.restart_service("BlocksScreen"):
-            QtWidgets.QApplication.quit()
+        QtWidgets.QApplication.quit()
+        # uses service auto start to start the app
 
     def ask_input_shaper(self) -> None:
         """Ask whether to run the automatic input shaper."""
