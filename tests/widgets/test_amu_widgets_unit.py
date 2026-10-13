@@ -1,4 +1,4 @@
-"""SpoolInfoPanel action-button matrix and AMUpage gate-select debounce."""
+"""SpoolInfoPanel action-button matrix and AMUpage gate selection."""
 
 import sys
 from unittest.mock import MagicMock
@@ -175,11 +175,9 @@ def page(qtbot, manager):
 
 
 class TestAMUpageSelect:
-    def test_rapid_taps_send_one_select_for_the_last_gate(self, page, manager, qtbot):
-        for gate in (0, 2, 3):
-            page.carousel.selectionChanged.emit(gate)
-        qtbot.waitUntil(lambda: manager.select_gate.called, timeout=2000)
-        manager.select_gate.assert_called_once_with(3)
+    def test_tap_selects_the_gate_immediately(self, page, manager):
+        page.carousel.selectionChanged.emit(2)
+        manager.select_gate.assert_called_once_with(2)
 
     def test_tap_keeps_the_active_gate_highlighted_until_state_confirms(self, page):
         page.carousel.selectionChanged.emit(2)

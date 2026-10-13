@@ -11,8 +11,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class AMUpage(QtWidgets.QStackedWidget):
-    _SELECT_DEBOUNCE_MS = 700
-
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
     )
@@ -39,11 +37,6 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.amu_manager: AMUManager = amu_manager
         self.load_popup = load_popup
         self.status = None
-        self._pending_gate = -1
-        self._select_timer = QtCore.QTimer(self)
-        self._select_timer.setSingleShot(True)
-        self._select_timer.setInterval(self._SELECT_DEBOUNCE_MS)
-        self._select_timer.timeout.connect(self._send_select)
         self._build_ui()
 
         self.main_back_button.clicked.connect(self.request_back)
@@ -110,11 +103,7 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     def _select_gate(self, idx: int):
         self.carousel.selectIndex(self.current_index)
-        self._pending_gate = idx
-        self._select_timer.start()
-
-    def _send_select(self) -> None:
-        self.amu_manager.select_gate(self._pending_gate)
+        self.amu_manager.select_gate(idx)
 
     def _on_selection(self, mmu_state: MMUState) -> None:
         idx = mmu_state.gate
