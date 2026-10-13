@@ -458,21 +458,25 @@ class Files(QtCore.QObject):
         job_id = str(metadata.job_id)
         if job_id in self._job_durations:
             return
-        # Mark before sending: error replies skip the callback.
+        # Mark before sending so an in-flight lookup is not re-requested.
         self._job_durations[job_id] = None
-        self.ws.api.history_get_job(
+        sent = self.ws.api.history_get_job(
             job_id,
             lambda result, name=filename, uid=job_id: self._history_job.emit(
                 name, uid, result or {}
             ),
         )
+        if not sent:
+            self._job_durations.pop(job_id, None)
 
     @QtCore.pyqtSlot(str, str, dict, name="on_history_job")
     def _on_history_job(self, filename: str, job_id: str, result: dict) -> None:
         """Cache a completed job's duration and re-emit fileinfo."""
         job = result.get("job") or {}
         status = job.get("status")
-        if status == "in_progress":
+        lost = (result.get("error") or {}).get("code") == -1
+        # Re-ask after a disconnect or a running job; a deleted job stays final.
+        if lost or status == "in_progress":
             self._job_durations.pop(job_id, None)
             return
         duration = job.get("print_duration")

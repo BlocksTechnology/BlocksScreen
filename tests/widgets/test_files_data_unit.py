@@ -186,6 +186,28 @@ class TestHistoryPrintDuration:
         files.request_print_duration("a.gcode")
         assert files.ws.api.history_get_job.call_count == 2
 
+    def test_disconnect_reply_is_asked_again(self, files):
+        """A reply lost to a disconnect must not hide the duration until restart."""
+        files.request_print_duration("a.gcode")
+        error = {"code": -1, "message": "disconnected"}
+        files._on_history_job("a.gcode", "000023", {"error": error})
+        files.request_print_duration("a.gcode")
+        assert files.ws.api.history_get_job.call_count == 2
+
+    def test_deleted_job_is_not_asked_again(self, files):
+        """A deleted job (-32601) is final; re-asking costs a request per view."""
+        files.request_print_duration("a.gcode")
+        error = {"code": -32601, "message": "Invalid job uid: 000023"}
+        files._on_history_job("a.gcode", "000023", {"error": error})
+        files.request_print_duration("a.gcode")
+        assert files.ws.api.history_get_job.call_count == 1
+
+    def test_unsent_lookup_is_asked_again(self, files):
+        files.ws.api.history_get_job.return_value = False
+        files.request_print_duration("a.gcode")
+        files.request_print_duration("a.gcode")
+        assert files.ws.api.history_get_job.call_count == 2
+
 
 class TestFilelistNotifications:
     def test_every_batched_entry_is_applied(self, files):
