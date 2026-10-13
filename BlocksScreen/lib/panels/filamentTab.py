@@ -1,15 +1,15 @@
 import logging
 import typing
 from collections import deque
+from urllib.parse import urlencode
 
 from devices.amu import AMUManager
-from devices.amu.models import GateStatus
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.Common.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.Common.numpadPage import CustomNumpad
 from lib.panels.widgets.FilamentTab.addFilamentPage import AddFilamentPage
-from lib.panels.widgets.FilamentTab.addSpoolPage import AddSpoolPage
+from lib.panels.widgets.FilamentTab.addSpoolPage import AddSpoolPage, make_color_pixmap
 from lib.panels.widgets.FilamentTab.amuPage import AMUpage
 from lib.panels.widgets.FilamentTab.basicFilamentPanel import BasicFilamentPanel
 from lib.panels.widgets.FilamentTab.colorWheelWidget import ColorWheelWidget
@@ -55,7 +55,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._previous_gate_states: dict[int, bool] = {}
         self.pre_gate_idx = {}
         self.popup_gates: deque = deque()
-        self._spool_id_map: dict[str, dict] = {}
+        self._spool_id_map: dict[int, dict] = {}
         self._current_field: QtWidgets.QLineEdit | None = None
         self._color_selected_callback: typing.Callable[[str], None] | None = None
         self._selected_spool: dict | None = None
@@ -80,41 +80,55 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.spoolmanPanel.request_back.connect(self.request_back)
 
         self.spoolmanPanel.request_spools.connect(
-            lambda: self.ws.api.spoolman_proxy(
-                "GET", "/v1/spool", callback=self.spoolmanPanel.on_spools_received
+            lambda: self._spoolman(
+                self.spoolmanPanel.on_spools_received,
+                self.ws.api.spoolman_proxy,
+                "GET",
+                "/v1/spool",
             )
         )
         self.spoolmanPanel.request_get_spool_id.connect(
             lambda: self.ws.api.get_spool_id()
         )
         self.spoolmanPanel.request_delete_spool.connect(
-            lambda spool_id: self.ws.api.delete_spool(
-                spool_id, callback=self.spoolmanPanel.on_delete_spool_result
+            lambda spool_id: self._spoolman(
+                self.spoolmanPanel.on_delete_spool_result,
+                self.ws.api.delete_spool,
+                spool_id,
             )
         )
         self.spoolmanPanel.request_filaments.connect(
-            lambda: self.ws.api.get_filaments(
-                callback=self.spoolmanPanel.on_filaments_received
+            lambda: self._spoolman(
+                self.spoolmanPanel.on_filaments_received, self.ws.api.get_filaments
             )
         )
         self.spoolmanPanel.request_add_spool.connect(
-            lambda filament_id, body: self.ws.api.add_spool(
-                filament_id, body, callback=self.spoolmanPanel.on_add_spool_result
+            lambda filament_id, body: self._spoolman(
+                self.spoolmanPanel.on_add_spool_result,
+                self.ws.api.add_spool,
+                filament_id,
+                body,
             )
         )
         self.spoolmanPanel.request_add_filament.connect(
-            lambda body: self.ws.api.add_filament(
-                body, callback=self.spoolmanPanel.on_add_filament_result
+            lambda body: self._spoolman(
+                self.spoolmanPanel.on_add_filament_result,
+                self.ws.api.add_filament,
+                body,
             )
         )
         self.spoolmanPanel.request_add_manufacturer.connect(
-            lambda body: self.ws.api.add_manufacturer(
-                body, callback=self.spoolmanPanel.on_add_manufacturer_result
+            lambda body: self._find_or_add_vendor(
+                body, self.spoolmanPanel.on_add_manufacturer_result
             )
         )
 
         self._basic_panel = BasicFilamentPanel(
-            self.printer, self.cfg, parent=self, load_popup=self.load_popup
+            self.printer,
+            self.cfg,
+            parent=self,
+            load_popup=self.load_popup,
+            amu_manager=self.amu_manager,
         )
         self._basic_panel.run_gcode.connect(self.run_gcode)
         self._basic_panel.call_load_panel.connect(self.call_load_panel)
@@ -133,12 +147,40 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.run_gcode.connect(self.ws.api.run_gcode)
 
+    def _spoolman(self, callback, call, *args) -> None:
+        """Run a Spoolman API call; a send that fails offline answers *callback* at once."""
+        if not call(*args, callback=callback):
+            callback({"error": "not connected"})
+
+    def _find_or_add_vendor(self, body: dict, callback) -> None:
+        """Reuse the Spoolman vendor named exactly ``body["name"]``; POST one only if none."""
+        name = body["name"]
+
+        def on_vendors(result: dict) -> None:
+            vendors = result.get("response")
+            if result.get("error") is not None or not isinstance(vendors, list):
+                callback({"error": result.get("error") or "bad vendor list"})
+                return
+            match = next((v for v in vendors if v.get("name") == name), None)
+            if match is not None:
+                callback({"response": match, "error": None})
+            else:
+                self._spoolman(callback, self.ws.api.add_manufacturer, body)
+
+        self._spoolman(
+            on_vendors,
+            self.ws.api.spoolman_proxy,
+            "GET",
+            "/v1/vendor",
+            urlencode({"name": name}),
+        )
+
     def in_case_error(self):
         """Reset the popup and spool info in case of an error."""
         self._reset_popup()
         self.reset_spool_info()
         self._add_spool_page.setFilter(None)
-        self._add_filament_page.setData("---", 0)
+        self._add_filament_page.reset()
         self.load_state = False
         self.load_popup.hide()
 
@@ -479,42 +521,37 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._add_popup.add_widget(self._add_stack)
 
         self._add_spool_page.request_filaments.connect(
-            lambda: self.ws.api.get_filaments(
-                callback=self._add_spool_page.on_filaments_received
+            lambda: self._spoolman(
+                self._add_spool_page.on_filaments_received, self.ws.api.get_filaments
             )
         )
         self._add_spool_page.cancelled.connect(self._add_popup.hide)
 
         self._add_spool_page.request_add_spool.connect(
-            lambda filament_id, body: self.ws.api.add_spool(
+            lambda filament_id, body: self._spoolman(
+                self._add_spool_page.on_add_spool_result,
+                self.ws.api.add_spool,
                 filament_id,
                 body,
-                callback=self._add_spool_page.on_add_spool_result,
             )
         )
-        self._add_spool_page.accepted.connect(
-            lambda: {
-                self.ws.api.spoolman_proxy(
-                    "GET", "/v1/spool", callback=self.on_spools_received
-                ),
-                self._add_popup.hide(),
-            }
-        )
+        self._add_spool_page.accepted.connect(self._add_popup.hide)
+        self._add_spool_page.accepted.connect(self._request_spools)
 
         self._add_spool_page.open_add_filament.connect(
             lambda: self._add_stack.setCurrentIndex(1)
         )
 
         self._add_filament_page.request_add_filament.connect(
-            lambda body: self.ws.api.add_filament(
+            lambda body: self._spoolman(
+                self._add_filament_page.on_add_filament_result,
+                self.ws.api.add_filament,
                 body,
-                callback=self._add_filament_page.on_add_filament_result,
             )
         )
         self._add_filament_page.request_add_manufacturer.connect(
-            lambda body: self.ws.api.add_manufacturer(
-                body,
-                callback=self._add_filament_page.on_add_manufacturer_result,
+            lambda body: self._find_or_add_vendor(
+                body, self._add_filament_page.on_add_manufacturer_result
             )
         )
 
@@ -595,36 +632,31 @@ class FilamentTab(QtWidgets.QStackedWidget):
         return page
 
     def handle_skip_button(self):
-        """Handles the skip button action from the pre-gate popup to send the appropriate G-code to map the gate to no spool."""
+        """Clear the popup gate's map entry so it holds no spool."""
         gate = self.pre_gate_idx.get("gate", 0)
         self._reset_popup()
-        self.run_gcode.emit(
-            f"MMU_GATE_MAP GATE={gate} MATERIAL=N/A NAME=N/A COLOR=FFFFFF SPOOLID=-1 TEMP=250 QUIET=1"
-        )
+        self.amu_manager.clear_gate(gate)
+        self._finish_popup()
+
+    def _finish_popup(self) -> None:
+        """Run the pending callback, hide the popup and show the next queued gate."""
         if self._popup_callback is not None:
             try:
                 self._popup_callback()
-            except Exception as e:  # noqa: BLE001 - arbitrary caller-supplied callback
+            except Exception as e:
                 logger.error(f"Error executing pre-gate accept callback: {e}")
             finally:
                 self._popup_callback = None
-
         self.popup.hide()
         self._material_filter = None
         self._add_spool_page.setFilter(None)
-        self._add_filament_page.setData("---", 0)
+        self._add_filament_page.reset()
         self.handle_popup()
 
     def handle_popup(self, force=False):
-        """Handles showing the popup for pre-gate filament detection.
-        If multiple gates trigger, they will be queued and shown one at a time.
-
-        Args:
-            force (bool): If True, forces the popup to open even if no gates are queued.
-        """
+        """Show the next queued gate's popup; *force* opens it with an empty queue."""
         if self.popup.isVisible():
             return
-        self.ws.api.spoolman_proxy("GET", "/v1/spool", callback=self.on_spools_received)
         if not self.popup_gates:
             if force:
                 self.pre_gate_idx = {"gate": 0}
@@ -643,11 +675,13 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
             self._spoolman_title_lbl.setText(f"Filament Detected — Gate {gate}")
 
+        if self._spoolman_available:
+            self._request_spools()
         self.popup.show()
 
     @QtCore.pyqtSlot(int, str, str, "PyQt_PyObject", name="open-pregate-popup")
     def open_pregate_popup(self, temp, material, name, callback=None):
-        """Open the pre-gate popup pre-filled with a detected filament's info and *callback*."""
+        """Open the pre-gate popup pre-filled with a detected filament and *callback*."""
         self._popup_name.setText(name)
         self._popup_material.setText(material)
         self._popup_temp.setText(str(temp))
@@ -659,44 +693,22 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.handle_popup(True)
 
     def on_popup_accept(self):
-        """Handles the accept action from the pre-gate popup to send the appropriate G-code to map the gate to the spool."""
+        """Map the popup gate to the entered filament."""
         gate = self.pre_gate_idx.get("gate", 0)
-        name = self._popup_name.text().strip() or "N/A"
-        color = self._popup_color.text().strip("#").strip()
-        material = self._popup_material.text().strip()
         try:
             temp = int(self._popup_temp.text().strip("°º").strip())
         except ValueError:
-            temp = -1
-
-        parts = [f"MMU_GATE_MAP GATE={gate} SPOOLID=-1"]
-        if name:
-            parts.append(f'NAME="{name}"')
-        if material:
-            parts.append(f'MATERIAL="{material}"')
-        if color:
-            parts.append(f'COLOR="{color}"')
-        if temp > 0:
-            parts.append(f"TEMP={temp}")
-        parts.append("QUIET=1")
-
-        self.run_gcode.emit(" ".join(parts))
-        self.run_gcode.emit("MMU_GATE_MAP REFRESH=1")
-
-        if self._popup_callback is not None:
-            try:
-                self._popup_callback()
-            except Exception as e:  # noqa: BLE001 - arbitrary caller-supplied callback
-                logger.error(f"Error executing pre-gate accept callback: {e}")
-            finally:
-                self._popup_callback = None
-
+            temp = 0
+        self.amu_manager.set_gate_info(
+            gate,
+            self._popup_material.text().strip(),
+            self._popup_color.text().strip("#").strip(),
+            -1,
+            filament_name=self._popup_name.text().strip(),
+            temperature=temp if temp > 0 else None,
+        )
         self._reset_popup()
-        self.popup.hide()
-        self._material_filter = None
-        self._add_spool_page.setFilter(None)
-        self._add_filament_page.setData("---", 0)
-        self.handle_popup()
+        self._finish_popup()
 
     def _reset_popup(self):
         self._popup_name.setText("")
@@ -704,22 +716,35 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._popup_material.setText("")
         self._popup_temp.setText("250")
 
-    @QtCore.pyqtSlot(dict, name="on-spools-received")
-    def on_spools_received(self, result: dict) -> None:
-        self._spool_load_widget.hide()
-        self._spool_list_view.show()
-        self.reset_spool_info()
-        if result.get("error") is not None:
-            self._no_spools_label.setText("Could not reach Spoolman")
-            self._no_spools_label.show()
-            return
-        spools = result.get("response")
-        if not isinstance(spools, list):
-            return
-
+    def _clear_spool_list(self) -> None:
+        """Drop every spool row so no stale one can be mapped to a gate."""
         self._spool_id_map = {}
         self._spool_model.clear()
         self._spool_delegate.clear()
+        self.reset_spool_info()
+
+    def _request_spools(self) -> None:
+        """Swap the spool list for the spinner and fetch the spools from Spoolman."""
+        self._clear_spool_list()
+        self._spool_list_view.hide()
+        self._no_spools_label.hide()
+        self._spool_load_widget.show()
+        self._spoolman(
+            self.on_spools_received, self.ws.api.spoolman_proxy, "GET", "/v1/spool"
+        )
+
+    @QtCore.pyqtSlot(dict, name="on-spools-received")
+    def on_spools_received(self, result: dict) -> None:
+        self._spool_load_widget.hide()
+        self._clear_spool_list()
+        spools = result.get("response")
+        if result.get("error") is not None or not isinstance(spools, list):
+            self._spool_list_view.hide()
+            self._no_spools_label.setText("Could not reach Spoolman")
+            self._no_spools_label.show()
+            return
+
+        self._spool_list_view.show()
         self._spool_model.add_item(
             ListItem(
                 text="+ Add Spool",
@@ -738,17 +763,16 @@ class FilamentTab(QtWidgets.QStackedWidget):
             ):
                 continue
 
-            self._spool_model.add_item(
-                ListItem(
-                    text=name,
-                    right_text=material,
-                    left_icon=self._make_color_pixmap(filament),
-                    _lfontsize=14,
-                    _rfontsize=12,
-                    height=60,
-                )
+            item = ListItem(
+                text=name,
+                right_text=material,
+                left_icon=make_color_pixmap(filament),
+                _lfontsize=14,
+                _rfontsize=12,
+                height=60,
             )
-            self._spool_id_map[name] = spool
+            self._spool_model.add_item(item)
+            self._spool_id_map[id(item)] = spool
         self.update()
 
         if self._spool_id_map:
@@ -767,9 +791,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
             return
         if item.text == "+ Add Spool":
             self.reset_spool_info()
+            self._add_spool_page.reset()
             self._add_popup.show()
             return
-        spool = self._spool_id_map.get(item.text)
+        spool = self._spool_id_map.get(id(item))
         if spool is None:
             return
         self._selected_spool = spool
@@ -777,47 +802,20 @@ class FilamentTab(QtWidgets.QStackedWidget):
         filament = spool.get("filament") or {}
         self.filament_name_label.setText(item.text)
         self.material_label.setText(filament.get("material", "N/A"))
+        remaining = spool.get("remaining_weight")
         self.weight_label.setText(
-            f"{spool.get('remaining_weight')} g"
-            if spool.get("remaining_weight") is not None
-            else "N/A"
+            f"{remaining:.0f} g" if remaining is not None else "N/A"
         )
-        self.vendor_label.setText(
-            filament.get("vendor", "N/A").get("name", "N/A")
-            if filament.get("vendor")
-            else "N/A"
-        )
+        self.vendor_label.setText((filament.get("vendor") or {}).get("name", "N/A"))
 
     def _on_accept_clicked(self) -> None:
         spool = self._selected_spool
         if not spool:
             return
-        filament = spool.get("filament") or {}
-        f_id = spool.get("id", -1)
-        f_name = filament.get("name", "N/A")
-        f_color = filament.get("color_hex", "ffffff")
-        f_material = filament.get("material", "")
-        f_temp = filament.get("settings_extruder_temp", -1)
-        gate = self.pre_gate_idx.get("gate", 0)
-
         self._selected_spool = None
         self.accept_btn.setEnabled(False)
-        self.popup.hide()
-        self._material_filter = None
-        self._add_spool_page.setFilter(None)
-        self._add_filament_page.setData("---", 0)
-        self.run_gcode.emit(
-            f"MMU_GATE_MAP GATE={gate} SPOOLID={f_id} NAME='{f_name}' MATERIAL='{f_material}' COLOR='{f_color}' TEMP={f_temp} QUIET=1"
-        )
-        if self._popup_callback is not None:
-            try:
-                self._popup_callback()
-            except Exception as e:  # noqa: BLE001 - arbitrary caller-supplied callback
-                logger.error(f"Error executing pre-gate accept callback: {e}")
-            finally:
-                self._popup_callback = None
-
-        self.handle_popup()
+        self.amu_manager.assign_spool(self.pre_gate_idx.get("gate", 0), spool)
+        self._finish_popup()
 
     def reset_spool_info(self):
         """Clear the selected-spool detail labels back to their placeholder state."""
@@ -827,38 +825,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.vendor_label.setText("N/A")
         self._selected_spool = None
         self.accept_btn.setEnabled(False)
-
-    @staticmethod
-    def _make_color_pixmap(filament: dict) -> QtGui.QPixmap:
-        size = 32
-        pixmap = QtGui.QPixmap(size, size)
-        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-        painter = QtGui.QPainter(pixmap)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        multi_hexes = filament.get("multi_color_hexes")
-        color_hex = filament.get("color_hex")
-        if multi_hexes:
-            hexes = [h.strip() for h in multi_hexes.split(",") if h.strip()]
-            if hexes:
-                clip = QtGui.QPainterPath()
-                clip.addRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
-                painter.setClipPath(clip)
-                stripe_w = size / len(hexes)
-                for i, h in enumerate(hexes):
-                    painter.fillRect(
-                        QtCore.QRectF(i * stripe_w, 0, stripe_w, size),
-                        QtGui.QColor(f"#{h}"),
-                    )
-        elif color_hex:
-            painter.setBrush(QtGui.QColor(f"#{color_hex}"))
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
-        else:
-            painter.setPen(QtGui.QColor(180, 180, 180))
-            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(QtCore.QRectF(1, 1, size - 2, size - 2), 6, 6)
-        painter.end()
-        return pixmap
 
     def _open_numpad(
         self,
@@ -927,31 +893,17 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if callback is not None:
             callback(hex_str)
 
-    def _clear_gate_map(self, gate_info) -> None:
-        """Blank a gate's map entry when its filament runs out."""
-        if gate_info.spool_id == -1 and gate_info.material in (None, "", "N/A"):
-            return  # already blank
-
-        self.run_gcode.emit(
-            f"MMU_GATE_MAP GATE={gate_info.index} MATERIAL= TEMP=-1 COLOR= SPOOLID=-1 NAME= QUIET=1"
-        )
-
     def on_mmu_state_changed(self, mmu_state):
-        """Handles changes in the MMU state from the AMU manager to update the UI and show the load panel when loading/unloading."""
+        """Track gate fills/runouts and drive the AMU page and load popup."""
+        if mmu_state is None:
+            return
         for gate_info in mmu_state.gates:
             previous_state = self._previous_gate_states.get(gate_info.index)
-            current_state = gate_info.status in [
-                GateStatus.AVAILABLE,
-                GateStatus.AVAILABLE_FROM_BUFFER,
-            ]
+            current_state = gate_info.is_available
             self._previous_gate_states[gate_info.index] = current_state
-
-            if previous_state is False and current_state is True:
-                if len(mmu_state.gates) > 1:
-                    self.popup_gates.append({"gate": gate_info.index})
-                    self.handle_popup()
-            elif previous_state is True and gate_info.status == GateStatus.EMPTY:
-                self._clear_gate_map(gate_info)
+            if previous_state is False and current_state and len(mmu_state.gates) > 1:
+                self.popup_gates.append({"gate": gate_info.index})
+                self.handle_popup()
 
         if not self.amu_configured:
             if len(mmu_state.gates) > 1:
@@ -960,10 +912,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
                     self.amu_manager, parent=self, load_popup=self.load_popup
                 )
                 self.addWidget(self.amupage)
-                try:
+                if self._basic_panel is not None:
                     self.removeWidget(self._basic_panel)
                     self._basic_panel.deleteLater()
-                    self.fp_button_1.disconnect()
+                    self._basic_panel = None
+                try:
+                    self.fp_button_1.clicked.disconnect()
                 except TypeError:
                     pass
                 self.fp_button_1.clicked.connect(
@@ -971,7 +925,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 )
                 self.amupage.request_back.connect(self.request_back)
                 self.amupage.request_change_tab.connect(self.request_change_tab)
-                self.amupage.request_gate_map.connect(self.run_gcode)
                 self.amupage.request_numpad[
                     str, int, "PyQt_PyObject", int, int
                 ].connect(self._open_numpad)
@@ -995,7 +948,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             if mmu_state.action == "Idle":
                 self.load_state = False
                 self.load_popup.hide()
-                if not len(mmu_state.gates) > 1:
+                if self._basic_panel is not None:
                     self._basic_panel.change_page(0)
         elif mmu_state.action in ("Loading", "Unloading"):
             self.load_state = True
@@ -1014,16 +967,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.load_status_widget.set_action(mmu_state.action)
 
         gate_info = mmu_state.current_gate_info
-        raw_color = (
-            str(gate_info.color).lstrip("#")[:6]
+        self.load_status_widget.set_gate_color(
+            QtGui.QColor.fromRgbF(*gate_info.color_rgb)
             if gate_info and gate_info.color
-            else ""
+            else QtGui.QColor("#ffffff")
         )
-        parsed_color = QtGui.QColor("#" + raw_color) if raw_color else QtGui.QColor()
-        if parsed_color.isValid():
-            self.load_status_widget.set_gate_color(parsed_color)
-        else:
-            self.load_status_widget.set_gate_color(QtGui.QColor("#ffffff"))
 
         self.load_status_label.setText(mmu_state.action)
 
