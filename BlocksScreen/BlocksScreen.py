@@ -330,7 +330,7 @@ if __name__ == "__main__":
         # ask for it), and Klipper is restarted to load it.
         # Optional: without it the screen works as before, just no hotplug.
         try:
-            _logger.info("[DEVICE WATCHER]Initializing...")
+            _logger.info("[DEVICE WATCHER] Initializing...")
             device_watcher = DeviceConfigWatcher(conf_man, parent=main_window)
             device_watcher.config_changed.connect(main_window.on_device_config_changed)
             device_watcher.confirmation_required.connect(
@@ -345,6 +345,7 @@ if __name__ == "__main__":
     BlocksScreen.processEvents()
     BlocksScreen.aboutToQuit.connect(on_quit)
     _setup_sigterm(BlocksScreen)
+
     # Event-driven repaint: fire the moment the window first paints (parented to
     # main_window so it lives as long as the window).
     _FirstPaintRefresh(main_window)
