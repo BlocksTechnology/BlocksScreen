@@ -2,6 +2,7 @@ name: Stage sign-off
 
 # Approving this run records a `staging` deployment for the stage tip; the Prod and
 # Release Branches rulesets require it before a PR can merge.
+# Promote with `git push origin dev:stage`, a fast-forward only, so the signed-off tip is always a dev commit.
 on:
   push:
     branches: [stage]
@@ -31,6 +32,10 @@ jobs:
             --jq '.commits[] | select((.parents | length == 1) and .author.login != "dependabot[bot]")
               | {sha, author: (.author.login // .commit.author.name), subject: (.commit.message | split("\n")[0])}' \
             > commits.json
+          if [[ ! -s commits.json ]]; then
+            echo "::notice::nothing to test by hand in this push (only merge commits or Dependabot bumps), no email sent"
+            exit 0
+          fi
           # Squash subjects are the PR titles; @html because they are free text from PR authors.
           # Tables, bgcolor and inline styles only: Outlook for Windows renders with Word.
           cat > notify.jq <<'JQ'

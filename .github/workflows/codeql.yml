@@ -3,7 +3,7 @@ name: "CodeQL Advanced"
 # No paths-ignore: code scanning merge protection waits forever for a skipped analysis.
 on:
   push:
-    branches: [main, dev, stage]
+    branches: [main, dev, stage, "Release**"]
   pull_request:
   schedule:
     - cron: '27 5 * * 0'
