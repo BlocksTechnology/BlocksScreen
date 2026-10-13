@@ -2,7 +2,7 @@ name: Stage sign-off
 
 # Approving this run records a `staging` deployment for the stage tip; the Prod and
 # Release Branches rulesets require it before a PR can merge.
-# Promote with `git push origin dev:stage`, a fast-forward only, so the signed-off tip is always a dev commit.
+# Promote with `git fetch origin && git push origin origin/dev:stage`: never local dev, which can hold unreviewed commits.
 on:
   push:
     branches: [stage]

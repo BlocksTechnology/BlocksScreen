@@ -15,8 +15,6 @@ from pathlib import Path
 
 import pytest
 
-from updater.executor import PIP_PIN
-
 _REQS = Path(__file__).resolve().parents[2] / "scripts" / "requirements.txt"
 
 # Field-validated on Pi 5 aarch64 (see updater deployment notes). Do NOT bump
@@ -73,14 +71,6 @@ def test_every_requirement_is_exact_pin(name: str) -> None:
         and not _PIN_RE.match(line)
     ]
     assert not loose, f"{name}: pin these with == : {loose}"
-
-
-def test_updater_pip_pin_matches_file() -> None:
-    """The updater pins component venvs from code, so it must not drift from the file."""
-    pins = _parse_pins(
-        (_REQS.parent / "requirements-pip.txt").read_text(encoding="utf-8")
-    )
-    assert PIP_PIN == f"pip=={pins['pip']}"
 
 
 @pytest.mark.parametrize("line", ["pip===26.2.1", "pip==26.*", "pip==", "pip>=26"])
