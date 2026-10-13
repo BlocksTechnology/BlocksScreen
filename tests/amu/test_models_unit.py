@@ -116,7 +116,6 @@ class TestMMUState:
             "gate_filament_name": ["Bambu PLA Basic", ""],
             "gate_temperature": [215.0, 0.0],
             "gate_speed_override": [100, 80],
-            "drying_state": ["active", ""],
             "pending_spool_id": 7,
             "operation": "loading",
             # Key names from a live RF50 (mmu_sensor_manager.py:100).
@@ -244,20 +243,6 @@ class TestMMUState:
             100,
             80,
         )
-
-    # drying_state is per-gate despite having no gate_ prefix.
-    def test_from_status_parses_drying_state_per_gate(self) -> None:
-        state = MMUState.from_status(self._full_status_extended())
-        assert (state.gates[0].drying_state, state.gates[1].drying_state) == (
-            "active",
-            "",
-        )
-
-    def test_apply_diff_updates_drying_state(self) -> None:
-        state = MMUState.from_status(self._full_status_extended())
-        state = state.apply_diff({"drying_state": ["complete", "queued"]})
-        assert [g.drying_state for g in state.gates] == ["complete", "queued"]
-        assert state.gates[0].speed_override == 100
 
     def test_apply_diff_num_gates_resizes_gates(self) -> None:
         """A variant switch resizes gates without touching any gate_* array."""

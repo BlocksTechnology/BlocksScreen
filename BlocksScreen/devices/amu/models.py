@@ -79,7 +79,6 @@ _GATE_ARRAYS: dict[str, str] = {
     "gate_filament_name": "filament_name",
     "gate_temperature": "temperature",
     "gate_speed_override": "speed_override",
-    "drying_state": "drying_state",
 }
 
 _GATE_COERCE: dict[str, Callable] = {
@@ -111,7 +110,6 @@ class GateInfo:
     filament_name: str = ""
     temperature: float | None = None
     speed_override: int = 100
-    drying_state: str = ""
 
     @property
     def is_available(self) -> bool:
