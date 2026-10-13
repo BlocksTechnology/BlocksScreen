@@ -18,7 +18,9 @@ NM_INTEGRATION := NM_INTEGRATION_TESTS=1
 
 # Tracked and staged .py files only: untracked local scripts never reach CI, so they must not fail a gate.
 # wildcard drops files deleted from the working tree but still in the index.
-GIT_PY   = $(wildcard $(shell git ls-files -- '*.py'))
+GIT_PY   = $(wildcard $(shell git ls-files -- '*.py' 2>/dev/null))
+# Outside a git checkout (a source tarball) GIT_PY is empty and the gates scan the whole tree, as CI does.
+PY_SCOPE = $(if $(GIT_PY),$(words $(GIT_PY)) tracked files,the whole tree (not a git checkout))
 
 PYRCC5  := /usr/bin/pyrcc5
 QRC_DIR := BlocksScreen/lib/ui/resources
@@ -87,13 +89,13 @@ lint: ## Run pylint
 
 # --force-exclude: without it ruff ignores its exclude list for paths passed explicitly.
 format-check: ## Verify formatting without modifying files (tracked files only)
-	@echo "ruff check + ruff format --diff on $(words $(GIT_PY)) tracked files"
+	@echo "ruff check + ruff format --diff on $(PY_SCOPE)"
 	@$(PYTHON) -m ruff check --force-exclude --target-version=py311 --config=pyproject.toml $(GIT_PY)
 	@$(PYTHON) -m ruff format --diff --force-exclude --target-version=py311 --config=pyproject.toml $(GIT_PY)
 
 security: ## Run bandit security scan (tracked files only)
-	@echo "bandit on $(words $(GIT_PY)) tracked files"
-	@$(PYTHON) -m bandit -c pyproject.toml $(GIT_PY)
+	@echo "bandit on $(PY_SCOPE)"
+	@$(PYTHON) -m bandit -c pyproject.toml $(or $(GIT_PY),-r .)
 
 check: format-check lint security test-fast docstrcov ## Full pre-push gate (mirrors CI)
 

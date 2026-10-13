@@ -180,6 +180,14 @@ set_gates_box() {
     ' "$1" >"$1.tmp" && mv "$1.tmp" "$1"
 }
 
+# apply_meta URL: add the assignee, labels and reviewers saved in $meta; every --add-* is a no-op when already set, so a retry is safe.
+apply_meta() {
+    local -a args
+    mapfile -t args <"$meta"
+    gh pr edit "$1" "${args[@]}" >/dev/null
+    rm -f "$meta"
+}
+
 cd "$(git rev-parse --show-toplevel)"
 readonly TEMPLATE=.github/pull_request_template.md
 readonly TITLE_MAX=72
@@ -195,11 +203,14 @@ declare -rA TYPE_LABEL=(
 declare -rA TYPE_BOX=([feat]=Feature [fix]="Bug Fix" [refactor]="Code Refactor" [docs]=Documentation)
 readonly AREAS=(none ui updater network ci dependencies)
 
-branch="" pushed=0 committed=0
+branch="" pushed=0 committed=0 url=""
 on_exit() {
     local status=$?
     if ((status == 0)); then return; fi
-    if ((pushed)); then
+    if [[ -n $url ]]; then
+        warn "The pull request is open at $url, but its assignee, labels or reviewers are not all set."
+        warn "Run make pr again to retry, or set them on GitHub and delete $meta."
+    elif ((pushed)); then
         warn "'$branch' was pushed but the PR was not created. Run make pr again to retry with the same description."
     elif ((committed)); then
         warn "Aborted. Nothing was pushed; the new commit stays on '$branch' (undo it with: git reset --soft HEAD~1)."
@@ -221,6 +232,10 @@ case $branch in
     "") die "HEAD is detached; switch to your feature branch first" ;;
     main | dev | stage | Release-* | Release/*) die "'$branch' is a shared branch; work on a feature branch (git switch -c fix/short-name)" ;;
 esac
+# Both live until the PR exists with all its metadata, so a rerun picks up where a failed run stopped.
+git_dir=$(git rev-parse --git-dir)
+body="$git_dir/PR_BODY-${branch//\//-}.md"
+meta="$git_dir/PR_META-${branch//\//-}"
 
 origin=$(git remote get-url origin 2>/dev/null) || die "this clone has no 'origin' remote"
 repo_info=$(gh repo view "$origin" --json nameWithOwner,viewerPermission,isFork,parent \
@@ -238,6 +253,13 @@ ok "Logged in with push access to $repo"
 existing_pr=$(gh pr list -R "$repo" --head "$branch" --state open --json url --jq '.[0].url // empty')
 if [[ -n $existing_pr ]]; then
     ok "'$branch' already has an open pull request: $existing_pr"
+    # Left by a run that opened the PR and then failed: finish its metadata; the draft is already the PR body.
+    if [[ -s $meta ]]; then
+        url=$existing_pr
+        apply_meta "$url"
+        ok "Assignee, labels and reviewers set"
+    fi
+    rm -f "$body"
     say "    New commits appear there after a plain 'git push'."
     exit 0
 fi
@@ -268,15 +290,24 @@ fi
 # One fetch for all branches: every call to origin can ask for the SSH key passphrase again.
 # git's own error stays visible: a network or auth failure is not a missing branch.
 git fetch -q --prune origin || die "could not fetch origin (see the error above)"
-# dev is first and preselected, so Enter is the usual PR; the rest, most recently active first, are for stacked PRs.
+# dev is preselected; the rest are stack parents (in HEAD, not yet in dev), and "Other branch" reaches any base.
 bases=(dev)
 while read -r ref; do
     if [[ $ref != HEAD && $ref != dev && $ref != "$branch" ]]; then bases+=("$ref"); fi
-done < <(git for-each-ref --sort=-committerdate --format='%(refname:strip=3)' refs/remotes/origin/)
+done < <(git for-each-ref --merged HEAD --no-merged origin/dev --sort=-committerdate \
+    --format='%(refname:strip=3)' refs/remotes/origin/)
+bases+=("Other branch...")
 
 while true; do
     index=$(menu "Merge $branch into" 0 "${bases[@]}")
     base=${bases[index]}
+    if ((index == ${#bases[@]} - 1)); then
+        base=$(ask "Base branch name on origin")
+        if [[ -z $base || $base == "$branch" ]] || ! git show-ref --verify --quiet "refs/remotes/origin/$base"; then
+            warn "origin has no branch '$base' to merge $branch into."
+            continue
+        fi
+    fi
     case $base in
         main | stage | Release-* | Release/*)
             warn "'$base' only receives promotions (dev -> stage -> production); feature work targets dev."
@@ -407,7 +438,6 @@ fi
 
 # ── 5. Description ───────────────────────────────────────────────────────────
 step 5 "Description"
-body="$(git rev-parse --git-dir)/PR_BODY-${branch//\//-}.md"
 if [[ -s $body ]] && confirm "Reuse the description from your previous attempt?" y; then
     ok "Reusing $body"
 else
@@ -453,11 +483,16 @@ git push -u origin "$branch" ||
     die "push rejected; if origin/$branch has commits you lack, run 'git pull --rebase' and retry (never force-push a shared branch)"
 pushed=1
 
-args=(-R "$repo" --base "$base" --head "$branch" --title "$title" --body-file "$body" --assignee "$me")
-for label in "${apply[@]}"; do args+=(--label "$label"); done
-if [[ -n $reviewers ]]; then args+=(--reviewer "$reviewers"); fi
+# gh pr create sets metadata after opening the PR, so it only creates; the saved edits are retried by a rerun.
+edits=(--add-assignee "$me")
+for label in "${apply[@]}"; do edits+=(--add-label "$label"); done
+if [[ -n $reviewers ]]; then edits+=(--add-reviewer "$reviewers"); fi
+printf '%s\n' "${edits[@]}" >"$meta"
+
+args=(-R "$repo" --base "$base" --head "$branch" --title "$title" --body-file "$body")
 if [[ $draft == yes ]]; then args+=(--draft); fi
 url=$(gh pr create "${args[@]}")
 rm -f "$body"
+apply_meta "$url"
 say ""
 ok "${BOLD}Pull request opened:${RESET} $url"

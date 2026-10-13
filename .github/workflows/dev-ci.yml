@@ -57,7 +57,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install -r scripts/requirements-pip.txt
-          pip install -r scripts/requirements.txt -r scripts/requirements-dev.txt
+          # --no-deps installs only what is pinned, so pip check fails on any dependency the files forgot.
+          pip install --no-deps -r scripts/requirements.txt -r scripts/requirements-dev.txt
+          pip check
 
       - name: Run ${{ matrix.test-type }}
         env:
