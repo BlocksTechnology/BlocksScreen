@@ -1,20 +1,10 @@
+import configparser
 import typing
 
 from lib.utils.blocks_combobox import BlocksComboBox
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-BOOLEAN_STATES = {
-    "1": True,
-    "yes": True,
-    "true": True,
-    "on": True,
-    "0": False,
-    "no": False,
-    "false": False,
-    "off": False,
-}
 
 
 class BlocksField(QtWidgets.QWidget):
@@ -127,7 +117,7 @@ class BlocksField(QtWidgets.QWidget):
         if self.editable == "DropDownMenu":
             raise TypeError("set_right_text() is not supported for DropDownMenu")
         if self.editable == "Toggle":
-            states = BOOLEAN_STATES
+            states = configparser.ConfigParser.BOOLEAN_STATES
             self.set_checked(states.get(text.strip().lower(), False))
             return
         self._right.setText(text)
