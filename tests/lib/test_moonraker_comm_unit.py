@@ -238,7 +238,7 @@ class TestReconnectCycle:
         ws.on_close(None, 1006, "gone")
         assert ws.request_table == {}
         qtbot.waitUntil(lambda: bool(got))
-        assert got == [{"error": "disconnected"}]
+        assert got == [{"error": {"code": -1, "message": "disconnected"}}]
 
     def test_failed_send_returns_false_and_forgets_request(self, ws, monkeypatch):
         # conftest stubs websocket; an except clause needs a real class
@@ -248,6 +248,30 @@ class TestReconnectCycle:
         ws.ws.send.side_effect = OSError("broken pipe")
         assert ws.send_request("server.info", callback=MagicMock()) is False
         assert ws.request_table == {}
+
+    def test_send_racing_close_answers_the_callback_once(self, ws, qtbot, monkeypatch):
+        """on_close already failed the callback, so True keeps the caller from a 2nd."""
+        monkeypatch.setattr(moonrakerComm.websocket, "WebSocketException", OSError)
+        ws.connected = True
+        ws.ws = MagicMock()
+
+        def close_then_fail(_packet):
+            ws.on_close(None, 1006, "gone")
+            raise OSError("broken pipe")
+
+        ws.ws.send.side_effect = close_then_fail
+        got = []
+        assert ws.send_request("server.info", callback=got.append) is True
+        qtbot.waitUntil(lambda: bool(got))
+        qtbot.wait(20)
+        assert got == [{"error": {"code": -1, "message": "disconnected"}}]
+
+    def test_send_while_disconnected_never_calls_back(self, ws, qtbot):
+        callback = MagicMock()
+        assert ws.send_request("server.info", callback=callback) is False
+        assert ws.request_table == {}
+        qtbot.wait(20)
+        callback.assert_not_called()
 
 
 @pytest.fixture

@@ -207,7 +207,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             callbacks = [e[2] for e in self.request_table.values() if e[2] is not None]
             self.request_table.clear()
         for callback in callbacks:
-            self.request_reply_signal.emit(callback, {"error": "disconnected"})
+            # Same shape as a Moonraker JSON-RPC error; -1 marks it client-side.
+            error = {"code": -1, "message": "disconnected"}
+            self.request_reply_signal.emit(callback, {"error": error})
         self.ws.keep_running = False
         self.connection_lost[str].emit(
             f"code: {_close_status_code} | message {_close_message}"
@@ -374,12 +376,14 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         Args:
             method (str): Websocket method name
             params (dict, optional): parameters for the websocket method. Defaults to None.
-            callback (callable, optional): Called on the GUI thread with
-            ``response["result"]``, or ``{"error": ...}`` on a JSON-RPC error. If None,
-            the response is routed as a ``WebSocketMessageReceived`` event to the
-            parent widget. Defaults to None.
+            callback (callable, optional): Called once on the GUI thread with
+            ``response["result"]``, or with ``{"error": {"code": int, "message": str}}``
+            on a JSON-RPC error or a disconnect (code -1); check for ``"error"``
+            before reading the result. If None, the response is routed as a
+            ``WebSocketMessageReceived`` event to the parent widget. Defaults to None.
         Returns:
-            bool: Whether the method finished and a request was sent
+            bool: True if sent; the callback then runs exactly once. False if not
+            sent; the callback never runs, so the caller handles the failure.
         """
         if params is None:
             params = {}
@@ -405,9 +409,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         except (websocket.WebSocketException, OSError) as e:
             logger.warning("WS request %s not sent: %s", method, e)
             with self._request_lock:
-                drained = self.request_table.pop(_rid, None) is None
-            # on_close already failed a drained callback; False would answer it twice.
-            return drained and callback is not None
+                queued = self.request_table.pop(_rid, None) is not None
+            if queued or callback is None:
+                return False
+            # on_close already failed it; False would make the caller answer it twice.
+            return True
         return True
 
 
