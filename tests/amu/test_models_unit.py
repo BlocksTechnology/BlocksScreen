@@ -1,5 +1,9 @@
 """Unit tests for BlocksScreen.devices.amu.models."""
 
+import dataclasses
+
+import pytest
+
 from BlocksScreen.devices.amu.models import (
     FilamentPos,
     GateInfo,
@@ -11,11 +15,11 @@ from BlocksScreen.devices.amu.models import (
 
 class TestGateStatus:
     def test_values(self) -> None:
+        # Must match Happy-Hare's GATE_* codes (mmu.py:59-62).
+        assert GateStatus.UNKNOWN == -1
         assert GateStatus.EMPTY == 0
         assert GateStatus.AVAILABLE == 1
         assert GateStatus.AVAILABLE_FROM_BUFFER == 2
-        assert GateStatus.UNKNOWN == -1
-
 
     def test_is_int_enum(self) -> None:
         assert isinstance(GateStatus.AVAILABLE, int)
@@ -60,39 +64,20 @@ class TestGateInfo:
             spool_id=1,
         )
 
-    def test_is_available_true_for_available(self) -> None:
-        assert self._make(GateStatus.AVAILABLE).is_available is True
+    @pytest.mark.parametrize(
+        ("status", "available"),
+        [
+            (GateStatus.AVAILABLE, True),
+            (GateStatus.AVAILABLE_FROM_BUFFER, True),
+            (GateStatus.EMPTY, False),
+            (GateStatus.UNKNOWN, False),
+        ],
+    )
+    def test_is_available(self, status, available) -> None:
+        assert self._make(status).is_available is available
 
-    def test_is_available_true_for_buffer(self) -> None:
-        assert self._make(GateStatus.AVAILABLE_FROM_BUFFER).is_available is True
-
-    def test_is_available_false_for_empty(self) -> None:
-        assert self._make(GateStatus.EMPTY).is_available is False
-
-    def test_is_available_false_for_unknown(self) -> None:
-        assert self._make(GateStatus.UNKNOWN).is_available is False
-
-    def test_gate_info_default_weight_is_gone(self) -> None:
-        gate = self._make(GateStatus.AVAILABLE)
-        assert gate.weight_g is None
-
-    def test_gate_info_default_mid_usage_is_false(self) -> None:
-        gate = self._make(GateStatus.AVAILABLE)
-        assert gate.mid_usage is False
-
-    def test_gate_info_weight_and_mid_usage_set(self) -> None:
-        gate = GateInfo(
-            index=0,
-            status=GateStatus.AVAILABLE,
-            material="PLA",
-            color="ff0000",
-            color_rgb=(1.0, 0.0, 0.0),
-            spool_id=1,
-            weight_g=245.5,
-            mid_usage=True,
-        )
-        assert gate.weight_g == 245.5
-        assert gate.mid_usage is True
+    def test_gate_info_default_speed_override_is_100(self) -> None:
+        assert self._make(GateStatus.AVAILABLE).speed_override == 100
 
     def test_gate_info_default_filament_name(self) -> None:
         assert self._make(GateStatus.AVAILABLE).filament_name == ""
@@ -130,11 +115,14 @@ class TestMMUState:
             **self._full_status(num_gates),
             "gate_filament_name": ["Bambu PLA Basic", ""],
             "gate_temperature": [215.0, 0.0],
+            "gate_speed_override": [100, 80],
+            "drying_state": ["active", ""],
             "pending_spool_id": 7,
             "operation": "loading",
+            # Key names from a live RF50 (mmu_sensor_manager.py:100).
             "sensors": {
-                "pre_gate_0": True,
-                "gate": False,
+                "mmu_pre_gate": True,
+                "mmu_gate": False,
             },
         }
 
@@ -147,6 +135,18 @@ class TestMMUState:
         assert state.gates[1].status == GateStatus.EMPTY
         assert state.ttg_map == (0, 1)
 
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ([], (0.0, 0.0, 0.0)),
+            ([0.5], (0.5, 0.0, 0.0)),
+            ([0.1, 0.2, 0.3, 0.4], (0.1, 0.2, 0.3)),
+        ],
+    )
+    def test_short_colour_array_pads_with_zeroes(self, raw, expected) -> None:
+        status = {**self._full_status(), "gate_color_rgb": [raw, (0.0, 0.0, 0.0)]}
+        assert MMUState.from_status(status).gates[0].color_rgb == expected
+
     def test_from_status_empty_dict_uses_default(self) -> None:
         state: MMUState = MMUState.from_status({})
         assert state.num_gates == 0
@@ -156,9 +156,11 @@ class TestMMUState:
         assert state.has_bypass is False
         assert state.spoolman_support is SpoolmanSupport.OFF
 
-    def test_is_paused_true(self) -> None:
+    # The only values Happy-Hare's is_mmu_paused() accepts (mmu.py:3040).
+    @pytest.mark.parametrize("print_state", ["paused", "pause_locked"])
+    def test_is_paused_true(self, print_state: str) -> None:
         state: MMUState = MMUState.from_status(
-            {**self._full_status(), "print_state": "pause"}
+            {**self._full_status(), "print_state": print_state}
         )
         assert state.is_paused is True
 
@@ -202,6 +204,14 @@ class TestMMUState:
         )
         assert state.has_bypass is True
 
+    # Happy-Hare publishes 0-100 during a bowden move, else -1 (mmu.py:1433).
+    def test_bowden_progress_defaults_to_idle(self) -> None:
+        assert MMUState.from_status(self._full_status()).bowden_progress == -1
+
+    def test_apply_diff_updates_bowden_progress(self) -> None:
+        state: MMUState = MMUState.from_status(self._full_status())
+        assert state.apply_diff({"bowden_progress": 42}).bowden_progress == 42
+
     def test_apply_diff_filament_pos_coerced(self) -> None:
         state: MMUState = MMUState.from_status(self._full_status())
         updated: MMUState = state.apply_diff({"filament_pos": 0})
@@ -218,6 +228,81 @@ class TestMMUState:
         state: MMUState = MMUState.from_status(self._full_status())
         updated: MMUState = state.apply_diff({"gate_status": [1, 1]})
         assert updated.gates[1].status == GateStatus.AVAILABLE
+
+    def test_gate_array_diff_preserves_untouched_arrays(self) -> None:
+        """A diff carries only the arrays that changed; the rest must survive it."""
+        state = MMUState.from_status(self._full_status_extended())
+        updated = state.apply_diff({"gate_status": [2, 0]})
+        assert updated.gates[0] == dataclasses.replace(
+            state.gates[0], status=GateStatus.AVAILABLE_FROM_BUFFER
+        )
+        assert updated.gates[1] == state.gates[1]
+
+    def test_from_status_parses_speed_override_per_gate(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+        assert (state.gates[0].speed_override, state.gates[1].speed_override) == (
+            100,
+            80,
+        )
+
+    # drying_state is per-gate despite having no gate_ prefix.
+    def test_from_status_parses_drying_state_per_gate(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+        assert (state.gates[0].drying_state, state.gates[1].drying_state) == (
+            "active",
+            "",
+        )
+
+    def test_apply_diff_updates_drying_state(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+        state = state.apply_diff({"drying_state": ["complete", "queued"]})
+        assert [g.drying_state for g in state.gates] == ["complete", "queued"]
+        assert state.gates[0].speed_override == 100
+
+    def test_apply_diff_num_gates_resizes_gates(self) -> None:
+        """A variant switch resizes gates without touching any gate_* array."""
+        state: MMUState = MMUState.from_status(self._full_status())
+        assert len(state.apply_diff({"num_gates": 1}).gates) == 1
+        grown = state.apply_diff({"num_gates": 4})
+        assert len(grown.gates) == 4
+        assert grown.gates[3].status is GateStatus.UNKNOWN
+
+    # A 1->4 variant switch grows num_gates before the gate arrays catch up.
+    def test_from_status_short_gate_arrays_default_the_tail(self) -> None:
+        state: MMUState = MMUState.from_status(self._full_status_extended(4))
+        assert len(state.gates) == 4
+        tail = state.gates[2:]
+        assert [g.index for g in tail] == [2, 3]
+        assert all(g.status is GateStatus.UNKNOWN for g in tail)
+        assert all(g.spool_id == -1 for g in tail)
+        assert all(g.speed_override == 100 for g in tail)
+
+    def test_from_status_long_gate_arrays_are_truncated(self) -> None:
+        state: MMUState = MMUState.from_status(self._full_status_extended(1))
+        assert len(state.gates) == 1
+        assert state.gates[0].status is GateStatus.AVAILABLE
+
+    def test_apply_diff_does_not_alias_sensors(self) -> None:
+        """The frozen dataclass must not hand out a reference to the caller's dict."""
+        state: MMUState = MMUState.from_status(self._full_status())
+        diff = {"sensors": {"mmu_gate": True}}
+        updated = state.apply_diff(diff)
+        diff["sensors"]["extruder"] = False
+        assert updated.sensors == {"mmu_gate": True}
+
+    def test_unknown_enum_values_do_not_raise(self) -> None:
+        """PyQt6 turns a ValueError inside a slot into qFatal, killing the whole GUI."""
+        state = MMUState.from_status(
+            {
+                **self._full_status(),
+                "gate_status": [99, 0],
+                "filament_pos": 42,
+                "spoolman_support": "readwrite",
+            }
+        )
+        assert state.gates[0].status is GateStatus.UNKNOWN
+        assert state.filament_pos is FilamentPos.UNKNOWN
+        assert state.spoolman_support is SpoolmanSupport.OFF
 
     def test_from_status_parse_gate_filament_name(self) -> None:
         state = MMUState.from_status(self._full_status_extended())
@@ -238,7 +323,7 @@ class TestMMUState:
 
     def test_from_status_parse_sensors(self) -> None:
         state = MMUState.from_status(self._full_status_extended())
-        assert state.sensors == {"pre_gate_0": True, "gate": False}
+        assert state.sensors == {"mmu_pre_gate": True, "mmu_gate": False}
 
     def test_from_status_new_field_defaults(self) -> None:
         state = MMUState.from_status(self._full_status())
@@ -254,5 +339,5 @@ class TestMMUState:
     def test_apply_diff_replaces_sensors(self) -> None:
         state = MMUState.from_status(self._full_status_extended())
 
-        updated = state.apply_diff({"sensors": {"pre_gate_0": False}})
-        assert updated.sensors == {"pre_gate_0": False}
+        updated = state.apply_diff({"sensors": {"mmu_pre_gate": False}})
+        assert updated.sensors == {"mmu_pre_gate": False}
