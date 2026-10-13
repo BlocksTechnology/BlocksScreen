@@ -165,7 +165,8 @@ class AMUManager(QtCore.QObject):
             return
 
         def _on_result(result: dict | None) -> None:
-            if result is not None:
+            # An error reply parses as an empty spool and would blank the gate.
+            if result and "error" not in result:
                 self.spool_fetched.emit(gate, result)
 
         self._ws.api.get_spool(spool_id, _on_result)
