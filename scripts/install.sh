@@ -236,6 +236,10 @@ function create_virtualenv() {
         exit 1
     fi
 
+    # Pinned so a fresh box runs the pip CI tested; on failure the stock pip still installs the requirements.
+    pip3 --disable-pip-version-check install -r "${BS_PATH}/scripts/requirements-pip.txt" ||
+        echo_info "Could not install the pinned pip, continuing with $(pip3 --version)"
+
     if [[ "$(uname -m)" =~ armv[67]l|aarch64 ]]; then
         echo_text "Using $(uname -m)! Building sdbus from source, installing PyQt6 + rest from wheels (piwheels)..."
         grep -v "^sdbus==" "${BS_PATH}/scripts/requirements.txt" >/tmp/bs-requirements.txt
@@ -252,14 +256,14 @@ function create_virtualenv() {
         sudo apt install -y build-essential cmake libsystemd-dev
         if [[ "$(uname -m)" =~ armv[67]l|aarch64 ]]; then
             echo_text "Adding piwheels.org as extra index..."
-            echo_info "Installing with pip setuptools and app requirements"
-            pip3 install --extra-index-url https://www.piwheels.org/simple --upgrade pip setuptools
+            echo_info "Installing pinned pip and app requirements"
+            pip3 install -r "${BS_PATH}/scripts/requirements-pip.txt"
             pip3 install --use-pep517 --no-binary sdbus --use-feature=no-binary-enable-wheel-cache "$SDBUS_VERSION" &&
                 pip3 install --extra-index-url https://www.piwheels.org/simple -r /tmp/bs-requirements.txt
             pip_status=$?
         else
-            echo_info "Upgrading pip and Installing with pip setuptools and app requirements"
-            pip3 install --upgrade pip setuptools
+            echo_info "Installing pinned pip and app requirements"
+            pip3 install -r "${BS_PATH}/scripts/requirements-pip.txt"
             pip3 install -r "${BS_PATH}"/scripts/requirements.txt
             pip_status=$?
             printf "\n"

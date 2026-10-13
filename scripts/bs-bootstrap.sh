@@ -97,6 +97,10 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
         fi
     fi
 fi
+# pip -r never removes a dropped pin; the glob keeps this free on every start once the stale backport is gone.
+if compgen -G "$BSENV/lib/python3*/site-packages/typing-*-info" >/dev/null; then
+    _as_blocks "$BSENV/bin/pip" uninstall --quiet --yes typing || true
+fi
 
 # 4. Updater stack (local files only - works offline).
 # Verify each critical artifact: an old-installer box can have the service but no apt helper.

@@ -1,6 +1,6 @@
 [project]
 name = "BlocksScreen"
-dynamic = ['version']
+dynamic = ['version', 'dependencies', 'optional-dependencies']
 description = "GUI for BLOCKS Printers running Klipper"
 authors = [
   { name = "Hugo do Carmo Costa", email = "hugo.santos.costa@gmail.com" },
@@ -9,33 +9,15 @@ maintainers = [
   { name = "Guilherme Costa", email = "guilherme.costa@blockstec.com" },
   { name = "Roberto Martins ", email = "roberto.martins@blockstec.com" },
 ]
-dependencies = [
-  'altgraph==0.17.4',
-  'certifi==2025.10.5',
-  'charset-normalizer==3.4.4',
-  'idna==3.15',
-  'numpy==2.3.4',
-  'pefile==2024.8.26',
-  'PyQt6==6.10.0',
-  'PyQt6-Qt6==6.10.0',
-  'PyQt6_sip==13.10.2',
-  'requests>=2.32.5',
-  'sdbus==0.14.1',
-  'sdbus-networkmanager==2.0.0',
-  'typing==3.7.4.3',
-  'websocket-client==1.9.0',
-  'qrcode==8.2',
-]
 requires-python = "==3.11.2"
 readme = "README.md"
 license = { text = "GNU Affero General Public License v3.0 or later" }
 keywords = ["GUI", "klipper", "BlocksScreen", "BLOCKS"]
 
-[project.optional-dependencies]
-dev = ["ruff", "pylint", "pytest", "pytest-cov", "docstr_coverage"]
-stage = ["bandit"]
-full-dev = ["BlockScreen[dev,stage]"]
-
+# The requirements files are the only place versions live; a second list here drifted to pins the Pi cannot install.
+[tool.setuptools.dynamic]
+dependencies = { file = ["scripts/requirements.txt"] }
+optional-dependencies.dev = { file = ["scripts/requirements-dev.txt"] }
 
 [project.urls]
 Homepage = "https://blockstec.com"
