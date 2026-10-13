@@ -474,8 +474,9 @@ class Files(QtCore.QObject):
         """Cache a completed job's duration and re-emit fileinfo."""
         job = result.get("job") or {}
         status = job.get("status")
-        # Unmarked so the next view asks again: a lost reply or a running job.
-        if "error" in result or status == "in_progress":
+        lost = (result.get("error") or {}).get("code") == -1
+        # Re-ask after a disconnect or a running job; a deleted job stays final.
+        if lost or status == "in_progress":
             self._job_durations.pop(job_id, None)
             return
         duration = job.get("print_duration")
