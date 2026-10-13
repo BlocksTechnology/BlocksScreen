@@ -42,27 +42,3 @@ class TestGetSpool:
                 "use_v2_response": False,
             },
         )
-
-
-class TestSetSpoolUsedWeight:
-    def test_returns_true_on_sucess(self, rest) -> None:
-        with patch.object(rest, "post_request", return_value={"result": "ok"}):
-            assert rest.set_spool_used_weight(42, 75.5)
-
-    def test_returns_false_on_error(self, rest) -> None:
-        with patch.object(rest, "post_request", return_value=None):
-            assert not rest.set_spool_used_weight(42, 75.5)
-
-    # PATCH, not POST: POST creates a spool, PUT replaces every field.
-    def test_goes_through_the_proxy(self, rest) -> None:
-        with patch.object(rest, "post_request", return_value=None) as mock_post:
-            rest.set_spool_used_weight(5, 100.0)
-        mock_post.assert_called_once_with(
-            "server/spoolman/proxy",
-            json={
-                "request_method": "PATCH",
-                "path": "/v1/spool/5",
-                "use_v2_response": False,
-                "body": {"used_weight": 100.0},
-            },
-        )

@@ -230,6 +230,25 @@ class TestReconnectCycle:
         qtbot.wait(50)
         connect.assert_not_called()
 
+    def test_close_fails_pending_requests(self, ws, qtbot):
+        ws.ws = MagicMock()
+        got = []
+        ws.request_table[3] = ["server.info", {}, None]
+        ws.request_table[4] = ["server.spoolman.proxy", {}, got.append]
+        ws.on_close(None, 1006, "gone")
+        assert ws.request_table == {}
+        qtbot.waitUntil(lambda: bool(got))
+        assert got == [{"error": "disconnected"}]
+
+    def test_failed_send_returns_false_and_forgets_request(self, ws, monkeypatch):
+        # conftest stubs websocket; an except clause needs a real class
+        monkeypatch.setattr(moonrakerComm.websocket, "WebSocketException", OSError)
+        ws.connected = True
+        ws.ws = MagicMock()
+        ws.ws.send.side_effect = OSError("broken pipe")
+        assert ws.send_request("server.info", callback=MagicMock()) is False
+        assert ws.request_table == {}
+
 
 @pytest.fixture
 def api():

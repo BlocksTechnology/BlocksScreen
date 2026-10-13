@@ -140,10 +140,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
         painter.drawPath(self._strip_path)
 
-        if is_loaded:
-            icon = self._icons["loaded"]
-        else:
-            icon = self._icons["unloaded"]
+        icon = self._icons["loaded" if is_loaded else "unloaded"]
 
         x = (self.width() - icon.width()) // 2
         y = int((self.height() - icon.height()) // 1.1)
@@ -386,7 +383,6 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         info_col.addLayout(fields)
         info_col.addStretch(1)
 
-        # Fixed width so long status text cannot shift the buttons.
         info_widget = QtWidgets.QWidget()
         info_widget.setLayout(info_col)
         info_widget.setFixedWidth(300)
@@ -504,7 +500,6 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         self._btn_unload.setEnabled(enabled and loaded)
         self._btn_purge.setEnabled(can_feed)
         self._btn_cut.setEnabled(can_check)
-        self.update()
 
     def _apply_swatch(self, color: QtGui.QColor | None) -> None:
         if color is not None:

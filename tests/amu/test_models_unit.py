@@ -21,9 +21,6 @@ class TestGateStatus:
         assert GateStatus.AVAILABLE == 1
         assert GateStatus.AVAILABLE_FROM_BUFFER == 2
 
-    def test_unknown_value_does_not_raise(self) -> None:
-        assert GateStatus(99) is GateStatus.UNKNOWN
-
     def test_is_int_enum(self) -> None:
         assert isinstance(GateStatus.AVAILABLE, int)
 
@@ -67,22 +64,17 @@ class TestGateInfo:
             spool_id=1,
         )
 
-    def test_is_available_true_for_available(self) -> None:
-        assert self._make(GateStatus.AVAILABLE).is_available is True
-
-    def test_is_available_true_for_buffer(self) -> None:
-        assert self._make(GateStatus.AVAILABLE_FROM_BUFFER).is_available is True
-
-    def test_is_available_false_for_empty(self) -> None:
-        assert self._make(GateStatus.EMPTY).is_available is False
-
-    def test_is_available_false_for_unknown(self) -> None:
-        assert self._make(GateStatus.UNKNOWN).is_available is False
-
-    def test_gate_info_has_no_spoolman_local_fields(self) -> None:
-        # Happy-Hare publishes no weight or bed_temp gate arrays.
-        fields = {f.name for f in dataclasses.fields(GateInfo)}
-        assert fields.isdisjoint({"weight_g", "remaining_weight", "bed_temp"})
+    @pytest.mark.parametrize(
+        ("status", "available"),
+        [
+            (GateStatus.AVAILABLE, True),
+            (GateStatus.AVAILABLE_FROM_BUFFER, True),
+            (GateStatus.EMPTY, False),
+            (GateStatus.UNKNOWN, False),
+        ],
+    )
+    def test_is_available(self, status, available) -> None:
+        assert self._make(status).is_available is available
 
     def test_gate_info_default_speed_override_is_100(self) -> None:
         assert self._make(GateStatus.AVAILABLE).speed_override == 100

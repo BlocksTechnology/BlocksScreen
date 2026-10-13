@@ -203,6 +203,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         _close_message = args[2] if len(args) == 3 else None
         with self._state_lock:
             self.connected = False
+        with self._request_lock:
+            callbacks = [e[2] for e in self.request_table.values() if e[2] is not None]
+            self.request_table.clear()
+        for callback in callbacks:
+            self.request_reply_signal.emit(callback, {"error": "disconnected"})
         self.ws.keep_running = False
         self.connection_lost[str].emit(
             f"code: {_close_status_code} | message {_close_message}"
@@ -395,7 +400,14 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             "params": params,
             "id": _rid,
         }
-        _ws.send(json.dumps(packet))
+        try:
+            _ws.send(json.dumps(packet))
+        except (websocket.WebSocketException, OSError) as e:
+            logger.warning("WS request %s not sent: %s", method, e)
+            with self._request_lock:
+                drained = self.request_table.pop(_rid, None) is None
+            # on_close already failed a drained callback; False would answer it twice.
+            return drained and callback is not None
         return True
 
 

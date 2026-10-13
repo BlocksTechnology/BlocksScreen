@@ -32,8 +32,8 @@ def _gcode_value(value: object) -> str:
     """Quote a value for Klipper's shlex-based extended gcode parser."""
     if isinstance(value, float):
         value = round(value)
-    # A raw newline would end the gcode line.
-    text = " ".join(str(value).split())
+    # A raw newline ends the gcode line; '%' crashes save_variables' configparser.
+    text = " ".join(str(value).replace("%", "").split())
     return shlex.quote(text)
 
 
@@ -62,6 +62,7 @@ class AMUManager(QtCore.QObject):
         self._ws = ws
         self._mmu_state: MMUState | None = None
         self._pre_gate_sensors: dict[int, bool] = {}
+        self._print_state = ""
 
     def _gate_map(self, gate: int, **params: object) -> bool:
         """Emit MMU_GATE_MAP for one gate; False when no gate is selected yet."""
@@ -80,10 +81,17 @@ class AMUManager(QtCore.QObject):
 
     def toggle_amu_system(self, activate: bool) -> None:
         """Swap the printer.cfg variant, restarting on change; emits amu_toggled."""
+        if self._print_state in ("printing", "paused"):
+            logger.warning(
+                "Ignoring AMU toggle while the print is %s", self._print_state
+            )
+            self.amu_toggled.emit(False)
+            return
         result = self._config_toggler.toggle(activate)
         self.amu_toggled.emit(result is not ToggleResult.FAILED)
         if result is ToggleResult.CHANGED:
-            self.run_gcode_signal.emit("FIRMWARE_RESTART")
+            # FIRMWARE_RESTART as gcode drops the socket and replies a false 503.
+            self._ws.api.firmware_restart()
 
     def get_state(self) -> MMUState | None:
         """Return the latest MMU state, or None before the first status arrives."""
@@ -131,7 +139,11 @@ class AMUManager(QtCore.QObject):
 
     def set_gate_temp(self, gate: int, temp: int) -> None:
         """Set *gate*'s temp; skips TEMP<=0 since Happy-Hare reads 0 as "keep"."""
-        if round(temp) <= 0:
+        state = self._mmu_state
+        if state is not None and state.spoolman_support is SpoolmanSupport.PULL:
+            logger.warning("Ignoring gate %d temperature: Spoolman pull owns it", gate)
+            return
+        if not math.isfinite(temp) or round(temp) <= 0:
             logger.warning("Ignoring gate %d temperature %s: not positive", gate, temp)
             return
         self._gate_map(gate, TEMP=temp)
@@ -156,47 +168,19 @@ class AMUManager(QtCore.QObject):
             temperature=filament.get("settings_extruder_temp"),
         )
 
-    def update_spool_weight(self, gate: int, used_weight: float) -> None:
-        """Push *used_weight* to Spoolman for the spool at *gate*."""
-        if self._mmu_state is None:
-            return
-        if self._mmu_state.spoolman_support in (
-            SpoolmanSupport.OFF,
-            SpoolmanSupport.READONLY,
-        ):
-            return
-        if not 0 <= gate < len(self._mmu_state.gates):
-            logger.warning("update_spool_weight: gate %d out of range", gate)
-            return
-        spool_id = self._mmu_state.gates[gate].spool_id
-        if spool_id == -1:
-            return
-        if not (math.isfinite(used_weight) and used_weight >= 0):
-            logger.warning("update_spool_weight: invalid used_weight %r", used_weight)
-            return
-        self._ws.api.update_spool(
-            spool_id, {"used_weight": used_weight}, callback=self._on_spool_weight_reply
-        )
-
-    @staticmethod
-    def _on_spool_weight_reply(result: dict | None) -> None:
-        """Log a failed Spoolman weight write."""
-        if isinstance(result, dict) and result.get("error"):
-            logger.warning("Spoolman weight update failed: %s", result["error"])
-
     def home_mmu(self) -> None:
         """Re-select the current tool via MMU_HOME; refused while filament is loaded."""
         state = self._mmu_state
+        if state is None:
+            logger.warning("Ignoring MMU_HOME: no MMU state yet")
+            return
         # Bare MMU_HOME defaults to TOOL=0 with no loaded guard.
-        if state is not None and state.filament_pos not in (
-            FilamentPos.UNLOADED,
-            FilamentPos.UNKNOWN,
-        ):
+        if state.filament_pos not in (FilamentPos.UNLOADED, FilamentPos.UNKNOWN):
             logger.warning(
                 "Ignoring MMU_HOME while filament is %s", state.filament_pos.name
             )
             return
-        tool = state.tool if state is not None else -1
+        tool = state.tool
         self.run_gcode_signal.emit(f"MMU_HOME TOOL={tool}" if tool >= 0 else "MMU_HOME")
 
     def reset_mmu(self) -> None:
@@ -204,11 +188,12 @@ class AMUManager(QtCore.QObject):
         self.run_gcode_signal.emit("MMU_RESET CONFIRM=1")
 
     def _selected_gate_unloaded(self) -> GateInfo | None:
-        """Return the selected gate when the MMU is enabled, homed and unloaded."""
+        """Return the selected gate when the MMU is idle-ready: enabled, homed, unloaded."""
         state = self._mmu_state
         if (
             state is None
             or not (state.enabled and state.is_homed)
+            or state.is_printing
             or state.filament_pos != FilamentPos.UNLOADED
         ):
             return None
@@ -228,9 +213,10 @@ class AMUManager(QtCore.QObject):
         if (
             state is None
             or not state.enabled
+            or state.is_printing
             or state.filament_pos == FilamentPos.UNLOADED
         ):
-            logger.warning("Ignoring MMU_UNLOAD: MMU disabled or nothing loaded")
+            logger.warning("Ignoring MMU_UNLOAD: MMU disabled, printing or unloaded")
             return False
         self.run_gcode_signal.emit("MMU_UNLOAD")
         return True
@@ -238,7 +224,13 @@ class AMUManager(QtCore.QObject):
     def select_gate(self, gate: int) -> None:
         """Send MMU_SELECT unless invalid, already selected, or filament is loaded."""
         state = self._mmu_state
-        if state is None or not 0 <= gate < state.num_gates or gate == state.gate:
+        if (
+            state is None
+            or not (state.enabled and state.is_homed)
+            or state.is_printing
+            or not 0 <= gate < state.num_gates
+            or gate == state.gate
+        ):
             return
         if state.filament_pos != FilamentPos.UNLOADED:
             logger.warning(
@@ -265,7 +257,7 @@ class AMUManager(QtCore.QObject):
 
     def recover_single_gate(self, loaded: bool) -> None:
         """Tell Happy-Hare whether the single-gate filament path is loaded."""
-        self.run_gcode_signal.emit(f"MMU_RECOVER TOOL=0 GATE=0 LOADED={int(loaded)}")
+        self.run_gcode_signal.emit(f"MMU_RECOVER GATE=0 LOADED={int(loaded)}")
 
     def change_tool(self, tool: int) -> None:
         """Select *tool* with MMU_CHANGE_TOOL, swapping filament if needed."""
@@ -278,7 +270,10 @@ class AMUManager(QtCore.QObject):
                 return
             self._mmu_state = MMUState.from_status(data)
         else:
-            self._mmu_state = self._mmu_state.apply_diff(data)
+            state = self._mmu_state.apply_diff(data)
+            if state == self._mmu_state:
+                return
+            self._mmu_state = state
         self.mmu_state_changed.emit(self._mmu_state)
 
     def on_object_updated(
@@ -289,6 +284,8 @@ class AMUManager(QtCore.QObject):
             self.update_mmu_state(values)
         elif object_type == "filament_switch_sensor":
             self.on_pre_gate_update(values, object_name)
+        elif object_type == "print_stats" and "state" in values:
+            self._print_state = values["state"]
 
     def on_pre_gate_update(self, values: dict, name: str) -> None:
         """Track one pre-gate switch; the mmu aggregate hides unselected gates."""

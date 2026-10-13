@@ -164,6 +164,11 @@ class MMUState:
         return self.print_state in ("paused", "pause_locked")
 
     @property
+    def is_printing(self) -> bool:
+        """Return True while a print is running; a paused print allows recovery."""
+        return self.print_state in ("started", "printing")
+
+    @property
     def current_gate_info(self) -> GateInfo | None:
         """Return the GateInfo for the selected gate, or None when none is selected."""
         if 0 <= self.gate < len(self.gates):

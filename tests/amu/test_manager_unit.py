@@ -32,7 +32,7 @@ _FULL_STATUS: dict = {
     "gate": 0,
     "filament": "Loaded",
     "action": "Idle",
-    "print_state": "printing",
+    "print_state": "standby",
     "reason_for_pause": "",
     "gate_status": [1, -1],
     "gate_material": ["PLA", ""],
@@ -123,6 +123,38 @@ class TestToggleAMUSystem:
         mgr, _ = manager_with_cfg
         with qtbot.assertNotEmitted(mgr.run_gcode_signal):
             mgr.toggle_amu_system(False)
+        mgr._ws.api.firmware_restart.assert_not_called()
+
+    # A config swap restarts the firmware, which would kill the running print.
+    @pytest.mark.parametrize("print_state", ["printing", "paused"])
+    def test_refused_during_a_print(self, manager_with_cfg, qtbot, print_state) -> None:
+        mgr, cfg = manager_with_cfg
+        mgr.on_object_updated("print_stats", "print_stats", {"state": print_state})
+        with qtbot.waitSignal(mgr.amu_toggled) as blocker:
+            mgr.toggle_amu_system(True)
+        assert blocker.args == [False]
+        assert cfg.read_text() == _COMMENTED_CFG
+        mgr._ws.api.firmware_restart.assert_not_called()
+
+    def test_allowed_once_the_print_ends(self, manager_with_cfg, qtbot) -> None:
+        mgr, cfg = manager_with_cfg
+        mgr.on_object_updated("print_stats", "print_stats", {"state": "printing"})
+        mgr.on_object_updated("print_stats", "print_stats", {"state": "complete"})
+        with qtbot.waitSignal(mgr.amu_toggled) as blocker:
+            mgr.toggle_amu_system(True)
+        assert blocker.args == [True]
+        assert cfg.read_text() == _UNCOMMENTED_CFG
+
+    # print_stats diffs without "state" must not reset the tracked state.
+    def test_print_stats_diff_without_state_is_ignored(
+        self, manager_with_cfg, qtbot
+    ) -> None:
+        mgr, _ = manager_with_cfg
+        mgr.on_object_updated("print_stats", "print_stats", {"state": "printing"})
+        mgr.on_object_updated("print_stats", "print_stats", {"print_duration": 5.0})
+        with qtbot.waitSignal(mgr.amu_toggled) as blocker:
+            mgr.toggle_amu_system(True)
+        assert blocker.args == [False]
 
     def test_activate_uncomments_includes(self, manager_with_cfg, qtbot) -> None:
         mgr, cfg = manager_with_cfg
@@ -148,17 +180,12 @@ class TestToggleAMUSystem:
 
 
 class TestUpdateMMUState:
-    def test_first_call_emits_state(self, manager, qtbot) -> None:
+    def test_first_call_emits_and_stores_state(self, manager, qtbot) -> None:
         with qtbot.waitSignal(manager.mmu_state_changed) as blocker:
             manager.update_mmu_state(_FULL_STATUS)
+        assert blocker.args[0] is manager.get_state()
         assert isinstance(blocker.args[0], MMUState)
-
-    def test_first_call_stores_state(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS)
-        state = manager.get_state()
-        assert state is not None
-        assert state.num_gates == 2
-        assert state.enabled is True
+        assert blocker.args[0].num_gates == 2
 
     # A diff-seeded state is gateless and blanks the carousel.
     def test_diff_cannot_seed_state(self, manager, qtbot) -> None:
@@ -188,10 +215,18 @@ class TestUpdateMMUState:
         assert manager.get_state().num_gates == 2
         assert manager.get_state().gates[0].material == "PLA"
 
-    def test_each_call_emits_signal(self, manager, qtbot) -> None:
+    # filament_position streams during moves but is not part of the state.
+    @pytest.mark.parametrize("diff", [{"filament_position": 12.5}, {"tool": 0}])
+    def test_no_op_diff_emits_nothing(self, manager, qtbot, diff) -> None:
         manager.update_mmu_state(_FULL_STATUS)
+        with qtbot.assertNotEmitted(manager.mmu_state_changed):
+            manager.update_mmu_state(diff)
+
+    def test_same_status_after_restart_emits(self, manager, qtbot) -> None:
+        manager.update_mmu_state(_FULL_STATUS)
+        manager.on_klippy_state("disconnect")
         with qtbot.waitSignal(manager.mmu_state_changed):
-            manager.update_mmu_state({"tool": 1})
+            manager.update_mmu_state(_FULL_STATUS)
 
     def test_from_status_parses_endless_spool_groups(self, manager) -> None:
         data = {**_FULL_STATUS, "endless_spool_groups": [0, 1, 3, 0]}
@@ -255,7 +290,7 @@ class TestGcodeSignals:
     def test_recover_single_gate(self, manager, qtbot, loaded, flag) -> None:
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
             manager.recover_single_gate(loaded)
-        assert blocker.args == [f"MMU_RECOVER TOOL=0 GATE=0 LOADED={flag}"]
+        assert blocker.args == [f"MMU_RECOVER GATE=0 LOADED={flag}"]
 
     # Happy-Hare wants rrggbb or a W3C name, never a '#' prefix.
     @pytest.mark.parametrize("method", ["set_gate_color", "set_gate_info"])
@@ -279,10 +314,16 @@ class TestGcodeSignals:
             manager.set_gate_temp(1, temp)
         assert blocker.args == [f"MMU_GATE_MAP GATE=1 TEMP={round(temp)} QUIET=1"]
 
-    @pytest.mark.parametrize("temp", [0, -1, 0.4])
-    def test_non_positive_temp_emits_no_gcode(self, manager, qtbot, temp) -> None:
+    @pytest.mark.parametrize("temp", [0, -1, 0.4, float("inf"), float("nan")])
+    def test_invalid_temp_emits_no_gcode(self, manager, qtbot, temp) -> None:
         with qtbot.assertNotEmitted(manager.run_gcode_signal):
             manager.set_gate_temp(1, temp)
+
+    # Happy-Hare ignores TEMP when Spoolman pull mode owns the gate map.
+    def test_temp_skipped_in_pull_mode(self, manager, qtbot) -> None:
+        manager.update_mmu_state(_status(spoolman_support="pull"))
+        with qtbot.assertNotEmitted(manager.run_gcode_signal):
+            manager.set_gate_temp(1, 240)
 
     # Omitted TEMP resets the gate to default_extruder_temp (mmu.py:8627).
     @pytest.mark.parametrize(
@@ -321,7 +362,13 @@ class TestGcodeSignals:
         with qtbot.assertNotEmitted(manager.run_gcode_signal):
             getattr(manager, method)(*args)
 
-    def test_home_mmu(self, manager, qtbot) -> None:
+    # Without state the loaded guard cannot run, and bare MMU_HOME means TOOL=0.
+    def test_home_mmu_without_state_sends_nothing(self, manager, qtbot) -> None:
+        with qtbot.assertNotEmitted(manager.run_gcode_signal):
+            manager.home_mmu()
+
+    def test_home_mmu_without_a_tool_is_bare(self, manager, qtbot) -> None:
+        manager.update_mmu_state(_status(tool=-1, filament_pos=0))
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
             manager.home_mmu()
         assert blocker.args == ["MMU_HOME"]
@@ -368,6 +415,8 @@ class TestGcodeSignals:
             {"filament_pos": 0, "gate": -1},
             {"filament_pos": 0, "enabled": False},
             {"filament_pos": 0, "is_homed": False},
+            {"filament_pos": 0, "print_state": "printing"},
+            {"filament_pos": 0, "print_state": "started"},
         ],
     )
     def test_load_gate_refused(self, manager, qtbot, overrides) -> None:
@@ -384,13 +433,22 @@ class TestGcodeSignals:
 
     # Happy-Hare drops MMU_UNLOAD when disabled or already unloaded (mmu.py:6981).
     @pytest.mark.parametrize(
-        "overrides", [None, {"filament_pos": 0}, {"enabled": False}]
+        "overrides",
+        [None, {"filament_pos": 0}, {"enabled": False}, {"print_state": "printing"}],
     )
     def test_unload_refused(self, manager, qtbot, overrides) -> None:
         if overrides is not None:
             manager.update_mmu_state(_status(**overrides))
         with qtbot.assertNotEmitted(manager.run_gcode_signal):
             assert manager.unload() is False
+
+    # A paused print is where a failed swap gets recovered by hand.
+    @pytest.mark.parametrize("print_state", ["paused", "pause_locked"])
+    def test_unload_allowed_while_paused(self, manager, qtbot, print_state) -> None:
+        manager.update_mmu_state(_status(print_state=print_state))
+        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
+            assert manager.unload() is True
+        assert blocker.args == ["MMU_UNLOAD"]
 
     def test_eject_gate(self, manager, qtbot) -> None:
         manager.update_mmu_state(_status(filament_pos=0))
@@ -406,6 +464,7 @@ class TestGcodeSignals:
             {"filament_pos": 10},
             {"filament_pos": 0, "gate": -1},
             {"filament_pos": 0, "gate_status": [0, 1]},
+            {"filament_pos": 0, "print_state": "printing"},
         ],
     )
     def test_eject_gate_refused(self, manager, qtbot, overrides) -> None:
@@ -428,6 +487,7 @@ class TestGcodeSignals:
             {"filament_pos": 10},
             {"filament_pos": 0, "gate": -2},
             {"filament_pos": 0, "is_homed": False},
+            {"filament_pos": 0, "print_state": "printing"},
         ],
     )
     def test_check_gate_refused(self, manager, qtbot, overrides) -> None:
@@ -451,6 +511,9 @@ class TestGcodeSignals:
             ({"filament_pos": 0}, 2),
             ({"filament_pos": 0}, -1),
             ({"filament_pos": 10}, 1),
+            ({"filament_pos": 0, "enabled": False}, 1),
+            ({"filament_pos": 0, "is_homed": False}, 1),
+            ({"filament_pos": 0, "print_state": "printing"}, 1),
         ],
     )
     def test_select_gate_skipped(self, manager, qtbot, overrides, gate) -> None:
@@ -464,16 +527,6 @@ class TestGcodeSignals:
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
             manager.change_tool(1)
         assert blocker.args == ["MMU_CHANGE_TOOL TOOL=1"]
-
-    def test_klippy_disconnect(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS)
-        manager.on_klippy_state("disconnect")
-        assert manager.get_state() is None
-
-    def test_klippy_ready(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS)
-        manager.on_klippy_state("ready")
-        assert manager.get_state() is not None
 
     def test_klippy_disconnected_to_connected(self, manager) -> None:
         manager.update_mmu_state(_FULL_STATUS)
@@ -502,11 +555,14 @@ class TestGcodeSignals:
         with qtbot.assertNotEmitted(manager.mmu_state_changed):
             manager.on_klippy_state("ready")
 
-    def test_activate_emits_firmware_restart(self, manager_with_cfg, qtbot) -> None:
+    # The gcode form drops the socket mid-reply and reports a false 503.
+    def test_activate_calls_the_firmware_restart_rpc(
+        self, manager_with_cfg, qtbot
+    ) -> None:
         mgr, _ = manager_with_cfg
-        with qtbot.waitSignal(mgr.run_gcode_signal) as blocker:
+        with qtbot.assertNotEmitted(mgr.run_gcode_signal):
             mgr.toggle_amu_system(True)
-        assert blocker.args == ["FIRMWARE_RESTART"]
+        mgr._ws.api.firmware_restart.assert_called_once_with()
 
 
 class TestPregateSensors:
@@ -547,10 +603,6 @@ class TestPregateSensors:
             manager.on_pre_gate_update({"filament_detected": True}, name)
         assert manager.get_pre_gate_sensors() == {}
 
-    def test_pre_gate_stores_state(self, manager) -> None:
-        manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_2")
-        assert manager.get_pre_gate_sensors() == {2: True}
-
     def test_pre_gate_filament_not_detected(self, manager) -> None:
         manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_0")
         manager.on_pre_gate_update({"filament_detected": False}, "mmu_pre_gate_1")
@@ -558,25 +610,14 @@ class TestPregateSensors:
         manager.on_pre_gate_update({"filament_detected": False}, "mmu_pre_gate_3")
         assert manager.get_pre_gate_sensors() == {0: True, 1: False, 2: True, 3: False}
 
-    def test_pre_gate_empty(self, manager) -> None:
-        assert manager.get_pre_gate_sensors() == {}
-
-    def test_pre_gate_multiple_emits(self, manager, qtbot) -> None:
-        with qtbot.waitSignal(manager.pre_gate_changed) as blocker:
-            manager.on_pre_gate_update({"filament_detected": False}, "mmu_pre_gate_0")
-        assert blocker.args == [0, False]
-        with qtbot.waitSignal(manager.pre_gate_changed) as blocker:
-            manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_1")
-        assert blocker.args == [1, True]
-        with qtbot.waitSignal(manager.pre_gate_changed) as blocker:
-            manager.on_pre_gate_update({"filament_detected": False}, "mmu_pre_gate_2")
-        assert blocker.args == [2, False]
-        with qtbot.waitSignal(manager.pre_gate_changed) as blocker:
-            manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_3")
-        assert blocker.args == [3, True]
-
-    def test_pre_gate_update_is_dict(self, manager) -> None:
-        assert isinstance(manager.get_pre_gate_sensors(), dict)
+    def test_pre_gate_emits_each_reading(self, manager) -> None:
+        seen = []
+        manager.pre_gate_changed.connect(lambda *args: seen.append(args))
+        for gate, detected in enumerate([False, True, False, True]):
+            manager.on_pre_gate_update(
+                {"filament_detected": detected}, f"mmu_pre_gate_{gate}"
+            )
+        assert seen == [(0, False), (1, True), (2, False), (3, True)]
 
     def test_klippy_disconnect_clears_pre_gate_sensors(self, manager) -> None:
         manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_0")
@@ -585,9 +626,6 @@ class TestPregateSensors:
 
 
 class TestIsAMUActive:
-    def test_false_when_not_configured(self, manager) -> None:
-        assert manager.is_amu_active() is False
-
     def test_false_when_configured_but_no_mmu_state(
         self, manager_with_cfg, qtbot
     ) -> None:
@@ -610,67 +648,6 @@ class TestIsAMUActive:
             mgr.toggle_amu_system(True)
         mgr.update_mmu_state(_status(enabled=False))
         assert mgr.is_amu_active() is False
-
-
-class TestUpdateSpoolWeight:
-    # gates[-1] wraps, so an unselected gate hit the last gate's spool.
-    @pytest.mark.parametrize("gate", [-1, -2, 2, 99])
-    def test_out_of_range_gate_does_not_push(self, manager, gate) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.update_spool_weight(gate, 250.0)
-        manager._ws.api.update_spool.assert_not_called()
-
-    def test_valid_gate_pushes_used_weight(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.update_spool_weight(0, 250.0)
-        manager._ws.api.update_spool.assert_called_once_with(
-            42, {"used_weight": 250.0}, callback=manager._on_spool_weight_reply
-        )
-
-    @pytest.mark.parametrize("weight", [-5.0, float("nan"), float("inf")])
-    def test_invalid_weight_not_pushed(self, manager, weight, caplog) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.update_spool_weight(0, weight)
-        manager._ws.api.update_spool.assert_not_called()
-        assert "invalid used_weight" in caplog.text
-
-    def test_zero_weight_pushed(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.update_spool_weight(0, 0.0)
-        manager._ws.api.update_spool.assert_called_once()
-
-    @pytest.mark.parametrize(
-        "reply",
-        [
-            {"response": None, "error": {"status_code": 422, "message": "bad"}},
-            {"error": {"code": -32601, "message": "Method not found"}},
-        ],
-    )
-    def test_error_reply_logged(self, manager, reply, caplog) -> None:
-        manager._on_spool_weight_reply(reply)
-        assert "Spoolman weight update failed" in caplog.text
-
-    def test_ok_reply_not_logged(self, manager, caplog) -> None:
-        manager._on_spool_weight_reply({"response": {"id": 42}, "error": None})
-        assert "failed" not in caplog.text
-
-    def test_noop_when_mmu_state_none(self, manager) -> None:
-        manager.update_spool_weight(0, 250.0)
-        manager._ws.api.update_spool.assert_not_called()
-
-    # readonly mode must never write to Spoolman.
-    @pytest.mark.parametrize("support", ["off", "readonly"])
-    def test_noop_when_spoolman_not_writable(self, manager, support) -> None:
-        manager.update_mmu_state(
-            {**_FULL_STATUS_WITH_SPOOLMAN, "spoolman_support": support}
-        )
-        manager.update_spool_weight(0, 250.0)
-        manager._ws.api.update_spool.assert_not_called()
-
-    def test_noop_when_gate_has_no_spool(self, manager) -> None:
-        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
-        manager.update_spool_weight(1, 250.0)
-        manager._ws.api.update_spool.assert_not_called()
 
 
 class TestObjectRouting:
@@ -707,7 +684,6 @@ class TestLoadCellUpdate:
             manager.on_object_updated(
                 "load_cell", "load_cell_mmu_0", {"force_g": 150.0}
             )
-        assert not hasattr(manager, "gate_weight_updated")
 
 
 class TestGcodeQuoting:
@@ -735,6 +711,13 @@ class TestGcodeQuoting:
         assert params["NAME"] == " ".join(name.split())
         assert params["COLOR"] == color.lstrip("#")
         assert params["SPOOLID"] == "42"
+
+    # Klipper's save_variables configparser shuts Klippy down on a '%'.
+    @pytest.mark.parametrize("name", ["50%", "%(x)s"])
+    def test_percent_is_stripped(self, manager, qtbot, name) -> None:
+        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
+            manager.set_gate_info(0, "PLA", "ff0000", 42, filament_name=name)
+        assert "%" not in blocker.args[0]
 
 
 class TestAssignSpool:

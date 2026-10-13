@@ -1,3 +1,5 @@
+import contextlib
+import math
 import typing
 
 from devices.amu import AMUManager, FilamentPos, MMUState
@@ -69,25 +71,17 @@ class AMUpage(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """Point the back button at request_back while printing, else at tab 0."""
-        if isinstance(value, str) and "state" in field:
-            self.state = value
-            if value in ("printing", "pausing", "paused", "resuming"):
-                try:
-                    self.main_back_button.clicked.disconnect()
-                except TypeError:
-                    pass
-
-                self.main_back_button.clicked.connect(
-                    lambda: self.request_change_tab.emit(0)
-                )
-
-            else:
-                try:
-                    self.main_back_button.clicked.disconnect()
-                except TypeError:
-                    pass
-                self.main_back_button.clicked.connect(lambda: self.request_back.emit())
+        """Point the back button at tab 0 while printing, else at request_back."""
+        if not (isinstance(value, str) and "state" in field):
+            return
+        with contextlib.suppress(TypeError):
+            self.main_back_button.clicked.disconnect()
+        if value in ("printing", "pausing", "paused", "resuming"):
+            self.main_back_button.clicked.connect(
+                lambda: self.request_change_tab.emit(0)
+            )
+        else:
+            self.main_back_button.clicked.connect(self.request_back)
 
     def on_mmu_state_changed(self, mmu_state):
         """Sync the carousel and info panel to live MMU state."""
@@ -99,14 +93,19 @@ class AMUpage(QtWidgets.QStackedWidget):
             self.info_panel.clear_slot(can_unload=False)
             return
         # apply_diff reuses the gates tuple when no gate_* key changed.
-        if (
+        redraw = (
             prev is None
             or mmu_state.gates is not prev.gates
             or mmu_state.filament_pos != prev.filament_pos
+        )
+        if not redraw and all(
+            getattr(mmu_state, f) == getattr(prev, f)
+            for f in ("gate", "enabled", "is_homed")
         ):
+            return
+        if redraw:
             for gate_info in mmu_state.gates:
                 self.carousel.addSpool(gate_info, mmu_state.filament_pos)
-            self.update()
         self._on_selection(mmu_state)
 
     def _select_gate(self, idx: int):
@@ -136,9 +135,10 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     def _gate_temp(self) -> int | None:
         try:
-            return round(float(self.info_panel._lbl_temp.text().strip("º")))
+            temp = float(self.info_panel._lbl_temp.text().strip("º"))
         except ValueError:
             return None
+        return round(temp) if math.isfinite(temp) else None
 
     def _on_gate_temp_change(self, _name: str, value: int) -> None:
         self.info_panel._lbl_temp.setText(str(value))

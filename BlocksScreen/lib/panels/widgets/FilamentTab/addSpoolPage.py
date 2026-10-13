@@ -4,12 +4,68 @@ from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.Common.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.Common.numpadPage import CustomNumpad
+from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+
+def spoolman_color(hex_text: str) -> QtGui.QColor:
+    """Spoolman hex is rrggbb or rrggbbaa; QColor reads 8 digits as aarrggbb."""
+    h = hex_text.strip().lstrip("#")
+    return QtGui.QColor(f"#{h[6:]}{h[:6]}")
+
+
+def make_add_pixmap() -> QtGui.QPixmap:
+    """Return the 32px "+" icon of the "New ..." list rows."""
+    pixmap = QtGui.QPixmap(32, 32)
+    pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(pixmap)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pen = QtGui.QPen(QtGui.QColor(160, 160, 160))
+    pen.setWidth(2)
+    painter.setPen(pen)
+    painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    painter.drawRoundedRect(QtCore.QRectF(1, 1, 30, 30), 6, 6)
+    painter.drawLine(16, 8, 16, 24)
+    painter.drawLine(8, 16, 24, 16)
+    painter.end()
+    return pixmap
+
+
+def make_color_pixmap(filament: dict) -> QtGui.QPixmap:
+    """Return a 32px swatch of a Spoolman filament's (multi) colour."""
+    size = 32
+    pixmap = QtGui.QPixmap(size, size)
+    pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(pixmap)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    multi_hexes: str | None = filament.get("multi_color_hexes")
+    color_hex: str | None = filament.get("color_hex")
+    if multi_hexes:
+        hexes = [h.strip() for h in multi_hexes.split(",") if h.strip()]
+        if hexes:
+            clip = QtGui.QPainterPath()
+            clip.addRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
+            painter.setClipPath(clip)
+            stripe_w = size / len(hexes)
+            for i, h in enumerate(hexes):
+                painter.fillRect(
+                    QtCore.QRectF(i * stripe_w, 0, stripe_w, size), spoolman_color(h)
+                )
+    elif color_hex:
+        painter.setBrush(spoolman_color(color_hex))
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
+    else:
+        painter.setPen(QtGui.QColor(180, 180, 180))
+        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(QtCore.QRectF(1, 1, size - 2, size - 2), 6, 6)
+    painter.end()
+    return pixmap
 
 
 class AddSpoolPage(QtWidgets.QWidget):
@@ -33,11 +89,12 @@ class AddSpoolPage(QtWidgets.QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._selected_filament_id: int | None = None
-        self._filament_id_map: dict[str, dict] = {}
+        self._filament_id_map: dict[int, dict] = {}
         self._keyboard_field: QtWidgets.QLineEdit | None = None
         self._material_filter: str | None = None
 
         self._build_ui()
+        self._popup = Popup(self)
 
         self._keyboard = CustomQwertyKeyboard(self)
         self._keyboard.hide()
@@ -73,26 +130,27 @@ class AddSpoolPage(QtWidgets.QWidget):
         self.request_filaments.emit()
 
     def setFilter(self, material: str | None = None) -> None:
-        """Set a material filter and reload the filament list."""
+        """Set the material filter applied on the next reset."""
         self._material_filter = material
-        self.reset()
 
     @QtCore.pyqtSlot(dict, name="on-filaments-received")
     def on_filaments_received(self, result: dict) -> None:
         self._fil_load_widget.hide()
-        self._fil_list_view.show()
-        if result.get("error") is not None:
-            return
-        filaments = result.get("response")
-        if not isinstance(filaments, list):
-            return
         self._filament_id_map = {}
         self._fil_model.clear()
         self._fil_delegate.clear()
+        filaments = result.get("response")
+        if result.get("error") is not None or not isinstance(filaments, list):
+            self._fil_list_view.hide()
+            self._no_filaments_label.setText("Could not reach Spoolman")
+            self._no_filaments_label.show()
+            return
+
+        self._fil_list_view.show()
         self._fil_model.add_item(
             ListItem(
                 text=" New Filament",
-                left_icon=self._make_add_pixmap(),
+                left_icon=make_add_pixmap(),
                 _lfontsize=14,
                 height=60,
             )
@@ -107,18 +165,17 @@ class AddSpoolPage(QtWidgets.QWidget):
                 and self._material_filter.lower() not in material.lower()
             ):
                 continue
-            self._fil_model.add_item(
-                ListItem(
-                    text=name,
-                    right_text=material,
-                    left_icon=self._make_color_pixmap(fil),
-                    _lfontsize=14,
-                    _rfontsize=12,
-                    height=60,
-                )
+            item = ListItem(
+                text=name,
+                right_text=material,
+                left_icon=make_color_pixmap(fil),
+                _lfontsize=14,
+                _rfontsize=12,
+                height=60,
             )
-            self._filament_id_map[name] = fil
-            self.update()
+            self._fil_model.add_item(item)
+            self._filament_id_map[id(item)] = fil
+        self.update()
 
         if self._filament_id_map:
             self._no_filaments_label.hide()
@@ -130,27 +187,15 @@ class AddSpoolPage(QtWidgets.QWidget):
             )
             self._no_filaments_label.show()
 
-    @staticmethod
-    def _make_add_pixmap() -> QtGui.QPixmap:
-        pixmap = QtGui.QPixmap(32, 32)
-        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-        painter = QtGui.QPainter(pixmap)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        pen = QtGui.QPen(QtGui.QColor(160, 160, 160))
-        pen.setWidth(2)
-        painter.setPen(pen)
-        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(QtCore.QRectF(1, 1, 32 - 2, 32 - 2), 6, 6)
-        mid = 32 // 2
-        painter.drawLine(mid, 8, mid, 32 - 8)
-        painter.drawLine(8, mid, 32 - 8, mid)
-        painter.end()
-        return pixmap
-
     @QtCore.pyqtSlot(dict, name="on-add-spool-result")
     def on_add_spool_result(self, result: dict) -> None:
+        self._submit_btn.setEnabled(self._selected_filament_id is not None)
         if result.get("error") is None:
             self.accepted.emit()
+        else:
+            self._popup.new_message(
+                message_type=Popup.MessageType.ERROR, message="Could not add spool"
+            )
 
     @QtCore.pyqtSlot(ListItem, name="on-filament-selected")
     def _on_filament_selected(self, item: ListItem) -> None:
@@ -159,7 +204,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         if item.text == " New Filament":
             self.open_add_filament.emit()
             return
-        filament = self._filament_id_map.get(item.text)
+        filament = self._filament_id_map.get(id(item))
         if filament:
             self._selected_filament_id = filament.get("id")
             self._lot_field.setEnabled(True)
@@ -232,39 +277,8 @@ class AddSpoolPage(QtWidgets.QWidget):
                 body["initial_weight"] = float(weight)
             except ValueError:
                 pass
+        self._submit_btn.setEnabled(False)
         self.request_add_spool.emit(int(self._selected_filament_id), body)
-
-    @staticmethod
-    def _make_color_pixmap(filament: dict) -> QtGui.QPixmap:
-        size = 32
-        pixmap = QtGui.QPixmap(size, size)
-        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-        painter = QtGui.QPainter(pixmap)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        multi_hexes: str | None = filament.get("multi_color_hexes")
-        color_hex: str | None = filament.get("color_hex")
-        if multi_hexes:
-            hexes = [h.strip() for h in multi_hexes.split(",") if h.strip()]
-            if hexes:
-                clip = QtGui.QPainterPath()
-                clip.addRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
-                painter.setClipPath(clip)
-                stripe_w = size / len(hexes)
-                for i, h in enumerate(hexes):
-                    painter.fillRect(
-                        QtCore.QRectF(i * stripe_w, 0, stripe_w, size),
-                        QtGui.QColor(f"#{h}"),
-                    )
-        elif color_hex:
-            painter.setBrush(QtGui.QColor(f"#{color_hex}"))
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
-        else:
-            painter.setPen(QtGui.QColor(180, 180, 180))
-            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(QtCore.QRectF(1, 1, size - 2, size - 2), 6, 6)
-        painter.end()
-        return pixmap
 
     def _build_ui(self) -> None:
         self.setMaximumHeight(470)

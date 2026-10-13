@@ -157,6 +157,28 @@ def test_color_swatch_accepts_names(panel):
     assert panel._lbl_clr.text() == ""
 
 
+# A fresh save_variables file has no filament_type; that used to raise AttributeError.
+@pytest.mark.parametrize(
+    ("variables", "expected"),
+    [
+        ({}, "UNKNOWN"),
+        ({"filament_type": ""}, "UNKNOWN"),
+        ({"filament_type": "TPU"}, "UNKNOWN"),
+        ({"filament_type": 5}, "UNKNOWN"),
+        ({"filament_type": "PETG"}, "PETG"),
+        ({"filament_type": "PLA+"}, "PLA"),
+    ],
+)
+def test_save_variables_material_label(panel, variables, expected):
+    panel.on_save_variables_update({"variables": variables})
+    assert panel._lbl_mat._right.text() == expected
+
+
+def test_save_variables_without_variables_key(panel):
+    panel.on_save_variables_update({})
+    assert panel._lbl_mat._right.text() == "UNKNOWN"
+
+
 def test_accepted_position_change_recovers_through_manager(panel):
     panel.on_mmu_state_changed(_mmu_state(FilamentPos.LOADED))
     emitted = []
@@ -187,7 +209,6 @@ def mmu_panel(qtbot, mock_printer, mock_cfg):
     )
     qtbot.addWidget(panel)
     panel.mmu_configured = True
-    panel.state = "printing"  # skips the SAVE_VARIABLE emit
     panel.show()
     return panel
 
@@ -200,9 +221,9 @@ def test_load_goes_through_manager(mmu_panel, sent):
     mmu_panel.run_gcode.connect(emitted.append)
     mmu_panel.load_filament()
     mmu_panel.amu_manager.load_gate.assert_called_once_with()
-    # A refused load must not leave the load popup up with nothing running.
+    # A refused load must not leave the popup up or the type label saying loaded.
     assert mmu_panel.load_popup.show.called is sent
-    assert emitted == []
+    assert [g.startswith("SAVE_VARIABLE") for g in emitted] == ([True] if sent else [])
 
 
 @pytest.mark.parametrize("sent", [True, False])
@@ -214,4 +235,4 @@ def test_unload_goes_through_manager(mmu_panel, sent):
     mmu_panel.unload_filament()
     mmu_panel.amu_manager.unload.assert_called_once_with()
     assert mmu_panel.load_popup.show.called is sent
-    assert emitted == []
+    assert [g.startswith("SAVE_VARIABLE") for g in emitted] == ([True] if sent else [])

@@ -248,6 +248,24 @@ class TestAMUpageActions:
         page._on_temp_edited()
         manager.set_gate_temp.assert_called_once_with(1, 215)
 
+    @pytest.mark.parametrize("text", ["inf", "nan", "1e999"])
+    def test_non_finite_temp_sends_nothing(self, page, manager, text):
+        page.info_panel._lbl_temp.setText(text)
+        page._on_temp_edited()
+        manager.set_gate_temp.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("state", "tab"), [("printing", [0]), ("paused", [0]), ("standby", [])]
+    )
+    def test_back_button_follows_print_state(self, page, state, tab):
+        tabs, backs = [], []
+        page.request_change_tab.connect(tabs.append)
+        page.request_back.connect(lambda: backs.append(1))
+        page.on_print_stats_update("state", "printing")
+        page.on_print_stats_update("state", state)
+        page.main_back_button.click()
+        assert (tabs, backs) == (tab, [] if tab else [1])
+
 
 class TestAMUpageRedraw:
     @staticmethod
@@ -273,6 +291,12 @@ class TestAMUpageRedraw:
         diff = {"filament_pos": int(FilamentPos.LOADED)}
         page.on_mmu_state_changed(page.status.apply_diff(diff))
         assert len(calls) == 4
+
+    def test_unchanged_view_skips_selection(self, page, monkeypatch):
+        calls = []
+        monkeypatch.setattr(page, "_on_selection", calls.append)
+        page.on_mmu_state_changed(page.status.apply_diff({"action": "Loading"}))
+        assert calls == []
 
     def test_selection_follows_a_scalar_diff(self, page):
         page.on_mmu_state_changed(page.status.apply_diff({"gate": 2}))
