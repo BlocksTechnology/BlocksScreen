@@ -1,13 +1,35 @@
+"""Immutable value types mirroring the MMU status Happy-Hare publishes to Moonraker."""
+
+from __future__ import annotations
+
 import dataclasses
+import logging
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
+logger = logging.getLogger(__name__)
+
+
+def _rgb(value: Sequence[float]) -> tuple[float, float, float]:
+    """Coerce a colour sequence to a fixed 3-tuple, padding a short one with zeroes."""
+    r, g, b = [*value, 0.0, 0.0, 0.0][:3]
+    return (float(r), float(g), float(b))
+
 
 class GateStatus(IntEnum):
+    """Gate filament availability, matching Happy-Hare's GATE_* codes (mmu.py:59)."""
+
+    UNKNOWN = -1
     EMPTY = 0
     AVAILABLE = 1
     AVAILABLE_FROM_BUFFER = 2
-    UNKNOWN = -1
+
+    @classmethod
+    def _missing_(cls, value: object) -> GateStatus:
+        """Firmware can ship new codes; an unhandled ValueError would qFatal the GUI."""
+        logger.warning("Unknown GateStatus %r, treating as UNKNOWN", value)
+        return cls.UNKNOWN
 
 
 class FilamentPos(IntEnum):
@@ -26,6 +48,12 @@ class FilamentPos(IntEnum):
     IN_EXTRUDER = 9
     LOADED = 10
 
+    @classmethod
+    def _missing_(cls, value: object) -> FilamentPos:
+        """Firmware can ship new codes; an unhandled ValueError would qFatal the GUI."""
+        logger.warning("Unknown FilamentPos %r, treating as UNKNOWN", value)
+        return cls.UNKNOWN
+
 
 class SpoolmanSupport(StrEnum):
     """Level of Spoolman integration configured in Happy-Hare."""
@@ -35,21 +63,53 @@ class SpoolmanSupport(StrEnum):
     PUSH = "push"
     PULL = "pull"
 
+    @classmethod
+    def _missing_(cls, value: object) -> SpoolmanSupport:
+        """OFF is the safe default: it suppresses Spoolman writes, not guesses."""
+        logger.warning("Unknown SpoolmanSupport %r, treating as OFF", value)
+        return cls.OFF
+
+
+_GATE_ARRAYS: dict[str, str] = {
+    "gate_status": "status",
+    "gate_material": "material",
+    "gate_color": "color",
+    "gate_color_rgb": "color_rgb",
+    "gate_spool_id": "spool_id",
+    "gate_filament_name": "filament_name",
+    "gate_temperature": "temperature",
+    "gate_speed_override": "speed_override",
+}
+
+_GATE_COERCE: dict[str, Callable] = {
+    "status": GateStatus,
+    "color_rgb": _rgb,
+}
+
+_GATE_DIFF_KEYS: frozenset[str] = frozenset(_GATE_ARRAYS) | {"num_gates"}
+
+_SCALAR_COERCE: dict[str, Callable] = {
+    "ttg_map": tuple,
+    "endless_spool_groups": tuple,
+    "filament_pos": FilamentPos,
+    "spoolman_support": SpoolmanSupport,
+    "sensors": dict,
+}
+
 
 @dataclass(frozen=True, slots=True)
 class GateInfo:
+    """One gate as Happy-Hare publishes it."""
+
     index: int
-    status: GateStatus
-    material: str
-    color: str
-    color_rgb: tuple[float, float, float]
-    spool_id: int
+    status: GateStatus = GateStatus.UNKNOWN
+    material: str = ""
+    color: str = ""
+    color_rgb: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    spool_id: int = -1
     filament_name: str = ""
     temperature: float | None = None
-    weight_g: float | None = None
-    mid_usage: bool = False
-    remaining_weight: float | None = None
-    bed_temp: int | None = None
+    speed_override: int = 100
 
     @property
     def is_available(self) -> bool:
@@ -57,168 +117,88 @@ class GateInfo:
         return self.status in (GateStatus.AVAILABLE, GateStatus.AVAILABLE_FROM_BUFFER)
 
 
+def _gates(arrays: Mapping[str, Sequence], num_gates: int) -> tuple[GateInfo, ...]:
+    """Build the gate tuple from parallel arrays, leaving short ones defaulted."""
+    return tuple(
+        GateInfo(
+            index=i,
+            **{
+                f: _GATE_COERCE[f](v[i]) if f in _GATE_COERCE else v[i]
+                for f, v in arrays.items()
+                if i < len(v)
+            },
+        )
+        for i in range(num_gates)
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class MMUState:
-    enabled: bool
-    is_homed: bool
-    num_gates: int
-    tool: int
-    gate: int
-    filament: str  # "Loaded" | "Unloaded" | "Unknown"
-    filament_pos: FilamentPos
-    action: str
-    bowden_progress: float
-    print_state: str
-    reason_for_pause: str
-    has_bypass: bool
-    spoolman_support: SpoolmanSupport
-    gates: tuple[GateInfo, ...]
-    ttg_map: tuple[int, ...]
+    """A full snapshot of the MMU; rebuilt, never mutated, on every status update."""
+
+    enabled: bool = False
+    is_homed: bool = False
+    num_gates: int = 0
+    tool: int = -1
+    gate: int = -1
+    filament: str = "Unknown"  # "Loaded" | "Unloaded" | "Unknown"
+    filament_pos: FilamentPos = FilamentPos.UNKNOWN
+    action: str = ""
+    bowden_progress: float = -1.0
+    print_state: str = ""
+    reason_for_pause: str = ""
+    has_bypass: bool = False
+    spoolman_support: SpoolmanSupport = SpoolmanSupport.OFF
+    gates: tuple[GateInfo, ...] = ()
+    ttg_map: tuple[int, ...] = ()
     pending_spool_id: int = -1
     operation: str = ""
-    sensors: dict = dataclasses.field(default_factory=dict)
-    gate_speed_override: tuple[float, ...] = dataclasses.field(default_factory=tuple)
+    sensors: dict[str, bool | None] = dataclasses.field(default_factory=dict)
     endless_spool_groups: tuple[int, ...] = dataclasses.field(default_factory=tuple)
 
     @property
     def is_paused(self) -> bool:
         """Return True if the MMU is in a paused/error state."""
-        return self.print_state == "pause"
+        return self.print_state in ("paused", "pause_locked")
+
+    @property
+    def is_printing(self) -> bool:
+        """Return True while a print is running; a paused print allows recovery."""
+        return self.print_state in ("started", "printing")
 
     @property
     def current_gate_info(self) -> GateInfo | None:
-        """Return the GateInfo for the currently selected gate, or None if no gate is selected."""
+        """Return the GateInfo for the selected gate, or None when none is selected."""
         if 0 <= self.gate < len(self.gates):
             return self.gates[self.gate]
         return None
 
     @classmethod
-    def from_status(cls, data: dict) -> "MMUState":
-        """Build an MMUState from a full Moonraker mmu status dict.
-
-        Args:
-            data (dict): Full status dict from printer.objects.query or the initial notify_status_update payload.
-
-        Returns:
-            MMUState: New instance populated from *data*
-        """
-        num_gates = data.get("num_gates", 0)
-
-        statuses = data.get("gate_status", [GateStatus.UNKNOWN] * num_gates)
-        material = data.get("gate_material", [""] * num_gates)
-        colors = data.get("gate_color", [""] * num_gates)
-        rgbs = data.get("gate_color_rgb", [(0.0, 0.0, 0.0)] * num_gates)
-        spool_ids = data.get("gate_spool_id", [-1] * num_gates)
-        filament_name = data.get("gate_filament_name", [""] * num_gates)
-        temperature = data.get("gate_temperature", [None] * num_gates)
-        speed_override = data.get("gate_speed_override", [])
-        weight_g = data.get("gate_weight_g", [None] * num_gates)
-        remaining_weight_list = data.get("gate_remaining_weight", [None] * num_gates)
-        bed_temperature_list = data.get("gate_bed_temp", [None] * num_gates)
-        mid_usage_list = data.get("gate_mid_usage", [False] * num_gates)
-
-        gates: tuple[GateInfo, ...] = tuple(
-            GateInfo(
-                index=i,
-                status=GateStatus(statuses[i]),
-                material=material[i],
-                color=colors[i],
-                color_rgb=tuple(rgbs[i]),
-                spool_id=spool_ids[i],
-                filament_name=filament_name[i],
-                temperature=temperature[i],
-                weight_g=weight_g[i],
-                remaining_weight=remaining_weight_list[i],
-                bed_temp=bed_temperature_list[i],
-                mid_usage=mid_usage_list[i],
-            )
-            for i in range(num_gates)
-        )
-        return cls(
-            enabled=data.get("enabled", False),
-            is_homed=data.get("is_homed", False),
-            num_gates=num_gates,
-            tool=data.get("tool", -1),
-            gate=data.get("gate", -1),
-            filament=data.get("filament", "Unknown"),
-            filament_pos=FilamentPos(data.get("filament_pos", FilamentPos.UNKNOWN)),
-            action=data.get("action", ""),
-            bowden_progress=data.get("bowden_progress", -1),
-            print_state=data.get("print_state", ""),
-            reason_for_pause=data.get("reason_for_pause", ""),
-            has_bypass=data.get("has_bypass", False),
-            spoolman_support=SpoolmanSupport(
-                data.get("spoolman_support", SpoolmanSupport.OFF)
-            ),
-            gates=gates,
-            ttg_map=tuple(data.get("ttg_map", [])),
-            pending_spool_id=data.get("pending_spool_id", -1),
-            operation=data.get("operation", ""),
-            sensors=dict(data.get("sensors", {})),
-            gate_speed_override=tuple(speed_override),
-            endless_spool_groups=tuple(data.get("endless_spool_groups", [])),
-        )
+    def from_status(cls, data: dict) -> MMUState:
+        """Build an MMUState from a full Moonraker mmu status dict."""
+        return cls().apply_diff(data)
 
     def gate_for_tool(self, tool: int) -> int:
-        """Returns the gate mapped to *tool*, or -1 if unmapped."""
+        """Return the gate mapped to *tool*, or -1 if unmapped."""
         if 0 <= tool < len(self.ttg_map):
             return self.ttg_map[tool]
         return -1
 
-    def apply_diff(self, diff: dict) -> "MMUState":
-        """Apply a Moonraker status diff and return an updated MMUState.
-
-        Args:
-            diff (dict): Partial status dict from notify_status_update.
-
-        Returns:
-            MMUState: New instance with updated fields
-        """
-        gate_keys: set[str] = {
-            "gate_status",
-            "gate_material",
-            "gate_color",
-            "gate_color_rgb",
-            "gate_spool_id",
-            "gate_filament_name",
-            "gate_temperature",
-            "gate_speed_override",
+    def apply_diff(self, diff: dict) -> MMUState:
+        """Return a new MMUState with a notify_status_update diff applied."""
+        changed = {
+            k: _SCALAR_COERCE[k](v) if k in _SCALAR_COERCE else v
+            for k, v in diff.items()
+            if k in _STATE_FIELDS
         }
-        if gate_keys.isdisjoint(diff):
-            # No gate array changes
-            scalar_fields = {
-                k: v for k, v in diff.items() if k in MMUState.__dataclass_fields__
-            }
-            if "ttg_map" in scalar_fields:
-                scalar_fields["ttg_map"] = tuple(scalar_fields["ttg_map"])
-            if "filament_pos" in scalar_fields:
-                scalar_fields["filament_pos"] = FilamentPos(
-                    scalar_fields["filament_pos"]
-                )
-            if "spoolman_support" in scalar_fields:
-                scalar_fields["spoolman_support"] = SpoolmanSupport(
-                    scalar_fields["spoolman_support"]
-                )
-            if "endless_spool_groups" in scalar_fields:
-                scalar_fields["endless_spool_groups"] = tuple(
-                    scalar_fields["endless_spool_groups"]
-                )
-            return dataclasses.replace(self, **scalar_fields)
-        # Gate arrays changed — need full rebuild, but we lost the raw arrays
-        # Pass current gate data + diff into from_status
-        gate_data = {
-            "gate_status": [g.status for g in self.gates],
-            "gate_material": [g.material for g in self.gates],
-            "gate_color": [g.color for g in self.gates],
-            "gate_color_rgb": [g.color_rgb for g in self.gates],
-            "gate_spool_id": [g.spool_id for g in self.gates],
-            "gate_filament_name": [g.filament_name for g in self.gates],
-            "gate_speed_override": list(self.gate_speed_override),
-            "gate_temperature": [g.temperature for g in self.gates],
-            "gate_weight_g": [g.weight_g for g in self.gates],
-            "gate_remaining_weight": [g.remaining_weight for g in self.gates],
-            "gate_bed_temp": [g.bed_temp for g in self.gates],
-            "gate_mid_usage": [g.mid_usage for g in self.gates],
+        if _GATE_DIFF_KEYS.isdisjoint(diff):
+            return dataclasses.replace(self, **changed)
+        arrays = {
+            f: diff[key] if key in diff else [getattr(g, f) for g in self.gates]
+            for key, f in _GATE_ARRAYS.items()
         }
-        merged = {**dataclasses.asdict(self), **gate_data, **diff}
-        return MMUState.from_status(merged)
+        num_gates = changed.get("num_gates", self.num_gates)
+        return dataclasses.replace(self, **changed, gates=_gates(arrays, num_gates))
+
+
+_STATE_FIELDS: frozenset[str] = frozenset(f.name for f in dataclasses.fields(MMUState))

@@ -938,6 +938,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     def on_mmu_state_changed(self, mmu_state):
         """Handles changes in the MMU state from the AMU manager to update the UI and show the load panel when loading/unloading."""
+        if mmu_state is None:
+            return
         for gate_info in mmu_state.gates:
             previous_state = self._previous_gate_states.get(gate_info.index)
             current_state = gate_info.status in [
