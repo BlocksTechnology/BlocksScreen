@@ -187,38 +187,56 @@ class AMUManager(QtCore.QObject):
         """Erase all persisted MMU state (gate map, TTG map, statistics) and re-init."""
         self.run_gcode_signal.emit("MMU_RESET CONFIRM=1")
 
+    def load_refusal(self) -> str:
+        """Return why the selected gate cannot load, or "" when it is idle-ready."""
+        state = self._mmu_state
+        if state is None:
+            return "MMU status not received yet."
+        if not state.enabled:
+            return "MMU is disabled."
+        if state.is_printing:
+            return "Not available while printing."
+        if not state.is_homed:
+            return "MMU is not homed."
+        if state.filament_pos != FilamentPos.UNLOADED:
+            return "Filament is not fully unloaded."
+        if state.current_gate_info is None:
+            return "No gate is selected."
+        return ""
+
+    def unload_refusal(self) -> str:
+        """Return why the filament cannot be unloaded, or "" when it can."""
+        state = self._mmu_state
+        if state is None:
+            return "MMU status not received yet."
+        if not state.enabled:
+            return "MMU is disabled."
+        if state.is_printing:
+            return "Not available while printing."
+        if state.filament_pos == FilamentPos.UNLOADED:
+            return "Filament is already unloaded."
+        return ""
+
     def _selected_gate_unloaded(self) -> GateInfo | None:
         """Return the selected gate when the MMU is idle-ready: enabled, homed, unloaded."""
-        state = self._mmu_state
-        if (
-            state is None
-            or not (state.enabled and state.is_homed)
-            or state.is_printing
-            or state.filament_pos != FilamentPos.UNLOADED
-        ):
+        if self._mmu_state is None or self.load_refusal():
             return None
-        return state.current_gate_info
+        return self._mmu_state.current_gate_info
 
     def load_gate(self) -> bool:
         """Load filament from the selected gate by sending MMU_LOAD; True if sent."""
-        if self._selected_gate_unloaded() is None:
-            logger.warning("Ignoring MMU_LOAD: no homed, unloaded gate selected")
+        if reason := self.load_refusal():
+            logger.warning("Ignoring MMU_LOAD: %s", reason)
             return False
         self.run_gcode_signal.emit("MMU_LOAD")
         return True
 
-    def unload(self) -> bool:
-        """Unload the currently loaded filament by sending MMU_UNLOAD; True if sent."""
-        state = self._mmu_state
-        if (
-            state is None
-            or not state.enabled
-            or state.is_printing
-            or state.filament_pos == FilamentPos.UNLOADED
-        ):
-            logger.warning("Ignoring MMU_UNLOAD: MMU disabled, printing or unloaded")
+    def unload(self, eject: bool = False) -> bool:
+        """Unload via MMU_UNLOAD, or MMU_EJECT when *eject*; True if sent."""
+        if reason := self.unload_refusal():
+            logger.warning("Ignoring unload: %s", reason)
             return False
-        self.run_gcode_signal.emit("MMU_UNLOAD")
+        self.run_gcode_signal.emit("MMU_EJECT" if eject else "MMU_UNLOAD")
         return True
 
     def select_gate(self, gate: int) -> None:

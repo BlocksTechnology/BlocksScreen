@@ -22,8 +22,7 @@ _STUBBED = (
     "lib.panels.widgets.FilamentTab",
     "lib.panels.filamentTab",
 )
-for _stale in [m for m in sys.modules if m.startswith(_STUBBED)]:
-    sys.modules.pop(_stale, None)
+_saved = {m: sys.modules.pop(m) for m in list(sys.modules) if m.startswith(_STUBBED)}
 
 # loadWidget imports configfile at import time; the conftest fixture only stubs it later.
 _had_configfile = "configfile" in sys.modules
@@ -32,6 +31,10 @@ from lib.panels.filamentTab import FilamentTab  # noqa: E402
 
 if not _had_configfile:
     sys.modules.pop("configfile", None)
+# Put the other modules' stand-ins back so this import leaves sys.modules as found.
+for _real in [m for m in sys.modules if m.startswith(_STUBBED)]:
+    del sys.modules[_real]
+sys.modules.update(_saved)
 
 
 def test_none_state_after_klipper_restart_is_ignored() -> None:

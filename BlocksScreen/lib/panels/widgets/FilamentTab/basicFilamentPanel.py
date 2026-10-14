@@ -1,3 +1,4 @@
+import contextlib
 import enum
 import logging
 from functools import partial
@@ -44,7 +45,13 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             return f"<{self.__class__.__name__}.{self._name_}>"
 
     def __init__(
-        self, printer: Printer, cfg, parent=None, *, load_popup: BasePopup | None = None
+        self,
+        printer: Printer,
+        cfg,
+        parent=None,
+        *,
+        amu_manager,
+        load_popup: BasePopup | None = None,
     ) -> None:
         super().__init__(parent)
         self.printer = printer
@@ -57,6 +64,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.filament_buttons_list = []
         self.mmu_configured = False
         self.load_popup = load_popup
+        self.amu_manager = amu_manager
         self._mmu_state = None
         self._setup_ui()
         self.filament_state = self.FilamentStates.UNKNOWN
@@ -115,10 +123,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             save_variables (dict): dictionary containing the save variables from the printer
         """
         filament_type = FilamentTypes.UNKNOWN
-        variables = save_variables.get("variables", {})
-        filament_type = variables.get("filament_type", "")
+        saved = save_variables.get("variables", {}).get("filament_type", "")
         for i in FilamentTypes:
-            if filament_type and i.value.name in filament_type:
+            if isinstance(saved, str) and i.value.name in saved:
                 filament_type = i
                 break
         self._lbl_mat.set_right_text(filament_type.value.name)
@@ -132,22 +139,14 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             self.state = value
             self._refresh_check_btn()
             self._refresh_pos_editable()
+            with contextlib.suppress(TypeError):
+                self.main_back_button.disconnect()
             if value in ("printing", "paused"):
-                try:
-                    self.main_back_button.disconnect()
-                except TypeError:
-                    pass
-
                 self.main_back_button.clicked.connect(
                     lambda: self.request_change_tab.emit(0)
                 )
-
             else:
-                try:
-                    self.main_back_button.disconnect()
-                except TypeError:
-                    pass
-                self.main_back_button.clicked.connect(lambda: self.request_back.emit())
+                self.main_back_button.clicked.connect(self.request_back)
 
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
@@ -211,6 +210,12 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 message="Filament is already loaded.",
             )
             return
+        if self.mmu_configured and not self.amu_manager.load_gate():
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=self.amu_manager.load_refusal(),
+            )
+            return
         if not self._in_print:
             self.run_gcode.emit(
                 f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
@@ -218,9 +223,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if not self.mmu_configured:
             self.call_load_panel.emit(True, "Loading", True)
             self.run_gcode.emit("LOAD_FILAMENT")
-            return
-        self.load_popup.show()
-        self.run_gcode.emit("MMU_LOAD")
+        elif self.load_popup is not None:
+            self.load_popup.show()
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
@@ -239,17 +243,22 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             )
             return
         self.find_routine_objects()
+        # Basic panel uses MMU_EJECT; when loaded, Happy-Hare v3 runs it as MMU_UNLOAD.
+        if self.mmu_configured and not self.amu_manager.unload(eject=True):
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=self.amu_manager.unload_refusal(),
+            )
+            return
         if not self._in_print:
             self.run_gcode.emit(
                 f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
             )
-
         if not self.mmu_configured:
             self.call_load_panel.emit(True, "Unloading", True)
             self.run_gcode.emit("UNLOAD_FILAMENT")
-            return
-        self.load_popup.show()
-        self.run_gcode.emit("MMU_EJECT")
+        elif self.load_popup is not None:
+            self.load_popup.show()
 
     def _on_load_clicked(self) -> None:
         if self._in_print:
@@ -347,7 +356,12 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @filament_state.setter
     def filament_state(self, update: FilamentStates) -> None:
         self._filament_state = update
-        self.Basic_fp_load_btn.setEnabled(update is not self.FilamentStates.LOADED)
+        # Happy-Hare only loads from UNLOADED; a sensorless non-MMU printer stays UNKNOWN.
+        self.Basic_fp_load_btn.setEnabled(
+            update is self.FilamentStates.UNLOADED
+            if self.mmu_configured
+            else update is not self.FilamentStates.LOADED
+        )
         self.Basic_fp_unload_btn.setEnabled(update is not self.FilamentStates.UNLOADED)
         if self._lbl_pos.select_option(update.name.capitalize()):
             self._pos_committed = self._lbl_pos.text()
@@ -385,8 +399,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
     def _accept_pos_change(self, new_pos: str) -> None:
         self._pos_committed = new_pos
-        n = 1 if new_pos == "Loaded" else 0
-        self.run_gcode.emit(f"MMU_RECOVER TOOL=0 GATE=0 LOADED={n}")
+        self.amu_manager.recover_single_gate(new_pos == "Loaded")
 
     def _reject_pos_change(self) -> None:
         self._lbl_pos.select_option(self._pos_committed)

@@ -1,15 +1,23 @@
-import logging
 import typing
 
 from lib.panels.widgets.FilamentTab.addFilamentPage import AddFilamentPage
-from lib.panels.widgets.FilamentTab.addSpoolPage import AddSpoolPage
+from lib.panels.widgets.FilamentTab.addSpoolPage import (
+    AddSpoolPage,
+    make_add_pixmap,
+    make_color_pixmap,
+    spoolman_color,
+)
 from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-logger: logging.Logger = logging.getLogger(__name__)
+
+def _css_color(hex_text: str) -> str:
+    """Qt style sheets read 8-digit hex as #aarrggbb, like QColor."""
+    return spoolman_color(hex_text).name(QtGui.QColor.NameFormat.HexArgb)
 
 
 class SpoolmanPage(QtWidgets.QWidget):
@@ -82,6 +90,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.reload_btn.clicked.connect(self._on_reload_clicked)
         self.delete_btn.clicked.connect(self._on_delete_clicked)
 
+        self._popup = Popup(self)
         self.confirm_popup = BasePopup(self, True, True)
         self.confirm_popup.set_message("Do you want to delete this spool")
         self.confirm_popup.accepted.connect(self._on_confirm_delete)
@@ -91,21 +100,27 @@ class SpoolmanPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on-spools-received")
     def on_spools_received(self, result: dict) -> None:
         """Handle v2 proxy response for GET /v1/spool."""
-        if result.get("error") is not None:
-            return
         spools = result.get("response")
-        if not isinstance(spools, list):
-            return
-        self._spools = spools
+        if result.get("error") is None and isinstance(spools, list):
+            self._spools = spools
+            self._no_spools_label.setText("No spools found")
+        else:
+            self._spools = []
+            self._selected_spool = None
+            self._refresh_info_box()
+            self._no_spools_label.setText("Could not reach Spoolman")
         self._build_model_list()
 
     @QtCore.pyqtSlot(dict, name="on-delete-spool-result")
     def on_delete_spool_result(self, result: dict) -> None:
         """Handle v2 proxy response for DELETE /v1/spool/{id}."""
         if result.get("error") is not None:
-            logger.error("Delete spool failed: %s", result["error"])
+            self._popup.new_message(
+                message_type=Popup.MessageType.ERROR, message="Could not delete spool"
+            )
             return
         self._selected_spool = None
+        self._refresh_info_box()
         self._on_reload_clicked()
 
     def _spool_display_name(self, spool: dict) -> str:
@@ -115,57 +130,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         if spool.get("archived", False):
             name = f"{name} [Archived]"
         return name
-
-    @staticmethod
-    def _make_add_pixmap() -> QtGui.QPixmap:
-        pixmap = QtGui.QPixmap(32, 32)
-        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-        painter = QtGui.QPainter(pixmap)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        pen = QtGui.QPen(QtGui.QColor(160, 160, 160))
-        pen.setWidth(2)
-        painter.setPen(pen)
-        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(QtCore.QRectF(1, 1, 32 - 2, 32 - 2), 6, 6)
-        mid = 32 // 2
-        painter.drawLine(mid, 8, mid, 32 - 8)
-        painter.drawLine(8, mid, 32 - 8, mid)
-        painter.end()
-        return pixmap
-
-    @staticmethod
-    def _make_color_pixmap(filament: dict) -> QtGui.QPixmap:
-        pixmap = QtGui.QPixmap(32, 32)
-        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-        painter = QtGui.QPainter(pixmap)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-
-        multi_hexes: str | None = filament.get("multi_color_hexes")
-        color_hex: str | None = filament.get("color_hex")
-
-        if multi_hexes:
-            hexes = [h.strip() for h in multi_hexes.split(",") if h.strip()]
-            if hexes:
-                clip = QtGui.QPainterPath()
-                clip.addRoundedRect(QtCore.QRectF(0, 0, 32, 32), 6, 6)
-                painter.setClipPath(clip)
-                stripe_w = 32 / len(hexes)
-                for i, h in enumerate(hexes):
-                    painter.fillRect(
-                        QtCore.QRectF(i * stripe_w, 0, stripe_w, 32),
-                        QtGui.QColor(f"#{h}"),
-                    )
-        elif color_hex:
-            painter.setBrush(QtGui.QColor(f"#{color_hex}"))
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(QtCore.QRectF(0, 0, 32, 32), 6, 6)
-        else:
-            painter.setPen(QtGui.QColor(180, 180, 180))
-            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(QtCore.QRectF(1, 1, 32 - 2, 32 - 2), 6, 6)
-
-        painter.end()
-        return pixmap
 
     def _on_reload_clicked(self) -> None:
         self.request_spools.emit()
@@ -199,7 +163,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.model.add_item(
             ListItem(
                 text=" Add Spool",
-                left_icon=self._make_add_pixmap(),
+                left_icon=make_add_pixmap(),
                 _lfontsize=14,
                 height=60,
             )
@@ -230,7 +194,7 @@ class SpoolmanPage(QtWidgets.QWidget):
             item = ListItem(
                 text=display_name,
                 right_text=right_text,
-                left_icon=self._make_color_pixmap(filament),
+                left_icon=make_color_pixmap(filament),
                 selected=False,
                 _lfontsize=14,
                 _rfontsize=12,
@@ -257,9 +221,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._refresh_info_box()
 
     def _refresh_info_box(self) -> None:
-        if not self._selected_spool:
-            return
-        spool = self._selected_spool
+        spool = self._selected_spool or {}
         filament = spool.get("filament") or {}
         vendor = filament.get("vendor") or {}
 
@@ -302,14 +264,16 @@ class SpoolmanPage(QtWidgets.QWidget):
                 swatch.setMinimumSize(QtCore.QSize(18, 24))
                 swatch.setMaximumSize(QtCore.QSize(36, 24))
                 swatch.setStyleSheet(
-                    f"background-color: #{hex_val}; border-radius: 4px;"
+                    f"background-color: {_css_color(hex_val)}; border-radius: 4px;"
                 )
                 self.color_swatch_layout.addWidget(swatch)
         elif color_hex:
             swatch = QtWidgets.QFrame(self)
             swatch.setMinimumSize(QtCore.QSize(36, 24))
             swatch.setMaximumSize(QtCore.QSize(56, 24))
-            swatch.setStyleSheet(f"background-color: #{color_hex}; border-radius: 5px;")
+            swatch.setStyleSheet(
+                f"background-color: {_css_color(color_hex)}; border-radius: 5px;"
+            )
             self.color_swatch_layout.addWidget(swatch)
         else:
             swatch = QtWidgets.QFrame(self)
