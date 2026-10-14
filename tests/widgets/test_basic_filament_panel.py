@@ -85,7 +85,7 @@ def _item_addrs(layout):
 
 def test_pages_do_not_share_layout_items(qtbot, mock_printer, mock_cfg):
     """No QLayoutItem may belong to two layouts (deterministic, no crash)."""
-    panel = BasicFilamentPanel(mock_printer, mock_cfg)
+    panel = BasicFilamentPanel(mock_printer, mock_cfg, amu_manager=MagicMock())
     qtbot.addWidget(panel)
     shared = _item_addrs(panel.verticalLayout) & _item_addrs(panel.verticalLayout_2)
     assert not shared, (
@@ -96,7 +96,7 @@ def test_pages_do_not_share_layout_items(qtbot, mock_printer, mock_cfg):
 
 def test_destroying_panel_is_clean(qapp, mock_printer, mock_cfg):
     """Force destruction (the AMU-swap path) and confirm no double-free SIGBUS."""
-    panel = BasicFilamentPanel(mock_printer, mock_cfg)
+    panel = BasicFilamentPanel(mock_printer, mock_cfg, amu_manager=MagicMock())
     panel.deleteLater()
     qapp.processEvents()
     # Reaching here means ~BasicFilamentPanel ran without a double-free.
@@ -115,7 +115,7 @@ def _mmu_state(pos, action="Idle", color="", tool=0, gate=0):
 
 @pytest.fixture
 def panel(qtbot, mock_printer, mock_cfg):
-    panel = BasicFilamentPanel(mock_printer, mock_cfg)
+    panel = BasicFilamentPanel(mock_printer, mock_cfg, amu_manager=MagicMock())
     qtbot.addWidget(panel)
     return panel
 
@@ -125,6 +125,14 @@ def test_check_button_enabled_when_loaded(panel):
     assert panel.Basic_fp_check_btn.isEnabled()
     panel.on_print_stats_update("state", "printing")
     assert not panel.Basic_fp_check_btn.isEnabled()
+
+
+# Happy-Hare refuses MMU_LOAD from a mid-path position; a sensorless printer must still load.
+@pytest.mark.parametrize(("mmu", "enabled"), [(True, False), (False, True)])
+def test_load_button_in_unknown_position(panel, mmu, enabled):
+    panel.mmu_configured = mmu
+    panel.filament_state = panel.FilamentStates.UNKNOWN
+    assert panel.Basic_fp_load_btn.isEnabled() is enabled
 
 
 def test_sensor_without_mmu_updates_position(panel):
@@ -149,14 +157,37 @@ def test_color_swatch_accepts_names(panel):
     assert panel._lbl_clr.text() == ""
 
 
-def test_accepted_position_change_emits_mmu_recover(panel):
+# A fresh save_variables file has no filament_type; that used to raise AttributeError.
+@pytest.mark.parametrize(
+    ("variables", "expected"),
+    [
+        ({}, "UNKNOWN"),
+        ({"filament_type": ""}, "UNKNOWN"),
+        ({"filament_type": "TPU"}, "UNKNOWN"),
+        ({"filament_type": 5}, "UNKNOWN"),
+        ({"filament_type": "PETG"}, "PETG"),
+        ({"filament_type": "PLA+"}, "PLA"),
+    ],
+)
+def test_save_variables_material_label(panel, variables, expected):
+    panel.on_save_variables_update({"variables": variables})
+    assert panel._lbl_mat._right.text() == expected
+
+
+def test_save_variables_without_variables_key(panel):
+    panel.on_save_variables_update({})
+    assert panel._lbl_mat._right.text() == "UNKNOWN"
+
+
+def test_accepted_position_change_recovers_through_manager(panel):
     panel.on_mmu_state_changed(_mmu_state(FilamentPos.LOADED))
     emitted = []
     panel.run_gcode.connect(emitted.append)
     panel._lbl_pos.select_option("Unloaded")
     panel.on_pos_change()
     panel.confirm_pos_popup.accepted.emit()
-    assert emitted == ["MMU_RECOVER TOOL=0 GATE=0 LOADED=0"]
+    panel.amu_manager.recover_single_gate.assert_called_once_with(False)
+    assert emitted == []
 
 
 def test_rejected_position_change_reverts_without_gcode(panel):
@@ -168,3 +199,55 @@ def test_rejected_position_change_reverts_without_gcode(panel):
     panel.confirm_pos_popup.rejected.emit()
     assert emitted == []
     assert panel._lbl_pos.text() == "Loaded"
+
+
+@pytest.fixture
+def mmu_panel(qtbot, mock_printer, mock_cfg):
+    load_popup = MagicMock()
+    panel = BasicFilamentPanel(
+        mock_printer, mock_cfg, amu_manager=MagicMock(), load_popup=load_popup
+    )
+    qtbot.addWidget(panel)
+    panel.mmu_configured = True
+    panel.show()
+    return panel
+
+
+@pytest.mark.parametrize("sent", [True, False])
+def test_load_goes_through_manager(mmu_panel, monkeypatch, sent):
+    mmu_panel.filament_state = mmu_panel.FilamentStates.UNLOADED
+    mmu_panel.amu_manager.load_gate.return_value = sent
+    mmu_panel.amu_manager.load_refusal.return_value = "MMU is not homed."
+    monkeypatch.setattr(mmu_panel.popup, "new_message", MagicMock())
+    emitted = []
+    mmu_panel.run_gcode.connect(emitted.append)
+    mmu_panel.load_filament()
+    mmu_panel.amu_manager.load_gate.assert_called_once_with()
+    # A refused load tells the user why instead of doing nothing.
+    assert mmu_panel.popup.new_message.called is not sent
+    if not sent:
+        assert mmu_panel.popup.new_message.call_args.kwargs["message"] == (
+            "MMU is not homed."
+        )
+    # A refused load must not leave the popup up or the type label saying loaded.
+    assert mmu_panel.load_popup.show.called is sent
+    assert [g.startswith("SAVE_VARIABLE") for g in emitted] == ([True] if sent else [])
+
+
+@pytest.mark.parametrize("sent", [True, False])
+def test_unload_goes_through_manager(mmu_panel, monkeypatch, sent):
+    mmu_panel.filament_state = mmu_panel.FilamentStates.LOADED
+    mmu_panel.amu_manager.unload.return_value = sent
+    mmu_panel.amu_manager.unload_refusal.return_value = "Not available while printing."
+    monkeypatch.setattr(mmu_panel.popup, "new_message", MagicMock())
+    emitted = []
+    mmu_panel.run_gcode.connect(emitted.append)
+    mmu_panel.unload_filament()
+    mmu_panel.amu_manager.unload.assert_called_once_with(eject=True)
+    assert mmu_panel.popup.new_message.called is not sent
+    if not sent:
+        assert mmu_panel.popup.new_message.call_args.kwargs["message"] == (
+            "Not available while printing."
+        )
+    assert mmu_panel.load_popup.show.called is sent
+    assert [g.startswith("SAVE_VARIABLE") for g in emitted] == ([True] if sent else [])
