@@ -241,20 +241,30 @@ class TestBootChanged:
 class TestScanDevices:
     def test_by_id_listing_fills_in_what_the_daemon_missed(self, monkeypatch):
         other = Device(symlink_name="usb-Klipper_stm32h723xx_29003A00-if00")
-        monkeypatch.setattr(
-            dc.SerialScanner, "scan", lambda self: [other]
-        )  # daemon answered, without the AMU
+        # daemon answered, without the AMU
+        monkeypatch.setattr(dc.SerialScanner, "daemon_scan", lambda self: [other])
         monkeypatch.setattr(
             dc.SerialScanner, "legacy_scan", staticmethod(lambda: [other, AMU])
         )
         names = [d.symlink_name for d in DeviceConfigManager.scan_devices()]
         assert names == [other.symlink_name, AMU.symlink_name]
 
+    def test_daemon_down_lists_by_id_once(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(dc.SerialScanner, "daemon_scan", lambda self: None)
+        monkeypatch.setattr(
+            dc.SerialScanner,
+            "legacy_scan",
+            staticmethod(lambda: calls.append(1) or [AMU]),
+        )
+        names = [d.symlink_name for d in DeviceConfigManager.scan_devices()]
+        assert names == [AMU.symlink_name] and calls == [1]
+
     def test_scan_errors_never_raise(self, monkeypatch):
         def boom(*_):
             raise RuntimeError("scan bug")
 
-        monkeypatch.setattr(dc.SerialScanner, "scan", boom)
+        monkeypatch.setattr(dc.SerialScanner, "daemon_scan", boom)
         monkeypatch.setattr(dc.SerialScanner, "legacy_scan", staticmethod(boom))
         assert DeviceConfigManager.scan_devices() == []
 

@@ -503,11 +503,15 @@ class MainWindow(QtWidgets.QMainWindow):
         ):
             return
         _logger.info("Klipper disconnected — auto-restarting service")
+        self._begin_klipper_restart()
+        self.ws.api.restart_service("klipper")
+
+    def _begin_klipper_restart(self) -> None:
+        """Mark a Klipper restart in flight so "disconnected" won't restart it again"""
         self._klipper_auto_restart_pending = True
         self.loadwidget.set_status_message("Restarting Klipper...")
         self.loadscreen.show()
         self._klipper_restart_timeout.start()
-        self.ws.api.restart_service("klipper")
 
     @QtCore.pyqtSlot(name="arm-health-bless")
     def _arm_health_bless(self) -> None:
@@ -815,12 +819,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         _logger.info("Restarting Klipper to load the new device config")
         self._device_restart_pending = False
-        # Same bookkeeping as the auto-restart, so the "disconnected" state
-        # this causes doesn't trigger a second restart.
-        self._klipper_auto_restart_pending = True
-        self.loadwidget.set_status_message("Restarting Klipper...")
-        self.loadscreen.show()
-        self._klipper_restart_timeout.start()
+        self._begin_klipper_restart()
 
     @QtCore.pyqtSlot(bool, name="toggle-popups")
     def popup_toggle(self, toggle: bool) -> None:

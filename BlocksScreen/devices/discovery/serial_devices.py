@@ -1,27 +1,22 @@
 """Serial-device scanning backed by device_discoveryd.
 
-Drop-in replacement for tools/serial_scanner.py during the move to the
-discovery daemon: same `SerialScanner` API (`scan`, `scan_klipper`,
-`scan_katapult`, `scan_unflashed`) and the same `Device` fields, properties
-and repr, so callers only change their import.
-
 Devices come from the daemon's snapshot (only `connection == "Serial"`
-entries - the daemon also reports USB devices, which the legacy scanner
-never did). When the daemon can't be used - not installed on this machine,
-not running yet, or speaking an unsupported protocol - scanning falls back
-to the legacy tools.serial_scanner, so behaviour is unchanged either way.
+entries - the daemon also reports plain USB devices). When the daemon can't
+be used - not installed on this machine, not running yet, or speaking an
+unsupported protocol - scanning falls back to listing /dev/serial/by-id.
 
 USB vendor/product IDs: the daemon only reports them for its `USB` entries
-(0 for `Serial` ones), and the legacy scan never did. So whenever a serial
-device arrives without an ID, it is read here from sysfs - the idVendor /
-idProduct of the USB device behind the tty - which is what lets device
-profiles match on the IDs from USB_IDS.md instead of the by-id name.
+(0 for `Serial` ones), and the by-id name never carries them. So whenever a
+serial device arrives without an ID, it is read here from sysfs - the
+idVendor / idProduct of the USB device behind the tty - which is what lets
+device profiles match on the IDs from USB_IDS.md instead of the by-id name.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -38,10 +33,7 @@ _SYSFS_MAX_DEPTH = 4
 
 
 class FirmwareState(Enum):
-    """Firmware a serial device appears to run, guessed from its by-id name.
-
-    Member names match tools/serial_scanner.py for drop-in compatibility.
-    """
+    """Firmware a serial device appears to run, guessed from its by-id name."""
 
     # pylint: disable=invalid-name
     Klipper = "Klipper"
@@ -52,7 +44,7 @@ class FirmwareState(Enum):
 
 @dataclass
 class Device:  # pylint: disable=too-many-instance-attributes
-    """A serial device under /dev/serial/by-id (same shape as the legacy one)."""
+    """A serial device under /dev/serial/by-id"""
 
     name: str = ""
     manufacturer: str = ""
@@ -67,7 +59,7 @@ class Device:  # pylint: disable=too-many-instance-attributes
 
     # USB vendor/product ID of the device's parent USB interface, as set by
     # the MCU firmware's Kconfig USB_VENDOR_ID/USB_DEVICE_ID at build time.
-    # 0 means "not reported" (legacy scanner, or a daemon/protocol version
+    # 0 means "not reported" (by-id scan, or a daemon/protocol version
     # that doesn't send it yet) - never treat 0 as a real ID.
     vendor_id: int = 0
     product_id: int = 0
@@ -177,36 +169,82 @@ def fill_usb_ids(dev: Device) -> Device:
 
 def device_from_json(data: dict[str, Any]) -> Device:
     """Build a Device from one device object of the daemon's protocol."""
-    dev = Device(**{f: str(data.get(f) or "") for f in _DEVICE_FIELDS})
-    dev.firmware = _firmware(str(data.get("firmware") or ""))
-    dev.vendor_id = _usb_id(data.get("vendor_id"))
-    dev.product_id = _usb_id(data.get("product_id"))
+    dev = Device(
+        firmware=_firmware(str(data.get("firmware") or "")),
+        vendor_id=_usb_id(data.get("vendor_id")),
+        product_id=_usb_id(data.get("product_id")),
+    )
+    for f in _DEVICE_FIELDS:
+        setattr(dev, f, str(data.get(f) or ""))
+    return fill_usb_ids(dev)
+
+
+def serial_from_json(devices: Iterable[Any]) -> list[Device]:
+    """The daemon's Serial devices (it also reports plain USB ones)"""
+    return [
+        device_from_json(d)
+        for d in devices
+        if isinstance(d, dict) and d.get("connection") == "Serial"
+    ]
+
+
+def _detect_firmware(symlink_name: str) -> FirmwareState:
+    if "Klipper" in symlink_name:
+        return FirmwareState.Klipper
+    if "Katapult" in symlink_name or "CanBoot" in symlink_name:
+        return FirmwareState.Katapult
+    if any(m in symlink_name for m in ("1a86", "FTDI", "Silicon_Labs", "Prolific")):
+        return FirmwareState.Unflashed
+    return FirmwareState.Unknown
+
+
+def device_from_symlink(symlink_name: str, device_path: str) -> Device:
+    """Parse a by-id name like usb-Klipper_stm32h723xx_<serial>-if00 into a Device"""
+    dev = Device(
+        symlink_name=symlink_name,
+        device_path=device_path,
+        firmware=_detect_firmware(symlink_name),
+    )
+    rest = symlink_name.removeprefix("usb-")
+    head, sep, tail = rest.rpartition("-if")
+    if sep:
+        rest, dev.interface = head, tail.split("-")[0]
+    parts = rest.split("_")
+    if len(parts) >= 3:
+        dev.manufacturer, dev.serial_number = parts[0], parts[-1]
+        dev.product = "_".join(parts[1:-1])
+    elif len(parts) == 2:
+        dev.manufacturer, dev.product = parts
+    else:
+        dev.manufacturer = rest
+    if dev.is_klipper or dev.is_katapult:
+        dev.mcu_type = dev.product.split("_")[0]
+    dev.name = f"{dev.manufacturer} {dev.mcu_type or dev.product}".strip()
     return fill_usb_ids(dev)
 
 
 class SerialScanner:
     """Lists /dev/serial/by-id devices via device_discoveryd.
 
-    Falls back to tools.serial_scanner when the daemon is unavailable.
+    Falls back to reading /dev/serial/by-id when the daemon is unavailable.
     """
 
     def __init__(self, socket_path: str | None = None, timeout: float = 2.0) -> None:
         self._socket_path = socket_path
         self._timeout = timeout
 
+    def daemon_scan(self) -> list[Device] | None:
+        """Serial devices from device_discoveryd, None when it can't be used"""
+        devices = fetch_snapshot(self._socket_path, self._timeout)
+        return None if devices is None else serial_from_json(devices)
+
     def scan(self) -> list[Device]:
         """All serial devices - equivalent to ls /dev/serial/by-id/*"""
-        devices = fetch_snapshot(self._socket_path, self._timeout)
+        devices = self.daemon_scan()
         if devices is None:
-            _logger.info(
-                "device_discoveryd unavailable, using legacy /dev/serial/by-id scan"
-            )
+            _logger.info("device_discoveryd unavailable, scanning /dev/serial/by-id")
             return self.legacy_scan()
-        return [
-            device_from_json(d)
-            for d in devices
-            if isinstance(d, dict) and d.get("connection") == "Serial"
-        ]
+        return devices
 
     def scan_klipper(self) -> list[Device]:
         """Devices running Klipper"""
@@ -223,15 +261,11 @@ class SerialScanner:
     @staticmethod
     def legacy_scan() -> list[Device]:
         """Plain /dev/serial/by-id listing, without the daemon"""
-        # Imported lazily: once every machine runs the daemon, this fallback
-        # and tools/serial_scanner.py can be deleted together.
-        from tools.serial_scanner import (  # pylint: disable=import-outside-toplevel
-            SerialScanner as LegacySerialScanner,
-        )
-
-        result = []
-        for old in LegacySerialScanner().scan():
-            dev = Device(**{f: getattr(old, f) for f in _DEVICE_FIELDS})
-            dev.firmware = _firmware(old.firmware.value)
-            result.append(fill_usb_ids(dev))
-        return result
+        try:
+            with os.scandir(SERIAL_BY_ID_PATH) as entries:
+                return [
+                    device_from_symlink(e.name, os.path.realpath(e.path))
+                    for e in entries
+                ]
+        except OSError:  # udev removes by-id when no serial device is plugged in
+            return []

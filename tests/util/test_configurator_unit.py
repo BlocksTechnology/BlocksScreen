@@ -190,25 +190,22 @@ class TestResolveSymlink:
         link = tmp_path / "configs" / "source.cfg"
         link.parent.mkdir()
         link.symlink_to(real)
-        assert resolve_symlink(real, link.parent) is True
+        assert resolve_symlink(real, {link.resolve().as_posix()}) is True
 
     def test_symlink_not_found(self, tmp_path):
-        real = tmp_path / "source.cfg"
-        real.touch()
-        target = tmp_path / "configs"
-        target.mkdir()
-        assert resolve_symlink(real, target) is False
+        real = _write(tmp_path / "source.cfg", "x")
+        other = _write(tmp_path / "other.cfg", "x")
+        assert resolve_symlink(real, {other.resolve().as_posix()}) is False
 
-    def test_target_not_a_dir(self, tmp_path):
-        f = _write(tmp_path / "file.txt", "x")
-        assert resolve_symlink(f, tmp_path / "ghost") is False
+    def test_empty_set(self, tmp_path):
+        assert resolve_symlink(_write(tmp_path / "a.cfg", "x"), set()) is False
 
-    def test_different_file_with_same_resolved_path(self, tmp_path):
+    def test_symlinked_file_resolves_to_its_target(self, tmp_path):
         real = _write(tmp_path / "original.cfg", "content")
         deep = tmp_path / "sub" / "original.cfg"
         deep.parent.mkdir()
         deep.symlink_to(real)
-        assert resolve_symlink(real, tmp_path) is True
+        assert resolve_symlink(deep, {real.resolve().as_posix()}) is True
 
 
 class TestGetFileChecksum:
@@ -220,7 +217,8 @@ class TestGetFileChecksum:
         assert h == hashlib.sha256(b"hello world").hexdigest()
 
     def test_file_not_found(self, tmp_path):
-        assert get_file_checksum(tmp_path / "ghost") == ""
+        with pytest.raises(FileNotFoundError):
+            get_file_checksum(tmp_path / "ghost")
 
     def test_identical_files_same_checksum(self, tmp_path):
         a = _write(tmp_path / "a.cfg", "same")
@@ -401,7 +399,7 @@ class TestGetMissingSymlinks:
 
 class TestSymlinkConfig:
     def test_creates_symlinks(self, tmp_path, mock_home):
-        mgr = _make_manager(tmp_path)
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
         mgr.config_dir = mock_home / "config"
         mgr.config_dir.mkdir(parents=True, exist_ok=True)
         src = _write(mock_home / "repo" / "a.cfg", "x")
@@ -411,7 +409,7 @@ class TestSymlinkConfig:
         assert target.resolve() == src.resolve()
 
     def test_skips_existing_valid(self, tmp_path, mock_home):
-        mgr = _make_manager(tmp_path)
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
         mgr.config_dir = mock_home / "config"
         mgr.config_dir.mkdir(parents=True, exist_ok=True)
         src = _write(mock_home / "repo" / "a.cfg", "x")
@@ -422,7 +420,7 @@ class TestSymlinkConfig:
         assert existing.resolve() == src.resolve()
 
     def test_creates_parent_dirs(self, tmp_path, mock_home):
-        mgr = _make_manager(tmp_path)
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
         mgr.config_dir = mock_home / "config"
         mgr.config_dir.mkdir(parents=True, exist_ok=True)
         src = _write(mock_home / "repo" / "sub" / "deep.cfg", "x")
@@ -571,19 +569,24 @@ class TestMergeCfgMarker:
         src = _write(
             tmp_path / "src_printer.cfg",
             "[header]\nval: 1\n"
-            + SV_CONFIG_MARKER + "\n"
-            + "#*# repo_saved: a\n",
+            + SV_CONFIG_MARKER
+            + "\n"
+            + "#*# [probe]\n#*# z_offset = 1.0\n#*# speed = 5\n#*#\n"
+            + "#*# [bed_mesh default]\n#*# version = 1\n",
         )
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
             "[header]\nval: 1\n"
-            + SV_CONFIG_MARKER + "\n"
-            + "#*# target_saved: b\n",
+            + SV_CONFIG_MARKER
+            + "\n"
+            + "#*# [probe]\n#*# z_offset = 0.5\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
-        merged = tgt.read_text()
-        assert "#*# repo_saved: a" in merged
-        assert "#*# target_saved: b" in merged
+        lines = tgt.read_text().splitlines()
+        assert "#*# z_offset = 0.5" in lines and "#*# z_offset = 1.0" not in lines
+        # unindented, else Klipper reads it as a continuation of z_offset
+        assert "#*# speed = 5" in lines
+        assert "#*# [bed_mesh default]" in lines
 
     def test_marker_at_start_of_target(self, tmp_path):
         mgr = _make_manager(tmp_path)

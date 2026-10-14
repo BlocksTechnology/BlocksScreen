@@ -158,8 +158,11 @@ def test_amu_plug_in_end_to_end(qtbot, sock_path, machine):
 
     text = printer_cfg.read_text()
     assert f"[mcu mmu]\nserial: /dev/serial/by-id/{SYMLINK}\n" in text
-    assert "\n[include config/variant_mmu/base/*.cfg]" in text
-    assert "\n#[include config/variant_sync_single/*.cfg" in text
+    lines = text.splitlines()
+    assert "[include config/variant_mmu/base/*.cfg]" in lines
+    assert any(
+        ln.startswith("#[include config/variant_sync_single/*.cfg") for ln in lines
+    )
     # the serial comes after the include so it overrides mmu.cfg's placeholder
     assert text.index("[include config/variant_mmu/base/*.cfg]") < text.index(
         "[mcu mmu]"

@@ -157,7 +157,7 @@ class DeviceConfigManager(ConfigManager):
         """
         devices: list[Device] = []
         try:
-            devices = SerialScanner(timeout=BOOT_SCAN_TIMEOUT).scan()
+            devices = SerialScanner(timeout=BOOT_SCAN_TIMEOUT).daemon_scan() or []
         except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
             # Never let a scan problem stop the config sync at boot.
             _logger.error("Device scan failed: %s", e)
@@ -167,7 +167,7 @@ class DeviceConfigManager(ConfigManager):
                 d for d in SerialScanner.legacy_scan() if d.symlink_name not in seen
             ]
         except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
-            _logger.error("Legacy device scan failed: %s", e)
+            _logger.error("/dev/serial/by-id scan failed: %s", e)
         return devices
 
     def _read_printer_cfg(self) -> str | None:
@@ -177,31 +177,15 @@ class DeviceConfigManager(ConfigManager):
             return None
 
     def sync(self) -> None:
-        """Sync the machine configuration with the repo, then apply device templates.
-
-        Runs every step unconditionally: each one only writes when something
-        differs. (ConfigManager.sync skips syncing when every copied file
-        differs from the repo, which is exactly when it's needed.)
-        """
+        """Sync the machine configuration with the repo, then apply device templates"""
         before = self._read_printer_cfg()
         self._devices = self.scan_devices()
         _logger.info(
             "Devices at sync: %s",
             ", ".join(d.symlink_name for d in self._devices) or "none",
         )
-        try:
-            missing = self._get_missing_symlinks(self.config_dir, self.repo)
-            if self.check_nested():
-                self._cleanup_nested()
-            self.cleanup_broken_symlinks(self.config_dir)
-            self._symlink_config(missing)
-            self._cpy_cfg_files()
-        except (NotADirectoryError, FileNotFoundError) as e:
-            _logger.error("%s", e)
-        except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except
-            _logger.error("Caught exception during sync: %s", e)
-        # printer.cfg may have been skipped above (already equal to the repo's
-        # copy), so make sure the templates are applied either way.
+        super().sync()
+        # printer.cfg is skipped above when already equal to the repo's copy.
         try:
             self.apply_devices(self._devices)
         except Exception as e:  # noqa: BLE001  # pylint: disable=broad-except

@@ -11,7 +11,7 @@ from BlocksScreen.lib.panels.mainWindow import MainWindow
 def _make_fake_window(
     *, manual_restart_pending: bool = False, ws_connected: bool = True
 ) -> SimpleNamespace:
-    return SimpleNamespace(
+    win = SimpleNamespace(
         _klippy_ready=False,
         _update_in_progress=False,
         _klipper_auto_restart_pending=False,
@@ -26,6 +26,8 @@ def _make_fake_window(
         _try_device_config_restart=MagicMock(),
         _prompt_device_confirmation=MagicMock(),
     )
+    win._begin_klipper_restart = MethodType(MainWindow._begin_klipper_restart, win)
+    return win
 
 
 class TestKlippyDisconnectedAutoRestartGuard:
@@ -160,6 +162,7 @@ def _make_device_window(**state) -> SimpleNamespace:
         "request_klipper_restart",
         "_device_restart_blocked",
         "_try_device_config_restart",
+        "_begin_klipper_restart",
         "on_device_config_changed",
         "on_device_confirmation_required",
         "_device_prompt_blocked",

@@ -5,7 +5,7 @@ device-discoveryd.service; this package only talks to its Unix socket.
 
 - `DeviceDiscoveryClient`: long-lived Qt client (snapshot + hotplug signals)
 - `fetch_snapshot`: one-shot blocking query, no Qt event loop needed
-- `serial_devices.SerialScanner`: drop-in replacement for tools/serial_scanner.py
+- `serial_devices.SerialScanner`: daemon scan with a /dev/serial/by-id fallback
 """
 
 from .client import DeviceDiscoveryClient, default_socket_path, fetch_snapshot

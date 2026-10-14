@@ -24,7 +24,7 @@ import logging
 import typing
 
 from devices.discovery.client import DeviceDiscoveryClient
-from devices.discovery.serial_devices import Device, SerialScanner, device_from_json
+from devices.discovery.serial_devices import Device, SerialScanner, serial_from_json
 from PyQt6 import QtCore
 
 if typing.TYPE_CHECKING:
@@ -148,15 +148,11 @@ class DeviceConfigWatcher(QtCore.QObject):
             self._add_devices(added)
 
     def _queue(self, raw_devices: list) -> None:
-        devices = []
         try:
-            for raw in raw_devices:
-                if isinstance(raw, dict) and raw.get("connection") == "Serial":
-                    dev = device_from_json(raw)
-                    if dev.symlink_name:
-                        devices.append(dev)
+            devices = [d for d in serial_from_json(raw_devices) if d.symlink_name]
         except Exception:  # pylint: disable=broad-except
             _logger.exception("Ignoring unusable device report")
+            return
         self._add_devices(devices)
 
     def _add_devices(self, devices: list[Device]) -> None:

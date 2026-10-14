@@ -110,6 +110,27 @@ def _parse_message(line: bytes) -> dict[str, Any] | None:
     return msg
 
 
+def _split_lines(buf: bytes) -> tuple[list[bytes], bytes] | None:
+    """Complete non-empty lines in buf and the unterminated rest, None if oversized"""
+    *lines, rest = buf.split(b"\n")
+    if len(rest) > _MAX_LINE:
+        _log.warning("device_discoveryd sent an oversized line")
+        return None
+    return [line for line in lines if line], rest
+
+
+def _proto_supported(msg: dict[str, Any]) -> bool:
+    """False, with a warning, for a hello in a protocol this client doesn't speak"""
+    if msg["type"] != "hello" or msg.get("proto") == SUPPORTED_PROTOCOL:
+        return True
+    _log.warning(
+        "device_discoveryd speaks protocol %s, client supports %s",
+        msg.get("proto"),
+        SUPPORTED_PROTOCOL,
+    )
+    return False
+
+
 def fetch_snapshot(
     socket_path: str | None = None, timeout: float = 2.0
 ) -> list[dict[str, Any]] | None:
@@ -137,24 +158,17 @@ def fetch_snapshot(
                 chunk = sock.recv(_RECV_CHUNK)
                 if not chunk:
                     return None
-                buf += chunk
-                if b"\n" not in buf and len(buf) > _MAX_LINE:
-                    _log.warning("device_discoveryd sent an oversized line")
+                framed = _split_lines(buf + chunk)
+                if framed is None:
                     return None
-                while b"\n" in buf:
-                    line, buf = buf.split(b"\n", 1)
-                    msg = _parse_message(line) if line else None
+                lines, buf = framed
+                for line in lines:
+                    msg = _parse_message(line)
                     if msg is None:
                         continue
-                    msg_type = msg["type"]
-                    if msg_type == "hello" and msg.get("proto") != SUPPORTED_PROTOCOL:
-                        _log.warning(
-                            "device_discoveryd speaks protocol %s, client supports %s",
-                            msg.get("proto"),
-                            SUPPORTED_PROTOCOL,
-                        )
+                    if not _proto_supported(msg):
                         return None
-                    if msg_type == "snapshot":
+                    if msg["type"] == "snapshot":
                         return msg["devices"]
     except OSError as exc:
         _log.debug("device_discoveryd snapshot unavailable at %s: %s", path, exc)
@@ -214,9 +228,7 @@ class DeviceDiscoveryClient(QtCore.QObject):
                 self._connect_and_read(path)
                 if not self._stop_event.is_set():
                     _log.info("device_discoveryd closed the connection, reconnecting")
-                attempt = (
-                    0  # clean disconnect after a working connection: reset backoff
-                )
+                attempt = 0  # clean disconnect after a working connection
             except OSError as exc:
                 # First failure at INFO so a missing/unreachable daemon shows
                 # up in the journal; the retries after it stay at DEBUG.
@@ -256,16 +268,12 @@ class DeviceDiscoveryClient(QtCore.QObject):
                     continue
                 if not chunk:
                     return  # daemon closed the connection
-                buf += chunk
-                if b"\n" not in buf and len(buf) > _MAX_LINE:
-                    _log.warning(
-                        "device_discoveryd sent an oversized line, reconnecting"
-                    )
-                    return
-                while b"\n" in buf:
-                    line, buf = buf.split(b"\n", 1)
-                    if line:
-                        self._dispatch(line)
+                framed = _split_lines(buf + chunk)
+                if framed is None:
+                    return  # reconnect
+                lines, buf = framed
+                for line in lines:
+                    self._dispatch(line)
         finally:
             self._sock = None
             sock.close()
@@ -293,13 +301,11 @@ class DeviceDiscoveryClient(QtCore.QObject):
             _log.info("device_discoveryd removed: %s", _describe(msg["device"]))
             self.device_removed.emit(msg["device"])
         elif msg_type == "hello":
-            proto = msg.get("proto")
-            if proto != SUPPORTED_PROTOCOL:
-                _log.warning(
-                    "device_discoveryd speaks protocol %s, client supports %s",
-                    proto,
-                    SUPPORTED_PROTOCOL,
-                )
-            _log.info("device_discoveryd hello: proto=%s pid=%s", proto, msg.get("pid"))
+            _proto_supported(msg)
+            _log.info(
+                "device_discoveryd hello: proto=%s pid=%s",
+                msg.get("proto"),
+                msg.get("pid"),
+            )
         else:
             _log.debug("Unknown message type from device_discoveryd: %s", msg_type)

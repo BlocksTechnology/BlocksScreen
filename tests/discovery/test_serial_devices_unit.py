@@ -1,4 +1,4 @@
-"""devices.discovery.serial_devices: daemon-backed drop-in for tools.serial_scanner."""
+"""devices.discovery.serial_devices: daemon scan with a /dev/serial/by-id fallback."""
 
 import os
 
@@ -144,14 +144,12 @@ class TestScanViaDaemon:
 
 @pytest.fixture
 def legacy_by_id(tmp_path, monkeypatch):
-    """Point the legacy scanner at a fake /dev/serial/by-id."""
-    from tools import serial_scanner as legacy
-
+    """Point the by-id scan at a fake /dev/serial/by-id."""
     by_id = tmp_path / "by-id"
     by_id.mkdir()
     for name in (KLIPPER["symlink_name"], BEACON["symlink_name"]):
         os.symlink("/dev/null", by_id / name)
-    monkeypatch.setattr(legacy.SerialScanner, "SERIAL_PATH", str(by_id))
+    monkeypatch.setattr(sd, "SERIAL_BY_ID_PATH", f"{by_id}/")
     return by_id
 
 
@@ -161,7 +159,6 @@ class TestFallback:
         by_name = {d.symlink_name: d for d in devs}
         assert set(by_name) == {KLIPPER["symlink_name"], BEACON["symlink_name"]}
         klipper = by_name[KLIPPER["symlink_name"]]
-        # Converted to this module's types, not the legacy ones.
         assert isinstance(klipper, sd.Device)
         assert klipper.firmware is sd.FirmwareState.Klipper
         assert klipper.mcu_type == "stm32h723xx"
@@ -175,6 +172,48 @@ class TestFallback:
         daemon([])  # accepts, never sends
         devs = sd.SerialScanner(sock_path, timeout=0.3).scan()
         assert len(devs) == 2
+
+    def test_no_by_id_dir_is_empty(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sd, "SERIAL_BY_ID_PATH", f"{tmp_path}/by-id/")
+        assert sd.SerialScanner.legacy_scan() == []
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        (
+            "usb-Klipper_rp2040_my_board_E66-if01",
+            ("Klipper", "rp2040_my_board", "E66", "rp2040", "01", "Klipper rp2040"),
+        ),
+        (
+            "usb-CanBoot_stm32f446xx_123-if00",
+            (
+                "CanBoot",
+                "stm32f446xx",
+                "123",
+                "stm32f446xx",
+                "00",
+                "CanBoot stm32f446xx",
+            ),
+        ),
+        (
+            "usb-1a86_USB_Serial-if00-port0",
+            ("1a86", "USB", "Serial", "", "00", "1a86 USB"),
+        ),
+        ("usb-Foo_Bar", ("Foo", "Bar", "", "", "", "Foo Bar")),
+        ("plainname", ("plainname", "", "", "", "", "plainname")),
+    ],
+)
+def test_device_from_symlink(name, expected) -> None:
+    dev = sd.device_from_symlink(name, "/dev/null")
+    assert (
+        dev.manufacturer,
+        dev.product,
+        dev.serial_number,
+        dev.mcu_type,
+        dev.interface,
+        dev.name,
+    ) == expected
 
 
 class TestFetchSnapshot:
