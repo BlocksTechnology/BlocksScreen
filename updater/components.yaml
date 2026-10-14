@@ -85,7 +85,7 @@ components:
   - name: BlocksScreen
     type: git
     path: ~/BlocksScreen
-    branch: feat/device_discovery
+    branch: dev
     url: https://github.com/BlocksTechnology/BlocksScreen
     service: BlocksScreen.service
     reset_mode: hard
