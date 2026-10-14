@@ -402,6 +402,7 @@ class TestGcodeSignals:
 
     def test_load_gate(self, manager, qtbot) -> None:
         manager.update_mmu_state(_status(filament_pos=0))
+        assert manager.load_refusal() == ""
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
             assert manager.load_gate() is True
         assert blocker.args == ["MMU_LOAD"]
@@ -422,14 +423,19 @@ class TestGcodeSignals:
     def test_load_gate_refused(self, manager, qtbot, overrides) -> None:
         if overrides is not None:
             manager.update_mmu_state(_status(**overrides))
+        assert manager.load_refusal()
         with qtbot.assertNotEmitted(manager.run_gcode_signal):
             assert manager.load_gate() is False
 
-    def test_unload(self, manager, qtbot) -> None:
+    @pytest.mark.parametrize(
+        ("eject", "gcode"), [(False, "MMU_UNLOAD"), (True, "MMU_EJECT")]
+    )
+    def test_unload(self, manager, qtbot, eject, gcode) -> None:
         manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        assert manager.unload_refusal() == ""
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
-            assert manager.unload() is True
-        assert blocker.args == ["MMU_UNLOAD"]
+            assert manager.unload(eject=eject) is True
+        assert blocker.args == [gcode]
 
     # Happy-Hare drops MMU_UNLOAD when disabled or already unloaded (mmu.py:6981).
     @pytest.mark.parametrize(
@@ -439,8 +445,9 @@ class TestGcodeSignals:
     def test_unload_refused(self, manager, qtbot, overrides) -> None:
         if overrides is not None:
             manager.update_mmu_state(_status(**overrides))
+        assert manager.unload_refusal()
         with qtbot.assertNotEmitted(manager.run_gcode_signal):
-            assert manager.unload() is False
+            assert manager.unload(eject=True) is False
 
     # A paused print is where a failed swap gets recovered by hand.
     @pytest.mark.parametrize("print_state", ["paused", "pause_locked"])

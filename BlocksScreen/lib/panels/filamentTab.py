@@ -153,7 +153,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             callback({"error": "not connected"})
 
     def _find_or_add_vendor(self, body: dict, callback) -> None:
-        """Reuse the Spoolman vendor named exactly ``body["name"]``; POST one only if none."""
+        """Reuse the Spoolman vendor named ``body["name"]`` (any case); POST one only if none."""
         name = body["name"]
 
         def on_vendors(result: dict) -> None:
@@ -161,7 +161,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
             if result.get("error") is not None or not isinstance(vendors, list):
                 callback({"error": result.get("error") or "bad vendor list"})
                 return
-            match = next((v for v in vendors if v.get("name") == name), None)
+            # Spoolman's name filter is a case-insensitive partial match, so recheck here.
+            key = name.casefold()
+            match = next(
+                (v for v in vendors if (v.get("name") or "").casefold() == key), None
+            )
             if match is not None:
                 callback({"response": match, "error": None})
             else:

@@ -214,25 +214,40 @@ def mmu_panel(qtbot, mock_printer, mock_cfg):
 
 
 @pytest.mark.parametrize("sent", [True, False])
-def test_load_goes_through_manager(mmu_panel, sent):
+def test_load_goes_through_manager(mmu_panel, monkeypatch, sent):
     mmu_panel.filament_state = mmu_panel.FilamentStates.UNLOADED
     mmu_panel.amu_manager.load_gate.return_value = sent
+    mmu_panel.amu_manager.load_refusal.return_value = "MMU is not homed."
+    monkeypatch.setattr(mmu_panel.popup, "new_message", MagicMock())
     emitted = []
     mmu_panel.run_gcode.connect(emitted.append)
     mmu_panel.load_filament()
     mmu_panel.amu_manager.load_gate.assert_called_once_with()
+    # A refused load tells the user why instead of doing nothing.
+    assert mmu_panel.popup.new_message.called is not sent
+    if not sent:
+        assert mmu_panel.popup.new_message.call_args.kwargs["message"] == (
+            "MMU is not homed."
+        )
     # A refused load must not leave the popup up or the type label saying loaded.
     assert mmu_panel.load_popup.show.called is sent
     assert [g.startswith("SAVE_VARIABLE") for g in emitted] == ([True] if sent else [])
 
 
 @pytest.mark.parametrize("sent", [True, False])
-def test_unload_goes_through_manager(mmu_panel, sent):
+def test_unload_goes_through_manager(mmu_panel, monkeypatch, sent):
     mmu_panel.filament_state = mmu_panel.FilamentStates.LOADED
     mmu_panel.amu_manager.unload.return_value = sent
+    mmu_panel.amu_manager.unload_refusal.return_value = "Not available while printing."
+    monkeypatch.setattr(mmu_panel.popup, "new_message", MagicMock())
     emitted = []
     mmu_panel.run_gcode.connect(emitted.append)
     mmu_panel.unload_filament()
-    mmu_panel.amu_manager.unload.assert_called_once_with()
+    mmu_panel.amu_manager.unload.assert_called_once_with(eject=True)
+    assert mmu_panel.popup.new_message.called is not sent
+    if not sent:
+        assert mmu_panel.popup.new_message.call_args.kwargs["message"] == (
+            "Not available while printing."
+        )
     assert mmu_panel.load_popup.show.called is sent
     assert [g.startswith("SAVE_VARIABLE") for g in emitted] == ([True] if sent else [])
