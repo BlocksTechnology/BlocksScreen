@@ -634,7 +634,7 @@ class ConfigManager:
                 ok = False
                 if f == "printer.cfg":
                     ok = self.merge_cfg(src_file, target, marker=SV_CONFIG_MARKER)
-                elif f == "variables.cfg":
+                elif f in ["variables.cfg", "BlocksScreen.cfg"]:
                     ok = self.merge_cfg(src_file, target)
                 else:
                     ok = copy_file_simple(src_file, target)
