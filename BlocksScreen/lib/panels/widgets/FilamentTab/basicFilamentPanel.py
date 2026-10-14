@@ -211,6 +211,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             )
             return
         if self.mmu_configured and not self.amu_manager.load_gate():
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=self.amu_manager.load_refusal(),
+            )
             return
         if not self._in_print:
             self.run_gcode.emit(
@@ -239,7 +243,12 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             )
             return
         self.find_routine_objects()
-        if self.mmu_configured and not self.amu_manager.unload():
+        # Basic panel uses MMU_EJECT; when loaded, Happy-Hare v3 runs it as MMU_UNLOAD.
+        if self.mmu_configured and not self.amu_manager.unload(eject=True):
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=self.amu_manager.unload_refusal(),
+            )
             return
         if not self._in_print:
             self.run_gcode.emit(

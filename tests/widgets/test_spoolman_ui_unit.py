@@ -25,8 +25,7 @@ _STUBBED = (
     "lib.panels.widgets.FilamentTab",
     "lib.panels.filamentTab",
 )
-for _stale in [m for m in sys.modules if m.startswith(_STUBBED)]:
-    sys.modules.pop(_stale, None)
+_saved = {m: sys.modules.pop(m) for m in list(sys.modules) if m.startswith(_STUBBED)}
 
 # loadWidget imports configfile at import time; the conftest fixture only stubs it later.
 _had_configfile = "configfile" in sys.modules
@@ -42,6 +41,10 @@ from lib.utils.list_model import ListItem  # noqa: E402
 
 if not _had_configfile:
     sys.modules.pop("configfile", None)
+# Put the other modules' stand-ins back so this import leaves sys.modules as found.
+for _real in [m for m in sys.modules if m.startswith(_STUBBED)]:
+    del sys.modules[_real]
+sys.modules.update(_saved)
 
 UNREACHABLE = {"error": {"code": 503, "message": "Spoolman server not available"}}
 SPOOL = {"id": 7, "filament": {"name": "PLA Red", "material": "PLA"}}
@@ -190,6 +193,12 @@ class TestVendorLookup:
             "/v1/vendor",
             "name=Acme",
         )
+        tab.ws.api.add_manufacturer.assert_not_called()
+
+    # Spoolman's name filter ignores case, so "acme" must not add a second vendor.
+    def test_name_match_ignores_case(self, tab):
+        got = self._reply(tab, {"response": [{"id": 3, "name": "ACME"}], "error": None})
+        assert got == [{"response": {"id": 3, "name": "ACME"}, "error": None}]
         tab.ws.api.add_manufacturer.assert_not_called()
 
     def test_missing_name_is_created(self, tab):
