@@ -13,6 +13,13 @@ from updater.service import LoggingCallback, UpdateService
 
 
 @pytest.fixture(autouse=True)
+def units_installed():
+    """Report every systemd unit as installed so restart-failure tests don't
+    depend on which units exist on the machine running them."""
+    with patch(
+        "updater.service.service_unit_missing", AsyncMock(return_value=False)
+    ) as mock:
+        yield mock
 def _isolate_inflight(tmp_path_factory, monkeypatch):
     """Keep the in-flight marker, state and history out of the real cache."""
     marker = tmp_path_factory.mktemp("inflight") / "updater_inflight.json"
@@ -1331,6 +1338,36 @@ class TestAtomicBatch:
         assert done == {"c0": True, "c1": False}
 
     @pytest.mark.asyncio
+    async def test_restart_of_uninstalled_unit_does_not_abort(
+        self, tmp_path, units_installed
+    ):
+        # A component cloned before its unit was set up (install-updater still
+        # pending) must not revert every other component in the batch.
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=2, service="device-discoveryd.service")
+        units_installed.return_value = True
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.git_reset_to_hash") as mr,
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(False, "no unit")),
+            patch("updater.service.wait_for_service_active") as mock_wait,
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+        ):
+            await svc._run_git_batch(comps)
+        mr.assert_not_called()
+        mock_wait.assert_not_called()
+        assert all(c.args[1] is True for c in cb.on_component_done.call_args_list)
+        cb.on_error.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_cancel_mid_batch_reverts_staged(self, tmp_path):
         cb = MagicMock()
         svc, comps = self._svc(tmp_path, cb, n=2)
@@ -1981,6 +2018,41 @@ class TestProvisionMissingComponent:
             ok = await svc.update_component("newcomp")
         assert ok is True
         mock_restart.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_provision_with_uninstalled_unit_defers_setup(
+        self, tmp_path, units_installed
+    ):
+        # First clone: the hook deferred setup to install-updater, so the unit
+        # does not exist yet. Provisioning succeeds, keeps the clone, and applies
+        # the deferred install (touches the deploy flag).
+        comp = self._comp(tmp_path, service="newcomp.service")
+        cb = MagicMock()
+        units_installed.return_value = True
+        deferred = AsyncMock()
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(False, "no unit")),
+            patch("updater.service.wait_for_service_active") as mock_wait,
+            patch("updater.service.enable_service") as mock_enable,
+            patch("updater.service.shutil.rmtree") as mock_rmtree,
+            patch.object(UpdateService, "_apply_deferred_restart", new=deferred),
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            ok = await svc.update_component("newcomp")
+        assert ok is True
+        mock_wait.assert_not_called()
+        mock_enable.assert_not_called()  # install-updater enables it
+        mock_rmtree.assert_not_called()
+        deferred.assert_awaited_once()
+        cb.on_component_done.assert_called_once_with("newcomp", True)
 
     @pytest.mark.asyncio
     async def test_check_status_reports_needs_install(self, tmp_path):
