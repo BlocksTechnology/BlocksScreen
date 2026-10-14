@@ -40,9 +40,9 @@ def _button(
 
 
 def _show(
-    panel: SpoolInfoPanel, btn: Spoll_button, *, enabled=True, homed=True
+    panel: SpoolInfoPanel, btn: Spoll_button, *, enabled=True, homed=True, idle=True
 ) -> None:
-    panel.update_for_slot(btn, enabled=enabled, homed=homed)
+    panel.update_for_slot(btn, enabled=enabled, homed=homed, idle=idle)
 
 
 def _actions(panel: SpoolInfoPanel) -> dict[str, bool]:
@@ -81,30 +81,37 @@ class TestSpoolInfoPanelActions:
             "check": True,
         }
 
-    def test_active_gate_loaded_allows_unload_only(self, panel):
+    # HH v3 MMU_CHECK_GATE unloads first and reloads a LOADED tool after.
+    def test_active_gate_loaded_allows_unload_and_check(self, panel):
         _show(panel, _button(1, pos=FilamentPos.LOADED))
         assert _actions(panel) == {
             "load": False,
             "unload": True,
             "eject": False,
-            "check": False,
+            "check": True,
         }
         assert panel._lbl_status.text() == panel._LOADED_TEXT
 
     def test_mid_path_filament_shows_stuck_and_allows_unload(self, panel):
         _show(panel, _button(1, pos=FilamentPos.IN_BOWDEN))
         assert _actions(panel)["unload"] is True
+        assert _actions(panel)["check"] is True
         assert panel._lbl_status.text() == panel._STUCK_TEXT
 
     def test_unknown_position_counts_as_loaded(self, panel):
-        # UNKNOWN may hide filament in the path, so only unload is safe.
+        # UNKNOWN may hide filament in the path, so load and eject stay off.
         _show(panel, _button(1, pos=FilamentPos.UNKNOWN))
         assert _actions(panel) == {
             "load": False,
             "unload": True,
             "eject": False,
-            "check": False,
+            "check": True,
         }
+
+    @pytest.mark.parametrize("pos", [FilamentPos.UNLOADED, FilamentPos.LOADED])
+    def test_busy_or_printing_greys_actions(self, panel, pos):
+        _show(panel, _button(1, pos=pos), idle=False)
+        assert not any(_actions(panel).values())
 
     def test_spool_bound_gate_is_read_only(self, panel):
         btn = Spoll_button()
@@ -293,8 +300,18 @@ class TestAMUpageRedraw:
     def test_unchanged_view_skips_selection(self, page, monkeypatch):
         calls = []
         monkeypatch.setattr(page, "_on_selection", calls.append)
-        page.on_mmu_state_changed(page.status.apply_diff({"action": "Loading"}))
+        page.on_mmu_state_changed(page.status.apply_diff({"bowden_progress": 42.0}))
         assert calls == []
+
+    @pytest.mark.parametrize(
+        ("key", "busy", "idle"),
+        [("action", "Loading", "Idle"), ("print_state", "printing", "standby")],
+    )
+    def test_busy_or_printing_diff_greys_then_restores(self, page, key, busy, idle):
+        page.on_mmu_state_changed(page.status.apply_diff({key: busy}))
+        assert not any(_actions(page.info_panel).values())
+        page.on_mmu_state_changed(page.status.apply_diff({key: idle}))
+        assert _actions(page.info_panel)["load"] is True
 
     def test_selection_follows_a_scalar_diff(self, page):
         page.on_mmu_state_changed(page.status.apply_diff({"gate": 2}))

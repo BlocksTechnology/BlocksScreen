@@ -418,6 +418,7 @@ class TestGcodeSignals:
             {"filament_pos": 0, "is_homed": False},
             {"filament_pos": 0, "print_state": "printing"},
             {"filament_pos": 0, "print_state": "started"},
+            {"filament_pos": 0, "action": "Checking"},
         ],
     )
     def test_load_gate_refused(self, manager, qtbot, overrides) -> None:
@@ -440,7 +441,13 @@ class TestGcodeSignals:
     # Happy-Hare drops MMU_UNLOAD when disabled or already unloaded (mmu.py:6981).
     @pytest.mark.parametrize(
         "overrides",
-        [None, {"filament_pos": 0}, {"enabled": False}, {"print_state": "printing"}],
+        [
+            None,
+            {"filament_pos": 0},
+            {"enabled": False},
+            {"print_state": "printing"},
+            {"action": "Loading"},
+        ],
     )
     def test_unload_refused(self, manager, qtbot, overrides) -> None:
         if overrides is not None:
@@ -453,6 +460,13 @@ class TestGcodeSignals:
     @pytest.mark.parametrize("print_state", ["paused", "pause_locked"])
     def test_unload_allowed_while_paused(self, manager, qtbot, print_state) -> None:
         manager.update_mmu_state(_status(print_state=print_state))
+        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
+            assert manager.unload() is True
+        assert blocker.args == ["MMU_UNLOAD"]
+
+    # "Unknown" is the action Happy-Hare reports after an error, not a running action.
+    def test_unload_allowed_after_an_action_error(self, manager, qtbot) -> None:
+        manager.update_mmu_state(_status(action="Unknown"))
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
             assert manager.unload() is True
         assert blocker.args == ["MMU_UNLOAD"]
@@ -472,6 +486,7 @@ class TestGcodeSignals:
             {"filament_pos": 0, "gate": -1},
             {"filament_pos": 0, "gate_status": [0, 1]},
             {"filament_pos": 0, "print_state": "printing"},
+            {"filament_pos": 0, "action": "Homing"},
         ],
     )
     def test_eject_gate_refused(self, manager, qtbot, overrides) -> None:
@@ -486,20 +501,32 @@ class TestGcodeSignals:
             manager.check_gate()
         assert blocker.args == ["MMU_CHECK_GATE"]
 
-    # MMU_CHECK_GATE runs a full unload first when filament is loaded.
+    # HH v3 unloads first, then reloads a LOADED tool after the check (mmu.py:8897).
+    @pytest.mark.parametrize("filament_pos", [10, 3, -1])
+    def test_check_gate_allowed_from_any_position(
+        self, manager, qtbot, filament_pos
+    ) -> None:
+        manager.update_mmu_state(_status(filament_pos=filament_pos))
+        assert manager.check_refusal() == ""
+        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
+            manager.check_gate()
+        assert blocker.args == ["MMU_CHECK_GATE"]
+
     @pytest.mark.parametrize(
         "overrides",
         [
             None,
-            {"filament_pos": 10},
-            {"filament_pos": 0, "gate": -2},
-            {"filament_pos": 0, "is_homed": False},
-            {"filament_pos": 0, "print_state": "printing"},
+            {"gate": -2},
+            {"enabled": False},
+            {"is_homed": False},
+            {"print_state": "printing"},
+            {"action": "Checking"},
         ],
     )
     def test_check_gate_refused(self, manager, qtbot, overrides) -> None:
         if overrides is not None:
             manager.update_mmu_state(_status(**overrides))
+        assert manager.check_refusal()
         with qtbot.assertNotEmitted(manager.run_gcode_signal):
             manager.check_gate()
 
@@ -521,6 +548,7 @@ class TestGcodeSignals:
             ({"filament_pos": 0, "enabled": False}, 1),
             ({"filament_pos": 0, "is_homed": False}, 1),
             ({"filament_pos": 0, "print_state": "printing"}, 1),
+            ({"filament_pos": 0, "action": "Selecting"}, 1),
         ],
     )
     def test_select_gate_skipped(self, manager, qtbot, overrides, gate) -> None:

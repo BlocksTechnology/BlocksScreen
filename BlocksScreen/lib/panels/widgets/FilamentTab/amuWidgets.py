@@ -446,7 +446,9 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         self._btn_purge.setEnabled(False)
         self._btn_cut.setEnabled(False)
 
-    def update_for_slot(self, btn: Spoll_button, *, enabled: bool, homed: bool) -> None:
+    def update_for_slot(
+        self, btn: Spoll_button, *, enabled: bool, homed: bool, idle: bool
+    ) -> None:
         """Show the selected gate *btn*; bare HH gate commands act only on it."""
         color = btn.color
         r, g, b = color.red(), color.green(), color.blue()
@@ -459,9 +461,10 @@ class SpoolInfoPanel(QtWidgets.QWidget):
 
         filament_pos = btn.filament_pos
         loaded = filament_pos != FilamentPos.UNLOADED
-        # Mirrors the AMUManager guards.
-        can_check = enabled and homed and not loaded
-        can_feed = can_check and status != GateStatus.EMPTY
+        # Mirrors the AMUManager refusals; idle = not printing, no HH action running.
+        ready = enabled and idle
+        can_check = ready and homed
+        can_feed = can_check and not loaded and status != GateStatus.EMPTY
         if loaded:
             text = (
                 self._LOADED_TEXT
@@ -497,7 +500,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         self._set_color(color_hex)
 
         self._btn_load.setEnabled(can_feed)
-        self._btn_unload.setEnabled(enabled and loaded)
+        self._btn_unload.setEnabled(ready and loaded)
         self._btn_purge.setEnabled(can_feed)
         self._btn_cut.setEnabled(can_check)
 

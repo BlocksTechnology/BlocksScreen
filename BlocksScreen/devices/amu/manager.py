@@ -187,21 +187,38 @@ class AMUManager(QtCore.QObject):
         """Erase all persisted MMU state (gate map, TTG map, statistics) and re-init."""
         self.run_gcode_signal.emit("MMU_RESET CONFIRM=1")
 
-    def load_refusal(self) -> str:
-        """Return why the selected gate cannot load, or "" when it is idle-ready."""
-        state = self._mmu_state
-        if state is None:
-            return "MMU status not received yet."
+    @staticmethod
+    def _busy_refusal(state: MMUState) -> str:
+        """Return why the MMU cannot take a command now, or "" when it is idle."""
         if not state.enabled:
             return "MMU is disabled."
         if state.is_printing:
             return "Not available while printing."
+        if state.is_busy:
+            return f"MMU is busy ({state.action})."
+        return ""
+
+    def check_refusal(self) -> str:
+        """Return why the selected gate cannot be checked, or "" when it can."""
+        state = self._mmu_state
+        if state is None:
+            return "MMU status not received yet."
+        if reason := self._busy_refusal(state):
+            return reason
         if not state.is_homed:
             return "MMU is not homed."
-        if state.filament_pos != FilamentPos.UNLOADED:
-            return "Filament is not fully unloaded."
         if state.current_gate_info is None:
             return "No gate is selected."
+        return ""
+
+    def load_refusal(self) -> str:
+        """Return why the selected gate cannot load, or "" when it is idle-ready."""
+        reason = self.check_refusal()
+        state = self._mmu_state
+        if reason or state is None:
+            return reason
+        if state.filament_pos != FilamentPos.UNLOADED:
+            return "Filament is not fully unloaded."
         return ""
 
     def unload_refusal(self) -> str:
@@ -209,10 +226,8 @@ class AMUManager(QtCore.QObject):
         state = self._mmu_state
         if state is None:
             return "MMU status not received yet."
-        if not state.enabled:
-            return "MMU is disabled."
-        if state.is_printing:
-            return "Not available while printing."
+        if reason := self._busy_refusal(state):
+            return reason
         if state.filament_pos == FilamentPos.UNLOADED:
             return "Filament is already unloaded."
         return ""
@@ -246,6 +261,7 @@ class AMUManager(QtCore.QObject):
             state is None
             or not (state.enabled and state.is_homed)
             or state.is_printing
+            or state.is_busy
             or not 0 <= gate < state.num_gates
             or gate == state.gate
         ):
@@ -267,9 +283,9 @@ class AMUManager(QtCore.QObject):
 
     def check_gate(self) -> None:
         """Check the selected gate for filament by sending MMU_CHECK_GATE."""
-        # Happy-Hare runs a full unload first when not UNLOADED.
-        if self._selected_gate_unloaded() is None:
-            logger.warning("Ignoring MMU_CHECK_GATE: no unloaded gate selected")
+        # Happy-Hare v3 unloads first when not UNLOADED and reloads a LOADED tool after.
+        if reason := self.check_refusal():
+            logger.warning("Ignoring MMU_CHECK_GATE: %s", reason)
             return
         self.run_gcode_signal.emit("MMU_CHECK_GATE")
 

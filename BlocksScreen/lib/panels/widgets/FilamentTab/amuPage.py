@@ -93,7 +93,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         )
         if not redraw and all(
             getattr(mmu_state, f) == getattr(prev, f)
-            for f in ("gate", "enabled", "is_homed")
+            for f in ("gate", "enabled", "is_homed", "is_busy", "is_printing")
         ):
             return
         if redraw:
@@ -107,18 +107,20 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     def _on_selection(self, mmu_state: MMUState) -> None:
         idx = mmu_state.gate
+        idle = not (mmu_state.is_printing or mmu_state.is_busy)
         if not 0 <= idx < len(self.carousel.buttons):
             self.current_index = -1
             self.carousel.selectIndex(-1)
             self.info_panel.clear_slot(
                 can_unload=mmu_state.enabled
+                and idle
                 and mmu_state.filament_pos != FilamentPos.UNLOADED
             )
             return
         btn = self.carousel.buttons[idx]
         self.current_index = idx
         self.info_panel.update_for_slot(
-            btn, enabled=mmu_state.enabled, homed=mmu_state.is_homed
+            btn, enabled=mmu_state.enabled, homed=mmu_state.is_homed, idle=idle
         )
         self.carousel.selectIndex(idx)
 
