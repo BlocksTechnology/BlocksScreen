@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import shutil
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -16,6 +18,7 @@ from updater.executor import (
     _make_clean_env,
     _repair_corrupt_head,
     _remove_broken_loose_ref,
+    git_default_branch,
     _run,
     apt_update,
     apt_upgrade,
@@ -32,15 +35,19 @@ from updater.executor import (
     git_has_corruption,
     git_is_dirty,
     git_pull,
+    git_remote_reachable,
     git_remote_url,
     git_repair,
     git_reset_to_hash,
     git_prune_extra_remotes,
+    git_untracked_paths,
     enable_service,
+    klipper_printing,
     restart_service,
     restart_service_noblock,
     service_unit_missing,
     run_hook,
+    wait_for_http_ready,
 )
 
 
@@ -122,8 +129,8 @@ class TestRun:
     async def test_timeout_terminate_succeeds_no_kill(self, tmp_path):
         proc = _make_proc(0)
         proc.returncode = None  # still running when timeout fires
-        # communicate times out; wait() after SIGTERM succeeds → no SIGKILL
-        proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError)
+        # communicate times out; the drain after SIGTERM succeeds → no SIGKILL
+        proc.communicate = AsyncMock(side_effect=[asyncio.TimeoutError, (b"", b"")])
         proc.pid = 1234
         with (
             patch(
@@ -164,6 +171,18 @@ class TestRun:
         # Should call killpg once with SIGKILL on cancel
         assert killpg_mock.call_count == 1
 
+    @pytest.mark.asyncio
+    async def test_timeout_returns_with_flooding_child(self, tmp_path):
+        """Regression: a chatty child that ignores SIGTERM used to park _run forever."""
+        # >128KB unread output pauses the reader, so the pipe never sees EOF and
+        # a bare proc.wait() is never woken; only draining releases it.
+        script = "trap '' TERM; while :; do head -c 1000000 /dev/zero; done"
+        ok, msg = await asyncio.wait_for(
+            _run(["/bin/bash", "-c", script], timeout=0.5, cwd=tmp_path), timeout=20.0
+        )
+        assert ok is False
+        assert "timed out" in msg
+
 
 class TestGitClone:
     @pytest.mark.asyncio
@@ -197,6 +216,28 @@ class TestGitClone:
         assert argv[:2] == ["/usr/bin/git", "clone"]
         assert "--branch" in argv and "main" in argv
         assert argv[-2:] == ["https://github.com/x/y", str(dest)]
+
+
+class TestGitRemoteReachable:
+    @pytest.mark.asyncio
+    async def test_rejects_non_https_without_running(self):
+        with patch("updater.executor._run", new_callable=AsyncMock) as mock_run:
+            assert await git_remote_reachable("git@github.com:x/y") is False
+        mock_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("ok", [True, False])
+    async def test_short_bounded_ls_remote(self, ok):
+        with patch(
+            "updater.executor._run", new_callable=AsyncMock, return_value=(ok, "")
+        ) as mock_run:
+            assert await git_remote_reachable("https://github.com/x/y") is ok
+        assert mock_run.call_args[0][0][1:] == [
+            "ls-remote",
+            "https://github.com/x/y",
+            "HEAD",
+        ]
+        assert mock_run.call_args.kwargs["timeout"] <= 20.0
 
 
 class TestGitGetHash:
@@ -247,6 +288,34 @@ class TestGitIsDirty:
             "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
         ):
             assert await git_is_dirty(tmp_path) is False
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs a real git binary")
+class TestGitUntrackedPaths:
+    """Real git: untracked-vs-a-foreign-index listing used by the reclone carry-over."""
+
+    @pytest.mark.asyncio
+    async def test_lists_untracked_against_fresh_index(self, tmp_path):
+        new, old = tmp_path / "new", tmp_path / "old"
+        for tree in (new, old):
+            (tree / "klippy" / "extras").mkdir(parents=True)
+            (tree / "a.py").write_text("a")
+            (tree / "klippy" / "extras" / "x.py").write_text("x")
+        assert (await _run(["git", "init", "-q", str(new)], timeout=10.0))[0]
+        assert (await _run(["git", "add", "-A"], cwd=new, timeout=10.0))[0]
+        (old / ".config").write_text("cfg")
+        (old / "out").mkdir()
+        (old / "out" / "klipper.bin").write_text("bin")
+        (old / "klippy" / "extras" / "mmu.py").symlink_to("/nonexistent")
+        (old / ".git").mkdir()
+        (old / ".git" / "HEAD").write_text("corrupt")  # old repo unreadable
+        entries = await git_untracked_paths(old, new / ".git")
+        assert entries is not None
+        assert sorted(entries) == [".config", "klippy/extras/mmu.py", "out/"]
+
+    @pytest.mark.asyncio
+    async def test_bad_git_dir_returns_none(self, tmp_path):
+        assert await git_untracked_paths(tmp_path, tmp_path / ".git") is None
 
 
 class TestGitCommitsBehind:
@@ -329,6 +398,15 @@ class TestGitDescribe:
             await git_describe(tmp_path, ref="origin/main")
         cmd = exec_mock.call_args.args
         assert "origin/main" in cmd
+
+    @pytest.mark.asyncio
+    async def test_describes_with_tags_and_hash_fallback(self, tmp_path):
+        proc = _make_proc(0, b"v1.0.0-12-gabc1234\n", b"")
+        exec_mock = AsyncMock(return_value=proc)
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            assert await git_describe(tmp_path) == "v1.0.0-12-gabc1234"
+        cmd = exec_mock.call_args.args
+        assert "--tags" in cmd and "--always" in cmd
 
 
 class TestGitResetToHash:
@@ -842,6 +920,23 @@ class TestCheckGitStatus:
         assert result.commits_behind == 0
         assert result.branch_mismatch is True
 
+    @pytest.mark.asyncio
+    async def test_dead_configured_branch_reports_actionable_error(self, tmp_path):
+        # origin/<branch> deleted upstream: report "fix components.yaml", not the
+        # generic git_commits_behind failure.
+        procs = [
+            _make_proc(0, b"abc1234\n", b""),  # git_get_hash
+            _make_proc(0, b"wip/dead\n", b""),  # git_get_current_branch
+            _make_proc(128, b"", b"fatal: unknown revision\n"),  # git_commits_behind -1
+            _make_proc(128, b"", b"fatal: unknown revision\n"),  # git_ref_hash -> ""
+        ]
+        exec_mock = AsyncMock(side_effect=procs)
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            result = await check_git_status(
+                "klipper", tmp_path, branch="wip/dead", skip_fetch=True
+            )
+        assert result.error == "branch origin/wip/dead not found - fix components.yaml"
+
 
 class TestCheckAptStatus:
     @pytest.mark.asyncio
@@ -1091,6 +1186,7 @@ class TestRunHook:
 
         monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
         (tmp_path / "comp.sh").write_text("#!/bin/bash\nexit 0\n")
+        (tmp_path / "comp.sh").chmod(0o755)
         with patch.object(ex, "_run", new=AsyncMock(return_value=(True, ""))) as run:
             await run_hook("comp", tmp_path, "newh", "prevh", timeout=600.0)
         assert run.await_args.kwargs["timeout"] == 600.0
@@ -1102,6 +1198,7 @@ class TestRunHook:
 
         monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
         (tmp_path / "comp.sh").write_text("#!/bin/bash\nexit 0\n")
+        (tmp_path / "comp.sh").chmod(0o755)
         with patch.object(ex, "_run", new=AsyncMock(return_value=(True, ""))) as run:
             await run_hook("comp", tmp_path, "n", "p")
         assert run.await_args.kwargs["timeout"] == 60.0
@@ -1114,6 +1211,21 @@ class TestRunHook:
         ok, msg = await run_hook("../../etc/passwd", tmp_path, "n", "p")
         assert ok is False
         assert "escapes" in msg
+
+    @pytest.mark.asyncio
+    async def test_non_executable_hook_fails_cleanly(self, tmp_path, monkeypatch):
+        """A hook without the exec bit is a hook failure, not an unexpected error."""
+        import updater.executor as ex
+
+        monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
+        (tmp_path / "comp.sh").write_text("#!/bin/bash\nexit 0\n")
+        (tmp_path / "comp.sh").chmod(0o644)
+        with patch.object(ex, "_run", new=AsyncMock()) as run:
+            assert await run_hook("comp", tmp_path, "n", "p") == (
+                False,
+                "hook not executable",
+            )
+        run.assert_not_awaited()
 
 
 class TestEnableService:
@@ -1309,3 +1421,120 @@ class TestCorruptionSignatures:
             "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
         ):
             assert await git_has_corruption(Path("/x")) is True
+
+
+class TestGitDefaultBranch:
+    """git_default_branch: HEAD symref, else origin/HEAD target, else master."""
+
+    @pytest.mark.asyncio
+    async def test_prefers_head_symref(self, tmp_path):
+        with patch(
+            "updater.executor._run", return_value=(True, "master\n")
+        ) as mock_run:
+            assert await git_default_branch(tmp_path) == "master"
+        assert mock_run.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_origin_head(self, tmp_path):
+        with patch(
+            "updater.executor._run",
+            side_effect=[(False, ""), (True, "origin/master\n")],
+        ):
+            assert await git_default_branch(tmp_path) == "master"
+
+    @pytest.mark.asyncio
+    async def test_last_resort_is_master(self, tmp_path):
+        with patch("updater.executor._run", side_effect=[(False, ""), (False, "")]):
+            assert await git_default_branch(tmp_path) == "master"
+
+    @pytest.mark.asyncio
+    async def test_none_path_returns_master(self):
+        assert await git_default_branch(None) == "master"
+
+
+class TestWaitForHttpReady:
+    @pytest.mark.asyncio
+    async def test_returns_true_on_2xx(self):
+        with patch("updater.executor._http_probe", return_value=True):
+            assert await wait_for_http_ready("http://127.0.0.1:7912/x") is True
+
+    @pytest.mark.asyncio
+    async def test_times_out_when_never_ready(self):
+        with patch("updater.executor._http_probe", return_value=False):
+            assert (
+                await wait_for_http_ready("http://127.0.0.1:7912/x", timeout=0) is False
+            )
+
+    @pytest.mark.asyncio
+    async def test_polls_until_ready(self):
+        with (
+            patch("updater.executor._http_probe", side_effect=[False, True]) as probe,
+            patch("updater.executor.asyncio.sleep", new=AsyncMock()),
+        ):
+            assert await wait_for_http_ready("http://127.0.0.1:7912/x") is True
+        assert probe.call_count == 2
+
+
+class TestKlipperPrinting:
+    @staticmethod
+    async def _serve(sock: Path, reply: bytes) -> asyncio.Server:
+        async def handle(reader, writer):
+            await reader.readuntil(b"\x03")
+            writer.write(reply)
+            await writer.drain()
+            await reader.read()
+            writer.close()
+
+        return await asyncio.start_unix_server(handle, sock)
+
+    @staticmethod
+    def _state(state: str) -> bytes:
+        status = {"print_stats": {"state": state}}
+        body = {"id": 1, "result": {"eventtime": 1.0, "status": status}}
+        return json.dumps(body).encode() + b"\x03"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("state", "active"),
+        [
+            ("printing", True),
+            ("paused", True),
+            ("standby", False),
+            ("complete", False),
+            ("cancelled", False),
+            ("error", False),
+        ],
+    )
+    async def test_state(self, tmp_path, state, active):
+        sock = tmp_path / "k.sock"
+        async with await self._serve(sock, self._state(state)):
+            assert await klipper_printing(sock) is active
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "reply",
+        [
+            b"garbage\x03",
+            b'{"id": 1, "error": {"message": "Klippy not ready"}}\x03',
+            b"[]\x03",
+            b'{"id": 1',
+        ],
+    )
+    async def test_bad_reply_is_idle(self, tmp_path, reply):
+        sock = tmp_path / "k.sock"
+        async with await self._serve(sock, reply):
+            assert await klipper_printing(sock) is False
+
+    @pytest.mark.asyncio
+    async def test_missing_socket_is_idle(self, tmp_path):
+        assert await klipper_printing(tmp_path / "absent.sock") is False
+
+    @pytest.mark.asyncio
+    async def test_unresponsive_klipper_times_out_idle(self, tmp_path):
+        async def handle(reader, writer):
+            await reader.read()
+            writer.close()
+
+        sock = tmp_path / "k.sock"
+        async with await asyncio.start_unix_server(handle, sock):
+            assert await klipper_printing(sock, timeout=0.05) is False

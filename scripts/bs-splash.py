@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""Write the BLOCKS logo splash to /dev/fb0 and cache as raw bytes.
-
-Two modes:
-  default       - write to /dev/fb0 and save cache (no VT switch; X11 activates tty7 itself)
-  --precompute  - render and save cache only (no fb0 write)
-
-The raw cache is consumed by bs-pre-stop.py (ExecStop) and bs-splash-holder.py
-(tty8 boot splash); the PNG by feh in ExecStopPost.
-"""
+"""Render the splash to /dev/fb0, splash.raw (fb0 writers) and splash.png (X root)."""
 
 import argparse
 import os
@@ -81,7 +73,6 @@ def _render(w: int, h: int, Image, ImageDraw, ImageFont) -> Any:
         bg.paste(logo, (x, logo_y), logo)
         text_y = logo_y + lh + 24
     else:
-        # Fallback: no logo - draw a placeholder card
         card_w, card_h = 500, 160
         cx, cy = (w - card_w) // 2, (h - card_h) // 2
         draw.rectangle(
@@ -179,7 +170,6 @@ def main() -> None:
         _log(f"Render error: {e}")
         return
 
-    # Save PNG for X11 root-window splash (feh --bg-fill in ExecStopPost)
     try:
         _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         img.save(str(_CACHE_PATH.parent / "splash.png"))
@@ -190,7 +180,6 @@ def main() -> None:
     if fb_data is None:
         return
 
-    # Save raw cache so bs-pre-stop.py / bs-splash-holder.py can write fb0 directly
     try:
         _CACHE_PATH.write_bytes(fb_data)
     except OSError as e:
@@ -199,10 +188,7 @@ def main() -> None:
     if args.precompute:
         return
 
-    # Write logo to fb0 so fbcon on tty7 shows it immediately when X11 activates tty7.
-    # We do NOT switch VTs or set KD_GRAPHICS here - X11 does VT_ACTIVATE(7) itself
-    # at startup (that init step is not affected by -novtswitch), which keeps tty8
-    # active with the splash visible until X11 is truly ready to take over the display.
+    # No VT switch here: X does VT_ACTIVATE(7) itself even with -novtswitch.
     try:
         with open("/dev/fb0", "wb") as fb:
             fb.write(fb_data)

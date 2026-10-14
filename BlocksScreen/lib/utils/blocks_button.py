@@ -130,7 +130,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self.text_color = QtGui.QColor(value)
         self.update()
 
-    def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
+    def paintEvent(self, e: QtGui.QPaintEvent | None):
         """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)

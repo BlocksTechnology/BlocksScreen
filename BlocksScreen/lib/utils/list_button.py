@@ -4,9 +4,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class ListCustomButton(QtWidgets.QPushButton):
     def __init__(self, parent=None) -> None:
         if parent:
-            super(ListCustomButton, self).__init__(parent)
+            super().__init__(parent)
         else:
-            super(ListCustomButton, self).__init__()
+            super().__init__()
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self.second_icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self.text_color: QtGui.QColor = QtGui.QColor(255, 255, 255)

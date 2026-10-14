@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 import re
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 
 
 class MessageSource(enum.Enum):
@@ -287,7 +287,14 @@ RULES: tuple[MessageRule, ...] = (
     ),
     MessageRule(
         source=MessageSource.GCODE_ERROR,
-        matcher=_sub("flowguard"),
+        matcher=_sub("flowguard detected a clog"),
+        display="Filament Clog Detected",
+        hint="Check the extruder for a clog",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("flowguard detected a tangle"),
         display="Filament Tangle Detected",
         hint="Clear the tangle",
         severity=Severity.ERROR,

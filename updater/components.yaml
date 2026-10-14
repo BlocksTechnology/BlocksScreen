@@ -1,11 +1,6 @@
 poll_interval_minutes: 1440
 
-# Optional keys (also settable per-unit in
-# ~/printer_data/config/blockscreen_updater.yaml, merged by name):
-#   url: https://...          https-only clone URL (install_if_missing needs it)
-#   install_if_missing: true  clone + deps + hook when the path is absent
-#   restart_ui: true          also restart BlocksScreen after this component updates
-#   restart_klipper: true     also restart klipper after this component updates
+# Override per unit (merged by name) in ~/printer_data/config/blockscreen_updater.yaml.
 
 components:
   - name: klipper
@@ -76,8 +71,6 @@ components:
     reset_mode: hard
     order: 20
 
-  # Provisioned by hooks/Spoolman.sh (uv sync from source + stub client/dist);
-  # backend-only, used via the moonraker API.
   - name: Spoolman
     type: git
     path: ~/Spoolman
@@ -87,6 +80,7 @@ components:
     reset_mode: hard
     order: 21
     install_if_missing: true
+    health_url: http://127.0.0.1:7912/api/v1/health
 
   - name: BlocksScreen
     type: git

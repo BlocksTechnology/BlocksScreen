@@ -4,7 +4,7 @@ import pathlib
 from PyQt6 import QtCore
 
 from .udisks2 import UDisksDBusAsync
-from lib.panels.widgets.bannerPopup import BannerPopup
+from lib.panels.widgets.Common.bannerPopup import BannerPopup
 
 ResType: typing.TypeAlias = typing.Literal["always", "none"]
 

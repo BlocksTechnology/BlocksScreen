@@ -28,7 +28,7 @@
 XDG_RUNTIME_DIR=/run/user/$(id -u)
 export XDG_RUNTIME_DIR
 
-SCRIPT_PATH=$(dirname $(realpath $0))
+SCRIPT_PATH=$(dirname "$(realpath "$0")")
 BS_PATH=$(dirname "$SCRIPT_PATH")
 _BSENV_HOME=$(getent passwd "$(id -un)" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
@@ -91,6 +91,22 @@ fi
 git -C "$BS_PATH" config core.hooksPath scripts 2>/dev/null || true
 
 bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" BlocksScreen-start
+bs_ensure_install_state "$BS_PATH" "$BSENV" BlocksScreen-start
+bs_ensure_usb_max_current /boot/firmware/config.txt BlocksScreen-start || true
+
+# Serialize the boot git surgery below with the updater daemon/CLI (their flock):
+# the daemon's boot reconcile can heal this same repo concurrently. Proceed after
+# 20s rather than hold up the UI; the fd is closed before exec'ing the UI.
+_BS_LOCK_DIR="/run/blockscreen"
+if ! mkdir -p "$_BS_LOCK_DIR" 2>/dev/null; then
+    # Same fallback as updater/locking.py, which also creates it.
+    _BS_LOCK_DIR="$_BSENV_HOME/.cache/blockscreen"
+    mkdir -p "$_BS_LOCK_DIR" 2>/dev/null || true
+fi
+if exec 9>"$_BS_LOCK_DIR/updater.lock" 2>/dev/null; then
+    flock -w 20 9 2>/dev/null \
+        || echo "[BlocksScreen-start] updater lock busy - proceeding without it"
+fi
 
 # Remove stale git index lock left by an interrupted update (e.g. power loss during git reset)
 rm -f "$BS_PATH/.git/index.lock"
@@ -130,7 +146,12 @@ printf '%s\n' "$_attempts" > "$_BOOT_DIR/.boot_attempts.tmp" 2>/dev/null \
 echo "[BlocksScreen-start] boot attempt $_attempts"
 _last_good=$(tr -d '[:space:]' < "$_BOOT_DIR/last_good_commit" 2>/dev/null || echo "")
 _cur_head=$(git -C "$BS_PATH" rev-parse HEAD 2>/dev/null || echo "")
-if [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] && [ -n "$_last_good" ] \
+if [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] \
+   && bs_selfheal_engaged "$_BOOT_DIR/updater_state.json" "$BSENV/bin/python3.11"; then
+    # One rollback authority at a time: reverting here would undo the daemon's rung (it resets HEAD on purpose).
+    echo "BlocksScreen: crash loop ($_attempts boots) - updater self-heal owns recovery, not rolling back"
+    printf '0\n' > "$_BOOT_DIR/boot_attempts" 2>/dev/null || true
+elif [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] && [ -n "$_last_good" ] \
    && [ -n "$_cur_head" ] && [ "$_last_good" != "$_cur_head" ]; then
     echo "BlocksScreen: crash loop ($_attempts boots) - rolling back to ${_last_good:0:8}"
     if git -C "$BS_PATH" reset --hard "$_last_good" 2>/dev/null; then
@@ -147,6 +168,9 @@ if ! "$BSENV/bin/python3.11" -m compileall -q \
     echo "BlocksScreen: source check failed - running git reset --hard HEAD to recover"
     git -C "$BS_PATH" reset --hard HEAD 2>/dev/null || true
 fi
+
+# Release the updater lock now: the exec'd UI must never inherit (and hold) it.
+exec 9>&- 2>/dev/null || true
 
 # -- Deferred bootstrap (background) ------------------------------------------
 # Heavy / network-dependent setup (apt packages, pip requirements, updater

@@ -1,6 +1,5 @@
 """Collection of all custom events used by the application"""
 
-import typing
 from PyQt6.QtCore import QEvent
 
 
@@ -14,9 +13,7 @@ class WebSocketConnecting(QEvent):
     WebsocketConnectingEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(WebSocketConnecting, self).__init__(
-            WebSocketConnecting.WebsocketConnectingEvent
-        )
+        super().__init__(WebSocketConnecting.WebsocketConnectingEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -38,13 +35,11 @@ class WebSocketMessageReceived(QEvent):
 
     def __init__(
         self,
-        method: typing.Optional[str] = None,
-        data: typing.Optional[dict] = None,
-        metadata: typing.Optional[dict] = None,
+        method: str | None = None,
+        data: dict | None = None,
+        metadata: dict | None = None,
     ):
-        super(WebSocketMessageReceived, self).__init__(
-            WebSocketMessageReceived.WebsocketMessageReceivedEvent
-        )
+        super().__init__(WebSocketMessageReceived.WebsocketMessageReceivedEvent)
         self.method = method
         self.data = data
         self.metadata = metadata
@@ -65,7 +60,7 @@ class WebSocketOpen(QEvent):
     WebsocketOpenEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(WebSocketOpen, self).__init__(WebSocketOpen.WebsocketOpenEvent)
+        super().__init__(WebSocketOpen.WebsocketOpenEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -86,7 +81,7 @@ class WebSocketError(QEvent):
     WebsocketErrorEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(WebSocketError, self).__init__(WebSocketError.WebsocketErrorEvent)
+        super().__init__(WebSocketError.WebsocketErrorEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -107,9 +102,7 @@ class WebSocketDisconnected(QEvent):
     WebsocketDisconnectedEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(WebSocketDisconnected, self).__init__(
-            WebSocketDisconnected.WebsocketDisconnectedEvent
-        )
+        super().__init__(WebSocketDisconnected.WebsocketDisconnectedEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -131,7 +124,7 @@ class WebSocketClose(QEvent):
     WebsocketCloseEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(WebSocketClose, self).__init__(WebSocketClose.WebsocketCloseEvent)
+        super().__init__(WebSocketClose.WebsocketCloseEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -153,7 +146,7 @@ class KlippyShutdown(QEvent):
 
     def __init__(self, data, *args, **kwargs):
         QEvent.__instancecheck__(self)
-        super(KlippyShutdown, self).__init__(KlippyShutdown.KlippyShutdownEvent)
+        super().__init__(KlippyShutdown.KlippyShutdownEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -180,7 +173,7 @@ class KlippyReady(QEvent):
     KlippyReadyEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(KlippyReady, self).__init__(KlippyReady.KlippyReadyEvent)
+        super().__init__(KlippyReady.KlippyReadyEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -201,9 +194,7 @@ class KlippyDisconnected(QEvent):
     KlippyDisconnectedEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(KlippyDisconnected, self).__init__(
-            KlippyDisconnected.KlippyDisconnectedEvent
-        )
+        super().__init__(KlippyDisconnected.KlippyDisconnectedEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -224,7 +215,7 @@ class KlippyError(QEvent):
     KlippyErrorEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, message, *args, **kwargs):
-        super(KlippyError, self).__init__(KlippyError.KlippyErrorEvent)
+        super().__init__(KlippyError.KlippyErrorEvent)
         self.data = data
         self.message = message
 
@@ -272,7 +263,7 @@ class PrintStart(QEvent):
     PrintStartEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, filename, *args, **kwargs):
-        super(PrintStart, self).__init__(PrintStart.PrintStartEvent)
+        super().__init__(PrintStart.PrintStartEvent)
         self.file = filename
         self.file_metadata = kwargs
         self.kwargs = kwargs
@@ -293,7 +284,7 @@ class PrintComplete(QEvent):
     PrintCompleteEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(PrintComplete, self).__init__(PrintComplete.PrintCompleteEvent)
+        super().__init__(PrintComplete.PrintCompleteEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -314,7 +305,7 @@ class PrintPause(QEvent):
     PrintPauseEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(PrintPause, self).__init__(PrintPause.PrintPauseEvent)
+        super().__init__(PrintPause.PrintPauseEvent)
 
         self.data = data
         self.args = args
@@ -336,7 +327,7 @@ class PrintResume(QEvent):
     PrintResumeEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(PrintResume, self).__init__(PrintResume.PrintResumeEvent)
+        super().__init__(PrintResume.PrintResumeEvent)
 
         self.data = data
         self.args = args
@@ -358,7 +349,7 @@ class PrintCancelled(QEvent):
     PrintCancelledEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(PrintCancelled, self).__init__(PrintCancelled.PrintCancelledEvent)
+        super().__init__(PrintCancelled.PrintCancelledEvent)
 
         self.data = data
         self.args = args
@@ -380,7 +371,7 @@ class PrintError(QEvent):
     PrintErrorEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(PrintError, self).__init__(PrintError.PrintErrorEvent)
+        super().__init__(PrintError.PrintErrorEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -401,7 +392,7 @@ class NetworkAdded(QEvent):
     NetworkAddedEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(NetworkAdded, self).__init__(NetworkAdded.NetworkAddedEvent)
+        super().__init__(NetworkAdded.NetworkAddedEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -422,7 +413,7 @@ class NetworkDeleted(QEvent):
     NetworkDeletedEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(NetworkDeleted, self).__init__(NetworkDeleted.NetworkDeletedEvent)
+        super().__init__(NetworkDeleted.NetworkDeletedEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -443,7 +434,7 @@ class NetworkScan(QEvent):
     NetworkScanEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(NetworkScan, self).__init__(NetworkScan.NetworkScanEvent)
+        super().__init__(NetworkScan.NetworkScanEvent)
         self.data = data
         self.args = args
         self.kwargs = kwargs

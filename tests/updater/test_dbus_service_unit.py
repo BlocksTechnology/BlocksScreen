@@ -1,5 +1,6 @@
 import asyncio
 import json
+from contextlib import nullcontext
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -104,10 +105,11 @@ class TestServiceRestartRollback:
         """If restart_service fails, _run_git_update must rollback, not emit done(True)."""
         import asyncio
         import logging
-        from updater.service import UpdateService
-        from updater.models import ComponentConfig
         from pathlib import Path
         from unittest.mock import AsyncMock
+
+        from updater.models import ComponentConfig
+        from updater.service import UpdateService
 
         cfg = ComponentConfig(
             name="klipper",
@@ -215,8 +217,9 @@ class TestEmitStatusErrorFallback:
     @pytest.mark.asyncio
     async def test_emits_error_status_per_component_on_check_failure(self, svc):
         """When check_status raises, status_ready must contain per-component error entries."""
-        from updater.models import ComponentConfig
         from pathlib import Path
+
+        from updater.models import ComponentConfig
 
         svc._svc.check_status = AsyncMock(side_effect=RuntimeError("boom"))
         svc._svc._components = [
@@ -272,6 +275,7 @@ class TestStatusPendingFlag:
         assert svc._status_pending is False
 
 
+@pytest.mark.usefixtures("reconciled")
 class TestPollIntervalUsage:
     @pytest.mark.asyncio
     async def test_periodic_status_check_uses_poll_interval(self, svc):
@@ -292,6 +296,164 @@ class TestPollIntervalUsage:
             await task
         except asyncio.CancelledError:
             pass
+
+    async def _record_sleeps(self, svc, count=2):
+        """Drive _periodic_status_check with a stubbed sleep, returning the delays it asked for."""
+        from updater import dbus_service
+
+        sleeps: list[float] = []
+
+        async def fake_sleep(delay):
+            sleeps.append(delay)
+            if len(sleeps) >= count:
+                raise asyncio.CancelledError
+
+        with (
+            patch.object(dbus_service.asyncio, "sleep", fake_sleep),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await svc._periodic_status_check()
+        return sleeps
+
+    @pytest.mark.asyncio
+    async def test_periodic_check_retries_soon_on_fetch_failure(self, svc):
+        """A failing git fetch must re-poll at the retry interval, not hide updates for a full poll."""
+        from updater import dbus_service
+
+        svc._svc.poll_interval = 86_400.0
+        svc._svc.has_fetch_failures = MagicMock(return_value=True)
+        svc._svc.check_status = AsyncMock(return_value={})
+
+        sleeps = await self._record_sleeps(svc)
+
+        assert sleeps == [3.0, dbus_service._FETCH_RETRY_INTERVAL_S]
+
+    @pytest.mark.asyncio
+    async def test_periodic_check_keeps_full_interval_when_healthy(self, svc):
+        """No fetch failures: the loop must sleep the configured poll interval."""
+        svc._svc.poll_interval = 86_400.0
+        svc._svc.has_fetch_failures = MagicMock(return_value=False)
+        svc._svc.check_status = AsyncMock(return_value={})
+
+        sleeps = await self._record_sleeps(svc)
+
+        assert sleeps == [3.0, 86_400.0]
+
+    @pytest.mark.asyncio
+    async def test_periodic_check_never_lengthens_a_short_poll_interval(self, svc):
+        """A poll interval below the retry interval wins: min(), not a blind override."""
+        svc._svc.poll_interval = 42.0
+        svc._svc.has_fetch_failures = MagicMock(return_value=True)
+        svc._svc.check_status = AsyncMock(return_value={})
+
+        sleeps = await self._record_sleeps(svc)
+
+        assert sleeps == [3.0, 42.0]
+
+
+class TestBootNotBusy:
+    def test_idle_at_construction(self):
+        """Offline boots must not open on the install overlay: busy waits for a real clone."""
+        from updater import dbus_service
+
+        with (
+            patch.object(dbus_service, "UpdateService", return_value=MagicMock()),
+            patch.object(
+                dbus_service.UpdaterDbusService,
+                "_spawn",
+                MagicMock(side_effect=lambda coro, **_: coro.close()),
+            ),
+        ):
+            built = dbus_service.UpdaterDbusService()
+        assert (built._busy, built._provisioning) == (False, False)
+
+
+@pytest.mark.usefixtures("reconciled")
+class TestBootProvision:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("raised", [False, True])
+    async def test_provisions_only_after_boot_reconcile(self, svc, raised, monkeypatch):
+        """Reconcile holds the process lock: provisioning first would always defer."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_BOOT_DELAY_S", 0.0)
+        gate = asyncio.get_running_loop().create_future()
+        svc._reconcile_task = gate
+        svc._svc.poll_interval = 3600.0
+        task = asyncio.create_task(svc._periodic_status_check())
+        await asyncio.sleep(0.05)
+        svc._svc.provision_missing.assert_not_awaited()
+
+        if raised:
+            gate.set_exception(RuntimeError("reconcile crashed"))
+        else:
+            gate.set_result(None)
+        await asyncio.sleep(0.05)
+        svc._svc.provision_missing.assert_awaited_once()
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        if raised:
+            gate.exception()
+
+    async def _run_polls(self, svc, polls: int) -> list[float]:
+        from updater import dbus_service
+
+        sleeps: list[float] = []
+
+        async def fake_sleep(delay):
+            sleeps.append(delay)
+            if len(sleeps) > polls:
+                raise asyncio.CancelledError
+
+        with (
+            patch.object(dbus_service.asyncio, "sleep", fake_sleep),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await svc._periodic_status_check()
+        assert sleeps.pop(0) == dbus_service._BOOT_DELAY_S
+        return sleeps
+
+    @pytest.mark.asyncio
+    async def test_failed_install_not_retried_on_later_polls(self, svc):
+        """Boot tries once; later polls never re-clone (user Update does)."""
+        svc._svc.poll_interval = 86_400.0
+        svc._svc.provision_missing = AsyncMock(return_value=False)
+        sleeps = await self._run_polls(svc, polls=3)
+        svc._svc.provision_missing.assert_awaited_once()
+        assert sleeps == [86_400.0] * 3
+
+    @pytest.mark.asyncio
+    async def test_deferred_provision_repolls_soon_then_stops(self, svc):
+        """A lock deferral is retried at the retry interval, not left for a full poll."""
+        from updater import dbus_service
+
+        svc._svc.poll_interval = 86_400.0
+        svc._svc.provision_missing = AsyncMock(side_effect=[True, False])
+        sleeps = await self._run_polls(svc, polls=3)
+        assert svc._svc.provision_missing.await_count == 2
+        assert sleeps == [dbus_service._FETCH_RETRY_INTERVAL_S, 86_400.0, 86_400.0]
+
+
+class TestProvisioningFlag:
+    def test_provision_busy_emits_provisioning_then_busy(self, svc):
+        svc._provisioning = False
+        svc._provision_busy(True)
+        svc.provisioning_changed.emit.assert_called_once_with((True,))
+        svc.busy_changed.emit.assert_called_once_with((True,))
+        assert svc._provisioning is True
+
+    @pytest.mark.asyncio
+    async def test_get_provisioning_reports_flag(self, svc):
+        svc._provisioning = True
+        assert await svc.get_provisioning() is True
+
+    @pytest.mark.asyncio
+    async def test_cancel_ignored_while_provisioning(self, svc):
+        svc._provisioning = svc._busy = True
+        await svc.cancel()
+        assert svc._busy is True
 
 
 class TestMethodReturnValues:
@@ -367,55 +529,154 @@ class TestMethodReturnValues:
         assert "RF50-Klipper" in called_with
         assert "klipper" not in called_with  # clean repo not updated
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("restart_pending", "apt_spawned"), [(True, False), (False, True)]
+    )
+    async def test_background_apt_skipped_when_daemon_restart_pending(
+        self, svc, restart_pending, apt_spawned
+    ):
+        """A pending daemon restart would SIGKILL apt mid-run, so the pass is skipped."""
+        svc._svc.check_status = AsyncMock(return_value={})
+        svc._svc.background_apt_upgrade = AsyncMock()
+        svc._svc.daemon_restart_pending = restart_pending
+        await svc._run_update_all()
+        await asyncio.sleep(0)  # let a spawned task run
+        assert svc._svc.background_apt_upgrade.called is apt_spawned
 
-class TestBootProvision:
-    """_boot: reconcile, then provision components a self-update just added."""
+
+class TestLockHeldSurfacesError:
+    def _held_lock(self):
+        lock = MagicMock()
+        lock.return_value.__enter__.return_value = False
+        return lock
 
     @pytest.mark.asyncio
-    async def test_pending_components_are_provisioned_while_busy(self, svc):
-        from updater.models import ComponentConfig
-
-        comp = ComponentConfig(name="DeviceDiscovery", kind="git")
-        busy_seen = []
-        svc._svc.reconcile = AsyncMock()
-        svc._svc.pending_provision = AsyncMock(return_value=[comp])
-        svc._svc.provision = AsyncMock(
-            side_effect=lambda comps: busy_seen.append(svc._busy)
-        )
-        await svc._boot()
-        await asyncio.gather(*svc._background_tasks)
-        svc._svc.reconcile.assert_awaited_once()
-        svc._svc.provision.assert_awaited_once_with([comp])
-        assert busy_seen == [True]
+    async def test_update_all_lock_held_emits_error(self, svc):
+        with patch("updater.dbus_service.process_lock", self._held_lock()):
+            await svc._run_update_all()
+        svc.error.emit.assert_called_once_with(("updater", "another update is running"))
+        svc._svc.update_all.assert_not_called()
         assert svc._busy is False
-        svc.status_ready.emit.assert_called()
 
     @pytest.mark.asyncio
-    async def test_nothing_pending_stays_idle(self, svc):
-        svc._svc.reconcile = AsyncMock()
-        svc._svc.pending_provision = AsyncMock(return_value=[])
-        svc._svc.provision = AsyncMock()
-        await svc._boot()
-        svc._svc.provision.assert_not_awaited()
-        svc.busy_changed.emit.assert_not_called()
+    async def test_update_component_lock_held_emits_error(self, svc):
+        with patch("updater.dbus_service.process_lock", self._held_lock()):
+            await svc._run_update_component("klipper")
+        svc.error.emit.assert_called_once_with(("klipper", "another update is running"))
+        svc._svc.update_component.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_user_update_already_running_is_left_alone(self, svc):
-        from updater.models import ComponentConfig
+    async def test_recover_lock_held_emits_error(self, svc):
+        with patch("updater.dbus_service.process_lock", self._held_lock()):
+            await svc._run_recover("klipper", hard=False)
+        svc.error.emit.assert_called_once_with(("klipper", "another update is running"))
+        svc._svc.recover.assert_not_called()
 
-        svc._busy = True
-        svc._svc.reconcile = AsyncMock()
-        svc._svc.pending_provision = AsyncMock(
-            return_value=[ComponentConfig(name="DeviceDiscovery", kind="git")]
+    @pytest.mark.asyncio
+    async def test_lock_miss_keeps_busy_owned_by_install(self, svc):
+        """A user task losing the lock to an install must not drop its overlay."""
+        svc._provision_busy(True)
+        with patch("updater.dbus_service.process_lock", self._held_lock()):
+            await svc._run_update_all()
+        assert svc._busy is True
+        svc._provision_busy(False)
+        assert svc._busy is False
+
+
+class TestBootReconcileRetry:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("acquired", [True, False])
+    async def test_retry_spawned_only_when_lock_busy(self, svc, acquired):
+        """The start script holds the lock on UI start; a busy lock must defer, not drop."""
+        svc._svc.reconcile = AsyncMock(return_value=acquired)
+        with patch.object(
+            svc, "_spawn", MagicMock(side_effect=lambda coro, **_: coro.close())
+        ) as spawn:
+            await svc._boot_reconcile()
+        if acquired:
+            spawn.assert_not_called()
+        else:
+            spawn.assert_called_once()
+            assert spawn.call_args.kwargs["name"] == "boot_reconcile_retry"
+
+    @pytest.mark.asyncio
+    async def test_retry_polls_until_heal_runs(self, svc):
+        from updater import dbus_service
+
+        svc._svc.reconcile = AsyncMock(side_effect=[False, False, True])
+        sleep = AsyncMock()
+        with patch.object(dbus_service.asyncio, "sleep", sleep):
+            await svc._retry_reconcile()
+        assert svc._svc.reconcile.await_count == 3
+        assert sleep.await_count == 3
+        sleep.assert_awaited_with(dbus_service._RECONCILE_RETRY_S)
+
+    @pytest.mark.asyncio
+    async def test_lock_holder_heals_before_work(self, svc):
+        """A batch overwrites the in-flight marker, so a pending heal must run first."""
+        order: list[str] = []
+        svc._svc.reconcile_if_pending = AsyncMock(
+            side_effect=lambda: order.append("heal")
         )
-        svc._svc.provision = AsyncMock()
-        await svc._boot()
-        svc._svc.provision.assert_not_awaited()
+        work = AsyncMock(side_effect=lambda: order.append("work"))
+        with patch("updater.dbus_service.process_lock", lambda: nullcontext(True)):
+            assert await svc._run_with_lock(work, "update_all", "updater") is True
+        assert order == ["heal", "work"]
+
+
+class TestShutdown:
+    @pytest.mark.asyncio
+    async def test_drains_status_respawned_during_shutdown(self, svc):
+        """The pending_status respawn from _emit_status's finally must not outlive the loop."""
+        started = asyncio.Event()
+
+        async def blocking_check(**_kw):
+            started.set()
+            await asyncio.Event().wait()
+
+        svc._svc.check_status = AsyncMock(side_effect=blocking_check)
+        task = svc._spawn(svc._emit_status(), name="status")
+        await started.wait()
+        svc._status_pending = True
+        await svc.shutdown()
+        assert task.cancelled()
+        assert svc._svc.check_status.await_count == 1
+        assert svc._background_tasks == set()
 
     @pytest.mark.asyncio
-    async def test_reconcile_failure_does_not_raise(self, svc):
-        svc._svc.reconcile = AsyncMock(side_effect=RuntimeError("boom"))
-        svc._svc.pending_provision = AsyncMock()
-        await svc._boot()
-        svc._svc.pending_provision.assert_not_awaited()
+    async def test_spawn_after_shutdown_never_runs(self, svc):
+        ran = []
 
+        async def late():
+            ran.append(True)
+
+        await svc.shutdown()
+        task = svc._spawn(late(), name="late")
+        await asyncio.gather(task, return_exceptions=True)
+        assert task.cancelled()
+        assert ran == []
+
+    @pytest.mark.asyncio
+    async def test_shielded_rollback_cannot_outlast_stop_timeout(
+        self, svc, monkeypatch
+    ):
+        """systemd SIGKILLs at 90s; shutdown must return first, even mid-rollback."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_SHUTDOWN_DRAIN_S", 0.05)
+        release = asyncio.Event()
+
+        async def stubborn():
+            while not release.is_set():
+                try:
+                    await release.wait()
+                except asyncio.CancelledError:
+                    continue
+
+        task = svc._spawn(stubborn(), name="update_all")
+        await asyncio.sleep(0)
+        await asyncio.wait_for(svc.shutdown(), timeout=1.0)
+        assert not task.done()
+        release.set()
+        await task

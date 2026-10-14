@@ -1,4 +1,5 @@
 [D-BUS Service]
 Name=com.blockscreen.Updater
+Exec=/bin/false
 User=blocks
 SystemdService=BlocksScreen-updater.service

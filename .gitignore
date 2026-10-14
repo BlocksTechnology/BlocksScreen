@@ -162,6 +162,8 @@ cython_debug/
 *.drawio
 *.logs
 *.log
+# TimedRotatingFileHandler appends a date suffix, so *.log alone leaves logs/ dirty on every box.
+logs/
 
 */*Zone.Identifier
 *:Zone.Identifier

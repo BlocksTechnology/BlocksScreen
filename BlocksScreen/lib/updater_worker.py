@@ -6,6 +6,7 @@ import asyncio
 import logging
 import threading
 import time
+from contextlib import closing, suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -20,19 +21,28 @@ if TYPE_CHECKING:
 _log = logging.getLogger(__name__)
 
 
+def _dbus_daemon(bus: Any) -> Any:
+    """Proxy to org.freedesktop.DBus; imported lazily to keep module import Qt-only."""
+    from sdbus_async.dbus_daemon import FreedesktopDbus
+
+    return FreedesktopDbus(bus=bus)
+
+
 _RECONNECT_DELAYS = (5.0, 15.0, 30.0, 60.0)
 
 # Max silence from a busy daemon; progress signals refresh the deadline.
 _BUSY_IDLE_LIMIT = 360.0
 
+_DAEMON_BUS_NAME = "com.blockscreen.Updater"
+_UPDATER_UNIT = "BlocksScreen-updater.service"
+_BUS_DRIVER = "org.freedesktop.DBus"
+
+# 2 = ~20 s absent (5 s + 15 s retries) before asking systemd to start the unit.
+_ESCALATE_AFTER = 2
+
 
 class UpdaterWorker(QtCore.QObject):
-    """Async D-Bus client for the blockscreen updater daemon.
-
-    Owns an asyncio event loop on a dedicated daemon thread.
-    All D-Bus operations execute as coroutines on that loop.
-    Results are bridged back to Qt via pyqtSignals
-    """
+    """Updater D-Bus client on a private asyncio thread, bridged to Qt via signals."""
 
     status_ready = QtCore.pyqtSignal(str)
     step_complete = QtCore.pyqtSignal(str, int, int)
@@ -41,8 +51,9 @@ class UpdaterWorker(QtCore.QObject):
     rollback_done = QtCore.pyqtSignal(str, bool)
     recover_done = QtCore.pyqtSignal(str, bool)
     busy_changed = QtCore.pyqtSignal(bool)
+    provisioning_changed = QtCore.pyqtSignal(bool)
     daemon_unavailable = QtCore.pyqtSignal()
-    update_rejected = QtCore.pyqtSignal()  # daemon refused the request (already busy)
+    update_rejected = QtCore.pyqtSignal()
     request_reconnect = QtCore.pyqtSignal()
     proxy_connected = QtCore.pyqtSignal()
 
@@ -51,21 +62,40 @@ class UpdaterWorker(QtCore.QObject):
         self._loop = asyncio.new_event_loop()
         self._listener_tasks: list[asyncio.Task] = []
         self._watchdog_tasks: set[asyncio.Task] = set()
+        # Strong refs for one-shot tasks: the loop only holds weak ones.
+        self._bg_tasks: set[asyncio.Task] = set()
         # Created on the asyncio thread in _async_initialize, not here.
         self._busy_false_event: asyncio.Event | None = None
         self._proxy: UpdaterInterface | None = None
         self._reconnect_attempt: int = 0
         self._reconnecting: bool = False
+        self._reconnect_task: asyncio.Task | None = None
         self._shutting_down: bool = False
         self._last_activity: float = 0.0
+        self._daemon_owner: str = ""
+        # For replay_busy(): this thread starts before MainWindow wires its slots.
+        self._last_busy: bool = False
+        self._last_provisioning: bool = False
+        self._provisioning_signals: int = 0
+        self._owner_task: asyncio.Task | None = None
+        self._escalated: bool = False
+        self._init_lock = asyncio.Lock()
         self._thread = threading.Thread(
             target=self._run_loop, daemon=True, name="UpdaterAsyncLoop"
         )
         self._thread.start()
 
+    def _track_task(self, task: asyncio.Task) -> asyncio.Task:
+        """Hold a strong ref until done: the loop's own task set is weak and can collect it mid-await."""
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+        return task
+
     def _run_loop(self) -> None:
-        """Entry point for the asyncio daemon thread."""
+        """Thread entry: run the loop; the owner watch outlives listener teardown."""
         asyncio.set_event_loop(self._loop)
+        # Recreated per thread: an asyncio.Lock binds to the loop of its first await.
+        self._init_lock = asyncio.Lock()
         try:
             self._system_bus = sdbus.sd_bus_open_system()
         except Exception as exc:  # noqa: BLE001
@@ -74,7 +104,12 @@ class UpdaterWorker(QtCore.QObject):
             if not self._shutting_down:
                 self._restart_loop_thread(delay=10.0)
             return
-        self._loop.create_task(self._async_initialize(), name="updater_init")
+        self._owner_task = self._loop.create_task(
+            self._watch_daemon_owner(), name="updater_owner_watch"
+        )
+        self._track_task(
+            self._loop.create_task(self._async_initialize(), name="updater_init")
+        )
         try:
             self._loop.run_forever()
         except Exception as exc:  # noqa: BLE001
@@ -104,13 +139,24 @@ class UpdaterWorker(QtCore.QObject):
             target=_do_restart, daemon=True, name="UpdaterLoopRestart"
         ).start()
 
-    async def _async_initialize(self) -> None:
-        """Connect proxy and start all signal listener tasks."""
-        from updater.dbus_service import UpdaterInterface  # noqa: PLC0415
+    async def _async_initialize(self, expect_owner: str = "") -> None:
+        """Serialized (re)connect; ``expect_owner`` skips a resync for an already-connected owner."""
+        async with self._init_lock:
+            if expect_owner and expect_owner == self._daemon_owner:
+                _log.debug("owner %s already connected - skipping resync", expect_owner)
+                return
+            await self._connect()
+
+    async def _connect(self) -> None:
+        """Supersede any pending retry, connect the proxy and start the listeners."""
+        from updater.dbus_service import UpdaterInterface
 
         if self._busy_false_event is not None:
             self._busy_false_event.set()
         self._busy_false_event = asyncio.Event()
+        pending, self._reconnect_task = self._reconnect_task, None
+        if pending is not None and pending is not asyncio.current_task():
+            pending.cancel()
         self._reconnecting = False
 
         try:
@@ -125,9 +171,7 @@ class UpdaterWorker(QtCore.QObject):
             self._schedule_reconnect()
             return
 
-        self._reconnect_attempt = 0
-        self._reconnecting = False
-        _log.info("proxy connected (reconnect_attempt reset to 0), starting listeners")
+        _log.info("proxy created, starting listeners")
         for task in self._listener_tasks:
             task.cancel()
         self._listener_tasks.clear()
@@ -139,6 +183,7 @@ class UpdaterWorker(QtCore.QObject):
             self._listen_rollback,
             self._listen_recover_done,
             self._listen_busy_changed,
+            self._listen_provisioning_changed,
         ]
         for fn in listeners:
             task = asyncio.create_task(fn(), name=fn.__name__)
@@ -150,25 +195,56 @@ class UpdaterWorker(QtCore.QObject):
             await asyncio.sleep(0)
 
         try:
-            # Bounded: an unresponsive daemon holding an open socket must not hang reconnect forever.
             async with asyncio.timeout(10):
                 busy = await self._proxy.get_busy()
         except (sdbus.SdBusBaseError, TimeoutError) as exc:
-            # Proxy is lazy; this first call proves the daemon is reachable.
             _log.warning("get_busy failed on (re)connect: %s - scheduling retry", exc)
             self.daemon_unavailable.emit()
             self._schedule_reconnect()
             return
+
+        # Reset only now: new_proxy() is lazy, so an earlier reset pins backoff at 5s.
+        self._reconnect_attempt = 0
+        self._escalated = False
+        self._daemon_owner = await self._name_owner()
+
         if busy:
             self._busy_false_event.clear()
         else:
             self._busy_false_event.set()
-        _log.info("get_busy() on reconnect → %s", busy)
-        self.busy_changed.emit(busy)
+        _log.info("connected to owner %s, busy=%s", self._daemon_owner, busy)
+        self._last_busy = busy
+        await self._poll_provisioning(busy)
+        self.provisioning_changed.emit(self._last_provisioning)
+        self.busy_changed.emit(self._last_busy)
         if not busy:
             self.request_reconnect.emit()
 
         self.proxy_connected.emit()
+
+    async def _poll_provisioning(self, busy: bool) -> None:
+        """Seed _last_provisioning unless a live signal landed during the poll."""
+        seen = self._provisioning_signals
+        polled = busy and await self._get_provisioning()
+        if self._provisioning_signals == seen:
+            self._last_provisioning = polled
+        else:
+            _log.info("provisioning signal beat the connect-time poll; keeping it")
+
+    async def _get_provisioning(self) -> bool:
+        """Daemons predating get_provisioning answer with an error: treat as not provisioning."""
+        try:
+            async with asyncio.timeout(5):
+                return await self._proxy.get_provisioning()
+        except (sdbus.SdBusBaseError, TimeoutError):
+            return False
+
+    def replay_busy(self) -> None:
+        """Re-emit busy state once slots are wired; the connect-time emit can fire before they are."""
+        if self._last_provisioning:
+            self.provisioning_changed.emit(True)
+        if self._last_busy:
+            self.busy_changed.emit(True)
 
     def _on_listener_done(self, task: asyncio.Task) -> None:
         """Emit daemon_unavailable and schedule reconnect if a listener exits unexpectedly."""
@@ -187,11 +263,7 @@ class UpdaterWorker(QtCore.QObject):
                 self._schedule_reconnect()
 
     def _schedule_reconnect(self) -> None:
-        """Schedule _async_initialize retry with exponential backoff.
-
-        Idempotent: if a reconnect is already pending this is a no-op, so it is
-        safe to call from every failing listener without spawning duplicate tasks.
-        """
+        """Schedule a backoff retry of _async_initialize; no-op while one is pending."""
         if self._reconnecting:
             return
         self._reconnecting = True
@@ -203,17 +275,144 @@ class UpdaterWorker(QtCore.QObject):
             "scheduling reconnect in %.0fs (attempt %d)", delay, self._reconnect_attempt
         )
         try:
-            asyncio.get_running_loop().create_task(
-                self._delayed_reconnect(delay), name="reconnect"
+            self._reconnect_task = self._track_task(
+                asyncio.get_running_loop().create_task(
+                    self._delayed_reconnect(delay), name="reconnect"
+                )
             )
         except RuntimeError:
             self._reconnecting = False
             _log.warning("_schedule_reconnect called outside running loop - skipped")
 
     async def _delayed_reconnect(self, delay: float) -> None:
-        """Sleep for ``delay`` seconds then re-run ``_async_initialize``."""
-        await asyncio.sleep(delay)
-        await self._async_initialize()
+        """Sleep then reconnect; no finally, so a re-armed _reconnecting survives."""
+        try:
+            await asyncio.sleep(delay)
+            if self._shutting_down:
+                self._reconnecting = False
+                return
+            if (
+                self._reconnect_attempt >= _ESCALATE_AFTER
+                and not await self._name_owner()
+            ):
+                await self._escalate_restart()
+            await self._async_initialize()
+        except asyncio.CancelledError:
+            # A superseded retry must not clear the latch of the one that replaced it.
+            if self._reconnect_task in (None, asyncio.current_task()):
+                self._reconnecting = False
+            raise
+        except Exception:  # noqa: BLE001
+            self._reconnecting = False
+            _log.error("reconnect attempt failed - rescheduling", exc_info=True)
+            self._schedule_reconnect()
+
+    async def _watch_daemon_owner(self) -> None:
+        """Resync on owner change: a restarted daemon never re-emits busy_changed."""
+        resync = False  # the first seed races updater_init's own connect
+        while not self._shutting_down:
+            try:
+                changes: asyncio.Queue = asyncio.Queue()
+                # Raw match: sdbus signal iterators only subscribe on first __anext__.
+                slot = await self._system_bus.match_signal_async(
+                    _BUS_DRIVER,
+                    "/org/freedesktop/DBus",
+                    _BUS_DRIVER,
+                    "NameOwnerChanged",
+                    changes.put_nowait,
+                )
+                with closing(slot):
+                    owner = await self._name_owner()
+                    if resync and owner and owner != self._daemon_owner:
+                        await self._async_initialize(owner)
+                    else:
+                        self._daemon_owner = owner
+                    resync = True
+                    while not self._shutting_down:
+                        msg = await changes.get()
+                        name, _old, new_owner = msg.get_contents()
+                        if name != _DAEMON_BUS_NAME or new_owner == self._daemon_owner:
+                            continue
+                        if not new_owner:
+                            self._daemon_owner = ""
+                            # Retry bus-activates a stopped unit; only mask keeps it off.
+                            _log.error("updater daemon left the bus - awaiting restart")
+                            self.daemon_unavailable.emit()
+                            self._schedule_reconnect()
+                            continue
+                        _log.warning(
+                            "updater daemon restarted (owner=%s) - resyncing", new_owner
+                        )
+                        # _daemon_owner is set by _async_initialize, or its guard skips.
+                        await self._async_initialize(new_owner)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                _log.error("daemon owner watch failed - retrying in 10s", exc_info=True)
+            if not self._shutting_down:
+                await asyncio.sleep(10.0)
+
+    async def _name_owner(self) -> str:
+        """Unique-name owner of the daemon bus name, empty when unowned or unreachable."""
+        try:
+            async with asyncio.timeout(5):
+                return await _dbus_daemon(self._system_bus).get_name_owner(
+                    _DAEMON_BUS_NAME
+                )
+        except (sdbus.SdBusBaseError, TimeoutError, OSError, ImportError):
+            _log.debug("GetNameOwner(%s) failed", _DAEMON_BUS_NAME, exc_info=True)
+            return ""
+
+    async def _escalate_restart(self) -> None:
+        """Ask systemd once (latched until connect) to restart a unit it gave up on."""
+        if self._escalated:
+            return
+        self._escalated = True
+        _log.error(
+            "daemon absent after %d attempts - asking systemd to start %s",
+            self._reconnect_attempt,
+            _UPDATER_UNIT,
+        )
+        # argv must match the NOPASSWD sudoers rules from install-updater.sh exactly.
+        for args in (
+            ("reset-failed", _UPDATER_UNIT),
+            ("--no-block", "restart", _UPDATER_UNIT),
+        ):
+            await self._run_systemctl(args)
+
+    async def _run_systemctl(self, args: tuple[str, ...]) -> None:
+        """Run one sudo systemctl command, logging instead of raising on any failure."""
+        label = " ".join(args)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "sudo",
+                "-n",
+                "/usr/bin/systemctl",
+                *args,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except OSError:
+            _log.error("systemctl %s could not be spawned", label, exc_info=True)
+            return
+        try:
+            async with asyncio.timeout(30):
+                _, err = await proc.communicate()
+        except TimeoutError:
+            _log.error("systemctl %s timed out - killing", label)
+            with suppress(ProcessLookupError):
+                proc.kill()
+            with suppress(Exception):
+                async with asyncio.timeout(5):
+                    await proc.communicate()
+            return
+        if proc.returncode:
+            _log.error(
+                "systemctl %s rc=%s: %s",
+                label,
+                proc.returncode,
+                err.decode(errors="replace").strip(),
+            )
 
     def _require_proxy(self) -> bool:
         """Return True if the D-Bus proxy is ready; emit daemon_unavailable and return False otherwise."""
@@ -221,8 +420,6 @@ class UpdaterWorker(QtCore.QObject):
             self.daemon_unavailable.emit()
             return False
         return True
-
-    # --- Public API (QT -> asyncio thread) ---------------------------
 
     def trigger_update(self, name: str = "") -> None:
         """Queue an update; name='' updates all components."""
@@ -238,7 +435,7 @@ class UpdaterWorker(QtCore.QObject):
         _log.debug("trigger_status called")
         self._submit(self._call_status())
 
-    def trigger_recover(self, name: str, hard: bool) -> None:  # noqa: FBT001
+    def trigger_recover(self, name: str, hard: bool) -> None:
         """Request recovery for a component."""
         if not self._require_proxy():
             return
@@ -258,13 +455,15 @@ class UpdaterWorker(QtCore.QObject):
         self._submit(self._call_bless(name))
 
     def shutdown(self) -> None:
-        """Cancel all tasks and stop the event loop; close() runs in _run_loop after stop."""  # noqa: E501
+        """Cancel all tasks and stop the event loop; close() runs in _run_loop after stop."""
         self._shutting_down = True
 
         def _cancel_and_stop() -> None:
+            if self._owner_task is not None:
+                self._owner_task.cancel()
             for task in self._listener_tasks:
                 task.cancel()
-            for task in list(self._watchdog_tasks):
+            for task in list(self._watchdog_tasks) + list(self._bg_tasks):
                 task.cancel()
             self._loop.stop()
 
@@ -276,7 +475,7 @@ class UpdaterWorker(QtCore.QObject):
             )
 
     def _submit(self, coro: Coroutine[Any, Any, None]) -> None:
-        """Submit a coroutine to the asyncio loop, emit daemon_unavailable if loop is closed."""  # noqa: E501
+        """Submit a coroutine to the asyncio loop, emit daemon_unavailable if loop is closed."""
         try:
             asyncio.run_coroutine_threadsafe(coro, self._loop)
         except RuntimeError:
@@ -284,15 +483,8 @@ class UpdaterWorker(QtCore.QObject):
             _log.error("asyncio loop is closed, daemon is unavailable")
             self.daemon_unavailable.emit()
 
-    # --- Internal coroutines ---------------------------------------
-
     def _handle_proxy_error(self, exc: Exception, method: str) -> None:
-        """Log a D-Bus call failure, emit daemon_unavailable, and schedule a reconnect.
-
-        While a reconnect is already pending the emit is suppressed: the UI's
-        daemon-unavailable handler triggers a status refresh, which would fail
-        and re-emit here - an endless toast/request storm without this guard.
-        """
+        """Log a failed call; emit daemon_unavailable unless reconnecting; retry."""
         _log.error("%s D-Bus call failed: %s", method, exc)
         if not self._reconnecting:
             self.daemon_unavailable.emit()
@@ -325,7 +517,7 @@ class UpdaterWorker(QtCore.QObject):
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "request_status")
 
-    async def _call_recover(self, name: str, hard: bool) -> None:  # noqa: FBT001
+    async def _call_recover(self, name: str, hard: bool) -> None:
         """Call recover on the proxy; hard=True performs a full reinstall."""
         try:
             accepted = await self._proxy.recover(name, hard)
@@ -347,8 +539,6 @@ class UpdaterWorker(QtCore.QObject):
             await self._proxy.bless_healthy(name, "")
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "bless_healthy")
-
-    # --- Signal listeners ------------------------------------------
 
     async def _listen_status_ready(self) -> None:
         """Forward status_ready D-Bus signals to the Qt status_ready signal."""
@@ -398,6 +588,7 @@ class UpdaterWorker(QtCore.QObject):
         async for busy in self._proxy.busy_changed:
             _log.info("busy_changed received: %s", busy)
             self._touch_activity()
+            self._last_busy = busy
             if busy:
                 self._busy_false_event.clear()
                 task = asyncio.create_task(self._busy_watchdog(), name="busy_watchdog")
@@ -407,13 +598,16 @@ class UpdaterWorker(QtCore.QObject):
                 self._busy_false_event.set()
             self.busy_changed.emit(busy)
 
-    async def _busy_watchdog(self) -> None:
-        """Emit daemon_unavailable after _BUSY_IDLE_LIMIT seconds of daemon silence.
+    async def _listen_provisioning_changed(self) -> None:
+        """Forward provisioning_changed signals."""
+        async for provisioning in self._proxy.provisioning_changed:
+            self._touch_activity()
+            self._last_provisioning = provisioning
+            self._provisioning_signals += 1
+            self.provisioning_changed.emit(provisioning)
 
-        Any progress signal (step_complete, component_done, error, busy_changed)
-        refreshes the deadline via _touch_activity, so the watchdog only fires
-        when a busy daemon stops reporting entirely - not on long updates.
-        """
+    async def _busy_watchdog(self) -> None:
+        """Emit daemon_unavailable after _BUSY_IDLE_LIMIT s of no daemon progress."""
         if self._busy_false_event is None:
             _msg = "_busy_false_event not initialized"
             raise RuntimeError(_msg)

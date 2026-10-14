@@ -68,11 +68,7 @@ RESET = "\033[0m"
 
 
 def _write_splash_to_fb0() -> None:
-    """Write precomputed splash to fb0 while KD_GRAPHICS is still active.
-
-    Called from SIGTERM handler so fb0 already shows the splash before X exits,
-    eliminating the brief black frame between X shutdown and ExecStopPost.
-    """
+    """Write the precomputed splash to fb0 on SIGTERM, before window teardown."""
     try:
         if _SPLASH_CACHE.exists():
             _FB0.write_bytes(_SPLASH_CACHE.read_bytes())

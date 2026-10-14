@@ -8,37 +8,63 @@ import pytest
 from BlocksScreen.lib.panels.mainWindow import MainWindow
 
 
-def _make_fake_window(*, manual_restart_pending: bool) -> SimpleNamespace:
+def _make_fake_window(
+    *, manual_restart_pending: bool = False, ws_connected: bool = True
+) -> SimpleNamespace:
     return SimpleNamespace(
         _klippy_ready=False,
         _update_in_progress=False,
         _klipper_auto_restart_pending=False,
         _post_update_reconnect=False,
         _klipper_restart_timeout=MagicMock(),
+        _klipper_disconnect_grace=MagicMock(),
         updater_worker=MagicMock(),
         conn_window=SimpleNamespace(manual_restart_pending=manual_restart_pending),
         loadwidget=MagicMock(),
         loadscreen=MagicMock(),
-        ws=MagicMock(),
+        ws=MagicMock(connected=ws_connected),
         _try_device_config_restart=MagicMock(),
         _prompt_device_confirmation=MagicMock(),
     )
 
 
 class TestKlippyDisconnectedAutoRestartGuard:
-    def test_auto_restarts_when_no_manual_restart_pending(self) -> None:
-        fake_window = _make_fake_window(manual_restart_pending=False)
+    def test_disconnected_only_arms_grace(self) -> None:
+        # RESTART and SAVE_CONFIG pass through disconnected for about a second
+        fake_window = _make_fake_window()
 
         MainWindow._on_klippy_state(fake_window, "disconnected")
+
+        fake_window._klipper_disconnect_grace.start.assert_called_once()
+        fake_window.ws.api.restart_service.assert_not_called()
+
+    @pytest.mark.parametrize("state", ["startup", "ready", "shutdown", "error"])
+    def test_leaving_disconnected_cancels_grace(self, state) -> None:
+        fake_window = _make_fake_window()
+
+        MainWindow._on_klippy_state(fake_window, state)
+
+        fake_window._klipper_disconnect_grace.stop.assert_called_once()
+        fake_window._klipper_disconnect_grace.start.assert_not_called()
+
+    def test_auto_restarts_once_grace_expires(self) -> None:
+        fake_window = _make_fake_window()
+
+        MainWindow._auto_restart_klipper(fake_window)
 
         fake_window.ws.api.restart_service.assert_called_once_with("klipper")
         fake_window.loadscreen.show.assert_called_once()
         assert fake_window._klipper_auto_restart_pending is True
 
-    def test_skips_auto_restart_when_manual_restart_pending(self) -> None:
-        fake_window = _make_fake_window(manual_restart_pending=True)
+    @pytest.mark.parametrize(
+        ("manual_restart_pending", "ws_connected"), [(True, True), (False, False)]
+    )
+    def test_skips_auto_restart(self, manual_restart_pending, ws_connected) -> None:
+        fake_window = _make_fake_window(
+            manual_restart_pending=manual_restart_pending, ws_connected=ws_connected
+        )
 
-        MainWindow._on_klippy_state(fake_window, "disconnected")
+        MainWindow._auto_restart_klipper(fake_window)
 
         fake_window.ws.api.restart_service.assert_not_called()
         fake_window.loadscreen.show.assert_not_called()
@@ -64,7 +90,8 @@ def _make_nav_window(print_state: str) -> SimpleNamespace:
         _print_state=print_state,
         printPanel=print_panel,
         filamentPanel=MagicMock(),
-        ui=SimpleNamespace(main_content_widget=main_content, printTab=print_tab),
+        main_content_widget=main_content,
+        printTab=print_tab,
     )
     for name in (
         "_is_job_active",
@@ -235,17 +262,15 @@ def test_real_confirmation_popup_opens_and_accepts(qtbot, monkeypatch) -> None:
 
     from PyQt6 import QtWidgets
 
-    # conftest stubs lib.panels.widgets.basePopup; load the real widget here.
+    # conftest stubs lib.panels.widgets.Common.basePopup; load the real widget here.
     path = (
         pathlib.Path(__file__).parents[2]
-        / "BlocksScreen/lib/panels/widgets/basePopup.py"
+        / "BlocksScreen/lib/panels/widgets/Common/basePopup.py"
     )
     spec = importlib.util.spec_from_file_location("_real_basePopup", path)
     real = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(real)
-    monkeypatch.setattr(
-        sys.modules[MainWindow.__module__], "BasePopup", real.BasePopup
-    )
+    monkeypatch.setattr(sys.modules[MainWindow.__module__], "BasePopup", real.BasePopup)
 
     class _Host(QtWidgets.QMainWindow):
         # BasePopup needs a real widget parent; borrow the real method.

@@ -1,7 +1,6 @@
 import qrcode
-
-from PyQt6.QtGui import QImage, QColor, QPainter
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QImage, QPainter
 
 BLOCKS_URL = "https://blockstec.com"
 RF50_MANUAL_PAGE = "https://blockstec.com/RF50"

@@ -12,9 +12,7 @@ After=BlocksScreen-updater.service
 
 [Service]
 Type=notify
-# NotifyAccess=all: on the transitional fallback paths in BlocksScreen-start.sh
-# (inline xinit, launch_BlocksScreen.sh) the Qt process is not the main PID, and
-# its READY/WATCHDOG notifications would otherwise be rejected -> start timeout.
+# Fallback start paths (inline xinit, launch_BlocksScreen.sh) notify from a non-main PID.
 NotifyAccess=all
 WatchdogSec=30s
 Restart=always
@@ -28,8 +26,9 @@ Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/blocks/.Xauthority
 ExecStartPre=-+/bin/bash /home/blocks/BlocksScreen/scripts/bs-deploy-check.sh
 ExecStart=/home/blocks/BlocksScreen/scripts/BlocksScreen-start.sh
+# Root splash before SIGTERM: teardown destroys the windows long before the process exits.
+ExecStop=-/usr/bin/feh --no-fehbg --bg-fill /home/blocks/.cache/blockscreen/splash.png
 ExecStop=-+/home/blocks/BlocksScreen/scripts/bs-pre-stop.py
-ExecStopPost=-/usr/bin/feh --no-fehbg --bg-fill /home/blocks/.cache/blockscreen/splash.png
 
 [Install]
 WantedBy=multi-user.target
