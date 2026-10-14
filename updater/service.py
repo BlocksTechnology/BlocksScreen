@@ -54,6 +54,7 @@ from updater.executor import (
     restart_service,
     restart_service_noblock,
     run_hook,
+    service_unit_missing,
     verify_updater_importable,
     wait_for_http_ready,
     wait_for_service_active,
@@ -1776,6 +1777,13 @@ class UpdateService:
         """Restart+health-check+enable the provisioned service; fail reason or None."""
         if not component.service:
             return None
+        if await service_unit_missing(component.service):
+            self._log.info(
+                "%s: %s not installed yet, setup deferred to install-updater",
+                component.name,
+                component.service,
+            )
+            return None
         if await is_service_active(component.service):
             # The hook already started it (enable --now): a restart would start it twice.
             ok = await self._await_health(component.service, component.health_url)
@@ -1846,6 +1854,9 @@ class UpdateService:
             await self._set_provision_failed(component.name, False)
             self._history("install_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
+            # Provisioning runs after any git batch, so a setup the hook deferred
+            # to the sentinel is applied here rather than by the batch.
+            await self._apply_deferred_restart()
             return True
         except asyncio.CancelledError:
             self._log.warning(
@@ -2055,6 +2066,15 @@ class UpdateService:
         self._log.info("restarting %s and waiting for active", service)
         ok, err = await restart_service(service)
         if not ok:
+            if await service_unit_missing(service):
+                # Cloned but not set up yet (first-time setup failed or is still
+                # pending): reverting code cannot fix a missing unit, and aborting
+                # would block every other component in the batch.
+                self._log.warning(
+                    "%s is not installed, skipping restart until its setup runs",
+                    service,
+                )
+                return True
             self._log.error("restart %s failed: %s", service, err)
             return False
         if not await wait_for_service_active(service, timeout=90.0):

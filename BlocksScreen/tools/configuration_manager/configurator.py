@@ -11,7 +11,7 @@ import threading
 from datetime import datetime
 from typing import Literal
 
-from tools.serial_scanner import SerialScanner
+from devices.discovery.serial_devices import SerialScanner
 
 HOME = pathlib.Path.home()
 CONFIG_REPO: pathlib.Path = HOME / "RF50-Klipper"
@@ -109,11 +109,7 @@ def check_broken_symlinks(dir: pathlib.Path) -> list[pathlib.Path]:
 
 
 def resolve_symlink(file: pathlib.Path, resolved: set[str]) -> bool:
-    """Check if `file` has a valid symlink on `target` dir
-
-    Returns:
-        bool: whether or not the provided directory has a working symlink pointing to the src file
-    """
+    """Whether `file` resolves to one of the `resolved` symlink targets"""
     return file.resolve().as_posix() in resolved
 
 
@@ -330,7 +326,7 @@ class ConfigManager:
             # ignore .git dir files
             if ".git" in d.parts:
                 continue
-            if d.resolve().as_posix() not in _resolved:
+            if not resolve_symlink(d, _resolved):
                 _missing.append(d)
         return _missing
 
@@ -523,9 +519,7 @@ class ConfigManager:
                                     )
                                     for k, v in src_keys.items():
                                         if k not in tgt_keys:
-                                            merged_save_lines.append(
-                                                f"#*# \t{k} = {v}\n"
-                                            )
+                                            merged_save_lines.append(f"#*# {k} = {v}\n")
 
                         # Then: append any sections that exist only in source
                         for name, block in src_sc_sections:
@@ -733,23 +727,14 @@ class ConfigManager:
         return config_text
 
     def sync(self) -> None:
-        """Synchronizes configuration repo with the
-        machines configuration"""
+        """Synchronizes configuration repo with the machines configuration"""
+        # Every step only writes on a difference, so none is gated.
         try:
-            _missing = self._get_missing_symlinks(self.config_dir, self.repo)
-            _logger.info(_missing)
-            if _missing or any(self.cmp_cpy_files()):
-                if self.check_nested():
-                    self._cleanup_nested()
-
-                self.cleanup_broken_symlinks(self.config_dir)
-                self._symlink_config(_missing)
-                self._cpy_cfg_files()
-            else:
-                _logger.info("Configuration correct, proceding")
-        except NotADirectoryError as e:
-            _logger.error("%s" % e)
-        except FileNotFoundError as e:
-            _logger.error("%s" % e)
+            missing = self._get_missing_symlinks(self.config_dir, self.repo)
+            if self.check_nested():
+                self._cleanup_nested()
+            self.cleanup_broken_symlinks(self.config_dir)
+            self._symlink_config(missing)
+            self._cpy_cfg_files()
         except Exception as e:
-            _logger.error("Caught exception: %s" % e)
+            _logger.error("Caught exception during sync: %s", e)

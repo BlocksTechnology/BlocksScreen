@@ -25,7 +25,7 @@ components:
     type: git
     path: ~/RF50-Klipper
     url: https://github.com/BlocksTechnology/RF50-Klipper
-    branch: Release-2.0
+    branch: feat/amu-configs
     service: klipper.service
     reset_mode: hard
     order: 10
@@ -39,6 +39,19 @@ components:
     service: klipper.service
     reset_mode: hard
     order: 13
+
+  # Device discovery daemon (BlocksTechnology/DeviceDiscovery). Cloned on
+  # machines that lack it; the hook then defers first-time setup (apt deps,
+  # full build, systemd unit - root) to scripts/install-updater.sh.
+  - name: DeviceDiscovery
+    type: git
+    path: ~/DeviceDiscovery
+    url: https://github.com/BlocksTechnology/DeviceDiscovery.git
+    install_if_missing: true
+    branch: main
+    service: device-discoveryd.service
+    reset_mode: hard
+    order: 15
 
   - name: katapult
     type: git
@@ -72,7 +85,7 @@ components:
   - name: BlocksScreen
     type: git
     path: ~/BlocksScreen
-    branch: Release-2.0
+    branch: dev
     url: https://github.com/BlocksTechnology/BlocksScreen
     service: BlocksScreen.service
     reset_mode: hard

@@ -61,7 +61,12 @@ def _load_entry_module():
 
     tools = _stub("tools")
     tools.__path__ = []  # type: ignore[attr-defined]
-    _stub("tools.configuration_manager", ConfigManager=MagicMock())
+    _stub(
+        "tools.configuration_manager",
+        ConfigManager=MagicMock(),
+        DeviceConfigManager=MagicMock(),
+        DeviceConfigWatcher=MagicMock(),
+    )
 
     saved = {k: sys.modules.get(k) for k in stubs}
     sys.modules.update(stubs)

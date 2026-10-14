@@ -14,7 +14,7 @@ from configfile import get_configparser
 from lib.panels.mainWindow import MainWindow  # noqa: E402
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
 from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
-from tools.configuration_manager import ConfigManager
+from tools.configuration_manager import DeviceConfigManager, DeviceConfigWatcher
 
 install_crash_handler()
 
@@ -166,12 +166,17 @@ def on_quit() -> None:
     LogManager.shutdown()
 
 
+conf_man: DeviceConfigManager | None = None
+device_watcher: DeviceConfigWatcher | None = None
+
+
 def initialize_conf_manager() -> None:
     global conf_man
     try:
-        conf_man = ConfigManager(get_configparser())
+        logging.info("[DeviceConfigManager] Initializing...")
+        conf_man = DeviceConfigManager(get_configparser())
     except Exception as e:
-        _logger.error(
+        logging.error(
             "Caught Exception on configuration_manager tool: %s" % e, exc_info=True
         )
 
@@ -294,14 +299,15 @@ class _FirstPaintRefresh(QtCore.QObject):
 if __name__ == "__main__":
     setup_logging(
         filename="logs/BlocksScreen.log",
-        level=logging.DEBUG,
+        level=logging.INFO,
         console_output=True,
-        console_level=logging.DEBUG,
+        console_level=logging.INFO,
         capture_stderr=True,
         capture_stdout=False,
     )
     _logger = logging.getLogger(__name__)
     _logger.info("============ BlocksScreen Initializing ============")
+
     initialize_conf_manager()
     BlocksScreen = BlocksScreenApp([])
     BlocksScreen.setApplicationName("BlocksScreen")
@@ -309,9 +315,33 @@ if __name__ == "__main__":
     BlocksScreen.setDesktopFileName("BlocksScreen")
     _splash = show_splash()
     main_window = MainWindow()
+
+    if conf_man is not None:
+        if conf_man.boot_changed:
+            # Klipper may have started before the boot sync rewrote
+            # printer.cfg; restarted once Moonraker is up and no job runs.
+            main_window.request_klipper_restart()
+        # Live side of the device templates: printer.cfg follows devices
+        # plugged in while running (after the user's OK for templates that
+        # ask for it), and Klipper is restarted to load it.
+        # Optional: without it the screen works as before, just no hotplug.
+        try:
+            _logger.info("[DEVICE WATCHER] Initializing...")
+            device_watcher = DeviceConfigWatcher(conf_man, parent=main_window)
+            device_watcher.config_changed.connect(main_window.on_device_config_changed)
+            device_watcher.confirmation_required.connect(
+                main_window.on_device_confirmation_required
+            )
+            main_window.device_config_accepted.connect(device_watcher.accept)
+            main_window.device_config_declined.connect(device_watcher.decline)
+            device_watcher.start()
+            BlocksScreen.aboutToQuit.connect(device_watcher.stop)
+        except Exception as e:  # noqa: BLE001
+            _logger.error("Device hotplug disabled: %s", e, exc_info=True)
     BlocksScreen.processEvents()
     BlocksScreen.aboutToQuit.connect(on_quit)
     _setup_sigterm(BlocksScreen)
+
     # Event-driven repaint: fire the moment the window first paints (parented to
     # main_window so it lives as long as the window).
     _FirstPaintRefresh(main_window)
