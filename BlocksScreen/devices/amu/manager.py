@@ -119,7 +119,7 @@ class AMUManager(QtCore.QObject):
         filament_name: str = "",
         temperature: int | None = None,
     ) -> bool:
-        """Map every field of *gate*; a None temperature takes Happy-Hare's default."""
+        """Overwrite all gate fields; '' clears one, None temp resets to HH default."""
         return self._gate_map(
             gate,
             NAME=filament_name,
