@@ -416,8 +416,6 @@ class TestGcodeSignals:
             {"filament_pos": 0, "gate": -1},
             {"filament_pos": 0, "enabled": False},
             {"filament_pos": 0, "is_homed": False},
-            {"filament_pos": 0, "print_state": "printing"},
-            {"filament_pos": 0, "print_state": "started"},
             {"filament_pos": 0, "action": "Checking"},
         ],
     )
@@ -445,7 +443,6 @@ class TestGcodeSignals:
             None,
             {"filament_pos": 0},
             {"enabled": False},
-            {"print_state": "printing"},
             {"action": "Loading"},
         ],
     )
@@ -485,7 +482,6 @@ class TestGcodeSignals:
             {"filament_pos": 10},
             {"filament_pos": 0, "gate": -1},
             {"filament_pos": 0, "gate_status": [0, 1]},
-            {"filament_pos": 0, "print_state": "printing"},
             {"filament_pos": 0, "action": "Homing"},
         ],
     )
@@ -519,7 +515,6 @@ class TestGcodeSignals:
             {"gate": -2},
             {"enabled": False},
             {"is_homed": False},
-            {"print_state": "printing"},
             {"action": "Checking"},
         ],
     )
@@ -547,7 +542,6 @@ class TestGcodeSignals:
             ({"filament_pos": 10}, 1),
             ({"filament_pos": 0, "enabled": False}, 1),
             ({"filament_pos": 0, "is_homed": False}, 1),
-            ({"filament_pos": 0, "print_state": "printing"}, 1),
             ({"filament_pos": 0, "action": "Selecting"}, 1),
         ],
     )
@@ -556,6 +550,34 @@ class TestGcodeSignals:
             manager.update_mmu_state(_status(**overrides))
         with qtbot.assertNotEmitted(manager.run_gcode_signal):
             manager.select_gate(gate)
+
+    # HH v3 parks and restores the toolhead around these; only MMU_PRELOAD checks
+    # for a print (mmu.py:9040), so the manager must not block them mid-print.
+    @pytest.mark.parametrize("print_state", ["printing", "started"])
+    @pytest.mark.parametrize(
+        ("filament_pos", "send", "gcode"),
+        [
+            (0, lambda m: m.load_gate(), "MMU_LOAD"),
+            (10, lambda m: m.unload(), "MMU_UNLOAD"),
+            (10, lambda m: m.check_gate(), "MMU_CHECK_GATE"),
+            (0, lambda m: m.select_gate(1), "MMU_SELECT GATE=1"),
+        ],
+    )
+    def test_allowed_while_printing(
+        self, manager, qtbot, print_state, filament_pos, send, gcode
+    ) -> None:
+        manager.update_mmu_state(
+            _status(filament_pos=filament_pos, print_state=print_state)
+        )
+        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
+            send(manager)
+        assert blocker.args == [gcode]
+
+    @pytest.mark.parametrize("print_state", ["printing", "started"])
+    def test_eject_refused_while_printing(self, manager, qtbot, print_state) -> None:
+        manager.update_mmu_state(_status(filament_pos=0, print_state=print_state))
+        with qtbot.assertNotEmitted(manager.run_gcode_signal):
+            manager.eject_gate()
 
     # TOOL, not GATE: the ttg map may not map tool N to gate N.
     def test_change_tool(self, manager, qtbot) -> None:

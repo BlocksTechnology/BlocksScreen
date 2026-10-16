@@ -190,10 +190,9 @@ class AMUManager(QtCore.QObject):
     @staticmethod
     def _busy_refusal(state: MMUState) -> str:
         """Return why the MMU cannot take a command now, or "" when it is idle."""
+        # No print guard: HH v3 parks and restores the toolhead around these mid-print.
         if not state.enabled:
             return "MMU is disabled."
-        if state.is_printing:
-            return "Not available while printing."
         if state.is_busy:
             return f"MMU is busy ({state.action})."
         return ""
@@ -260,7 +259,6 @@ class AMUManager(QtCore.QObject):
         if (
             state is None
             or not (state.enabled and state.is_homed)
-            or state.is_printing
             or state.is_busy
             or not 0 <= gate < state.num_gates
             or gate == state.gate
@@ -275,6 +273,9 @@ class AMUManager(QtCore.QObject):
 
     def eject_gate(self) -> None:
         """Fully eject filament from the selected gate, the only gate that can eject."""
+        if self._mmu_state is not None and self._mmu_state.is_printing:
+            logger.warning("Ignoring MMU_EJECT: not available while printing")
+            return
         gate = self._selected_gate_unloaded()
         if gate is None or gate.status == GateStatus.EMPTY:
             logger.warning("Ignoring MMU_EJECT: no unloaded, non-empty gate selected")

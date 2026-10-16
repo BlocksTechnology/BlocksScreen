@@ -413,12 +413,12 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             ":/filament_related/media/btn_icons/unload_filament.svg",
             self.unloadRequested,
         )
-        self._btn_purge = _make_btn(
+        self._btn_eject = _make_btn(
             "Eject",
             ":/filament_related/media/btn_icons/eject.svg",
             self.ejectRequested,
         )
-        self._btn_cut = _make_btn(
+        self._btn_check = _make_btn(
             "Check\nGate",
             ":/filament_related/media/btn_icons/check gate 1.svg",
             self.checkRequested,
@@ -428,8 +428,8 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         btn_grid.setSpacing(8)
         btn_grid.addWidget(self._btn_load, 0, 0)
         btn_grid.addWidget(self._btn_unload, 0, 1)
-        btn_grid.addWidget(self._btn_purge, 1, 0)
-        btn_grid.addWidget(self._btn_cut, 1, 1)
+        btn_grid.addWidget(self._btn_eject, 1, 0)
+        btn_grid.addWidget(self._btn_check, 1, 1)
         root.addLayout(btn_grid)
 
     def clear_slot(self, *, can_unload: bool) -> None:
@@ -443,11 +443,17 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             w.setEnabled(False)
         self._btn_load.setEnabled(False)
         self._btn_unload.setEnabled(can_unload)
-        self._btn_purge.setEnabled(False)
-        self._btn_cut.setEnabled(False)
+        self._btn_eject.setEnabled(False)
+        self._btn_check.setEnabled(False)
 
     def update_for_slot(
-        self, btn: Spoll_button, *, enabled: bool, homed: bool, idle: bool
+        self,
+        btn: Spoll_button,
+        *,
+        enabled: bool,
+        homed: bool,
+        idle: bool,
+        printing: bool,
     ) -> None:
         """Show the selected gate *btn*; bare HH gate commands act only on it."""
         color = btn.color
@@ -461,7 +467,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
 
         filament_pos = btn.filament_pos
         loaded = filament_pos != FilamentPos.UNLOADED
-        # Mirrors the AMUManager refusals; idle = not printing, no HH action running.
+        # Mirrors AMUManager: idle = no HH action; only Eject waits for the print.
         ready = enabled and idle
         can_check = ready and homed
         can_feed = can_check and not loaded and status != GateStatus.EMPTY
@@ -501,8 +507,8 @@ class SpoolInfoPanel(QtWidgets.QWidget):
 
         self._btn_load.setEnabled(can_feed)
         self._btn_unload.setEnabled(ready and loaded)
-        self._btn_purge.setEnabled(can_feed)
-        self._btn_cut.setEnabled(can_check)
+        self._btn_eject.setEnabled(can_feed and not printing)
+        self._btn_check.setEnabled(can_check)
 
     def _apply_swatch(self, color: QtGui.QColor | None) -> None:
         if color is not None:

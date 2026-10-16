@@ -9,24 +9,37 @@ import devices.amu.manager as amu_manager_module
 from devices.amu.models import FilamentPos, GateInfo, GateStatus, MMUState
 
 # conftest stubs devices.amu as a bare namespace; amuPage imports these from it.
-vars(sys.modules["devices.amu"]).update(
-    AMUManager=amu_manager_module.AMUManager,
-    FilamentPos=FilamentPos,
-    MMUState=MMUState,
+_amu = vars(sys.modules["devices.amu"])
+_AMU_NAMES = {
+    "AMUManager": amu_manager_module.AMUManager,
+    "FilamentPos": FilamentPos,
+    "MMUState": MMUState,
+}
+_amu_saved = {n: _amu[n] for n in _AMU_NAMES if n in _amu}
+_amu.update(_AMU_NAMES)
+# Other test modules leave session-wide stand-ins for these; the panel needs the real API.
+_STUBBED = (
+    "lib.utils.icon_button",
+    "lib.utils.blocks_button",
+    "lib.utils.blocks_label",
+    "lib.utils.blocks_linedit",
+    "lib.panels.widgets.FilamentTab",
 )
-# Other tests leave plain-Qt stand-ins for these session-wide; the panel needs the real API.
-for _real in ("icon_button", "blocks_button", "blocks_label", "blocks_linedit"):
-    sys.modules.pop(f"lib.utils.{_real}", None)
-for _stale in [
-    m for m in sys.modules if m.startswith("lib.panels.widgets.FilamentTab")
-]:
-    sys.modules.pop(_stale, None)
+_saved = {m: sys.modules.pop(m) for m in list(sys.modules) if m.startswith(_STUBBED)}
 
 from lib.panels.widgets.FilamentTab.amuPage import AMUpage  # noqa: E402
 from lib.panels.widgets.FilamentTab.amuWidgets import (  # noqa: E402
     SpoolInfoPanel,
     Spoll_button,
 )
+
+# Put the stand-ins back so this import leaves sys.modules and devices.amu as found.
+for _real in [m for m in sys.modules if m.startswith(_STUBBED)]:
+    del sys.modules[_real]
+sys.modules.update(_saved)
+for _name in _AMU_NAMES:
+    _amu.pop(_name, None)
+_amu.update(_amu_saved)
 
 
 def _button(
@@ -40,17 +53,25 @@ def _button(
 
 
 def _show(
-    panel: SpoolInfoPanel, btn: Spoll_button, *, enabled=True, homed=True, idle=True
+    panel: SpoolInfoPanel,
+    btn: Spoll_button,
+    *,
+    enabled=True,
+    homed=True,
+    idle=True,
+    printing=False,
 ) -> None:
-    panel.update_for_slot(btn, enabled=enabled, homed=homed, idle=idle)
+    panel.update_for_slot(
+        btn, enabled=enabled, homed=homed, idle=idle, printing=printing
+    )
 
 
 def _actions(panel: SpoolInfoPanel) -> dict[str, bool]:
     return {
         "load": panel._btn_load.isEnabled(),
         "unload": panel._btn_unload.isEnabled(),
-        "eject": panel._btn_purge.isEnabled(),
-        "check": panel._btn_cut.isEnabled(),
+        "eject": panel._btn_eject.isEnabled(),
+        "check": panel._btn_check.isEnabled(),
     }
 
 
@@ -109,9 +130,27 @@ class TestSpoolInfoPanelActions:
         }
 
     @pytest.mark.parametrize("pos", [FilamentPos.UNLOADED, FilamentPos.LOADED])
-    def test_busy_or_printing_greys_actions(self, panel, pos):
+    def test_busy_greys_actions(self, panel, pos):
         _show(panel, _button(1, pos=pos), idle=False)
         assert not any(_actions(panel).values())
+
+    # HH v3 parks around LOAD/UNLOAD/CHECK_GATE mid-print; only Eject waits.
+    @pytest.mark.parametrize(
+        ("pos", "expected"),
+        [
+            (
+                FilamentPos.UNLOADED,
+                {"load": True, "unload": False, "eject": False, "check": True},
+            ),
+            (
+                FilamentPos.LOADED,
+                {"load": False, "unload": True, "eject": False, "check": True},
+            ),
+        ],
+    )
+    def test_printing_greys_only_eject(self, panel, pos, expected):
+        _show(panel, _button(1, pos=pos), printing=True)
+        assert _actions(panel) == expected
 
     def test_spool_bound_gate_is_read_only(self, panel):
         btn = Spoll_button()
@@ -303,15 +342,19 @@ class TestAMUpageRedraw:
         page.on_mmu_state_changed(page.status.apply_diff({"bowden_progress": 42.0}))
         assert calls == []
 
-    @pytest.mark.parametrize(
-        ("key", "busy", "idle"),
-        [("action", "Loading", "Idle"), ("print_state", "printing", "standby")],
-    )
-    def test_busy_or_printing_diff_greys_then_restores(self, page, key, busy, idle):
-        page.on_mmu_state_changed(page.status.apply_diff({key: busy}))
+    def test_busy_diff_greys_then_restores(self, page):
+        page.on_mmu_state_changed(page.status.apply_diff({"action": "Loading"}))
         assert not any(_actions(page.info_panel).values())
-        page.on_mmu_state_changed(page.status.apply_diff({key: idle}))
+        page.on_mmu_state_changed(page.status.apply_diff({"action": "Idle"}))
         assert _actions(page.info_panel)["load"] is True
+
+    def test_printing_diff_greys_eject_then_restores(self, page):
+        page.on_mmu_state_changed(page.status.apply_diff({"print_state": "printing"}))
+        actions = _actions(page.info_panel)
+        assert actions["eject"] is False
+        assert actions["load"] is True
+        page.on_mmu_state_changed(page.status.apply_diff({"print_state": "standby"}))
+        assert _actions(page.info_panel)["eject"] is True
 
     def test_selection_follows_a_scalar_diff(self, page):
         page.on_mmu_state_changed(page.status.apply_diff({"gate": 2}))

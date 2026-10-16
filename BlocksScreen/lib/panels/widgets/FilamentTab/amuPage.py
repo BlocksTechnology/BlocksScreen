@@ -107,7 +107,7 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     def _on_selection(self, mmu_state: MMUState) -> None:
         idx = mmu_state.gate
-        idle = not (mmu_state.is_printing or mmu_state.is_busy)
+        idle = not mmu_state.is_busy
         if not 0 <= idx < len(self.carousel.buttons):
             self.current_index = -1
             self.carousel.selectIndex(-1)
@@ -120,7 +120,11 @@ class AMUpage(QtWidgets.QStackedWidget):
         btn = self.carousel.buttons[idx]
         self.current_index = idx
         self.info_panel.update_for_slot(
-            btn, enabled=mmu_state.enabled, homed=mmu_state.is_homed, idle=idle
+            btn,
+            enabled=mmu_state.enabled,
+            homed=mmu_state.is_homed,
+            idle=idle,
+            printing=mmu_state.is_printing,
         )
         self.carousel.selectIndex(idx)
 
