@@ -261,7 +261,7 @@ def test_re_no_match() -> None:
             MessageSource.GCODE_ERROR,
             "FlowGuard detected a clog.\nReason for trip: Compression stuck after "
             "409.04 mm motion (triggering parameter: flowguard_max_relief)",
-            "Filament Clog or Tangle",
+            "Filament Clog Detected",
             Severity.ERROR,
         ),
         (
@@ -269,14 +269,21 @@ def test_re_no_match() -> None:
             "FlowGuard detected a tangle.\nReason for trip: Tension stuck after "
             "38.20 mm motion and 20.00 mm relief "
             "(triggering parameter: flowguard_max_relief)",
-            "Filament Clog or Tangle",
+            "Filament Tangle Detected",
             Severity.ERROR,
         ),
         (
             MessageSource.GCODE_ERROR,
             "MMU issue detected. Print will be paused\nReason: A tangle has been "
             "detected on filament_tension and requires manual intervention",
-            "Filament Clog or Tangle",
+            "Filament Tangle Detected",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "MMU issue detected. Print will be paused\nReason: A clog has been "
+            "detected on filament_compression and requires manual intervention",
+            "Filament Clog Detected",
             Severity.ERROR,
         ),
         (
