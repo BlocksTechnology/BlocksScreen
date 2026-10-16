@@ -285,18 +285,26 @@ RULES: tuple[MessageRule, ...] = (
         hint="Replace the empty spool",
         severity=Severity.ERROR,
     ),
+    # Same clog/tangle word Happy Hare reports and Mainsail's FlowGuard meter shows.
     MessageRule(
         source=MessageSource.GCODE_ERROR,
-        matcher=_sub("flowguard detected a clog"),
-        display="Filament Clog Detected",
-        hint="Check the extruder for a clog",
+        matcher=_sub("clog/tangle has been detected"),
+        display="Filament Clog or Tangle",
+        hint="Check the nozzle and filament path",
         severity=Severity.ERROR,
     ),
     MessageRule(
         source=MessageSource.GCODE_ERROR,
-        matcher=_sub("flowguard detected a tangle"),
+        matcher=_re(r"flowguard detected a clog|a clog has been detected"),
+        display="Filament Clog Detected",
+        hint="Check the nozzle and extruder",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re(r"flowguard detected a tangle|a tangle has been detected"),
         display="Filament Tangle Detected",
-        hint="Clear the tangle",
+        hint="Check the spool and the feed into the MMU",
         severity=Severity.ERROR,
     ),
     # ── Gcode errors — heater / temperature ───────────────────────────────────
