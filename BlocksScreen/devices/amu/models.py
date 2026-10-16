@@ -167,6 +167,11 @@ class MMUState:
         return self.print_state in ("started", "printing")
 
     @property
+    def is_busy(self) -> bool:
+        """Return True while an action runs; "Unknown" is Happy-Hare's error state."""
+        return self.action not in ("", "Idle", "Unknown")
+
+    @property
     def current_gate_info(self) -> GateInfo | None:
         """Return the GateInfo for the selected gate, or None when none is selected."""
         if 0 <= self.gate < len(self.gates):
