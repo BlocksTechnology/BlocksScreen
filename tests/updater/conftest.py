@@ -61,6 +61,9 @@ def svc():
     mock_svc.reconcile = AsyncMock(return_value=True)
     mock_svc.reconcile_if_pending = AsyncMock()
     mock_svc.deploy_pending = MagicMock(return_value=False)
+    # Units stay live while the flag is set unless a test says otherwise.
+    mock_svc.deploy_running = AsyncMock(side_effect=lambda: mock_svc.deploy_pending())
+    mock_svc.deploy_flag_stamp = MagicMock(return_value=1)
     mock_svc._components = [
         ComponentConfig(name="moonraker", kind="git"),
         ComponentConfig(name="klipper", kind="git"),
@@ -79,6 +82,7 @@ def svc():
     s._provisioned = False
     s._boot_pass_done = True
     s._deploy_hold = None
+    s._capped_flag = None
     s._background_tasks = set()
     s._closing = False
     s._status_check_in_progress = False

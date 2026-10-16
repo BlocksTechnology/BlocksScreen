@@ -413,6 +413,39 @@ class TestDeployHold:
         assert svc._busy is False
 
     @pytest.mark.asyncio
+    async def test_capped_flag_never_holds_again(self, svc, monkeypatch):
+        """A stuck flag costs the cap once, not again at the end of every update."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_DEPLOY_POLL_S", 0.01)
+        monkeypatch.setattr(dbus_service, "_DEPLOY_HOLD_CAP_S", 0.03)
+        svc._svc.deploy_pending.return_value = True
+        svc._set_busy(False)
+        await asyncio.sleep(0.1)
+        svc._set_busy(True)
+        svc._set_busy(False)
+        assert (svc._busy, svc._deploy_hold) == (False, None)
+
+        svc._svc.deploy_flag_stamp.return_value = 2
+        svc._set_busy(False)
+        assert svc._busy is True
+        svc._svc.deploy_pending.return_value = False
+        await asyncio.sleep(0.05)
+
+    @pytest.mark.asyncio
+    async def test_dead_deploy_units_release_at_once(self, svc, monkeypatch):
+        """A failed or stopped path unit never runs install-updater: its flag is stale."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_DEPLOY_POLL_S", 0.01)
+        svc._busy = True
+        svc._svc.deploy_pending.return_value = True
+        svc._svc.deploy_running = AsyncMock(return_value=False)
+        svc._set_busy(False)
+        await asyncio.sleep(0.02)
+        assert (svc._busy, svc._deploy_hold) == (False, None)
+
+    @pytest.mark.asyncio
     async def test_hold_spawned_once(self, svc, monkeypatch):
         from updater import dbus_service
 
@@ -474,6 +507,25 @@ class TestStatusAfterBootPass:
 
         monkeypatch.setattr(dbus_service, "_BOOT_DELAY_S", 0.0)
         svc._boot_pass_done = False
+        svc._svc.poll_interval = 3600.0
+        task = asyncio.create_task(svc._periodic_status_check())
+        await asyncio.sleep(0.05)
+        assert svc._boot_pass_done is True
+        svc.status_ready.emit.assert_called_once()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("reconciled")
+    async def test_failed_boot_pass_still_emits_status(self, svc, monkeypatch):
+        """A raising provision pass must not leave the UI without status for a poll."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_BOOT_DELAY_S", 0.0)
+        svc._boot_pass_done = False
+        svc._provisioned = False
+        svc._svc.provision_missing = AsyncMock(side_effect=RuntimeError("boom"))
         svc._svc.poll_interval = 3600.0
         task = asyncio.create_task(svc._periodic_status_check())
         await asyncio.sleep(0.05)

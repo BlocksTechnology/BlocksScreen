@@ -553,7 +553,7 @@ class TestBootProvisioning:
             page.handle_provisioning_changed(True)
         assert blocker.args == [True, "Missing component, installing ...", False]
 
-    def test_undeclared_busy_is_not_an_install(self, page, qtbot):
+    def test_undeclared_busy_shows_update_overlay(self, page, qtbot):
         page.show_loading = MagicMock()
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_busy_changed(True)

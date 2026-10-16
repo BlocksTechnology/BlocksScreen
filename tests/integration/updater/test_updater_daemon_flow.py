@@ -112,6 +112,26 @@ async def test_deploy_hold_is_capped(harness, daemon):
     await wait_for(lambda: d.busy_trace() == [False], timeout=5.0, what="cap")
     assert harness.deploy_flag.exists()
 
+    origin = harness.remote("klipper")
+    harness.install(origin)
+    origin.commit({"klippy.py": "v2\n"})
+    harness.component("klipper", service="klipper.service")
+    assert await d.iface.update_all() is True
+    # The same stuck flag must not re-hold at the end of every update.
+    await wait_for(lambda: d.busy_trace() == [False, True, False], what="no re-hold")
+    assert d.iface._deploy_hold is None
+
+
+async def test_stale_flag_under_dead_deploy_units_does_not_hold(harness, daemon):
+    harness.deploy_flag.parent.mkdir(parents=True)
+    harness.deploy_flag.touch()
+    for unit in ("BlocksScreen-deploy.path", "BlocksScreen-deploy.service"):
+        (harness.state / f"inactive-{unit}").touch()  # path unit failed/stopped
+
+    d = daemon()
+    await wait_for(lambda: d.busy_trace() == [False], what="stale flag release")
+    assert harness.deploy_flag.exists()
+
 
 async def test_restarted_daemon_resumes_hold_silently(harness, daemon):
     harness.deploy_flag.parent.mkdir(parents=True)

@@ -179,6 +179,9 @@ _OFFLINE_PROVISION_TRIES = 6  # ~30 min of 300s polls, for late Wi-Fi
 # Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
 _DEPLOY_PATH_UNIT = Path("/etc/systemd/system/BlocksScreen-deploy.path")
+_DEPLOY_UNITS = ("BlocksScreen-deploy.path", "BlocksScreen-deploy.service")
+# A failed/stopped path unit never fires, so its stale flag is not a running deploy.
+_DEPLOY_LIVE_STATES = frozenset({"active", "activating", "deactivating", "reloading"})
 
 
 class ProgressCallback(Protocol):
@@ -1101,6 +1104,25 @@ class UpdateService:
         """True while install-updater.sh is queued or running; its ExecStopPost clears the flag."""
         # Without the path unit nothing ever clears the flag (bs-deploy-check.sh test).
         return _DEPLOY_FLAG.exists() and _DEPLOY_PATH_UNIT.exists()
+
+    @staticmethod
+    def deploy_flag_stamp() -> int | None:
+        """The deploy flag's mtime in ns, identifying one queued run; None when unset."""
+        try:
+            return _DEPLOY_FLAG.stat().st_mtime_ns
+        except OSError:
+            return None
+
+    async def deploy_running(self) -> bool:
+        """True while the flag is set and the path unit is armed or install-updater runs."""
+        if not self.deploy_pending():
+            return False
+        ok, out = await _run(
+            [SYSTEMCTL, "show", *_DEPLOY_UNITS, "-p", "ActiveState", "--value"],
+            timeout=10.0,
+        )
+        # Unknown state falls back to the flag; the hold cap still bounds it.
+        return not ok or not _DEPLOY_LIVE_STATES.isdisjoint(out.split())
 
     async def recover(self, name: str, hard: bool = False) -> bool:
         """Reset a component to its last known-good hash."""

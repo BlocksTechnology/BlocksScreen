@@ -23,8 +23,8 @@ _RECONCILE_RETRY_S = 5.0
 _BOOT_DELAY_S = 3.0
 _SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
 _DEPLOY_POLL_S = 1.0
-# Failed runs clear the flag via ExecStopPost; only a hung one reaches this (~40s typical).
-_DEPLOY_HOLD_CAP_S = 180.0
+# oneshot has no start timeout: bounds a hung install-updater (first DeviceDiscovery build takes minutes).
+_DEPLOY_HOLD_CAP_S = 900.0
 
 
 class DbusProgressCallback:
@@ -118,6 +118,8 @@ class UpdaterInterface(
         # request_status waits for the boot pass, so a client never sees pre-install status.
         self._boot_pass_done: bool = False
         self._deploy_hold: asyncio.Task | None = None
+        # Flag stamp that already used up the cap: never hold for it again.
+        self._capped_flag: int | None = None
         self._background_tasks: set[asyncio.Task] = set()
         self._closing: bool = False
         self._status_check_in_progress: bool = False
@@ -199,7 +201,7 @@ class UpdaterInterface(
 
     def _set_busy(self, busy: bool) -> None:
         """Busy stays up while install-updater.sh runs out-of-band, so the UI keeps its overlay."""
-        if not busy and self._svc.deploy_pending():
+        if not busy and self._hold_wanted():
             if self._deploy_hold is None:
                 self._deploy_hold = self._spawn(
                     self._hold_for_deploy(), name="deploy_hold"
@@ -214,18 +216,26 @@ class UpdaterInterface(
             _log.info("busy_changed -> %s", busy)
             self.busy_changed.emit((busy,))
 
+    def _hold_wanted(self) -> bool:
+        """A deploy flag is set and has not already used up the hold cap."""
+        return (
+            self._svc.deploy_pending()
+            and self._svc.deploy_flag_stamp() != self._capped_flag
+        )
+
     async def _hold_for_deploy(self) -> None:
-        """Poll the deploy flag; release busy when install-updater ends or the cap hits."""
+        """Hold busy while install-updater runs; release on exit, dead units or the cap."""
         _log.info("deploy flag set - holding busy until install-updater finishes")
         loop = asyncio.get_running_loop()
         deadline = loop.time() + _DEPLOY_HOLD_CAP_S
         try:
-            while self._svc.deploy_pending():
+            while await self._svc.deploy_running():
                 if loop.time() >= deadline:
                     _log.warning(
-                        "deploy flag still set after %.0fs - releasing busy",
+                        "install-updater still running after %.0fs - releasing busy",
                         _DEPLOY_HOLD_CAP_S,
                     )
+                    self._capped_flag = self._svc.deploy_flag_stamp()
                     break
                 await asyncio.sleep(_DEPLOY_POLL_S)
         finally:
@@ -297,11 +307,14 @@ class UpdaterInterface(
                     deferred = await self._svc.provision_missing(self._provision_busy)
                     self._provisioned = not deferred
                     _log.info("provisioning pass done (deferred=%s)", deferred)
-                self._boot_pass_done = True
+            except Exception as exc:  # noqa: BLE001
+                _log.error("provisioning pass failed: %s", exc)
+            # Emitted even after a failed pass: request_status stays silent until then.
+            self._boot_pass_done = True
+            try:
                 await self._emit_status()
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
-                self._boot_pass_done = True
             interval = self._svc.poll_interval
             if self._svc.has_fetch_failures():
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)

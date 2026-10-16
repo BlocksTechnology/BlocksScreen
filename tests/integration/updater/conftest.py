@@ -60,6 +60,12 @@ case "$1" in
   show)
     if [ "$2" = "--property=LoadState" ]; then
       if [ -e "{state}/missing-$unit" ]; then echo not-found; else echo loaded; fi
+    elif [[ " $* " == *" ActiveState "* ]]; then
+      for u in "${{@:2}}"; do
+        case "$u" in -*|ActiveState) continue ;; esac
+        if [ -e "{state}/inactive-$u" ]; then echo inactive; else echo active; fi
+        echo
+      done
     else
       echo 0
     fi
@@ -375,6 +381,7 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
         _DEPLOY_FLAG=h.deploy_flag,
         _DEPLOY_PATH_UNIT=deploy_unit,
         PIP=str(h.bin / "pip3"),
+        SYSTEMCTL=str(h.bin / "systemctl"),
         klipper_printing=h.printing,
         load_components=lambda: (comp_g["_build_configs"](h.components), 86_400.0),
     )

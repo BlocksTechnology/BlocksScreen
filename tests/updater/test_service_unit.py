@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import time
 from contextlib import ExitStack, nullcontext
 from pathlib import Path
@@ -20,6 +21,8 @@ def units_installed():
         "updater.service.service_unit_missing", AsyncMock(return_value=False)
     ) as mock:
         yield mock
+
+
 def _isolate_inflight(tmp_path_factory, monkeypatch):
     """Keep the in-flight marker, state and history out of the real cache."""
     marker = tmp_path_factory.mktemp("inflight") / "updater_inflight.json"
@@ -2826,6 +2829,47 @@ class TestDeferredRestart:
             UpdateService()._touch_deploy_flag()
         assert flag.exists() and not flag.is_symlink()
         assert target.read_text() == "keep"  # symlink not followed
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("ok", "out", "running"),
+        [
+            (True, "active\n\ninactive\n", True),
+            (True, "inactive\n\nactivating\n", True),
+            (True, "failed\n\ninactive\n", False),
+            (True, "inactive\n\ninactive\n", False),
+            (False, "", True),
+        ],
+    )
+    async def test_deploy_running_follows_unit_state(
+        self, tmp_path: Path, ok: bool, out: str, running: bool
+    ):
+        """A failed/stopped path unit never fires; an unreadable state trusts the flag."""
+        flag = tmp_path / ".run-install-updater"
+        flag.touch()
+        with (
+            patch("updater.service._DEPLOY_FLAG", flag),
+            patch("updater.service._DEPLOY_PATH_UNIT", flag),
+            patch("updater.service._run", new=AsyncMock(return_value=(ok, out))),
+        ):
+            assert await UpdateService().deploy_running() is running
+
+    @pytest.mark.asyncio
+    async def test_deploy_running_skips_systemctl_without_flag(self, tmp_path: Path):
+        with (
+            patch("updater.service._DEPLOY_FLAG", tmp_path / "nope"),
+            patch("updater.service._run", new=AsyncMock()) as mock_run,
+        ):
+            assert await UpdateService().deploy_running() is False
+        mock_run.assert_not_called()
+
+    def test_deploy_flag_stamp_tracks_each_touch(self, tmp_path: Path):
+        flag = tmp_path / ".run-install-updater"
+        with patch("updater.service._DEPLOY_FLAG", flag):
+            assert UpdateService.deploy_flag_stamp() is None
+            flag.touch()
+            os.utime(flag, ns=(1, 1))
+            assert UpdateService.deploy_flag_stamp() == 1
 
 
 class TestInflightRollback:
