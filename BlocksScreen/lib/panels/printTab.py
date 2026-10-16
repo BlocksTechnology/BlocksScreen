@@ -7,15 +7,15 @@ from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.Common.basePopup import BasePopup
-from lib.panels.widgets.metadataPage import FileMetadataWidget
 from lib.panels.widgets.Common.numpadPage import CustomNumpad
+from lib.panels.widgets.Common.slider_selector_page import SliderPage
+from lib.panels.widgets.metadataPage import FileMetadataWidget
 from lib.panels.widgets.PrintTab.babystepPage import BabystepPage
 from lib.panels.widgets.PrintTab.confirmPage import ConfirmWidget
 from lib.panels.widgets.PrintTab.filesPage import FilesPage
 from lib.panels.widgets.PrintTab.jobStatusPage import JobStatusWidget
 from lib.panels.widgets.PrintTab.sensorsPanel import SensorsWindow
 from lib.panels.widgets.PrintTab.tunePage import TuneWidget
-from lib.panels.widgets.Common.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
@@ -296,9 +296,7 @@ class PrintTab(QtWidgets.QStackedWidget):
                 self._active_z_offset = self._cancel_z_snapshot
                 self.save_config()
                 self._finish_print_handled = True
-                self.save_config_btn.setVisible(
-                    not self.printer.uses_true_zero_offset
-                )
+                self.save_config_btn.setVisible(not self.printer.uses_true_zero_offset)
             self._cancel_z_snapshot = 0.0
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
