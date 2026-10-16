@@ -22,6 +22,9 @@ _FETCH_RETRY_INTERVAL_S = 300.0
 _RECONCILE_RETRY_S = 5.0
 _BOOT_DELAY_S = 3.0
 _SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
+_DEPLOY_POLL_S = 1.0
+# Failed runs clear the flag via ExecStopPost; only a hung one reaches this (~40s typical).
+_DEPLOY_HOLD_CAP_S = 180.0
 
 
 class DbusProgressCallback:
@@ -112,6 +115,9 @@ class UpdaterInterface(
         self._busy: bool = False
         self._provisioning: bool = False
         self._provisioned: bool = False
+        # request_status waits for the boot pass, so a client never sees pre-install status.
+        self._boot_pass_done: bool = False
+        self._deploy_hold: asyncio.Task | None = None
         self._background_tasks: set[asyncio.Task] = set()
         self._closing: bool = False
         self._status_check_in_progress: bool = False
@@ -124,6 +130,11 @@ class UpdaterInterface(
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
         self._spawn(self._svc.supervise_ui(), name="supervise_ui")
         self._spawn(self._svc.forward_heal_ui(), name="forward_heal_ui")
+        # install-updater restarts us before its run ends: resume the hold.
+        # Silent: not exported yet, clients read it via get_busy on connect.
+        if self._svc.deploy_pending():
+            self._busy = True
+            self._deploy_hold = self._spawn(self._hold_for_deploy(), name="deploy_hold")
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
@@ -187,11 +198,41 @@ class UpdaterInterface(
             self.provisioning_changed.emit((provisioning,))
 
     def _set_busy(self, busy: bool) -> None:
+        """Busy stays up while install-updater.sh runs out-of-band, so the UI keeps its overlay."""
+        if not busy and self._svc.deploy_pending():
+            if self._deploy_hold is None:
+                self._deploy_hold = self._spawn(
+                    self._hold_for_deploy(), name="deploy_hold"
+                )
+            busy = True
+        self._emit_busy(busy)
+
+    def _emit_busy(self, busy: bool) -> None:
         """Emit busy_changed only on state transitions to avoid redundant signals."""
         if busy != self._busy:
             self._busy = busy
             _log.info("busy_changed -> %s", busy)
             self.busy_changed.emit((busy,))
+
+    async def _hold_for_deploy(self) -> None:
+        """Poll the deploy flag; release busy when install-updater ends or the cap hits."""
+        _log.info("deploy flag set - holding busy until install-updater finishes")
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _DEPLOY_HOLD_CAP_S
+        try:
+            while self._svc.deploy_pending():
+                if loop.time() >= deadline:
+                    _log.warning(
+                        "deploy flag still set after %.0fs - releasing busy",
+                        _DEPLOY_HOLD_CAP_S,
+                    )
+                    break
+                await asyncio.sleep(_DEPLOY_POLL_S)
+        finally:
+            self._deploy_hold = None
+        # A provisioning pass that started under the hold still owns busy.
+        if not self._provisioning:
+            self._emit_busy(busy=False)
 
     def _validate_component_name(self, name: str) -> bool:
         """SEC: verify component exists to prevent abuse on unknown names."""
@@ -256,9 +297,11 @@ class UpdaterInterface(
                     deferred = await self._svc.provision_missing(self._provision_busy)
                     self._provisioned = not deferred
                     _log.info("provisioning pass done (deferred=%s)", deferred)
+                self._boot_pass_done = True
                 await self._emit_status()
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
+                self._boot_pass_done = True
             interval = self._svc.poll_interval
             if self._svc.has_fetch_failures():
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)
@@ -380,6 +423,9 @@ class UpdaterInterface(
     async def request_status(self) -> None:
         """D-Bus method: reply immediately, status arrives via status_ready signal."""
         _log.info("request_status called")
+        if not self._boot_pass_done:
+            _log.info("request_status: boot pass pending, its status follows")
+            return
         self._spawn(self._emit_status(force=True), name="request_status")
 
     @sdbus.dbus_method_async(result_signature="b")

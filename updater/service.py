@@ -178,6 +178,7 @@ _OFFLINE_PROVISION_TRIES = 6  # ~30 min of 300s polls, for late Wi-Fi
 
 # Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
+_DEPLOY_PATH_UNIT = Path("/etc/systemd/system/BlocksScreen-deploy.path")
 
 
 class ProgressCallback(Protocol):
@@ -1094,6 +1095,12 @@ class UpdateService:
             _DEPLOY_FLAG.unlink()
         _DEPLOY_FLAG.touch()
         self._fsync_dir(_DEPLOY_FLAG.parent)
+
+    @staticmethod
+    def deploy_pending() -> bool:
+        """True while install-updater.sh is queued or running; its ExecStopPost clears the flag."""
+        # Without the path unit nothing ever clears the flag (bs-deploy-check.sh test).
+        return _DEPLOY_FLAG.exists() and _DEPLOY_PATH_UNIT.exists()
 
     async def recover(self, name: str, hard: bool = False) -> bool:
         """Reset a component to its last known-good hash."""

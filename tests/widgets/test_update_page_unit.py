@@ -555,9 +555,39 @@ class TestBootProvisioning:
 
     def test_undeclared_busy_is_not_an_install(self, page, qtbot):
         page.show_loading = MagicMock()
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_busy_changed(True)
+        assert blocker.args == [True, "Update in progress ...", False]
+        assert page._provisioning is False
+
+    def test_busy_with_own_overlay_keeps_its_message(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page._overlay_shown = True
         with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
             page.handle_busy_changed(True)
-        assert page._provisioning is False
+
+    def test_provision_end_while_busy_shows_finishing(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page.handle_provisioning_changed(True)
+        page.handle_busy_changed(True)
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_provisioning_changed(False)
+        assert blocker.args == [True, "Finishing installation ...", False]
+
+    def test_provision_end_while_idle_emits_nothing(self, page, qtbot):
+        page.show_loading = MagicMock()
+        with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
+            page.handle_provisioning_changed(False)
+
+    def test_daemon_restarting_keeps_overlay_and_hides_cancel(self, page, qtbot):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page._cancel_btn.reset_mock()
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_daemon_restarting()
+        assert blocker.args == [True, "Finishing installation ...", False]
+        assert page._overlay_shown is True
+        page._cancel_btn.hide.assert_called_once()
 
     def test_provision_steps_name_the_component(self, page, qtbot):
         page.show_loading = MagicMock()

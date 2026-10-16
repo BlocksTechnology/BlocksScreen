@@ -60,6 +60,7 @@ def svc():
     mock_svc.provision_missing = AsyncMock(return_value=False)
     mock_svc.reconcile = AsyncMock(return_value=True)
     mock_svc.reconcile_if_pending = AsyncMock()
+    mock_svc.deploy_pending = MagicMock(return_value=False)
     mock_svc._components = [
         ComponentConfig(name="moonraker", kind="git"),
         ComponentConfig(name="klipper", kind="git"),
@@ -76,6 +77,8 @@ def svc():
     s._busy = False
     s._provisioning = False
     s._provisioned = False
+    s._boot_pass_done = True
+    s._deploy_hold = None
     s._background_tasks = set()
     s._closing = False
     s._status_check_in_progress = False
