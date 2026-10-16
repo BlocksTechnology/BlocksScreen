@@ -247,3 +247,58 @@ class TestBugRegressions:
             "Shutdown due to some obscure fault"
         )
         assert result == "Some obscure fault"
+
+
+class TestErrorMessages:
+    # Verbatim Klipper state_message after an E-stop + host reboot (mcu.py + error_mcu.py)
+    MCU_STILL_SHUTDOWN = (
+        "Can not update MCU 'mcu' config as it is shutdown\n"
+        "Once the underlying issue is corrected, use the\n"
+        '"FIRMWARE_RESTART" command to reset the firmware, reload the\n'
+        "config, and restart the host software.\n"
+        "Error configuring printer\n"
+    )
+
+    def test_mcu_still_shutdown_after_reboot(self, page):
+        page.webhook_update("error", self.MCU_STILL_SHUTDOWN)
+        text = page.status_label.text()
+        assert page._state == ConnectionState.KLIPPER_ERROR
+        assert "emergency button" in text
+        assert "Error configuring printer" not in text
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("mcu 'mcu': Unable to connect", "Cannot reach the controller board"),
+            ("Failed automated reset of MCU 'mcu'", "did not reset"),
+            ("MCU Protocol error\n\nThis is frequently caused", "out of date"),
+        ],
+    )
+    def test_known_error_reasons(self, page, raw, expected):
+        page.webhook_update("error", raw)
+        assert expected in page.status_label.text()
+
+    def test_previous_mcu_shutdown_after_reboot(self, page):
+        page.webhook_update("shutdown", "Previous MCU 'mcu' shutdown: Command request")
+        assert "emergency button" in page.status_label.text()
+        assert page._firmware_restarting_pending is False
+
+    def test_unknown_error_shows_klipper_line(self, page):
+        page.webhook_update(
+            "error", "Option 'step_pin' in section 'stepper_x' must be specified"
+        )
+        text = page.status_label.text()
+        assert "step_pin" in text
+        assert "Firmware Restart" in text
+
+    def test_empty_error_keeps_generic_text(self, page):
+        page.webhook_update("error", "")
+        assert page.status_label.text() == (
+            "A printer error has occurred.\nPress 'Firmware Restart' to recover."
+        )
+
+    def test_info_ready_and_startup_are_ignored(self, page):
+        page._set_state(ConnectionState.KLIPPER_ERROR)
+        page.webhook_update("ready", "Printer is ready")
+        page.webhook_update("startup", "Printer is starting")
+        assert page._state == ConnectionState.KLIPPER_ERROR

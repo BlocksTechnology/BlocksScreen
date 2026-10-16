@@ -1080,9 +1080,11 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_printer_message(self, method, data, metadata) -> None:
         """Handle Printer messages"""
-        if "info" in method:
-            # TODO: Handle info
-            ...
+        if "info" in method and isinstance(data, dict):
+            # Only source of state_message when Klipper never reached ready
+            self.conn_window.webhook_update(
+                data.get("state", ""), data.get("state_message", "")
+            )
         if "print" in method:
             if "start" in method and "ok" in data:
                 self.printer_state_signal.emit("printing")
