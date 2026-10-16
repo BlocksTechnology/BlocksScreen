@@ -37,7 +37,7 @@ class ConnectionPage(QtWidgets.QFrame):
         ConnectionState.KLIPPER_STARTUP: "The printer is starting up.\nPlease wait…",
         ConnectionState.KLIPPER_READY: "The printer is ready.",
         ConnectionState.KLIPPER_DISCONNECTED: "The printer is not responding.\nPress 'Restart Printer' to reconnect.",
-        ConnectionState.KLIPPER_ERROR: "A printer error has occurred.\nPress 'Firmware Restart' to recover.",
+        ConnectionState.KLIPPER_ERROR: "A printer error has occurred.\n{message}",
         ConnectionState.KLIPPER_SHUTDOWN: "The printer has shut down.\n{message}",
     }
 
@@ -47,6 +47,13 @@ class ConnectionPage(QtWidgets.QFrame):
             "printers emergency button pressed",
             "printer emergency button pressed",
         }
+    )
+
+    # Any stop before a host reboot (E button, M112, fault) leaves the MCU halted, not only the button
+    _STILL_HALTED: typing.Final[str] = (
+        "Controller board still halted\nfrom a previous stop.\n"
+        "If the emergency button is pressed, release it,\n"
+        "then press 'Firmware Restart' to recover."
     )
 
     _SHUTDOWN_REASON_MAP: typing.ClassVar[dict[str, str]] = {
@@ -64,6 +71,12 @@ class ConnectionPage(QtWidgets.QFrame):
         "protocol error": "MCU communication protocol error.",
         "config error": "Configuration error\nCheck printer.cfg.\nPress 'Firmware Restart' to recover.",
         "mcu error during connect": "Failed to connect to the MCU.",
+        # Klipper error-state first lines (klippy/mcu.py, serialhdl.py, extras/error_mcu.py)
+        "can not update mcu": _STILL_HALTED,
+        "command request": "Emergency stop activated.",
+        "unable to connect": "Cannot reach the controller board.\nCheck its power and USB cable, then\npress 'Firmware Restart'.",
+        "failed automated reset of mcu": "The controller board did not reset.\nPower-cycle the printer.",
+        "mcu protocol error": "Controller board firmware is out of date.\nThe firmware must be updated.",
     }
 
     _FIRMWARE_RESTART_STATES: typing.ClassVar[frozenset[ConnectionState]] = frozenset(
@@ -192,6 +205,8 @@ class ConnectionPage(QtWidgets.QFrame):
             context = (
                 self._last_shutdown_context or ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
             )
+        elif state == ConnectionState.KLIPPER_ERROR and not context:
+            context = ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
         if not self._apply_shutdown_guard(state, context):
             return
         if self._handle_pending_restart(state):
@@ -236,9 +251,21 @@ class ConnectionPage(QtWidgets.QFrame):
     @staticmethod
     def _strip_shutdown_prefix(raw: str) -> str:
         return re.sub(
-            r"^(?:Shutdown due to |MCU '[^']*' shutdown[:.]\s*)",
+            r"^(?:Shutdown due to "
+            r"|(?:Previous )?MCU '[^']*' (?:shutdown[:.]|error during config\s*:)\s*"
+            r"|mcu '[^']*'\s*:\s*)",
             "",
             raw.split("\n")[0].strip(),
+        )
+
+    @staticmethod
+    def _is_halted_before_start(raw: str) -> bool:
+        # error_mcu.py "Previous" and mcu.py "during config": the MCU stopped before this Klipper run
+        return bool(
+            re.match(
+                r"(?:Previous MCU '[^']*' shutdown|MCU '[^']*' error during config)\s*:",
+                raw.lstrip(),
+            )
         )
 
     @staticmethod
@@ -252,10 +279,15 @@ class ConnectionPage(QtWidgets.QFrame):
         lower = ConnectionPage._normalize_shutdown_lines(line)
         if lower in ConnectionPage._SHUTDOWN_NOISE:
             return ""
+        if lower.startswith("command request") and (
+            ConnectionPage._is_halted_before_start(raw)
+        ):
+            return ConnectionPage._STILL_HALTED
         for key, display in ConnectionPage._SHUTDOWN_REASON_MAP.items():
             if lower.startswith(key):
                 return display
-        return line.capitalize()
+        # capitalize() would lowercase pin and MCU names
+        return line[:1].upper() + line[1:]
 
     @staticmethod
     def _build_shutdown_context(raw: str) -> str:
@@ -352,6 +384,17 @@ class ConnectionPage(QtWidgets.QFrame):
                 self._firmware_restarting_pending = True
                 self._restart_10s_timer.start()
                 self._restart_30s_timer.start()
+        elif state == "error":
+            self._set_state(
+                ConnectionState.KLIPPER_ERROR,
+                context=self._build_shutdown_context(message),
+            )
+
+    def on_printer_info(self, info: dict) -> None:
+        """Show the reason from a printer.info reply when Klipper is in error."""
+        # Error only: no subscription exists then; a repeated shutdown would cancel the E-stop watchdog
+        if info.get("state") == "error":
+            self.webhook_update("error", info.get("state_message", ""))
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         if self.conn_toggle:
