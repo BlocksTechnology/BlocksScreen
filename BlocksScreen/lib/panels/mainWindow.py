@@ -12,7 +12,6 @@ from lib.files import Files
 from lib.klipper_message_filter import (
     MessageSource,
     Severity,
-    is_mmu_toolchange,
     match_message,
 )
 from lib.machine import MachineControl
@@ -388,7 +387,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
     def _handle_display_status(self, name, value: str | float) -> None:
         if isinstance(value, str):
-            if value == "" or value.isspace() or is_mmu_toolchange(value):
+            if value == "" or value.isspace():
                 return
             self.show_notifications.emit("M117", str(value), Severity.INFO.value, True)
 

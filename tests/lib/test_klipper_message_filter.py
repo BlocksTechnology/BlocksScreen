@@ -10,7 +10,6 @@ from BlocksScreen.lib.klipper_message_filter import (
     _INDEX,
     _re,
     _sub,
-    is_mmu_toolchange,
     match_message,
 )
 
@@ -522,19 +521,3 @@ def test_full_display_with_hint() -> None:
         severity=Severity.INFO,
     )
     assert rule.full_display == "Title\nAction"
-
-
-@pytest.mark.parametrize(
-    "text",
-    ["T0", "> T0", "< T1", "T0 > T1", "> Bypass", "< Unknown", "Unknown > T3", " T12 "],
-)
-def test_is_mmu_toolchange_matches_happy_hare_m117(text: str) -> None:
-    assert is_mmu_toolchange(text)
-
-
-@pytest.mark.parametrize(
-    "text",
-    ["Printing T0 test", "Heating...", "T0 done", "t0", ">T0", "Layer 3 / 10", ""],
-)
-def test_is_mmu_toolchange_keeps_other_m117(text: str) -> None:
-    assert not is_mmu_toolchange(text)

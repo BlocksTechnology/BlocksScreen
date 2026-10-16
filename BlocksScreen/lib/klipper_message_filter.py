@@ -666,15 +666,6 @@ _INDEX: dict[MessageSource, tuple[MessageRule, ...]] = {
     src: tuple(r for r in RULES if r.source is src) for src in MessageSource
 }
 
-# Happy Hare _note_toolchange M117 forms: "T1", "> T1", "< T1", "T0 > T1", "> Bypass".
-_HH_TOOL = r"(?:T\d+|Bypass|Unknown)"
-_HH_TOOLCHANGE_RE = re.compile(rf"(?:[<>] )?{_HH_TOOL}(?: > {_HH_TOOL})?")
-
-
-def is_mmu_toolchange(text: str) -> bool:
-    """Return True for a Happy Hare toolchange M117 status line."""
-    return _HH_TOOLCHANGE_RE.fullmatch(text.strip()) is not None
-
 
 def match_message(source: MessageSource, text: str) -> MessageRule | None:
     if any(p.search(text) for p in _IGNORED):
