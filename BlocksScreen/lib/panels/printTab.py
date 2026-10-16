@@ -296,7 +296,9 @@ class PrintTab(QtWidgets.QStackedWidget):
                 self._active_z_offset = self._cancel_z_snapshot
                 self.save_config()
                 self._finish_print_handled = True
-                self.save_config_btn.setVisible(True)
+                self.save_config_btn.setVisible(
+                    not self.printer.uses_true_zero_offset
+                )
             self._cancel_z_snapshot = 0.0
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
@@ -360,6 +362,9 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
+        if self.printer.uses_true_zero_offset:
+            self.save_config_btn.setVisible(False)
+            return
         self._pending_save_offset = self._active_z_offset
         self.BasePopup_z_offset.set_message(
             f"The Z-Offset is now {self._pending_save_offset + 0.0:.3f} mm.\n"
