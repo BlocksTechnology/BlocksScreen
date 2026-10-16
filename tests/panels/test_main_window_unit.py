@@ -73,6 +73,19 @@ class TestKlippyDisconnectedAutoRestartGuard:
         assert fake_window._klipper_auto_restart_pending is False
 
 
+class TestDisplayStatusNotification:
+    @pytest.mark.parametrize("message", ["> T0", "< T1", "T0 > T1", "T1"])
+    def test_happy_hare_toolchange_is_not_notified(self, message) -> None:
+        win = SimpleNamespace(show_notifications=MagicMock())
+        MainWindow._handle_display_status(win, "message", message)
+        win.show_notifications.emit.assert_not_called()
+
+    def test_other_m117_is_notified(self) -> None:
+        win = SimpleNamespace(show_notifications=MagicMock())
+        MainWindow._handle_display_status(win, "message", "Heating bed")
+        win.show_notifications.emit.assert_called_once()
+
+
 # Panel indices used by the print-tab invariant fixtures.
 _MAIN_PAGE_IDX = 0
 _JOB_STATUS_IDX = 3

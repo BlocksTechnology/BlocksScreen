@@ -12,6 +12,8 @@ import types
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from BlocksScreen.lib.klipper_message_filter import is_mmu_toolchange
+
 _project_root = Path(__file__).resolve().parent.parent.parent
 
 # Other test directories (e.g. tests/lib/conftest.py) leak a bare
@@ -85,6 +87,7 @@ sys.modules["lib.files"].Files = MagicMock
 sys.modules["lib.klipper_message_filter"].MessageSource = MagicMock()
 sys.modules["lib.klipper_message_filter"].Severity = MagicMock()
 sys.modules["lib.klipper_message_filter"].match_message = MagicMock()
+sys.modules["lib.klipper_message_filter"].is_mmu_toolchange = is_mmu_toolchange
 sys.modules["lib.machine"].MachineControl = MagicMock
 sys.modules["lib.moonrakerComm"].MoonWebSocket = MagicMock
 sys.modules["lib.network"].WifiIconKey = MagicMock()

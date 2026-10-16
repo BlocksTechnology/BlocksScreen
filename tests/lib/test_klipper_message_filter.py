@@ -10,6 +10,7 @@ from BlocksScreen.lib.klipper_message_filter import (
     _INDEX,
     _re,
     _sub,
+    is_mmu_toolchange,
     match_message,
 )
 
@@ -260,13 +261,29 @@ def test_re_no_match() -> None:
             MessageSource.GCODE_ERROR,
             "FlowGuard detected a clog.\nReason for trip: Compression stuck after "
             "409.04 mm motion (triggering parameter: flowguard_max_relief)",
-            "Filament Clog Detected",
+            "Filament Clog or Tangle",
             Severity.ERROR,
         ),
         (
             MessageSource.GCODE_ERROR,
-            "FlowGuard detected a tangle.\nReason for trip: Tension stuck",
-            "Filament Tangle Detected",
+            "FlowGuard detected a tangle.\nReason for trip: Tension stuck after "
+            "38.20 mm motion and 20.00 mm relief "
+            "(triggering parameter: flowguard_max_relief)",
+            "Filament Clog or Tangle",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "MMU issue detected. Print will be paused\nReason: A tangle has been "
+            "detected on filament_tension and requires manual intervention",
+            "Filament Clog or Tangle",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "MMU issue: A clog/tangle has been detected and requires manual "
+            "intervention",
+            "Filament Clog or Tangle",
             Severity.ERROR,
         ),
         # Gcode Echo
@@ -498,3 +515,19 @@ def test_full_display_with_hint() -> None:
         severity=Severity.INFO,
     )
     assert rule.full_display == "Title\nAction"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["T0", "> T0", "< T1", "T0 > T1", "> Bypass", "< Unknown", "Unknown > T3", " T12 "],
+)
+def test_is_mmu_toolchange_matches_happy_hare_m117(text: str) -> None:
+    assert is_mmu_toolchange(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Printing T0 test", "Heating...", "T0 done", "t0", ">T0", "Layer 3 / 10", ""],
+)
+def test_is_mmu_toolchange_keeps_other_m117(text: str) -> None:
+    assert not is_mmu_toolchange(text)

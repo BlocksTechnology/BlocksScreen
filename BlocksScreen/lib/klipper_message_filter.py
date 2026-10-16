@@ -285,18 +285,12 @@ RULES: tuple[MessageRule, ...] = (
         hint="Replace the empty spool",
         severity=Severity.ERROR,
     ),
+    # FlowGuard names the stuck buffer side, not the fault, so a clog can trip "tangle".
     MessageRule(
         source=MessageSource.GCODE_ERROR,
-        matcher=_sub("flowguard detected a clog"),
-        display="Filament Clog Detected",
-        hint="Check the extruder for a clog",
-        severity=Severity.ERROR,
-    ),
-    MessageRule(
-        source=MessageSource.GCODE_ERROR,
-        matcher=_sub("flowguard detected a tangle"),
-        display="Filament Tangle Detected",
-        hint="Clear the tangle",
+        matcher=_re(r"flowguard detected a|(clog|tangle) has been detected"),
+        display="Filament Clog or Tangle",
+        hint="Check the nozzle and filament path",
         severity=Severity.ERROR,
     ),
     # ── Gcode errors — heater / temperature ───────────────────────────────────
@@ -657,6 +651,15 @@ _IGNORED: tuple[re.Pattern, ...] = (
 _INDEX: dict[MessageSource, tuple[MessageRule, ...]] = {
     src: tuple(r for r in RULES if r.source is src) for src in MessageSource
 }
+
+# Happy Hare _note_toolchange M117 forms: "T1", "> T1", "< T1", "T0 > T1", "> Bypass".
+_HH_TOOL = r"(?:T\d+|Bypass|Unknown)"
+_HH_TOOLCHANGE_RE = re.compile(rf"(?:[<>] )?{_HH_TOOL}(?: > {_HH_TOOL})?")
+
+
+def is_mmu_toolchange(text: str) -> bool:
+    """Return True for a Happy Hare toolchange M117 status line."""
+    return _HH_TOOLCHANGE_RE.fullmatch(text.strip()) is not None
 
 
 def match_message(source: MessageSource, text: str) -> MessageRule | None:
