@@ -266,6 +266,14 @@ class TestReconnectCycle:
         qtbot.wait(20)
         assert got == [{"error": {"code": -1, "message": "disconnected"}}]
 
+    def test_callback_error_keeps_socket_usable(self, ws):
+        """A raising callback reaches on_error but the socket stays open."""
+        ws.connected = True
+        ws.ws = MagicMock()
+        ws.on_error(ws.ws, AttributeError("'FilamentTab' has no '_material_filter'"))
+        assert ws.send_request("server.info") is True
+        ws.ws.close.assert_not_called()
+
     def test_send_while_disconnected_never_calls_back(self, ws, qtbot):
         callback = MagicMock()
         assert ws.send_request("server.info", callback=callback) is False
