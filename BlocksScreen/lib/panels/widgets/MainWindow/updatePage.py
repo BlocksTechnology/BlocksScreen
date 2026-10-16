@@ -375,6 +375,10 @@ class UpdatePage(QtWidgets.QWidget):
         if busy:
             if self._provisioning:
                 self._show_provisioning_overlay()
+            elif not self._overlay_shown:
+                # Busy this UI did not start: it restarted mid-update, block it too.
+                self._overlay_shown = True
+                self.call_load_panel.emit(True, "Update in progress ...", False)
             self._restart_pending = False
             self._restart_grace_timer.stop()
             self._stale_overlay_timer.stop()
@@ -409,10 +413,23 @@ class UpdatePage(QtWidgets.QWidget):
         if provisioning and self._busy:
             self._cancel_btn.hide()
             self._show_provisioning_overlay()
+        elif self._busy:
+            # Still busy after the clone: the daemon holds it for install-updater.
+            self._show_finishing_overlay()
 
     def _show_provisioning_overlay(self) -> None:
         self._overlay_shown = True
         self.call_load_panel.emit(True, "Missing component, installing ...", False)
+
+    def _show_finishing_overlay(self) -> None:
+        self._overlay_shown = True
+        self.call_load_panel.emit(True, "Finishing installation ...", False)
+
+    @QtCore.pyqtSlot(name="handle-daemon-restarting")
+    def handle_daemon_restarting(self) -> None:
+        """Daemon left mid-busy to restart: keep the overlay until the new one reports."""
+        self._cancel_btn.hide()
+        self._show_finishing_overlay()
 
     def _dismiss_stale_overlay(self) -> None:
         """Drop the overlay if the post-update status never arrived."""

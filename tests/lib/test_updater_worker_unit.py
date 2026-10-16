@@ -274,6 +274,24 @@ class TestDaemonOwnerWatch:
         worker._schedule_reconnect.assert_called_once_with()
 
     @pytest.mark.asyncio
+    async def test_owner_lost_while_busy_emits_restarting(self, worker):
+        """install-updater restarts a busy daemon: the overlay must stay, not drop."""
+        restarting, unavailable = [], []
+        worker.daemon_restarting.connect(lambda: restarting.append(True))
+        worker.daemon_unavailable.connect(lambda: unavailable.append(True))
+        worker._last_busy = True
+        worker._async_initialize = AsyncMock()
+        worker._schedule_reconnect = MagicMock()
+        _, dbus = self._subscribe(
+            worker, [(_BUS, ":1.5", ""), self._stop(worker)], owner=":1.5"
+        )
+        with dbus:
+            await worker._watch_daemon_owner()
+        assert restarting == [True]
+        assert unavailable == []
+        worker._schedule_reconnect.assert_called_once_with()
+
+    @pytest.mark.asyncio
     async def test_other_names_and_repeat_owner_ignored(self, worker):
         worker._async_initialize = AsyncMock()
         events = [("org.other.Thing", "", ":1.9"), (_BUS, ":1.5", ":1.5")]

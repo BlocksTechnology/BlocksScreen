@@ -53,6 +53,7 @@ class UpdaterWorker(QtCore.QObject):
     busy_changed = QtCore.pyqtSignal(bool)
     provisioning_changed = QtCore.pyqtSignal(bool)
     daemon_unavailable = QtCore.pyqtSignal()
+    daemon_restarting = QtCore.pyqtSignal()
     update_rejected = QtCore.pyqtSignal()
     request_reconnect = QtCore.pyqtSignal()
     proxy_connected = QtCore.pyqtSignal()
@@ -337,7 +338,11 @@ class UpdaterWorker(QtCore.QObject):
                             self._daemon_owner = ""
                             # Retry bus-activates a stopped unit; only mask keeps it off.
                             _log.error("updater daemon left the bus - awaiting restart")
-                            self.daemon_unavailable.emit()
+                            # Busy exit = install-updater restarting it; a failed retry still reports.
+                            if self._last_busy:
+                                self.daemon_restarting.emit()
+                            else:
+                                self.daemon_unavailable.emit()
                             self._schedule_reconnect()
                             continue
                         _log.warning(
