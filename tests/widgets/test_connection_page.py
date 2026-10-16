@@ -283,6 +283,21 @@ class TestErrorMessages:
         assert "emergency button" in page.status_label.text()
         assert page._firmware_restarting_pending is False
 
+    def test_error_during_config_after_reboot(self, page):
+        # mcu.py _send_get_config: the other message an E-stop + reboot can produce
+        page.webhook_update("error", "MCU 'mcu' error during config: Command request")
+        assert "emergency button" in page.status_label.text()
+
+    def test_live_command_request_is_not_previous_stop(self, page):
+        page.webhook_update("shutdown", "MCU 'mcu' shutdown: Command request")
+        text = page.status_label.text()
+        assert "Emergency stop activated." in text
+        assert "previous stop" not in text
+
+    def test_unknown_error_keeps_name_case(self, page):
+        page.webhook_update("error", "pin PA1 used multiple times in config")
+        assert "Pin PA1 used multiple times in config" in page.status_label.text()
+
     def test_unknown_error_shows_klipper_line(self, page):
         page.webhook_update(
             "error", "Option 'step_pin' in section 'stepper_x' must be specified"
@@ -302,3 +317,22 @@ class TestErrorMessages:
         page.webhook_update("ready", "Printer is ready")
         page.webhook_update("startup", "Printer is starting")
         assert page._state == ConnectionState.KLIPPER_ERROR
+
+    def test_printer_info_error_shows_reason(self, page):
+        page.on_printer_info(
+            {"state": "error", "state_message": self.MCU_STILL_SHUTDOWN}
+        )
+        assert "emergency button" in page.status_label.text()
+
+    def test_printer_info_shutdown_keeps_estop_watchdog(self, page):
+        # The info reply to the shutdown transition repeats what the subscription sent
+        estop = "Shutdown due to Printers Emergency Button Pressed."
+        page.webhook_update("shutdown", estop)
+        page.on_printer_info({"state": "shutdown", "state_message": estop})
+        assert page._firmware_restarting_pending is True
+        assert page._restart_30s_timer.isActive()
+
+    @pytest.mark.parametrize("state", ["ready", "startup", "shutdown"])
+    def test_printer_info_non_error_is_ignored(self, page, state):
+        page.on_printer_info({"state": state, "state_message": "anything"})
+        assert page._state == ConnectionState.DISCONNECTED
