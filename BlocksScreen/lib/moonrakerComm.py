@@ -57,7 +57,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self.daemon = True
 
         self.connected = False
-        self.disconnected = False
         self._reconnect_count = 0
         self._klippy_state: str | None = None
         self.callback_table: dict = {}
@@ -185,10 +184,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         """Websocket error callback"""
         # First argument is ws second is error message
         _error = args[1] if len(args) == 2 else args[0]
-        logger.error("Websocket error, disconnected: %s", _error)
-        with self._state_lock:
-            self.connected = False
-            self.disconnected = True
+        # Raising callbacks land here with the socket open; real drops end in on_close.
+        logger.error("Websocket error: %s", _error)
 
     def on_close(self, *args) -> None:
         """Websocket on close callback
