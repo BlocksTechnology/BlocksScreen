@@ -7,15 +7,15 @@ from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.Common.basePopup import BasePopup
-from lib.panels.widgets.Common.numpadPage import CustomNumpad
-from lib.panels.widgets.Common.slider_selector_page import SliderPage
 from lib.panels.widgets.metadataPage import FileMetadataWidget
+from lib.panels.widgets.Common.numpadPage import CustomNumpad
 from lib.panels.widgets.PrintTab.babystepPage import BabystepPage
 from lib.panels.widgets.PrintTab.confirmPage import ConfirmWidget
 from lib.panels.widgets.PrintTab.filesPage import FilesPage
 from lib.panels.widgets.PrintTab.jobStatusPage import JobStatusWidget
 from lib.panels.widgets.PrintTab.sensorsPanel import SensorsWindow
 from lib.panels.widgets.PrintTab.tunePage import TuneWidget
+from lib.panels.widgets.Common.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
@@ -296,7 +296,7 @@ class PrintTab(QtWidgets.QStackedWidget):
                 self._active_z_offset = self._cancel_z_snapshot
                 self.save_config()
                 self._finish_print_handled = True
-                self.save_config_btn.setVisible(not self.printer.uses_true_zero_offset)
+                self.save_config_btn.setVisible(True)
             self._cancel_z_snapshot = 0.0
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
@@ -360,9 +360,6 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
-        if self.printer.uses_true_zero_offset:
-            self.save_config_btn.setVisible(False)
-            return
         self._pending_save_offset = self._active_z_offset
         self.BasePopup_z_offset.set_message(
             f"The Z-Offset is now {self._pending_save_offset + 0.0:.3f} mm.\n"
@@ -426,6 +423,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Handles the print cancel action"""
         if (
             not self._finish_print_handled
+            and not self.printer.uses_true_zero_offset
             and self._active_z_offset != 0
             and self.babystepPage.baby_stepchange
         ):
