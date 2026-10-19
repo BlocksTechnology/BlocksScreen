@@ -58,8 +58,11 @@ class FakeDaemon:
         self._conn, _ = self._srv.accept()
         # Split mid-line to exercise the client's line buffering.
         half = len(self._payload) // 2
-        self._conn.sendall(self._payload[:half])
-        self._conn.sendall(self._payload[half:])
+        try:
+            self._conn.sendall(self._payload[:half])
+            self._conn.sendall(self._payload[half:])
+        except ConnectionError:
+            pass  # client hung up mid-send, e.g. on an oversized line
 
     def close(self):
         if self._conn:

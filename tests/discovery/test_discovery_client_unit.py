@@ -63,7 +63,9 @@ class TestDefaultSocketPath:
 
 
 class TestLateDaemon:
-    def test_socket_created_after_start_is_found(self, sock_path, tmp_path, monkeypatch):
+    def test_socket_created_after_start_is_found(
+        self, sock_path, tmp_path, monkeypatch
+    ):
         # BlocksScreen can start before device-discoveryd has bound its socket
         # (Type=simple). The client must look the path up again on each retry
         # instead of sticking with the $XDG_RUNTIME_DIR fallback it saw first.
@@ -78,7 +80,10 @@ class TestLateDaemon:
             time.sleep(0.3)  # first attempt fails: no socket anywhere yet
             daemon = FakeDaemon(
                 sock_path,
-                [{"type": "hello", "proto": 1, "pid": 1}, {"type": "snapshot", "devices": []}],
+                [
+                    {"type": "hello", "proto": 1, "pid": 1},
+                    {"type": "snapshot", "devices": []},
+                ],
             )
             assert _next(events) == ("connected", None)  # next retry, ~2 s later
             assert _next(events) == ("snapshot", [])
@@ -236,7 +241,10 @@ class TestBrokenDaemon:
             client.stop()
         assert thread_exceptions == []
 
-    @pytest.mark.parametrize("line", BAD_LINES)
+    # Truncated ids: the 100k "[" line otherwise becomes a 100k-char test id.
+    @pytest.mark.parametrize(
+        "line", BAD_LINES, ids=lambda line: line[:40].decode(errors="replace")
+    )
     def test_fetch_snapshot_never_raises(self, sock_path, line):
         daemon = FakeDaemon(sock_path, [line])
         try:
