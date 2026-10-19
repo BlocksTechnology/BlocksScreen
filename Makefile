@@ -1,5 +1,5 @@
 .PHONY: all init init-dev venv run lint format-check security check \
-        test test-all test-unit test-network test-ui test-integration test-integration-nm test-fast \
+        test test-all test-unit test-network test-ui test-integration test-fast \
         coverage coverage-all coverage-network clean clean-venv \
         docstrcov rcc rcc-all pr help
 
@@ -121,10 +121,7 @@ test-ui: ## UI tests only (*_ui.py)
 test-%: ## Tests all files inside the /<folder>/
 	$(PYTHON) -m pytest $(PYTEST_FLAGS) $(PYTEST_IGNORE) $(TESTS)/$*/
 
-test-integration: ## End-to-end suites in tests/integration/<part>/ (hermetic, no hardware)
-	$(PYTHON) -m pytest $(PYTEST_FLAGS) $(TESTS)/integration/
-
-test-integration-nm: ## D-Bus integration tests (requires live NetworkManager)
+test-integration: ## D-Bus integration tests (requires live NetworkManager)
 	$(NM_INTEGRATION) $(PYTHON) -m pytest $(PYTEST_FLAGS) $(TESTS)/*/*_integration.py
 
 test-all: ## All tests including D-Bus integration (requires NetworkManager)
