@@ -61,7 +61,7 @@ class FakeDaemon:
         try:
             self._conn.sendall(self._payload[:half])
             self._conn.sendall(self._payload[half:])
-        except (BrokenPipeError, ConnectionResetError):
+        except ConnectionError:
             pass  # client hung up mid-send, e.g. on an oversized line
 
     def close(self):
