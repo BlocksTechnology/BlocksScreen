@@ -391,10 +391,11 @@ class ConnectionPage(QtWidgets.QFrame):
             )
 
     def on_printer_info(self, info: dict) -> None:
-        """Show the reason from a printer.info reply when Klipper is in error."""
-        # Error only: no subscription exists then; a repeated shutdown would cancel the E-stop watchdog
-        if info.get("state") == "error":
-            self.webhook_update("error", info.get("state_message", ""))
+        """Show the reason from a printer.info reply when Klipper is in error or shutdown."""
+        state = info.get("state")
+        # A shutdown the subscription already reported would cancel the E-stop watchdog
+        if state == "error" or (state == "shutdown" and not self._shutdown_confirmed):
+            self.webhook_update(state, info.get("state_message", ""))
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         if self.conn_toggle:

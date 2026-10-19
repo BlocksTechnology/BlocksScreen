@@ -279,7 +279,17 @@ class TestErrorMessages:
         assert expected in page.status_label.text()
 
     def test_previous_mcu_shutdown_after_reboot(self, page):
-        page.webhook_update("shutdown", "Previous MCU 'mcu' shutdown: Command request")
+        # Real order: server.info's bare "shutdown", then the printer.info reply; no subscription
+        page.on_klippy_state("shutdown")
+        page.on_printer_info(
+            {
+                "state": "shutdown",
+                "state_message": "Previous MCU 'mcu' shutdown: Command request\n"
+                "Once the underlying issue is corrected, use the\n"
+                '"FIRMWARE_RESTART" command to reset the firmware',
+            }
+        )
+        assert page._state == ConnectionState.KLIPPER_SHUTDOWN
         assert "emergency button" in page.status_label.text()
         assert page._firmware_restarting_pending is False
 
@@ -332,7 +342,7 @@ class TestErrorMessages:
         assert page._firmware_restarting_pending is True
         assert page._restart_30s_timer.isActive()
 
-    @pytest.mark.parametrize("state", ["ready", "startup", "shutdown"])
-    def test_printer_info_non_error_is_ignored(self, page, state):
+    @pytest.mark.parametrize("state", ["ready", "startup"])
+    def test_printer_info_non_fault_is_ignored(self, page, state):
         page.on_printer_info({"state": state, "state_message": "anything"})
         assert page._state == ConnectionState.DISCONNECTED
