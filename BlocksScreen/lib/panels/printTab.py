@@ -423,6 +423,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Handles the print cancel action"""
         if (
             not self._finish_print_handled
+            and not self.printer.uses_true_zero_offset
             and self._active_z_offset != 0
             and self.babystepPage.baby_stepchange
         ):
