@@ -13,6 +13,7 @@ coroutine on the test's own event loop.
 """
 
 import asyncio
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1059,15 +1060,19 @@ class TestBuildCurrentState:
         assert state.ethernet_carrier is True
 
     @pytest.mark.asyncio
-    async def test_exception_returns_default(self, qapp):
+    async def test_exception_returns_default(self, qapp, caplog):
         w = _make_worker(qapp)
         nm_proxy = AsyncProxyMock(
             connectivity=0,
+            # Without it gather() raises TypeError and never awaits the other coroutines.
+            wireless_enabled=True,
             check_connectivity=AsyncMock(side_effect=RuntimeError("bang")),
         )
         w._nm = _ProxyFactory(nm_proxy)
-        state = await w._build_current_state()
+        with caplog.at_level(logging.ERROR):
+            state = await w._build_current_state()
         assert state.connectivity == ConnectivityState.UNKNOWN
+        assert "bang" in caplog.text
 
 
 class TestScanNetworks:
