@@ -300,6 +300,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updater_worker.daemon_unavailable.connect(
             self.update_page.handle_daemon_unavailable
         )
+        self.updater_worker.daemon_restarting.connect(
+            self.update_page.handle_daemon_restarting
+        )
         self.controlPanel.lock_ui.connect(self.set_ui_lock)
         self.updater_worker.request_reconnect.connect(self._on_post_update_reconnect)
         self.updater_worker.proxy_connected.connect(
