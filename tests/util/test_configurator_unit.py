@@ -261,6 +261,26 @@ class TestCopyFileSimple:
         copy_file_simple(src, dest / "renamed.cfg")
         assert (dest / "renamed.cfg").is_file()
 
+    def test_new_file_keeps_source_mode(self, tmp_path):
+        src = _write(tmp_path / "src.cfg", "data")
+        os.chmod(src, 0o644)
+        dest = tmp_path / "new.cfg"
+        copy_file_simple(src, dest)
+        assert dest.stat().st_mode & 0o777 == 0o644
+
+    def test_failed_overwrite_keeps_old_file(self, tmp_path, monkeypatch):
+        src = _write(tmp_path / "src.cfg", "new")
+        dest = _write(tmp_path / "dest.cfg", "old")
+
+        def power_cut(*_):
+            raise OSError("power cut")
+
+        monkeypatch.setattr(os, "replace", power_cut)
+        with pytest.raises(OSError):
+            copy_file_simple(src, dest)
+        assert dest.read_text() == "old"
+        assert not list(tmp_path.glob(".dest.cfg.*"))
+
 
 # =========================================================================
 # _build_file_index
@@ -561,6 +581,7 @@ class TestMergeCfgMarker:
         monkeypatch.setattr(os, "replace", power_cut)
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is False
         assert tgt.read_text() == old
+        assert not list(tmp_path.glob(".tgt_printer.cfg.*"))
 
     def test_target_no_marker_copies_source(self, tmp_path):
         mgr = _make_manager(tmp_path)

@@ -377,6 +377,12 @@ def atomic_write_text(path: pathlib.Path, text: str) -> None:
         except OSError:
             pass
         raise
+    # The rename survives a power cut only once the directory entry is on disk.
+    dir_fd = os.open(target.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
 
 
 def get_file_name(filename: str | None) -> str:

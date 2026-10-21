@@ -143,9 +143,15 @@ def copy_file_simple(orig: pathlib.Path | str, dest: pathlib.Path | str):
         dest = pathlib.Path(dest)
     if not orig.is_file() or not orig.exists():
         raise FileNotFoundError("File %s not found" % orig.as_posix())
-    res = shutil.copy2(orig, dest, follow_symlinks=False)
+    if dest.is_dir():
+        dest = dest / orig.name
+    existed = dest.exists()
+    # Overwritten in place, a power cut mid-copy leaves Klipper a truncated config.
+    atomic_write_text(dest, orig.read_text(encoding="utf-8"))
+    if not existed:
+        shutil.copymode(orig, dest)
     _logger.info("Copied file %s to destination %s" % (orig.name, dest))
-    return res
+    return str(dest)
 
 
 class ConfigManager:
