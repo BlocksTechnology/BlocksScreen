@@ -712,7 +712,7 @@ class ConfigManager:
         backup = self.backup_dir / f"variables.cfg.{_timestamp()}"
         shutil.copy2(target, backup)
         lines = [f"{k} = {v}\n" for k, v in sorted(keep.items())]
-        target.write_text("[Variables]\n" + "".join(lines) + "\n", encoding="utf-8")
+        atomic_write_text(target, "[Variables]\n" + "".join(lines) + "\n")
         _logger.info("Repaired variables.cfg, original kept at %s", backup)
         return True
 

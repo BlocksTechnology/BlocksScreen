@@ -953,6 +953,19 @@ class TestRepairVariables:
         assert tgt.read_text() == "[Variables]\nok = '50%%'\n\n"
         assert mgr._repair_variables(tgt) is False
 
+    def test_failed_repair_keeps_original(self, tmp_path, monkeypatch):
+        mgr = _make_manager(tmp_path)
+        tgt = _write(mgr.config_dir / "variables.cfg", self.BROKEN)
+
+        def power_cut(*_):
+            raise OSError("power cut")
+
+        monkeypatch.setattr(os, "replace", power_cut)
+        with pytest.raises(OSError):
+            mgr._repair_variables(tgt)
+        assert tgt.read_text() == self.BROKEN
+        assert not list(mgr.config_dir.glob(".variables.cfg.*"))
+
 
 class TestVariableDefaults:
     def _mgr(self, tmp_path, text: str) -> ConfigManager:
