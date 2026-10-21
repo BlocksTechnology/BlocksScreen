@@ -1,3 +1,5 @@
+"""Inactivity screensaver: DPMS display blanking and wake-touch suppression."""
+
 import helper_methods as helper_methods
 from PyQt6 import QtCore, QtWidgets
 

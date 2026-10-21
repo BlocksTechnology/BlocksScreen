@@ -29,6 +29,8 @@ REQS_HASH=$(md5sum "$REQS" | cut -d' ' -f1)
 SENTINEL="$BSENV/.blockscreen-reqs-hash"
 ATTEMPT="$BSENV/.blockscreen-reqs-attempt"
 REINSTALL=""
+# Shared with bs-bootstrap and install-updater.sh; released before step 3, which runs install-updater.sh.
+{ exec 201<"$BSENV" && flock -w 300 201; } || echo "[post-merge] venv lock not acquired (busy 300s or no venv) - continuing unlocked"
 # A truncated package (interrupted pip, power cut) still imports and yields only its dunders.
 if ! _as_blocks "$BSENV/bin/python3.11" -c "import yaml as _m; assert len(dir(_m)) > 15" >/dev/null 2>&1; then
     echo "[post-merge] PyYAML missing or broken - repairing before the pinned set"
@@ -71,6 +73,7 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
         fi
     fi
 fi
+exec 201<&-
 
 # 2. Sync all service files so start.sh finds them already in place.
 bs_sync_service_files "$SCRIPT_PATH" post-merge

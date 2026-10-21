@@ -46,6 +46,8 @@ _deps_broken() {
     REINSTALL="--force-reinstall --no-cache-dir"
     rm -f "$SENTINEL" "$ATTEMPT" 2>/dev/null || true
 }
+# Every venv writer (also install-updater.sh, post-merge) flocks the venv dir: a probe mid-replace forces a reinstall.
+{ exec 201<"$BSENV" && flock -w 900 201; } || echo "[bs-bootstrap] venv lock not acquired (busy 900s or no venv) - continuing unlocked"
 # Repair the daemon's own dependency up front so an update can still run if the full set below fails.
 if ! _probe yaml; then
     _deps_broken PyYAML
@@ -101,6 +103,8 @@ fi
 if compgen -G "$BSENV/lib/python3*/site-packages/typing-*-info" >/dev/null; then
     _as_blocks "$BSENV/bin/pip" uninstall --quiet --yes typing || true
 fi
+# Released before step 4: install-updater.sh takes the venv lock itself and would wait on ours.
+exec 201<&-
 
 # 4. Updater stack (local files only - works offline).
 # Verify each critical artifact: an old-installer box can have the service but no apt helper.
