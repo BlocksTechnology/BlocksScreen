@@ -21,8 +21,15 @@ DETECTION_CACHE: pathlib.Path = HOME / ".rf50_config.json"
 VARIABLES_FILE: pathlib.Path = KLIPPER_CONFIG_DIR / "variables.cfg"
 PRINTER_CONFIG: pathlib.Path = KLIPPER_CONFIG_DIR / "printer.cfg"
 SV_CONFIG_MARKER = "#*# <---------------------- SAVE_CONFIG ---------------------->"
+# Copied only when missing; bs_migrate_moonraker_conf and Mainsail own it after that.
+SEED_ONLY_FILES: frozenset[str] = frozenset({"moonraker.conf"})
 
 _logger = logging.getLogger(__name__)
+
+
+def _opt_line(opt: str, val: str) -> str:
+    """Option line; continuation lines indented so a multi-line value stays one option."""
+    return f"{opt}= " + val.replace("\n", "\n    ")
 
 
 def _timestamp() -> str:
@@ -542,12 +549,13 @@ class ConfigManager:
                         target_cfg.read_string(_tfl)
 
                     appendix = []
+                    inserts: dict[str, list[tuple[str, str]]] = {}
                     for section in src_cfg.sections():
                         if section.startswith("mcu") or section.startswith("beacon"):
                             continue
                         if not target_cfg.has_section(section):
                             appendix.append(
-                                (section, True, list(src_cfg.items(section, raw=True)))
+                                (section, list(src_cfg.items(section, raw=True)))
                             )
                         else:
                             sec_missing = [
@@ -556,33 +564,48 @@ class ConfigManager:
                                 if not target_cfg.has_option(section, o)
                             ]
                             if sec_missing:
-                                appendix.append((section, False, sec_missing))
+                                inserts[section] = sec_missing
+
+                    base = _tfl
+                    if inserts:
+                        # A repeated header breaks Klipper save_variables' parser.
+                        tlines = _tfl.splitlines(keepends=True)
+                        for i in range(len(tlines) - 1, -1, -1):
+                            m = configparser.ConfigParser.SECTCRE.match(
+                                tlines[i].strip()
+                            )
+                            if m and m.group("header") in inserts:
+                                opts = inserts.pop(m.group("header"))
+                                tlines[i] = tlines[i].rstrip("\n") + "\n"
+                                tlines[i + 1 : i + 1] = [
+                                    _opt_line(o, v) + "\n" for o, v in opts
+                                ]
+                        base = "".join(tlines)
 
                     for opt, val in src_cfg.defaults().items():
                         if not target_cfg.defaults().get(opt):
                             items = (
-                                appendix[-1][2]
+                                appendix[-1][1]
                                 if appendix and appendix[-1][0] == "DEFAULT"
                                 else None
                             )
                             if items is not None:
                                 items.append((opt, val))
                             else:
-                                appendix.append(("DEFAULT", True, [(opt, val)]))
+                                appendix.append(("DEFAULT", [(opt, val)]))
 
                     if appendix:
                         lines = []
-                        for section, is_new, opts in appendix:
-                            if is_new:
-                                lines.append(f"[{section}]")
+                        for section, opts in appendix:
+                            lines.append(f"[{section}]")
                             for opt, val in opts:
-                                lines.append(f"{opt}= {val}")
+                                lines.append(_opt_line(opt, val))
                         text = "\n".join(lines)
-                        if _tfl and not _tfl.endswith("\n"):
-                            _tfl += "\n"
-                        merged = _tfl + text + "\n"
+                        if base and not base.endswith("\n"):
+                            base += "\n"
+                        merged = base + text + "\n"
                     else:
-                        merged = _tfl
+                        merged = base
 
             merged = self._fix_beacon_serial(merged)
             if _tfl != merged:
@@ -617,6 +640,8 @@ class ConfigManager:
                     _logger.info("File created")
                     continue
 
+                if f in SEED_ONLY_FILES:
+                    continue
                 target = min(target_files, key=lambda p: len(p.parents))
                 if target.exists():
                     chk_src = get_file_checksum(src_file)
