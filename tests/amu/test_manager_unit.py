@@ -800,3 +800,60 @@ class TestAssignSpool:
 
     def test_unselected_gate_emits_nothing(self, manager) -> None:
         assert self._gcode(manager, -1, _SPOOL_DATA) == []
+
+
+class TestStaleMMUJob:
+    @staticmethod
+    def _run(manager, qtbot, *events: tuple[str, str]) -> list[str]:
+        manager._stale_job_timer.setInterval(10)
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        signals: list[str] = []
+        manager.run_gcode_signal.connect(signals.append)
+        for obj, state in events:
+            if obj == "mmu":
+                manager.update_mmu_state({"print_state": state})
+            else:
+                manager.on_object_updated(
+                    "print_stats", "print_stats", {"state": state}
+                )
+        qtbot.wait(50)
+        return signals
+
+    # .151 2026-10-21 11:10:20: PRINT_START raised, then HH's deferred auto-start re-opened the job.
+    def test_job_reopened_after_cancel_is_ended(self, manager, qtbot) -> None:
+        events = [
+            ("print_stats", "printing"),
+            ("mmu", "printing"),
+            ("mmu", "cancelled"),
+            ("print_stats", "cancelled"),
+            ("mmu", "printing"),
+        ]
+        assert self._run(manager, qtbot, *events) == ["MMU_PRINT_END STATE=cancelled"]
+
+    def test_standby_with_open_job_is_ended(self, manager, qtbot) -> None:
+        events = [("print_stats", "standby"), ("mmu", "started")]
+        assert self._run(manager, qtbot, *events) == ["MMU_PRINT_END STATE=standby"]
+
+    @pytest.mark.parametrize("ps_state", ["printing", "paused", "complete", "error"])
+    def test_other_print_stats_states_are_left_to_hh(
+        self, manager, qtbot, ps_state
+    ) -> None:
+        events = [("print_stats", ps_state), ("mmu", "printing")]
+        assert self._run(manager, qtbot, *events) == []
+
+    def test_normal_cancel_emits_nothing(self, manager, qtbot) -> None:
+        events = [
+            ("mmu", "printing"),
+            ("print_stats", "cancelled"),
+            ("mmu", "cancelled"),
+        ]
+        assert self._run(manager, qtbot, *events) == []
+
+    # A print start reports print_stats=printing after HH's started diff.
+    def test_states_agreeing_within_grace_disarms(self, manager, qtbot) -> None:
+        events = [
+            ("print_stats", "standby"),
+            ("mmu", "started"),
+            ("print_stats", "printing"),
+        ]
+        assert self._run(manager, qtbot, *events) == []
