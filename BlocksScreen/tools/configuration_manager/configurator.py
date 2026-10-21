@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import ast
 import configparser
 import hashlib
 import logging
@@ -238,6 +239,8 @@ class ConfigManager:
         self.config_fi_name, self.config_fi_relpath = self._build_file_index(
             self.config_dir
         )
+        # Set by sync(): a Klipper that refused the old variables.cfg must restart.
+        self.variables_repaired = False
 
         self.sync()
 
@@ -658,9 +661,13 @@ class ConfigManager:
 
                 # Files are different so they need merging
                 ok = False
+                if f == "variables.cfg":
+                    # Klipper rewrites it from memory: new keys go in via SAVE_VARIABLE
+                    self.variables_repaired = self._repair_variables(target)
+                    continue
                 if f == "printer.cfg":
                     ok = self.merge_cfg(src_file, target, marker=SV_CONFIG_MARKER)
-                elif f in ["variables.cfg", "BlocksScreen.cfg"]:
+                elif f == "BlocksScreen.cfg":
                     ok = self.merge_cfg(src_file, target)
                 else:
                     ok = copy_file_simple(src_file, target)
@@ -670,6 +677,70 @@ class ConfigManager:
             _logger.info("Caught exception while trying to create blank file %s" % e)
         except Exception as e:
             _logger.info("Caught exception while cpy files: %s" % e)
+
+    def _repair_variables(self, target: pathlib.Path) -> bool:
+        """Rewrite a variables.cfg save_variables cannot load, in its own format."""
+        strict = configparser.ConfigParser()
+        try:
+            # Same checks as save_variables.loadVariables, which fails Klippy's config
+            strict.read(target, encoding="utf-8")
+            if strict.has_section("Variables"):
+                for _, raw in strict.items("Variables"):
+                    ast.literal_eval(raw)
+            return False
+        except (configparser.Error, ValueError, SyntaxError, TypeError) as e:
+            _logger.warning("variables.cfg unloadable by Klipper, repairing: %s", e)
+        loose = configparser.ConfigParser(strict=False, interpolation=None)
+        try:
+            loose.read(target, encoding="utf-8")
+        except (configparser.Error, ValueError) as e:
+            _logger.error("variables.cfg beyond repair, left as is: %s", e)
+            return False
+        keep = {}
+        for key, raw in (
+            loose.items("Variables") if loose.has_section("Variables") else []
+        ):
+            try:
+                # Loose read skips interpolation: '%%' is Klipper's escaped '%', kept raw
+                if "%" in raw.replace("%%", ""):
+                    raise ValueError("'%' breaks save_variables' parser")
+                ast.literal_eval(raw.replace("%%", "%"))
+            except (ValueError, SyntaxError, TypeError) as e:
+                _logger.warning("Dropping variables.cfg %s = %r: %s", key, raw, e)
+                continue
+            keep[key] = raw
+        backup = self.backup_dir / f"variables.cfg.{_timestamp()}"
+        shutil.copy2(target, backup)
+        lines = [f"{k} = {v}\n" for k, v in sorted(keep.items())]
+        atomic_write_text(target, "[Variables]\n" + "".join(lines) + "\n")
+        _logger.info("Repaired variables.cfg, original kept at %s", backup)
+        return True
+
+    def variable_defaults(self) -> dict[str, str]:
+        """Repo variables.cfg keys Klipper's SAVE_VARIABLE can take, as raw literals."""
+        src_files = self.repo_fi_name.get("variables.cfg", [])
+        if not src_files:
+            return {}
+        cfg = configparser.ConfigParser(interpolation=None)
+        try:
+            cfg.read(min(src_files, key=lambda p: len(p.parents)), encoding="utf-8")
+        except configparser.Error as e:
+            _logger.error("Unreadable repo variables.cfg: %s", e)
+            return {}
+        if not cfg.has_section("Variables"):
+            return {}
+        defaults = {}
+        for key, raw in cfg.items("Variables"):
+            # HH owns mmu_*; '%' breaks save_variables' parser, ';' is a gcode comment
+            if key.startswith("mmu_") or "%" in raw or ";" in raw:
+                continue
+            try:
+                ast.literal_eval(raw)
+            except (ValueError, SyntaxError):
+                _logger.warning("variables.cfg %s is not a literal: %r", key, raw)
+                continue
+            defaults[key] = raw
+        return defaults
 
     def cmp_file(self, src, target) -> bool:
         src = pathlib.Path(src)

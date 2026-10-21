@@ -99,8 +99,8 @@ class DeviceConfigManager(ConfigManager):
         self._consent = consent if consent is not None else DeviceConsent()
         self._devices: list[Device] = []
         self._merging: str | None = None
-        # Set by sync(): printer.cfg differs from what it was before this
-        # boot's sync, so a Klipper that already loaded it must restart.
+        # Set by sync(): printer.cfg changed or variables.cfg was repaired during
+        # this boot's sync, so a Klipper that already loaded them must restart.
         self.boot_changed = False
         _logger.info(
             "Device profiles: %s", ", ".join(p.name for p in self._profiles) or "none"
@@ -165,6 +165,8 @@ class DeviceConfigManager(ConfigManager):
         self.boot_changed = self._read_printer_cfg() != before
         if self.boot_changed:
             _logger.info("printer.cfg changed during boot sync")
+        if self.variables_repaired:
+            self.boot_changed = True
 
     def merge_cfg(self, src_file, target_file, marker="") -> bool:
         """ConfigManager.merge_cfg, remembering which file is being merged"""
