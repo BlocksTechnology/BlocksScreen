@@ -228,6 +228,8 @@ echo_ok "post-merge hook installed"
 echo_info "Installing Python requirements ..."
 # Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
 export PIP_DISABLE_PIP_VERSION_CHECK=1
+# Shared with bs-bootstrap and post-merge: a concurrent pip crashes when the pip pin below replaces pip under it.
+{ exec 201<"$BSENV" && flock -w 300 201; } || echo_warn "Venv lock not acquired (busy 300s or no venv); installing unlocked"
 # Older runs of this script ran pip as root; hand those files back or every pip-as-blocks run fails.
 [ -d "$BSENV" ] && sudo find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
 # Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
@@ -254,6 +256,7 @@ if _as_blocks "$BSENV/bin/pip" install --quiet uv==0.12.24; then
 else
     echo_warn "uv install FAILED; Spoolman provisioning fails until it is installed"
 fi
+exec 201<&-
 
 echo_info "Pre-generating framebuffer splash cache ..."
 _as_blocks "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
