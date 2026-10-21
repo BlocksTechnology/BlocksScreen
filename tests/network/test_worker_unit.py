@@ -3145,6 +3145,7 @@ class TestStartSignalListeners:
 class TestAsyncInitializeFull:
     def test_happy_path_full_init(self, qapp):
         w = _make(qapp, running=False)
+        w._ensure_networking_enabled = AsyncMock(return_value=True)
         w._detect_interfaces = AsyncMock()
         w._ensure_wired_autoconnect = AsyncMock()
         w._is_ethernet_connected = AsyncMock(return_value=False)
@@ -3162,6 +3163,8 @@ class TestAsyncInitializeFull:
         _run(w._async_initialize())
 
         assert w._running is True
+        # Boot clears `nmcli networking off`, not just the Wi-Fi preflight.
+        w._ensure_networking_enabled.assert_awaited_once()
         w._detect_interfaces.assert_awaited_once()
         # Boot must not re-arm: NM's latch is how "ethernet off" survives a reboot.
         w._ensure_wired_autoconnect.assert_not_awaited()

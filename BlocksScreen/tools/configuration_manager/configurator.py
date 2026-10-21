@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import ast
 import configparser
 import hashlib
 import logging
@@ -626,9 +627,12 @@ class ConfigManager:
 
                 # Files are different so they need merging
                 ok = False
+                if f == "variables.cfg":
+                    # Klipper rewrites it from memory: new keys go in via SAVE_VARIABLE
+                    continue
                 if f == "printer.cfg":
                     ok = self.merge_cfg(src_file, target, marker=SV_CONFIG_MARKER)
-                elif f in ["variables.cfg", "BlocksScreen.cfg"]:
+                elif f == "BlocksScreen.cfg":
                     ok = self.merge_cfg(src_file, target)
                 else:
                     ok = copy_file_simple(src_file, target)
@@ -638,6 +642,32 @@ class ConfigManager:
             _logger.info("Caught exception while trying to create blank file %s" % e)
         except Exception as e:
             _logger.info("Caught exception while cpy files: %s" % e)
+
+    def variable_defaults(self) -> dict[str, str]:
+        """Repo variables.cfg keys Klipper's SAVE_VARIABLE can take, as raw literals."""
+        src_files = self.repo_fi_name.get("variables.cfg", [])
+        if not src_files:
+            return {}
+        cfg = configparser.ConfigParser(interpolation=None)
+        try:
+            cfg.read(min(src_files, key=lambda p: len(p.parents)), encoding="utf-8")
+        except configparser.Error as e:
+            _logger.error("Unreadable repo variables.cfg: %s", e)
+            return {}
+        if not cfg.has_section("Variables"):
+            return {}
+        defaults = {}
+        for key, raw in cfg.items("Variables"):
+            # HH owns mmu_*; '%' breaks save_variables' parser, ';' starts a gcode comment
+            if key.startswith("mmu_") or "%" in raw or ";" in raw:
+                continue
+            try:
+                ast.literal_eval(raw)
+            except (ValueError, SyntaxError):
+                _logger.warning("variables.cfg %s is not a literal: %r", key, raw)
+                continue
+            defaults[key] = raw
+        return defaults
 
     def cmp_file(self, src, target) -> bool:
         src = pathlib.Path(src)

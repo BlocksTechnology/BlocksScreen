@@ -820,17 +820,40 @@ class TestCpyCfgFiles:
         assert SV_CONFIG_MARKER in merged
         assert "#*# user: saved" in merged
 
-    def test_variables_cfg_differs_merge_called(self, tmp_path):
+    def test_existing_variables_cfg_left_to_klipper(self, tmp_path):
         mgr = _make_manager(tmp_path, cpy_files=["variables.cfg"])
         src = _write(mgr.repo / "variables.cfg", "[g]\nopt_a: repo\nopt_b: repo\n")
         tgt = _write(mgr.config_dir / "variables.cfg", "[g]\nopt_a: existing\n")
         mgr.repo_fi_name = {"variables.cfg": [src]}
         mgr.config_fi_name = {"variables.cfg": [tgt]}
         mgr._cpy_cfg_files()
-        result = configparser.ConfigParser()
-        result.read_string(tgt.read_text())
-        assert result.get("g", "opt_a") == "existing"
-        assert result.get("g", "opt_b") == "repo"
+        # Klipper's next SAVE_VARIABLE would drop an append; the seeder adds keys instead
+        assert tgt.read_text() == "[g]\nopt_a: existing\n"
+
+
+class TestVariableDefaults:
+    def _mgr(self, tmp_path, text: str) -> ConfigManager:
+        mgr = _make_manager(tmp_path)
+        mgr.repo_fi_name = {"variables.cfg": [_write(mgr.repo / "variables.cfg", text)]}
+        return mgr
+
+    def test_returns_literal_keys(self, tmp_path):
+        mgr = self._mgr(tmp_path, "[Variables]\netemp=0\nprintcore_type: 'Standard'\n")
+        assert mgr.variable_defaults() == {"etemp": "0", "printcore_type": "'Standard'"}
+
+    def test_skips_hh_owned_and_unsendable_values(self, tmp_path):
+        mgr = self._mgr(
+            tmp_path,
+            "[Variables]\nmmu_state_gate_selected = 0\npct = '50%'\n"
+            "semi = 'a;b'\nbare = PLA\nok = True\n",
+        )
+        assert mgr.variable_defaults() == {"ok": "True"}
+
+    def test_no_repo_file_or_section(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        mgr.repo_fi_name = {}
+        assert mgr.variable_defaults() == {}
+        assert self._mgr(tmp_path, "[Other]\na = 1\n").variable_defaults() == {}
 
 
 # =========================================================================
