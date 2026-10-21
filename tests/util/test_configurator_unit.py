@@ -543,6 +543,23 @@ class TestMergeCfgParser:
         result.read_string(tgt.read_text())
         assert result.get("Variables", "a") == "1"
 
+    def test_missing_option_goes_into_last_copy_of_repeated_section(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[a]\nx: 1\ny: 2\n")
+        tgt = _write(tmp_path / "t.cfg", "[a]\nx: 1\n[b]\nz: 3\n[a]\nw: 4\n")
+        assert mgr.merge_cfg(src, tgt) is True
+        assert tgt.read_text() == "[a]\nx: 1\n[b]\nz: 3\n[a]\ny= 2\nw: 4\n"
+
+    def test_missing_multiline_value_stays_one_option(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[a]\nx: 1\nfiles:\n  p.cfg\n  m.conf\n")
+        tgt = _write(tmp_path / "t.cfg", "[a]\nx: 1\n[b]\nz: 3\n")
+        assert mgr.merge_cfg(src, tgt) is True
+        result = configparser.ConfigParser()
+        result.read_string(tgt.read_text())
+        assert result.get("a", "files").split() == ["p.cfg", "m.conf"]
+        assert result.options("b") == ["z"]
+
 
 # =========================================================================
 # merge_cfg — marker-aware (printer.cfg, SAVE_CONFIG)

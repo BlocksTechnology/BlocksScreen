@@ -27,6 +27,11 @@ SEED_ONLY_FILES: frozenset[str] = frozenset({"moonraker.conf"})
 _logger = logging.getLogger(__name__)
 
 
+def _opt_line(opt: str, val: str) -> str:
+    """Option line; continuation lines indented so a multi-line value stays one option."""
+    return f"{opt}= " + val.replace("\n", "\n    ")
+
+
 def _timestamp() -> str:
     """Return the current timestamp in ISO8601 format
 
@@ -572,7 +577,9 @@ class ConfigManager:
                             if m and m.group("header") in inserts:
                                 opts = inserts.pop(m.group("header"))
                                 tlines[i] = tlines[i].rstrip("\n") + "\n"
-                                tlines[i + 1 : i + 1] = [f"{o}= {v}\n" for o, v in opts]
+                                tlines[i + 1 : i + 1] = [
+                                    _opt_line(o, v) + "\n" for o, v in opts
+                                ]
                         base = "".join(tlines)
 
                     for opt, val in src_cfg.defaults().items():
@@ -592,7 +599,7 @@ class ConfigManager:
                         for section, opts in appendix:
                             lines.append(f"[{section}]")
                             for opt, val in opts:
-                                lines.append(f"{opt}= {val}")
+                                lines.append(_opt_line(opt, val))
                         text = "\n".join(lines)
                         if base and not base.endswith("\n"):
                             base += "\n"
