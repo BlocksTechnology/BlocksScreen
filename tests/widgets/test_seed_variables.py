@@ -60,10 +60,10 @@ def test_unsaved_key_is_resent_after_klippy_restart(entry_mod):
     on_state = window.ws.klippy_state_signal.connect.call_args.args[0]
     emit = window.run_gcode_signal.emit
     on_update({"variables": {}})
-    on_state("ready")
     on_update({"variables": {}})
     assert emit.call_count == 1
-    on_state("startup")
+    # Fast restart: disconnect resets the stored state, so only "ready" is emitted
+    on_state("ready")
     on_update({"variables": {}})
     assert emit.call_count == 2
 

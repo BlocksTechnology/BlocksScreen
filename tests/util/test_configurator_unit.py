@@ -830,6 +830,51 @@ class TestCpyCfgFiles:
         # Klipper's next SAVE_VARIABLE would drop an append; the seeder adds keys instead
         assert tgt.read_text() == "[g]\nopt_a: existing\n"
 
+    def test_unloadable_variables_cfg_repaired(self, tmp_path):
+        mgr = _make_manager(tmp_path, cpy_files=["variables.cfg"])
+        src = _write(mgr.repo / "variables.cfg", "[Variables]\na = 1\n")
+        tgt = _write(
+            mgr.config_dir / "variables.cfg",
+            "[Variables]\nb = 2\na = 3\n[Variables]\nc = 'x'\n",
+        )
+        mgr.repo_fi_name = {"variables.cfg": [src]}
+        mgr.config_fi_name = {"variables.cfg": [tgt]}
+        mgr._cpy_cfg_files()
+        assert tgt.read_text() == "[Variables]\na = 3\nb = 2\nc = 'x'\n\n"
+
+
+class TestRepairVariables:
+    BROKEN = "[Variables]\nb = 2\n[Variables]\nb = 5\npct = '50%'\nbare = PLA\n"
+
+    def test_loadable_file_untouched(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        text = "[Variables]\nb = 2\nok = '50%%'\n"
+        tgt = _write(mgr.config_dir / "variables.cfg", text)
+        assert mgr._repair_variables(tgt) is False
+        assert tgt.read_text() == text
+        assert not list(mgr.backup_dir.iterdir())
+
+    def test_rewrites_as_klipper_loads_it(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        tgt = _write(mgr.config_dir / "variables.cfg", self.BROKEN)
+        assert mgr._repair_variables(tgt) is True
+        # Later duplicate wins; values Klipper's parser rejects are dropped
+        assert tgt.read_text() == "[Variables]\nb = 5\n\n"
+        assert mgr._repair_variables(tgt) is False
+
+    def test_original_backed_up(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        tgt = _write(mgr.config_dir / "variables.cfg", self.BROKEN)
+        mgr._repair_variables(tgt)
+        (backup,) = mgr.backup_dir.iterdir()
+        assert backup.read_text() == self.BROKEN
+
+    def test_unparseable_file_left_as_is(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        tgt = _write(mgr.config_dir / "variables.cfg", "a = 1\n")
+        assert mgr._repair_variables(tgt) is False
+        assert tgt.read_text() == "a = 1\n"
+
 
 class TestVariableDefaults:
     def _mgr(self, tmp_path, text: str) -> ConfigManager:
