@@ -20,13 +20,11 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import pathlib
-import shutil
-import tempfile
 from collections.abc import Iterable, Sequence
 
 from devices.discovery.serial_devices import Device, SerialScanner
+from helper_methods import atomic_write_text
 
 from .configurator import ConfigManager
 from .device_profiles import (
@@ -45,32 +43,6 @@ PRINTER_CFG = "printer.cfg"
 BOOT_SCAN_TIMEOUT = 1.0
 
 CONSENT_PATH = pathlib.Path.home() / ".config" / "blockscreen" / "device_consent.json"
-
-
-def atomic_write_text(path: pathlib.Path, text: str) -> None:
-    """Replace path's content in one step: readers see the old or the new file.
-
-    Klipper may read printer.cfg at any moment (its own start, a restart), and
-    a power cut mid-write must not leave a truncated file - the next boot's
-    merge would then rebuild it from the repo and lose the SAVE_CONFIG block.
-    Symlinks are followed so the link itself is kept.
-    """
-    target = path.resolve()
-    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text)
-            f.flush()
-            os.fsync(f.fileno())
-        if target.exists():
-            shutil.copymode(target, tmp)
-        os.replace(tmp, target)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
 
 
 class DeviceConsent:
