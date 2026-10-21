@@ -524,6 +524,42 @@ class TestMergeCfgParser:
         tgt = _write(tmp_path / "vars_target.cfg", "[g]\nk: v\n")
         assert mgr.merge_cfg(src, tgt) is True
 
+    def test_missing_option_lands_in_its_own_section(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[server]\na: 1\nb: 2\n[other]\nc: 3\n")
+        tgt = _write(tmp_path / "t.cfg", "[server]\na: 1\n[other]\nc: 3\n")
+        assert mgr.merge_cfg(src, tgt) is True
+        result = configparser.ConfigParser()
+        result.read_string(tgt.read_text())
+        assert result.get("server", "b") == "2"
+        assert not result.has_option("other", "b")
+
+    def test_missing_option_header_without_newline(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[Variables]\na = 1\n")
+        tgt = _write(tmp_path / "t.cfg", "[Variables]")
+        assert mgr.merge_cfg(src, tgt) is True
+        result = configparser.ConfigParser()
+        result.read_string(tgt.read_text())
+        assert result.get("Variables", "a") == "1"
+
+    def test_missing_option_goes_into_last_copy_of_repeated_section(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[a]\nx: 1\ny: 2\n")
+        tgt = _write(tmp_path / "t.cfg", "[a]\nx: 1\n[b]\nz: 3\n[a]\nw: 4\n")
+        assert mgr.merge_cfg(src, tgt) is True
+        assert tgt.read_text() == "[a]\nx: 1\n[b]\nz: 3\n[a]\ny= 2\nw: 4\n"
+
+    def test_missing_multiline_value_stays_one_option(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[a]\nx: 1\nfiles:\n  p.cfg\n  m.conf\n")
+        tgt = _write(tmp_path / "t.cfg", "[a]\nx: 1\n[b]\nz: 3\n")
+        assert mgr.merge_cfg(src, tgt) is True
+        result = configparser.ConfigParser()
+        result.read_string(tgt.read_text())
+        assert result.get("a", "files").split() == ["p.cfg", "m.conf"]
+        assert result.options("b") == ["z"]
+
 
 # =========================================================================
 # merge_cfg — marker-aware (printer.cfg, SAVE_CONFIG)
@@ -907,6 +943,22 @@ class TestVariableDefaults:
         mgr.repo_fi_name = {}
         assert mgr.variable_defaults() == {}
         assert self._mgr(tmp_path, "[Other]\na = 1\n").variable_defaults() == {}
+
+    def test_seed_only_file_kept_when_present(self, tmp_path):
+        mgr = _make_manager(tmp_path, cpy_files=["moonraker.conf"])
+        src = _write(mgr.repo / "moonraker.conf", "[server]\n")
+        tgt = _write(mgr.config_dir / "moonraker.conf", "[server]\n# patched\n")
+        mgr.repo_fi_name = {"moonraker.conf": [src]}
+        mgr.config_fi_name = {"moonraker.conf": [tgt]}
+        mgr._cpy_cfg_files()
+        assert tgt.read_text() == "[server]\n# patched\n"
+
+    def test_seed_only_file_seeded_when_missing(self, tmp_path):
+        mgr = _make_manager(tmp_path, cpy_files=["moonraker.conf"])
+        src = _write(mgr.repo / "moonraker.conf", "[server]\n")
+        mgr.repo_fi_name = {"moonraker.conf": [src]}
+        mgr._cpy_cfg_files()
+        assert (mgr.config_dir / "moonraker.conf").read_text() == "[server]\n"
 
 
 # =========================================================================

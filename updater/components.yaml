@@ -76,6 +76,8 @@ components:
     path: ~/Spoolman
     url: https://github.com/Donkie/Spoolman
     branch: master
+    # v0.27.0: upstream calls master untested and its DB migrations one-way; bump per release.
+    version: bed3f14ee77a3a571d31b14215d54b0b88a7519c
     service: Spoolman.service
     reset_mode: hard
     order: 21
