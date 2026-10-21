@@ -68,36 +68,45 @@ if [ -z "$REINSTALL" ] && [ -n "$(find "$BSENV/lib" -name '*.so' -size 0 -print 
 fi
 
 # 3. Full pinned requirements when the set changed (also done by post-merge).
-REQS_HASH=$(md5sum "$REQS" | cut -d' ' -f1)
-if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
-    # shellcheck disable=SC2086
-    if _as_blocks "$BSENV/bin/pip" install --quiet $REINSTALL \
-        --only-binary :all: \
-        --no-binary sdbus,sdbus-networkmanager \
-        --upgrade-strategy=only-if-needed \
-        -r "$BS_PATH/scripts/requirements.txt"; then
-        echo "$REQS_HASH" >"$SENTINEL"
-        chown "$_BSENV_USER" "$SENTINEL" 2>/dev/null || true
-        rm -f "$ATTEMPT" 2>/dev/null || true
-    else
-        # pip resolves -r atomically: a single dep without an aarch64 wheel
-        # rejects the whole set, the sentinel never advances, and bootstrap
-        # re-thrashes this install on every boot. Bound the retries - keep
-        # trying for a few boots (covers transient/offline failures), then
-        # accept the partial venv so a deterministically-failing set stops
-        # thrashing the boot path.
-        _prev=$(cut -d' ' -f1 "$ATTEMPT" 2>/dev/null || true)
-        _cnt=$(cut -d' ' -f2 "$ATTEMPT" 2>/dev/null || true)
-        case "$_cnt" in '' | *[!0-9]*) _cnt=0 ;; esac
-        if [ "$_prev" = "$REQS_HASH" ]; then _cnt=$((_cnt + 1)); else _cnt=1; fi
-        echo "$REQS_HASH $_cnt" >"$ATTEMPT"
-        chown "$_BSENV_USER" "$ATTEMPT" 2>/dev/null || true
-        if [ "$_cnt" -ge 3 ]; then
-            echo "[bs-bootstrap] requirements failed ${_cnt}x; giving up to stop boot thrash (venv left as-is)"
+_install_reqs() {
+    REQS_HASH=$(md5sum "$REQS" | cut -d' ' -f1)
+    if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
+        # shellcheck disable=SC2086
+        if _as_blocks "$BSENV/bin/pip" install --quiet $REINSTALL \
+            --only-binary :all: \
+            --no-binary sdbus,sdbus-networkmanager \
+            --upgrade-strategy=only-if-needed \
+            -r "$BS_PATH/scripts/requirements.txt"; then
             echo "$REQS_HASH" >"$SENTINEL"
             chown "$_BSENV_USER" "$SENTINEL" 2>/dev/null || true
+            rm -f "$ATTEMPT" 2>/dev/null || true
+        else
+            # pip resolves -r atomically: a single dep without an aarch64 wheel
+            # rejects the whole set, the sentinel never advances, and bootstrap
+            # re-thrashes this install on every boot. Bound the retries - keep
+            # trying for a few boots (covers transient/offline failures), then
+            # accept the partial venv so a deterministically-failing set stops
+            # thrashing the boot path.
+            _prev=$(cut -d' ' -f1 "$ATTEMPT" 2>/dev/null || true)
+            _cnt=$(cut -d' ' -f2 "$ATTEMPT" 2>/dev/null || true)
+            case "$_cnt" in '' | *[!0-9]*) _cnt=0 ;; esac
+            if [ "$_prev" = "$REQS_HASH" ]; then _cnt=$((_cnt + 1)); else _cnt=1; fi
+            echo "$REQS_HASH $_cnt" >"$ATTEMPT"
+            chown "$_BSENV_USER" "$ATTEMPT" 2>/dev/null || true
+            if [ "$_cnt" -ge 3 ]; then
+                echo "[bs-bootstrap] requirements failed ${_cnt}x; giving up to stop boot thrash (venv left as-is)"
+                echo "$REQS_HASH" >"$SENTINEL"
+                chown "$_BSENV_USER" "$SENTINEL" 2>/dev/null || true
+            fi
         fi
     fi
+}
+_install_reqs
+# post-merge skips pip while we hold the venv lock: install what it merged meanwhile.
+if [ "$(md5sum "$REQS" | cut -d' ' -f1)" != "$REQS_HASH" ]; then
+    echo "[bs-bootstrap] requirements changed during install - installing again"
+    REINSTALL=""
+    _install_reqs
 fi
 # pip -r never removes a dropped pin; the glob keeps this free on every start once the stale backport is gone.
 if compgen -G "$BSENV/lib/python3*/site-packages/typing-*-info" >/dev/null; then
