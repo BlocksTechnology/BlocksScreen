@@ -198,7 +198,13 @@ def _seed_variables(main_window: MainWindow, manager: DeviceConfigManager) -> No
                 f"SAVE_VARIABLE VARIABLE={key} VALUE={shlex.quote(defaults[key])}"
             )
 
+    def _on_state(state: str) -> None:
+        # A send lost to a restart or shutdown is retried once Klippy is ready again.
+        if state != "ready":
+            sent.clear()
+
     main_window.printer.save_variables_update.connect(_on_update)
+    main_window.ws.klippy_state_signal.connect(_on_state)
 
 
 def _sd_notify(msg: str) -> None:

@@ -14,11 +14,16 @@ def entry_mod():
     return _load_entry_module()
 
 
-def _seed(entry_mod, defaults: dict[str, str]):
+def _window(entry_mod, defaults: dict[str, str]) -> MagicMock:
     window = MagicMock()
     manager = MagicMock()
     manager.variable_defaults.return_value = defaults
     entry_mod._seed_variables(window, manager)
+    return window
+
+
+def _seed(entry_mod, defaults: dict[str, str]):
+    window = _window(entry_mod, defaults)
     on_update = window.printer.save_variables_update.connect.call_args.args[0]
     return on_update, window.run_gcode_signal.emit
 
@@ -47,6 +52,20 @@ def test_key_is_sent_once_even_before_klipper_reports_it(entry_mod):
     on_update({"variables": {}})
     on_update({"variables": {"etemp": 0}})
     assert emit.call_count == 1
+
+
+def test_unsaved_key_is_resent_after_klippy_restart(entry_mod):
+    window = _window(entry_mod, {"heating": "False"})
+    on_update = window.printer.save_variables_update.connect.call_args.args[0]
+    on_state = window.ws.klippy_state_signal.connect.call_args.args[0]
+    emit = window.run_gcode_signal.emit
+    on_update({"variables": {}})
+    on_state("ready")
+    on_update({"variables": {}})
+    assert emit.call_count == 1
+    on_state("startup")
+    on_update({"variables": {}})
+    assert emit.call_count == 2
 
 
 def test_update_without_variables_is_ignored(entry_mod):
