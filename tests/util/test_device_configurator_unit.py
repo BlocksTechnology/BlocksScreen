@@ -297,7 +297,7 @@ class TestAtomicWrite:
         def fail(*_):
             raise OSError("disk full")
 
-        monkeypatch.setattr(dc.os, "replace", fail)
+        monkeypatch.setattr(os, "replace", fail)
         with pytest.raises(OSError):
             dc.atomic_write_text(target, "new\n")
         assert target.read_text() == "old\n"
