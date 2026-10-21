@@ -237,6 +237,14 @@ class TestBootChanged:
         _boot(dirs, monkeypatch, [AMU])
         assert _boot(dirs, monkeypatch, []).boot_changed is True
 
+    def test_variables_cfg_repaired(self, dirs, monkeypatch):
+        _, config_dir, _ = dirs
+        _boot(dirs, monkeypatch, [AMU])
+        # Klipper already refused this file, only a restart loads the repair
+        (config_dir / "variables.cfg").write_text("[Variables]\na = 1\nbare = PLA\n")
+        assert _boot(dirs, monkeypatch, [AMU]).boot_changed is True
+        assert _boot(dirs, monkeypatch, [AMU]).boot_changed is False
+
 
 class TestScanDevices:
     def test_by_id_listing_fills_in_what_the_daemon_missed(self, monkeypatch):

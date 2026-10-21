@@ -875,6 +875,14 @@ class TestRepairVariables:
         assert mgr._repair_variables(tgt) is False
         assert tgt.read_text() == "a = 1\n"
 
+    def test_escaped_percent_kept(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        text = "[Variables]\nbare = PLA\nok = '50%%'\n"
+        tgt = _write(mgr.config_dir / "variables.cfg", text)
+        assert mgr._repair_variables(tgt) is True
+        assert tgt.read_text() == "[Variables]\nok = '50%%'\n\n"
+        assert mgr._repair_variables(tgt) is False
+
 
 class TestVariableDefaults:
     def _mgr(self, tmp_path, text: str) -> ConfigManager:

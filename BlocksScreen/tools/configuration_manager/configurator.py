@@ -225,6 +225,8 @@ class ConfigManager:
         self.config_fi_name, self.config_fi_relpath = self._build_file_index(
             self.config_dir
         )
+        # Set by sync(): a Klipper that refused the old variables.cfg must restart.
+        self.variables_repaired = False
 
         self.sync()
 
@@ -629,7 +631,7 @@ class ConfigManager:
                 ok = False
                 if f == "variables.cfg":
                     # Klipper rewrites it from memory: new keys go in via SAVE_VARIABLE
-                    self._repair_variables(target)
+                    self.variables_repaired = self._repair_variables(target)
                     continue
                 if f == "printer.cfg":
                     ok = self.merge_cfg(src_file, target, marker=SV_CONFIG_MARKER)
@@ -667,9 +669,10 @@ class ConfigManager:
             loose.items("Variables") if loose.has_section("Variables") else []
         ):
             try:
-                if "%" in raw:
+                # Loose read skips interpolation: '%%' is Klipper's escaped '%', kept raw
+                if "%" in raw.replace("%%", ""):
                     raise ValueError("'%' breaks save_variables' parser")
-                ast.literal_eval(raw)
+                ast.literal_eval(raw.replace("%%", "%"))
             except (ValueError, SyntaxError, TypeError) as e:
                 _logger.warning("Dropping variables.cfg %s = %r: %s", key, raw, e)
                 continue
