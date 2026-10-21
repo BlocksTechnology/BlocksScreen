@@ -563,11 +563,7 @@ class CrashHandler:
         if self._original_threading_excepthook and hasattr(threading, "excepthook"):
             threading.excepthook = self._original_threading_excepthook
 
-        if self._fault_file:
-            try:
-                self._fault_file.close()
-            except OSError:
-                pass  # File already closed; nothing to recover
+        # Kept open: faulthandler writes teardown SEGVs here; a closed fd gets reused.
 
         CrashHandler._installed = False
         CrashHandler._instance = None
