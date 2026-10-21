@@ -27,6 +27,10 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 CONFIG_PATH: Path = Path("~/printer_data/config/printer.cfg").expanduser()
 
+# HH job detection never ends these (only complete/error); MMU_PRINT_END parks only on complete.
+_STALE_JOB_STATES: tuple[str, ...] = ("cancelled", "standby")
+_STALE_JOB_GRACE_MS: int = 5000
+
 
 def _gcode_value(value: object) -> str:
     """Quote a value for Klipper's shlex-based extended gcode parser."""
@@ -63,6 +67,10 @@ class AMUManager(QtCore.QObject):
         self._mmu_state: MMUState | None = None
         self._pre_gate_sensors: dict[int, bool] = {}
         self._print_state = ""
+        self._stale_job_timer = QtCore.QTimer(self)
+        self._stale_job_timer.setSingleShot(True)
+        self._stale_job_timer.setInterval(_STALE_JOB_GRACE_MS)
+        self._stale_job_timer.timeout.connect(self._end_stale_mmu_job)
 
     def _gate_map(self, gate: int, **params: object) -> bool:
         """Emit MMU_GATE_MAP for one gate; False when no gate is selected yet."""
@@ -310,6 +318,7 @@ class AMUManager(QtCore.QObject):
                 return
             self._mmu_state = state
         self.mmu_state_changed.emit(self._mmu_state)
+        self._check_stale_mmu_job()
 
     def on_object_updated(
         self, object_type: str, object_name: str, values: dict
@@ -321,6 +330,31 @@ class AMUManager(QtCore.QObject):
             self.on_pre_gate_update(values, object_name)
         elif object_type == "print_stats" and "state" in values:
             self._print_state = values["state"]
+            self._check_stale_mmu_job()
+
+    def _is_stale_mmu_job(self) -> bool:
+        """Return True while Happy-Hare runs a job print_stats has already left."""
+        state = self._mmu_state
+        return (
+            state is not None
+            and state.is_printing
+            and self._print_state in _STALE_JOB_STATES
+        )
+
+    def _check_stale_mmu_job(self) -> None:
+        """Arm the grace timer on a job desync, disarm it once the states agree."""
+        if not self._is_stale_mmu_job():
+            self._stale_job_timer.stop()
+        elif not self._stale_job_timer.isActive():
+            self._stale_job_timer.start()
+
+    def _end_stale_mmu_job(self) -> None:
+        """End the job HH's deferred MMU_PRINT_START re-opens after a fast cancel."""
+        if self._is_stale_mmu_job():
+            logger.warning(
+                "Ending HH job left open by print_stats %s", self._print_state
+            )
+            self.run_gcode_signal.emit(f"MMU_PRINT_END STATE={self._print_state}")
 
     def on_pre_gate_update(self, values: dict, name: str) -> None:
         """Track one pre-gate switch; the mmu aggregate hides unselected gates."""
