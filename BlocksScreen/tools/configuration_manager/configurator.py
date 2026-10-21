@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Literal
 
 from devices.discovery.serial_devices import SerialScanner
+from helper_methods import atomic_write_text
 
 HOME = pathlib.Path.home()
 CONFIG_REPO: pathlib.Path = HOME / "RF50-Klipper"
@@ -586,7 +587,7 @@ class ConfigManager:
 
             merged = self._fix_beacon_serial(merged)
             if _tfl != merged:
-                target_file.write_text(merged, encoding="utf-8")
+                atomic_write_text(target_file, merged)
             return True
         except Exception as e:
             _logger.error("Caught exception while merging: %s" % e)

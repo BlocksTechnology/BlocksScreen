@@ -549,6 +549,19 @@ class TestMergeCfgMarker:
         assert SV_CONFIG_MARKER in merged
         assert "#*# saved_value: 123" in merged
 
+    def test_failed_write_keeps_saved_config(self, tmp_path, monkeypatch):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "src_printer.cfg", "[a]\nx: 1\n[b]\ny: 2\n")
+        old = "[a]\nx: 1\n" + SV_CONFIG_MARKER + "\n#*# saved_value: 123\n"
+        tgt = _write(tmp_path / "tgt_printer.cfg", old)
+
+        def power_cut(*_):
+            raise OSError("power cut")
+
+        monkeypatch.setattr(os, "replace", power_cut)
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is False
+        assert tgt.read_text() == old
+
     def test_target_no_marker_copies_source(self, tmp_path):
         mgr = _make_manager(tmp_path)
         src = _write(
