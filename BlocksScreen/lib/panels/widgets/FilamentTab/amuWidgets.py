@@ -27,6 +27,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self._text_rect: QtCore.QRect | None = None
         self._strip_rect: QtCore.QRect | None = None
         self._strip_path: QtGui.QPainterPath | None = None
+        self._selected_path: QtGui.QPainterPath | None = None
 
         white = QtGui.QColor(255, 255, 255)
         self._icons = {
@@ -50,6 +51,9 @@ class Spoll_button(QtWidgets.QAbstractButton):
 
         self._grid_border_pen = QtGui.QPen(self._GRID_GRAY)
         self._grid_border_pen.setWidth(2)
+
+        self._selected_border_pen = QtGui.QPen(white)
+        self._selected_border_pen.setWidth(2)
 
         self._grid_dark = self._GRID_GRAY.darker(150)
         self._grid_brush = QtGui.QBrush(
@@ -87,6 +91,11 @@ class Spoll_button(QtWidgets.QAbstractButton):
 
         self._strip_path = QtGui.QPainterPath()
         self._strip_path.addRoundedRect(QtCore.QRectF(self._strip_rect), 5, 5)
+
+        self._selected_path = QtGui.QPainterPath()
+        self._selected_path.addRoundedRect(
+            QtCore.QRectF(self.rect()).adjusted(1, 1, -1, -1), 8, 8
+        )
 
     def update_entry(self, gate_info: GateInfo, fm: FilamentPos):
         # color_rgb is Happy-Hare's parsed form, so w3c names like "red" work too.
@@ -145,6 +154,11 @@ class Spoll_button(QtWidgets.QAbstractButton):
         x = (self.width() - icon.width()) // 2
         y = int((self.height() - icon.height()) // 1.1)
         painter.drawPixmap(x, y, icon)
+
+        if self.isChecked():
+            painter.setPen(self._selected_border_pen)
+            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+            painter.drawPath(self._selected_path)
 
         painter.end()
 
