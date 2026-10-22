@@ -12,7 +12,9 @@ import logging
 import math
 import os
 import pathlib
+import shutil
 import struct
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +357,32 @@ def check_file_on_path(
 ) -> bool:
     """Return ``True`` if *filename* exists under *path*."""
     return (pathlib.Path(path) / filename).exists()
+
+
+def atomic_write_text(path: pathlib.Path, text: str) -> None:
+    """Write via temp file + rename: a power cut never truncates it; symlinks kept."""
+    target = path.resolve()
+    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        if target.exists():
+            shutil.copymode(target, tmp)
+        os.replace(tmp, target)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    # The rename survives a power cut only once the directory entry is on disk.
+    dir_fd = os.open(target.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
 
 
 def get_file_name(filename: str | None) -> str:

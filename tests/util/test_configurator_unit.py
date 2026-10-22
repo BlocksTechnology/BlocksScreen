@@ -261,6 +261,26 @@ class TestCopyFileSimple:
         copy_file_simple(src, dest / "renamed.cfg")
         assert (dest / "renamed.cfg").is_file()
 
+    def test_new_file_keeps_source_mode(self, tmp_path):
+        src = _write(tmp_path / "src.cfg", "data")
+        os.chmod(src, 0o644)
+        dest = tmp_path / "new.cfg"
+        copy_file_simple(src, dest)
+        assert dest.stat().st_mode & 0o777 == 0o644
+
+    def test_failed_overwrite_keeps_old_file(self, tmp_path, monkeypatch):
+        src = _write(tmp_path / "src.cfg", "new")
+        dest = _write(tmp_path / "dest.cfg", "old")
+
+        def power_cut(*_):
+            raise OSError("power cut")
+
+        monkeypatch.setattr(os, "replace", power_cut)
+        with pytest.raises(OSError):
+            copy_file_simple(src, dest)
+        assert dest.read_text() == "old"
+        assert not list(tmp_path.glob(".dest.cfg.*"))
+
 
 # =========================================================================
 # _build_file_index
@@ -524,6 +544,42 @@ class TestMergeCfgParser:
         tgt = _write(tmp_path / "vars_target.cfg", "[g]\nk: v\n")
         assert mgr.merge_cfg(src, tgt) is True
 
+    def test_missing_option_lands_in_its_own_section(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[server]\na: 1\nb: 2\n[other]\nc: 3\n")
+        tgt = _write(tmp_path / "t.cfg", "[server]\na: 1\n[other]\nc: 3\n")
+        assert mgr.merge_cfg(src, tgt) is True
+        result = configparser.ConfigParser()
+        result.read_string(tgt.read_text())
+        assert result.get("server", "b") == "2"
+        assert not result.has_option("other", "b")
+
+    def test_missing_option_header_without_newline(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[Variables]\na = 1\n")
+        tgt = _write(tmp_path / "t.cfg", "[Variables]")
+        assert mgr.merge_cfg(src, tgt) is True
+        result = configparser.ConfigParser()
+        result.read_string(tgt.read_text())
+        assert result.get("Variables", "a") == "1"
+
+    def test_missing_option_goes_into_last_copy_of_repeated_section(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[a]\nx: 1\ny: 2\n")
+        tgt = _write(tmp_path / "t.cfg", "[a]\nx: 1\n[b]\nz: 3\n[a]\nw: 4\n")
+        assert mgr.merge_cfg(src, tgt) is True
+        assert tgt.read_text() == "[a]\nx: 1\n[b]\nz: 3\n[a]\ny= 2\nw: 4\n"
+
+    def test_missing_multiline_value_stays_one_option(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "s.cfg", "[a]\nx: 1\nfiles:\n  p.cfg\n  m.conf\n")
+        tgt = _write(tmp_path / "t.cfg", "[a]\nx: 1\n[b]\nz: 3\n")
+        assert mgr.merge_cfg(src, tgt) is True
+        result = configparser.ConfigParser()
+        result.read_string(tgt.read_text())
+        assert result.get("a", "files").split() == ["p.cfg", "m.conf"]
+        assert result.options("b") == ["z"]
+
 
 # =========================================================================
 # merge_cfg — marker-aware (printer.cfg, SAVE_CONFIG)
@@ -548,6 +604,20 @@ class TestMergeCfgMarker:
         assert "[extruder]" in merged
         assert SV_CONFIG_MARKER in merged
         assert "#*# saved_value: 123" in merged
+
+    def test_failed_write_keeps_saved_config(self, tmp_path, monkeypatch):
+        mgr = _make_manager(tmp_path)
+        src = _write(tmp_path / "src_printer.cfg", "[a]\nx: 1\n[b]\ny: 2\n")
+        old = "[a]\nx: 1\n" + SV_CONFIG_MARKER + "\n#*# saved_value: 123\n"
+        tgt = _write(tmp_path / "tgt_printer.cfg", old)
+
+        def power_cut(*_):
+            raise OSError("power cut")
+
+        monkeypatch.setattr(os, "replace", power_cut)
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is False
+        assert tgt.read_text() == old
+        assert not list(tmp_path.glob(".tgt_printer.cfg.*"))
 
     def test_target_no_marker_copies_source(self, tmp_path):
         mgr = _make_manager(tmp_path)
@@ -820,17 +890,122 @@ class TestCpyCfgFiles:
         assert SV_CONFIG_MARKER in merged
         assert "#*# user: saved" in merged
 
-    def test_variables_cfg_differs_merge_called(self, tmp_path):
+    def test_existing_variables_cfg_left_to_klipper(self, tmp_path):
         mgr = _make_manager(tmp_path, cpy_files=["variables.cfg"])
         src = _write(mgr.repo / "variables.cfg", "[g]\nopt_a: repo\nopt_b: repo\n")
         tgt = _write(mgr.config_dir / "variables.cfg", "[g]\nopt_a: existing\n")
         mgr.repo_fi_name = {"variables.cfg": [src]}
         mgr.config_fi_name = {"variables.cfg": [tgt]}
         mgr._cpy_cfg_files()
-        result = configparser.ConfigParser()
-        result.read_string(tgt.read_text())
-        assert result.get("g", "opt_a") == "existing"
-        assert result.get("g", "opt_b") == "repo"
+        # Klipper's next SAVE_VARIABLE would drop an append; the seeder adds keys instead
+        assert tgt.read_text() == "[g]\nopt_a: existing\n"
+
+    def test_unloadable_variables_cfg_repaired(self, tmp_path):
+        mgr = _make_manager(tmp_path, cpy_files=["variables.cfg"])
+        src = _write(mgr.repo / "variables.cfg", "[Variables]\na = 1\n")
+        tgt = _write(
+            mgr.config_dir / "variables.cfg",
+            "[Variables]\nb = 2\na = 3\n[Variables]\nc = 'x'\n",
+        )
+        mgr.repo_fi_name = {"variables.cfg": [src]}
+        mgr.config_fi_name = {"variables.cfg": [tgt]}
+        mgr._cpy_cfg_files()
+        assert tgt.read_text() == "[Variables]\na = 3\nb = 2\nc = 'x'\n\n"
+
+
+class TestRepairVariables:
+    BROKEN = "[Variables]\nb = 2\n[Variables]\nb = 5\npct = '50%'\nbare = PLA\n"
+
+    def test_loadable_file_untouched(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        text = "[Variables]\nb = 2\nok = '50%%'\n"
+        tgt = _write(mgr.config_dir / "variables.cfg", text)
+        assert mgr._repair_variables(tgt) is False
+        assert tgt.read_text() == text
+        assert not list(mgr.backup_dir.iterdir())
+
+    def test_rewrites_as_klipper_loads_it(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        tgt = _write(mgr.config_dir / "variables.cfg", self.BROKEN)
+        assert mgr._repair_variables(tgt) is True
+        # Later duplicate wins; values Klipper's parser rejects are dropped
+        assert tgt.read_text() == "[Variables]\nb = 5\n\n"
+        assert mgr._repair_variables(tgt) is False
+
+    def test_original_backed_up(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        tgt = _write(mgr.config_dir / "variables.cfg", self.BROKEN)
+        mgr._repair_variables(tgt)
+        (backup,) = mgr.backup_dir.iterdir()
+        assert backup.read_text() == self.BROKEN
+
+    def test_unparseable_file_left_as_is(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        tgt = _write(mgr.config_dir / "variables.cfg", "a = 1\n")
+        assert mgr._repair_variables(tgt) is False
+        assert tgt.read_text() == "a = 1\n"
+
+    def test_escaped_percent_kept(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        text = "[Variables]\nbare = PLA\nok = '50%%'\n"
+        tgt = _write(mgr.config_dir / "variables.cfg", text)
+        assert mgr._repair_variables(tgt) is True
+        assert tgt.read_text() == "[Variables]\nok = '50%%'\n\n"
+        assert mgr._repair_variables(tgt) is False
+
+    def test_failed_repair_keeps_original(self, tmp_path, monkeypatch):
+        mgr = _make_manager(tmp_path)
+        tgt = _write(mgr.config_dir / "variables.cfg", self.BROKEN)
+
+        def power_cut(*_):
+            raise OSError("power cut")
+
+        monkeypatch.setattr(os, "replace", power_cut)
+        with pytest.raises(OSError):
+            mgr._repair_variables(tgt)
+        assert tgt.read_text() == self.BROKEN
+        assert not list(mgr.config_dir.glob(".variables.cfg.*"))
+
+
+class TestVariableDefaults:
+    def _mgr(self, tmp_path, text: str) -> ConfigManager:
+        mgr = _make_manager(tmp_path)
+        mgr.repo_fi_name = {"variables.cfg": [_write(mgr.repo / "variables.cfg", text)]}
+        return mgr
+
+    def test_returns_literal_keys(self, tmp_path):
+        mgr = self._mgr(tmp_path, "[Variables]\netemp=0\nprintcore_type: 'Standard'\n")
+        assert mgr.variable_defaults() == {"etemp": "0", "printcore_type": "'Standard'"}
+
+    def test_skips_hh_owned_and_unsendable_values(self, tmp_path):
+        mgr = self._mgr(
+            tmp_path,
+            "[Variables]\nmmu_state_gate_selected = 0\npct = '50%'\n"
+            "semi = 'a;b'\nbare = PLA\nok = True\n",
+        )
+        assert mgr.variable_defaults() == {"ok": "True"}
+
+    def test_no_repo_file_or_section(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        mgr.repo_fi_name = {}
+        assert mgr.variable_defaults() == {}
+        assert self._mgr(tmp_path, "[Other]\na = 1\n").variable_defaults() == {}
+
+    def test_seed_only_file_kept_when_present(self, tmp_path):
+        mgr = _make_manager(tmp_path, cpy_files=["moonraker.conf"])
+        src = _write(mgr.repo / "moonraker.conf", "[server]\n")
+        tgt = _write(mgr.config_dir / "moonraker.conf", "[server]\n# patched\n")
+        mgr.repo_fi_name = {"moonraker.conf": [src]}
+        mgr.config_fi_name = {"moonraker.conf": [tgt]}
+        mgr._cpy_cfg_files()
+        assert tgt.read_text() == "[server]\n# patched\n"
+
+    def test_seed_only_file_seeded_when_missing(self, tmp_path):
+        mgr = _make_manager(tmp_path, cpy_files=["moonraker.conf"])
+        src = _write(mgr.repo / "moonraker.conf", "[server]\n")
+        mgr.repo_fi_name = {"moonraker.conf": [src]}
+        mgr._cpy_cfg_files()
+        assert (mgr.config_dir / "moonraker.conf").read_text() == "[server]\n"
 
 
 # =========================================================================

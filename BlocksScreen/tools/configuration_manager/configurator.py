@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import ast
 import configparser
 import hashlib
 import logging
@@ -12,6 +13,7 @@ from datetime import datetime
 from typing import Literal
 
 from devices.discovery.serial_devices import SerialScanner
+from helper_methods import atomic_write_text
 
 HOME = pathlib.Path.home()
 CONFIG_REPO: pathlib.Path = HOME / "RF50-Klipper"
@@ -21,8 +23,15 @@ DETECTION_CACHE: pathlib.Path = HOME / ".rf50_config.json"
 VARIABLES_FILE: pathlib.Path = KLIPPER_CONFIG_DIR / "variables.cfg"
 PRINTER_CONFIG: pathlib.Path = KLIPPER_CONFIG_DIR / "printer.cfg"
 SV_CONFIG_MARKER = "#*# <---------------------- SAVE_CONFIG ---------------------->"
+# Copied only when missing; bs_migrate_moonraker_conf and Mainsail own it after that.
+SEED_ONLY_FILES: frozenset[str] = frozenset({"moonraker.conf"})
 
 _logger = logging.getLogger(__name__)
+
+
+def _opt_line(opt: str, val: str) -> str:
+    """Option line; continuation lines indented so a multi-line value stays one option."""
+    return f"{opt}= " + val.replace("\n", "\n    ")
 
 
 def _timestamp() -> str:
@@ -142,9 +151,15 @@ def copy_file_simple(orig: pathlib.Path | str, dest: pathlib.Path | str):
         dest = pathlib.Path(dest)
     if not orig.is_file() or not orig.exists():
         raise FileNotFoundError("File %s not found" % orig.as_posix())
-    res = shutil.copy2(orig, dest, follow_symlinks=False)
+    if dest.is_dir():
+        dest = dest / orig.name
+    existed = dest.exists()
+    # Overwritten in place, a power cut mid-copy leaves Klipper a truncated config.
+    atomic_write_text(dest, orig.read_text(encoding="utf-8"))
+    if not existed:
+        shutil.copymode(orig, dest)
     _logger.info("Copied file %s to destination %s" % (orig.name, dest))
-    return res
+    return str(dest)
 
 
 class ConfigManager:
@@ -224,6 +239,8 @@ class ConfigManager:
         self.config_fi_name, self.config_fi_relpath = self._build_file_index(
             self.config_dir
         )
+        # Set by sync(): a Klipper that refused the old variables.cfg must restart.
+        self.variables_repaired = False
 
         self.sync()
 
@@ -542,12 +559,13 @@ class ConfigManager:
                         target_cfg.read_string(_tfl)
 
                     appendix = []
+                    inserts: dict[str, list[tuple[str, str]]] = {}
                     for section in src_cfg.sections():
                         if section.startswith("mcu") or section.startswith("beacon"):
                             continue
                         if not target_cfg.has_section(section):
                             appendix.append(
-                                (section, True, list(src_cfg.items(section, raw=True)))
+                                (section, list(src_cfg.items(section, raw=True)))
                             )
                         else:
                             sec_missing = [
@@ -556,37 +574,52 @@ class ConfigManager:
                                 if not target_cfg.has_option(section, o)
                             ]
                             if sec_missing:
-                                appendix.append((section, False, sec_missing))
+                                inserts[section] = sec_missing
+
+                    base = _tfl
+                    if inserts:
+                        # A repeated header breaks Klipper save_variables' parser.
+                        tlines = _tfl.splitlines(keepends=True)
+                        for i in range(len(tlines) - 1, -1, -1):
+                            m = configparser.ConfigParser.SECTCRE.match(
+                                tlines[i].strip()
+                            )
+                            if m and m.group("header") in inserts:
+                                opts = inserts.pop(m.group("header"))
+                                tlines[i] = tlines[i].rstrip("\n") + "\n"
+                                tlines[i + 1 : i + 1] = [
+                                    _opt_line(o, v) + "\n" for o, v in opts
+                                ]
+                        base = "".join(tlines)
 
                     for opt, val in src_cfg.defaults().items():
                         if not target_cfg.defaults().get(opt):
                             items = (
-                                appendix[-1][2]
+                                appendix[-1][1]
                                 if appendix and appendix[-1][0] == "DEFAULT"
                                 else None
                             )
                             if items is not None:
                                 items.append((opt, val))
                             else:
-                                appendix.append(("DEFAULT", True, [(opt, val)]))
+                                appendix.append(("DEFAULT", [(opt, val)]))
 
                     if appendix:
                         lines = []
-                        for section, is_new, opts in appendix:
-                            if is_new:
-                                lines.append(f"[{section}]")
+                        for section, opts in appendix:
+                            lines.append(f"[{section}]")
                             for opt, val in opts:
-                                lines.append(f"{opt}= {val}")
+                                lines.append(_opt_line(opt, val))
                         text = "\n".join(lines)
-                        if _tfl and not _tfl.endswith("\n"):
-                            _tfl += "\n"
-                        merged = _tfl + text + "\n"
+                        if base and not base.endswith("\n"):
+                            base += "\n"
+                        merged = base + text + "\n"
                     else:
-                        merged = _tfl
+                        merged = base
 
             merged = self._fix_beacon_serial(merged)
             if _tfl != merged:
-                target_file.write_text(merged, encoding="utf-8")
+                atomic_write_text(target_file, merged)
             return True
         except Exception as e:
             _logger.error("Caught exception while merging: %s" % e)
@@ -617,6 +650,8 @@ class ConfigManager:
                     _logger.info("File created")
                     continue
 
+                if f in SEED_ONLY_FILES:
+                    continue
                 target = min(target_files, key=lambda p: len(p.parents))
                 if target.exists():
                     chk_src = get_file_checksum(src_file)
@@ -626,9 +661,13 @@ class ConfigManager:
 
                 # Files are different so they need merging
                 ok = False
+                if f == "variables.cfg":
+                    # Klipper rewrites it from memory: new keys go in via SAVE_VARIABLE
+                    self.variables_repaired = self._repair_variables(target)
+                    continue
                 if f == "printer.cfg":
                     ok = self.merge_cfg(src_file, target, marker=SV_CONFIG_MARKER)
-                elif f in ["variables.cfg", "BlocksScreen.cfg"]:
+                elif f == "BlocksScreen.cfg":
                     ok = self.merge_cfg(src_file, target)
                 else:
                     ok = copy_file_simple(src_file, target)
@@ -638,6 +677,70 @@ class ConfigManager:
             _logger.info("Caught exception while trying to create blank file %s" % e)
         except Exception as e:
             _logger.info("Caught exception while cpy files: %s" % e)
+
+    def _repair_variables(self, target: pathlib.Path) -> bool:
+        """Rewrite a variables.cfg save_variables cannot load, in its own format."""
+        strict = configparser.ConfigParser()
+        try:
+            # Same checks as save_variables.loadVariables, which fails Klippy's config
+            strict.read(target, encoding="utf-8")
+            if strict.has_section("Variables"):
+                for _, raw in strict.items("Variables"):
+                    ast.literal_eval(raw)
+            return False
+        except (configparser.Error, ValueError, SyntaxError, TypeError) as e:
+            _logger.warning("variables.cfg unloadable by Klipper, repairing: %s", e)
+        loose = configparser.ConfigParser(strict=False, interpolation=None)
+        try:
+            loose.read(target, encoding="utf-8")
+        except (configparser.Error, ValueError) as e:
+            _logger.error("variables.cfg beyond repair, left as is: %s", e)
+            return False
+        keep = {}
+        for key, raw in (
+            loose.items("Variables") if loose.has_section("Variables") else []
+        ):
+            try:
+                # Loose read skips interpolation: '%%' is Klipper's escaped '%', kept raw
+                if "%" in raw.replace("%%", ""):
+                    raise ValueError("'%' breaks save_variables' parser")
+                ast.literal_eval(raw.replace("%%", "%"))
+            except (ValueError, SyntaxError, TypeError) as e:
+                _logger.warning("Dropping variables.cfg %s = %r: %s", key, raw, e)
+                continue
+            keep[key] = raw
+        backup = self.backup_dir / f"variables.cfg.{_timestamp()}"
+        shutil.copy2(target, backup)
+        lines = [f"{k} = {v}\n" for k, v in sorted(keep.items())]
+        atomic_write_text(target, "[Variables]\n" + "".join(lines) + "\n")
+        _logger.info("Repaired variables.cfg, original kept at %s", backup)
+        return True
+
+    def variable_defaults(self) -> dict[str, str]:
+        """Repo variables.cfg keys Klipper's SAVE_VARIABLE can take, as raw literals."""
+        src_files = self.repo_fi_name.get("variables.cfg", [])
+        if not src_files:
+            return {}
+        cfg = configparser.ConfigParser(interpolation=None)
+        try:
+            cfg.read(min(src_files, key=lambda p: len(p.parents)), encoding="utf-8")
+        except configparser.Error as e:
+            _logger.error("Unreadable repo variables.cfg: %s", e)
+            return {}
+        if not cfg.has_section("Variables"):
+            return {}
+        defaults = {}
+        for key, raw in cfg.items("Variables"):
+            # HH owns mmu_*; '%' breaks save_variables' parser, ';' is a gcode comment
+            if key.startswith("mmu_") or "%" in raw or ";" in raw:
+                continue
+            try:
+                ast.literal_eval(raw)
+            except (ValueError, SyntaxError):
+                _logger.warning("variables.cfg %s is not a literal: %r", key, raw)
+                continue
+            defaults[key] = raw
+        return defaults
 
     def cmp_file(self, src, target) -> bool:
         src = pathlib.Path(src)

@@ -1,5 +1,6 @@
 import logging
 import os
+import shlex
 import shutil
 import signal
 import socket
@@ -181,6 +182,30 @@ def initialize_conf_manager() -> None:
         )
 
 
+def _seed_variables(main_window: MainWindow, manager: DeviceConfigManager) -> None:
+    """SAVE_VARIABLE repo keys Klipper lacks: a file append is lost on its next save."""
+    defaults = manager.variable_defaults()
+    sent: set[str] = set()
+
+    def _on_update(status: dict) -> None:
+        live = status.get("variables")
+        if live is None:
+            return
+        for key in defaults.keys() - live.keys() - sent:
+            sent.add(key)
+            logging.info("Seeding Klipper variable %s = %s", key, defaults[key])
+            main_window.run_gcode_signal.emit(
+                f"SAVE_VARIABLE VARIABLE={key} VALUE={shlex.quote(defaults[key])}"
+            )
+
+    def _on_state(_state: str) -> None:
+        # Emits are change-only and a fast restart emits just "ready": clear on any.
+        sent.clear()
+
+    main_window.printer.save_variables_update.connect(_on_update)
+    main_window.ws.klippy_state_signal.connect(_on_state)
+
+
 def _sd_notify(msg: str) -> None:
     sock_path = os.environ.get("NOTIFY_SOCKET", "")
     if not sock_path:
@@ -321,6 +346,7 @@ if __name__ == "__main__":
             # Klipper may have started before the boot sync rewrote
             # printer.cfg; restarted once Moonraker is up and no job runs.
             main_window.request_klipper_restart()
+        _seed_variables(main_window, conf_man)
         # Live side of the device templates: printer.cfg follows devices
         # plugged in while running (after the user's OK for templates that
         # ask for it), and Klipper is restarted to load it.
