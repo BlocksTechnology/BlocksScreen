@@ -1573,7 +1573,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return tab
 
     def _setup_header(self) -> None:
-        self.main_header_layout = QtWidgets.QGroupBox(parent=self.main_widget)
+        self.main_header_layout = QtWidgets.QFrame(parent=self.main_widget)
         self.main_header_layout.setObjectName("main_header_layout")
         self.main_header_layout.setGeometry(QtCore.QRect(0, 0, 800, 60))
         self.main_header_layout.setMinimumSize(QtCore.QSize(800, 60))
@@ -1594,7 +1594,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "    selection-color:rgb(60,60,60);\n"
             "}\n"
             "\n"
-            "QGroupBox{\n"
+            "#main_header_layout{\n"
             "    background-color: rgb(50,50,50);\n"
             "    border: none; \n"
             "    border-color : rgb(60,60,60);\n"
