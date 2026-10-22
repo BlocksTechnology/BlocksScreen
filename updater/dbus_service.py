@@ -115,6 +115,7 @@ class UpdaterInterface(
         self._busy: bool = False
         self._provisioning: bool = False
         self._provisioned: bool = False
+        self._followed_up: bool = False
         # request_status waits for the boot pass, so a client never sees pre-install status.
         self._boot_pass_done: bool = False
         self._deploy_hold: asyncio.Task | None = None
@@ -315,14 +316,37 @@ class UpdaterInterface(
                 await self._emit_status()
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
+            await self._followup_pass()
             interval = self._svc.poll_interval
             if self._svc.has_fetch_failures():
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)
                 _log.info("fetch failures pending - re-polling in %.0fs", interval)
-            elif not self._provisioned:
+            elif not self._provisioned or not self._followed_up:
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)
-                _log.info("provisioning deferred - re-polling in %.0fs", interval)
+                _log.info(
+                    "provisioning/followup deferred - re-polling in %.0fs", interval
+                )
             await asyncio.sleep(interval)
+
+    async def _followup_pass(self) -> None:
+        """After provisioning, apply manifest changes the previous daemon could not see."""
+        if not self._provisioned or self._followed_up or self._busy:
+            return
+        try:
+            retry, ran = await self._svc.run_followup(self._set_busy)
+            if ran:
+                await self._emit_status()
+        except Exception as exc:  # noqa: BLE001
+            _log.error("followup pass failed: %s", exc, exc_info=True)
+            retry, ran = False, False
+        self._followed_up = not retry
+        if not ran:
+            return
+        # The restart that led here skipped the Update's background apt sweep.
+        if not self._svc.daemon_restart_pending:
+            self._spawn(
+                self._svc.background_apt_upgrade(), name="background_apt_upgrade"
+            )
 
     @sdbus.dbus_method_async(result_signature="b")
     async def update_all(self) -> bool:
@@ -405,16 +429,7 @@ class UpdaterInterface(
     async def _update_all_locked(self) -> None:
         """Update dirty components and errored git repos (update self-heals those)."""
         statuses = await self._svc.check_status()
-        dirty = {
-            name
-            for name, s in statuses.items()
-            if s.commits_behind
-            or s.packages_upgradable > 0
-            or s.has_local_changes
-            or s.needs_install
-            or s.branch_mismatch
-            or (s.error is not None and s.kind != "apt")
-        }
+        dirty = {name for name, s in statuses.items() if s.needs_update}
         if dirty:
             await self._svc.update_all(dirty)
         else:

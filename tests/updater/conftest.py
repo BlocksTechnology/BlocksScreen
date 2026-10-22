@@ -58,6 +58,9 @@ def svc():
     mock_svc.recover = AsyncMock()
     mock_svc.has_fetch_failures = MagicMock(return_value=False)
     mock_svc.provision_missing = AsyncMock(return_value=False)
+    mock_svc.run_followup = AsyncMock(return_value=(False, False))
+    mock_svc.background_apt_upgrade = AsyncMock()
+    mock_svc.daemon_restart_pending = False
     mock_svc.reconcile = AsyncMock(return_value=True)
     mock_svc.reconcile_if_pending = AsyncMock()
     mock_svc.deploy_pending = MagicMock(return_value=False)
@@ -80,6 +83,7 @@ def svc():
     s._busy = False
     s._provisioning = False
     s._provisioned = False
+    s._followed_up = False
     s._boot_pass_done = True
     s._deploy_hold = None
     s._capped_flag = None

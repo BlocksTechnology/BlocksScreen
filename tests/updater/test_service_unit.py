@@ -41,6 +41,28 @@ class TestLoggingCallback:
         cb.on_recover("klipper", True)
 
 
+class TestNeedsUpdate:
+    @pytest.mark.parametrize(
+        "fields",
+        [
+            {"commits_behind": 1},
+            {"packages_upgradable": 2},
+            {"has_local_changes": True},
+            {"needs_install": True},
+            {"branch_mismatch": True},
+            {"kind": "git", "error": "fetch failed"},
+        ],
+    )
+    def test_dirty(self, fields):
+        assert ComponentStatus(name="c", **fields).needs_update
+
+    @pytest.mark.parametrize(
+        "fields", [{}, {"kind": "apt", "error": "locked"}, {"packages_upgradable": -1}]
+    )
+    def test_clean(self, fields):
+        assert not ComponentStatus(name="c", **fields).needs_update
+
+
 class TestBackoff:
     def test_permanent_trips_long_fixed_cooldown(self):
         b = updater_service._Backoff(base=30, cap=1800, permanent=3600)
@@ -2325,6 +2347,171 @@ class TestProvisionMissing:
             svc._components = [comp]
             await svc.provision_missing()
         assert order == ["heal", "clone"]
+
+
+class TestRunFollowup:
+    """run_followup applies manifest entries the pre-update daemon never loaded."""
+
+    BASE = "a" * 40
+
+    @pytest.fixture
+    def svc(self, tmp_path):
+        s = UpdateService()
+        s._followup_path = tmp_path / "updater_followup"
+        s._components = [
+            ComponentConfig(name="BlocksScreen", kind="git", path=tmp_path),
+            ComponentConfig(
+                name="Spoolman", kind="git", url="https://x/s", version="b" * 40
+            ),
+            ComponentConfig(name="klipper", kind="git", url="https://x/k"),
+        ]
+        return s
+
+    @pytest.fixture(autouse=True)
+    def env(self):
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(
+                UpdateService, "deploy_running", AsyncMock(return_value=False)
+            ),
+            patch.object(
+                UpdateService, "update_all", AsyncMock(return_value=True)
+            ) as ua,
+            patch("updater.service.git_remote_reachable", AsyncMock(return_value=True)),
+        ):
+            yield ua
+
+    def _mark(self, svc, text: str | None = None) -> None:
+        svc._followup_path.write_text(f"{text or self.BASE}\n")
+
+    @pytest.mark.asyncio
+    async def test_no_marker_is_a_noop(self, svc, env):
+        with patch.object(UpdateService, "_followup_targets") as targets:
+            assert await svc.run_followup() == (False, False)
+        targets.assert_not_called()
+        env.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_malformed_marker_is_dropped(self, svc):
+        self._mark(svc, "not-a-sha")
+        assert await svc.run_followup() == (False, False)
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("cause", ["printing", "deploy", "lock"])
+    async def test_defers_and_keeps_marker(self, svc, env, printing, cause):
+        self._mark(svc)
+        printing.return_value = cause == "printing"
+        with (
+            patch.object(
+                UpdateService,
+                "deploy_running",
+                AsyncMock(return_value=cause == "deploy"),
+            ),
+            patch("updater.service.process_lock", lambda: nullcontext(cause != "lock")),
+        ):
+            assert await svc.run_followup() == (True, False)
+        assert svc._followup_path.exists()
+        env.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_applies_targets_and_clears_marker(self, svc, env):
+        self._mark(svc)
+        on_busy = MagicMock()
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+        ):
+            assert await svc.run_followup(on_busy) == (False, True)
+        env.assert_awaited_once_with({"Spoolman"})
+        assert on_busy.call_args_list == [call(True), call(False)]
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_failed_update_is_not_retried(self, svc, env):
+        # One-shot: the marker is gone before update_all, so a crash cannot loop it.
+        self._mark(svc)
+        env.side_effect = RuntimeError("boom")
+        with (
+            patch.object(
+                UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+            ),
+            pytest.raises(RuntimeError),
+        ):
+            await svc.run_followup()
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_nothing_dirty_clears_marker(self, svc, env):
+        self._mark(svc)
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value=set())
+        ):
+            assert await svc.run_followup() == (False, False)
+        env.assert_not_called()
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_offline_defers_then_leaves_it_to_update(self, svc, env):
+        self._mark(svc)
+        tries = updater_service._OFFLINE_PROVISION_TRIES
+        with (
+            patch.object(
+                UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+            ),
+            patch(
+                "updater.service.git_remote_reachable", AsyncMock(return_value=False)
+            ),
+        ):
+            results = [await svc.run_followup() for _ in range(tries)]
+        assert results == [(True, False)] * (tries - 1) + [(False, False)]
+        env.assert_not_called()
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_targets_are_changed_and_dirty_entries_except_ui(self, svc):
+        old = [
+            ComponentConfig(name="BlocksScreen", kind="git"),  # changed, but excluded
+            ComponentConfig(name="Spoolman", kind="git", url="https://x/s"),  # new pin
+            ComponentConfig(name="klipper", kind="git", url="https://x/k"),  # same
+        ]
+        statuses = {
+            n: ComponentStatus(name=n, commits_behind=1)
+            for n in ("BlocksScreen", "Spoolman", "klipper")
+        }
+        with (
+            patch(
+                "updater.service.git_show_file", AsyncMock(return_value="yaml")
+            ) as show,
+            patch("updater.service.load_components", return_value=(old, 60.0)),
+            patch.object(
+                UpdateService, "check_status", AsyncMock(return_value=statuses)
+            ),
+        ):
+            assert await svc._followup_targets(self.BASE) == {"Spoolman"}
+        show.assert_awaited_once_with(
+            svc._components[0].path, self.BASE, "updater/components.yaml"
+        )
+
+    @pytest.mark.asyncio
+    async def test_clean_changed_entry_is_not_a_target(self, svc):
+        statuses = {"Spoolman": ComponentStatus(name="Spoolman")}
+        with (
+            patch("updater.service.git_show_file", AsyncMock(return_value="yaml")),
+            patch("updater.service.load_components", return_value=([], 60.0)),
+            patch.object(
+                UpdateService, "check_status", AsyncMock(return_value=statuses)
+            ),
+        ):
+            assert await svc._followup_targets(self.BASE) == set()
+
+    @pytest.mark.asyncio
+    async def test_missing_base_manifest_has_no_targets(self, svc):
+        with (
+            patch("updater.service.git_show_file", AsyncMock(return_value="")),
+            patch.object(UpdateService, "check_status") as check,
+        ):
+            assert await svc._followup_targets(self.BASE) == set()
+        check.assert_not_called()
 
 
 class TestReclone:

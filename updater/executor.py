@@ -259,7 +259,9 @@ async def _commits_behind_or_error(
 ) -> tuple[int, ComponentStatus | None]:
     """Resolve commits-behind; return (n, None) or (-1, error ComponentStatus)."""
     if version:
-        return 0, None
+        # Off the pin = one pending update, else a new pin is never applied.
+        pin = await git_ref_hash(path, f"{version}^{{commit}}")
+        return (0 if pin == current_hash else 1), None
     commits_behind = await git_commits_behind(path, remote_ref)
     if commits_behind != -1:
         return commits_behind, None
@@ -309,7 +311,7 @@ async def check_git_status(
         git_remote_url(path),
         git_is_dirty(path),
         git_describe(path),
-        git_describe(path, remote_ref),
+        git_describe(path, version or remote_ref),
     )
     if remote_url == "":
         logger.error("Failed at git_remote_url operation")
@@ -659,6 +661,14 @@ async def git_tree_has_path(path: Path | None, ref: str, repo_path: str) -> bool
         [GIT, "cat-file", "-e", f"{ref}:{repo_path}"], cwd=path, timeout=10.0
     )
     return ok
+
+
+async def git_show_file(path: Path | None, ref: str, repo_path: str) -> str:
+    """Return repo_path's content at ref (git show ref:path), or empty on any error."""
+    if path is None or not _GIT_SHA_RE.match(ref):
+        return ""
+    ok, output = await _run([GIT, "show", f"{ref}:{repo_path}"], cwd=path, timeout=10.0)
+    return output if ok else ""
 
 
 async def git_commits_behind(path: Path, remote_ref: str = "origin/HEAD") -> int:
