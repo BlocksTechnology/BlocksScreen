@@ -46,6 +46,7 @@ from updater.executor import (
     git_remote_reachable,
     git_repair,
     git_reset_to_hash,
+    git_show_file,
     git_tree_has_path,
     git_untracked_paths,
     is_git_repo,
@@ -68,6 +69,8 @@ _INFLIGHT_PATH = Path.home() / ".cache" / "blockscreen" / "updater_inflight.json
 # Present = fast recovery saturated (golden also looped).
 _FAULT_MARKER_PATH = Path.home() / ".cache" / "blockscreen" / "selfheal_fault.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
+# Written by hooks/BlocksScreen.sh: pre-update BlocksScreen hash whose manifest is stale.
+_FOLLOWUP_PATH = Path.home() / ".cache" / "blockscreen" / "updater_followup"
 _APT_STATUS_CACHE = Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json"
 _HISTORY_MAX_BYTES = 1_000_000
 _HISTORY_KEEP_LINES = 2000
@@ -260,11 +263,13 @@ class UpdateService:
         self._inflight_path = _INFLIGHT_PATH
         self._history_path = _HISTORY_PATH
         self._fault_marker_path = _FAULT_MARKER_PATH
+        self._followup_path = _FOLLOWUP_PATH
         self._log = logging.getLogger("updater")
         self._nrestarts_samples: dict[str, list[tuple[float, int]]] = {}
         self._restart_pending_until = 0.0
         self._reconciled = False
         self._offline_provision_tries = 0
+        self._offline_followup_tries = 0
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -560,6 +565,89 @@ class UpdateService:
                 if on_busy:
                     on_busy(False)
         return retry
+
+    async def run_followup(
+        self, on_busy: Callable[[bool], None] | None = None
+    ) -> tuple[bool, bool]:
+        """Apply manifest entries changed by the last BlocksScreen update; (retry, ran)."""
+        base = await asyncio.to_thread(self._read_followup)
+        if not base:
+            return False, False
+        if await klipper_printing() or await self.deploy_running():
+            self._log.info("followup: printing or deploy running, deferring")
+            return True, False
+        with process_lock() as acquired:
+            if not acquired:
+                self._log.info("followup: update in progress, deferring")
+                return True, False
+            # Busy before the network checks below, so an Update press is refused, not raced.
+            if on_busy:
+                on_busy(True)
+            try:
+                await self.reconcile_if_pending()
+                dirty = await self._followup_targets(base)
+                if dirty and not await self._followup_reachable(dirty):
+                    self._offline_followup_tries += 1
+                    if self._offline_followup_tries < _OFFLINE_PROVISION_TRIES:
+                        return True, False
+                    # Still shown dirty, so a later Update applies it.
+                    self._log.info("followup: still offline, leaving it to Update")
+                    dirty = set()
+                # One-shot: a failing entry must not re-run on every boot.
+                await asyncio.to_thread(self._clear_followup)
+                if not dirty:
+                    return False, False
+                self._log.info("followup: applying %s", sorted(dirty))
+                await self.update_all(dirty)
+            finally:
+                if on_busy:
+                    on_busy(False)
+        return False, True
+
+    async def _followup_targets(self, base: str) -> set[str]:
+        """Dirty components whose manifest entry differs from the one at base."""
+        ui = next((c for c in self._components if c.name == _UI_COMPONENT), None)
+        text = await git_show_file(
+            ui.path if ui else None, base, "updater/components.yaml"
+        )
+        if not text:
+            self._log.warning("followup: no manifest at %s, dropping", base[:8])
+            return set()
+        old = {c.name: c for c in load_components(text)[0]}
+        # BlocksScreen itself already updated: re-running it could loop.
+        changed = {
+            c.name
+            for c in self._components
+            if c.name != _UI_COMPONENT and old.get(c.name) != c
+        }
+        statuses = await self.check_status()
+        dirty = {n for n in changed if n in statuses and statuses[n].needs_update}
+        self._log.info("followup: changed=%s dirty=%s", sorted(changed), sorted(dirty))
+        return dirty
+
+    async def _followup_reachable(self, names: set[str]) -> bool:
+        """True when every target's remote answers."""
+        for c in self._components:
+            if c.name in names and c.url and not await git_remote_reachable(c.url):
+                self._log.info("followup: %s unreachable, deferring", c.name)
+                return False
+        return True
+
+    def _read_followup(self) -> str:
+        """The follow-up base hash, or empty when absent or malformed."""
+        try:
+            base = self._followup_path.read_text().strip()
+        except OSError:
+            return ""
+        if _GIT_SHA_RE.match(base):
+            return base
+        self._clear_followup()
+        return ""
+
+    def _clear_followup(self) -> None:
+        """Remove the follow-up marker."""
+        with contextlib.suppress(OSError):
+            self._followup_path.unlink()
 
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig]
