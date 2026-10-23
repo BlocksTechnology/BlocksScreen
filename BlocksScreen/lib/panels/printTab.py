@@ -22,6 +22,9 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+if typing.TYPE_CHECKING:
+    from devices.amu import AMUManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +59,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         bool, name="call-load-panel"
     )
     in_case_error = QtCore.pyqtSignal(name="in-case-error")
+    notify: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, int, bool, name="notify"
+    )
 
     def __init__(
         self,
@@ -63,8 +69,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         file_data: Files,
         ws: MoonWebSocket,
         printer: Printer,
+        amu_manager: "AMUManager | None" = None,
     ) -> None:
         super().__init__(parent)
+        self.amu_manager: "AMUManager | None" = amu_manager
         self._active_z_offset: float = 0.0
         self._pending_save_offset: float = 0.0
         self._finish_print_handled: bool = False
@@ -144,9 +152,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.in_case_error.connect(self.jobStatusPage_widget.handleErrors)
         self.addWidget(self.jobStatusPage_widget)
-        self.confirmPage_widget.on_accept.connect(
-            self.jobStatusPage_widget.on_print_start
-        )
+        self.confirmPage_widget.on_accept.connect(self.start_print)
         self.jobStatusPage_widget.show_request.connect(
             lambda: self.change_page(self.indexOf(self.jobStatusPage_widget))
         )
@@ -343,6 +349,18 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.sliderPage.set_slider_maximum(max_value)
         self.sliderPage.set_slider_position(int(current_value))
         self.change_page(self.indexOf(self.sliderPage))
+
+    @QtCore.pyqtSlot(str, name="start_print")
+    def start_print(self, file: str) -> None:
+        """Start *file* on the job status page unless PRINT_START would refuse it."""
+        # A refused PRINT_START runs on_error CANCEL_PRINT, which HH v3 reopens as a job.
+        if self.amu_manager is not None and (
+            reason := self.amu_manager.print_start_refusal()
+        ):
+            logger.warning("Print start of %s blocked: %s", file, reason)
+            self.notify.emit("PrintTab", reason, 2, True)
+            return
+        self.jobStatusPage_widget.on_print_start(file)
 
     @QtCore.pyqtSlot(str, str, name="delete_file")
     @QtCore.pyqtSlot(str, name="delete_file")

@@ -84,4 +84,22 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     _set_deploy_flag
 fi
 
-# No daemon restart on updater/ changes: mid-batch it would cancel and revert the batch.
+# updater/ changed: defer a daemon self-restart to post-batch (mid-batch it would revert the batch).
+if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" -- updater/ 2>/dev/null; then
+    if [ -n "${BS_UPDATER_SELF_UPDATE:-}" ] && [ -n "${BS_UPDATER_RESTART_SENTINEL:-}" ]; then
+        mkdir -p "$(dirname "$BS_UPDATER_RESTART_SENTINEL")" 2>/dev/null || true
+        echo "code" >>"$BS_UPDATER_RESTART_SENTINEL"
+        echo "[hook:BlocksScreen] updater code changed - deferring daemon restart to post-batch"
+    fi
+fi
+
+# Manifest changed: the restarted daemon applies the changed entries in the same Update.
+if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
+        -- updater/components.yaml 2>/dev/null; then
+    _followup="${HOME}/.cache/blockscreen/updater_followup"
+    if [ ! -e "$_followup" ]; then  # keep the oldest base across chained updates
+        mkdir -p "$(dirname "$_followup")"
+        printf '%s\n' "$PREV_HASH" >"$_followup"
+        echo "[hook:BlocksScreen] components.yaml changed - follow-up queued"
+    fi
+fi
