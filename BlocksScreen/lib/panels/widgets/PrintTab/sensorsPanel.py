@@ -2,6 +2,7 @@ import typing
 
 from lib.panels.widgets.PrintTab.sensorWidget import SensorWidget
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.fonts import register_momcake
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -130,11 +131,7 @@ class SensorsWindow(QtWidgets.QWidget):
 
     def _setup_ui(self) -> None:
         """Setup UI for updatePage"""
-        font_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Bold.ttf"
-        )
-        _families = QtGui.QFontDatabase.applicationFontFamilies(font_id)
-        font_family = _families[0] if _families else ""
+        font_family = register_momcake()
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
