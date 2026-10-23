@@ -808,13 +808,69 @@ class TestUpdateAll:
             ),
             patch(
                 "updater.service.UpdateService._provision_component",
-                side_effect=lambda _c: seen.append("provision"),
+                side_effect=lambda _c, _p: seen.append("provision"),
             ),
         ):
             svc = UpdateService()
             svc._components = [present, missing]
             await svc.update_all()
         assert seen == ["provision", "batch"]
+
+    def _provision_case(self, tmp_path: Path) -> list[ComponentConfig]:
+        moonraker = self._git(tmp_path, "moonraker", 3)
+        moonraker.service = "moonraker.service"
+        ui = self._git(tmp_path, "BlocksScreen", 99)
+        ui.service = "BlocksScreen.service"
+        hh = ComponentConfig(
+            name="Happy-Hare",
+            kind="git",
+            path=tmp_path / "absent",
+            order=4,
+            url="https://github.com/x/y",
+            install_if_missing=True,
+        )
+        return [moonraker, ui, hh]
+
+    @pytest.mark.asyncio
+    async def test_provision_defers_batch_restarts_and_batch_does_them(self, tmp_path):
+        svc = UpdateService()
+
+        async def batch(_b):
+            svc._verified_restarts.add("moonraker.service")
+            return True
+
+        with (
+            patch("updater.service.UpdateService._preflight_fetch", return_value=set()),
+            patch("updater.service.UpdateService._run_git_batch", side_effect=batch),
+            patch(
+                "updater.service.UpdateService._provision_component",
+                return_value=True,
+            ) as mock_provision,
+            patch("updater.service.UpdateService._restart_one") as mock_restart,
+        ):
+            svc._components = self._provision_case(tmp_path)
+            await svc.update_all()
+        # The fire-and-forget UI restart is never verified, so it is never pending.
+        assert mock_provision.call_args[0][1] == "moonraker.service"
+        mock_restart.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_provision_restarts_what_a_failed_batch_skipped(self, tmp_path):
+        with (
+            patch("updater.service.UpdateService._preflight_fetch", return_value=set()),
+            patch("updater.service.UpdateService._run_git_batch", return_value=False),
+            patch(
+                "updater.service.UpdateService._provision_component",
+                return_value=True,
+            ),
+            patch(
+                "updater.service.UpdateService._restart_one", return_value=True
+            ) as mock_restart,
+        ):
+            svc = UpdateService()
+            svc._components = self._provision_case(tmp_path)
+            await svc.update_all()
+        mock_restart.assert_awaited_once_with("moonraker.service")
 
     @pytest.mark.asyncio
     async def test_empty_batch_skips_git(self, tmp_path):
@@ -942,9 +998,49 @@ class TestAtomicBatch:
         ):
             await svc._run_git_batch(comps)
         assert hook.call_count == 2
-        for call in hook.call_args_list:
-            pending = call.kwargs["extra_env"]["BS_UPDATER_PENDING_RESTARTS"]
+        for hook_call in hook.call_args_list:
+            pending = hook_call.kwargs["extra_env"]["BS_UPDATER_PENDING_RESTARTS"]
             assert pending == "moonraker.service"
+
+    @pytest.mark.asyncio
+    async def test_dropped_component_leaves_pending_restarts(self, tmp_path):
+        """A Happy-Hare hook after a failed Moonraker hook must restart Moonraker itself."""
+        comps = [
+            self._git(tmp_path, "klipper", 2, "klipper.service"),
+            self._git(tmp_path, "moonraker", 3, "moonraker.service"),
+            self._git(tmp_path, "Happy-Hare", 4, "klipper.service"),
+        ]
+        svc = UpdateService(callback=MagicMock())
+        svc._components = comps
+        svc._state_path = tmp_path / "state.json"
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+            patch(
+                "updater.service.run_hook",
+                side_effect=[(True, ""), (False, "boom"), (True, "")],
+            ) as hook,
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+        ):
+            await svc._run_git_batch(comps)
+        pending = [
+            c.kwargs["extra_env"]["BS_UPDATER_PENDING_RESTARTS"]
+            for c in hook.call_args_list
+        ]
+        assert pending == [
+            "klipper.service moonraker.service",
+            "klipper.service moonraker.service",
+            "klipper.service",
+        ]
 
     @pytest.mark.asyncio
     async def test_inflight_marker_written_then_cleared_on_success(self, tmp_path):
@@ -1805,6 +1901,9 @@ class TestProvisionMissingComponent:
         from updater.service import _GIT_EMPTY_TREE
 
         assert mock_hook.call_args[0][3] == _GIT_EMPTY_TREE
+        assert mock_hook.call_args.kwargs["extra_env"] == {
+            "BS_UPDATER_PENDING_RESTARTS": ""
+        }
         cb.on_component_done.assert_called_once_with("newcomp", True)
 
     @pytest.mark.asyncio
@@ -2903,6 +3002,18 @@ class TestReconcile:
             await svc.reconcile_if_pending()
         mock_heal.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("printing", "flag"), [(True, "1"), (False, "")])
+    async def test_reclone_hook_flags_running_print(self, tmp_path, printing, flag):
+        comp = self._git_comp(tmp_path)
+        with (
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch("updater.service.klipper_printing", return_value=printing),
+            patch("updater.service.run_hook", return_value=(True, "")) as hook,
+        ):
+            await UpdateService()._boot_reclone_hook(comp)
+        assert hook.call_args.kwargs["extra_env"] == {"BS_UPDATER_PRINTING": flag}
+
 
 class TestWriteStateDurability:
     """_write_state fsyncs file + parent dir (Major 4)."""
@@ -3543,7 +3654,7 @@ class TestNonRepoComponent:
             svc._history_path = tmp_path / "history.jsonl"
             svc._components = [comp]
             await svc.update_all()
-        mock_prov.assert_awaited_once_with(comp)
+        mock_prov.assert_awaited_once_with(comp, "")
         cb.on_error.assert_not_called()
         assert not comp.path.exists()  # moved aside
         moved = list(tmp_path.glob("Spoolman.pre-updater-*"))

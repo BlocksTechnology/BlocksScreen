@@ -200,6 +200,14 @@ class TestHappyHareHook:
         ).is_symlink()
         assert _sudo_calls(tmp_path) == []
 
+    def test_printing_links_without_restart(self, tmp_path, hh_home):
+        result = _run_hh_hook(tmp_path, hh_home, BS_UPDATER_PRINTING="1")
+        assert result.returncode == 0, result.stderr
+        assert (
+            hh_home / "moonraker" / "moonraker" / "components" / "mmu_server.py"
+        ).is_symlink()
+        assert _sudo_calls(tmp_path) == []
+
     @_NOT_ROOT
     def test_unwritable_exclude_warns_and_links(self, tmp_path, hh_home):
         info = hh_home / "moonraker" / ".git" / "info"
@@ -319,6 +327,20 @@ class TestMoonrakerHook:
         result = self._run(tmp_path, hh_home)
         assert result.returncode == 0, result.stderr
         assert not self._dst(hh_home).exists()
+
+    def test_removes_link_left_by_failed_provision(self, tmp_path, hh_home):
+        _run_hh_hook(tmp_path, hh_home)
+        subprocess.run(["rm", "-rf", str(hh_home / "Happy-Hare")], check=True)
+        result = self._run(tmp_path, hh_home)
+        assert result.returncode == 0, result.stderr
+        assert not self._dst(hh_home).is_symlink()
+
+    def test_keeps_foreign_link_without_happy_hare(self, tmp_path, hh_home):
+        subprocess.run(["rm", "-rf", str(hh_home / "Happy-Hare")], check=True)
+        self._dst(hh_home).symlink_to(tmp_path / "elsewhere.py")
+        result = self._run(tmp_path, hh_home)
+        assert result.returncode == 0, result.stderr
+        assert self._dst(hh_home).is_symlink()
 
     @_NOT_ROOT
     def test_relink_failure_never_fails_hook(self, tmp_path, hh_home):

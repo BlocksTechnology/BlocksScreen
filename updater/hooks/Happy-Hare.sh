@@ -13,6 +13,7 @@ if [ ! -f "$_src" ]; then
     exit 1
 fi
 
+# RF50 layout: Happy-Hare, moonraker and printer_data are siblings in one home.
 _home=$(dirname "$COMPONENT_PATH")
 _moonraker="$_home/moonraker"
 _components="$_moonraker/moonraker/components"
@@ -51,6 +52,10 @@ fi
 if [ -n "${HH_LINK_ONLY:-}" ] \
         || [[ " ${BS_UPDATER_PENDING_RESTARTS:-} " == *" moonraker.service "* ]]; then
     echo "[hook:Happy-Hare] link only - caller restarts Moonraker"
+    exit 0
+fi
+if [ -n "${BS_UPDATER_PRINTING:-}" ]; then
+    echo "[hook:Happy-Hare] print running - mmu_server loads on the next Moonraker restart"
     exit 0
 fi
 

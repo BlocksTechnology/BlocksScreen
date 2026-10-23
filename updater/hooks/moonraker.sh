@@ -7,10 +7,15 @@ if [ -z "${COMPONENT_PATH:-}" ]; then
     exit 0
 fi
 
+# RF50 layout: Happy-Hare and moonraker are siblings in one home.
 _hh="$(dirname "$COMPONENT_PATH")/Happy-Hare"
 _src="$_hh/components/mmu_server.py"
 _dst="$COMPONENT_PATH/moonraker/components/mmu_server.py"
 if [ ! -f "$_src" ]; then
+    # A failed Happy-Hare provision removes the checkout but leaves its link behind.
+    if [ -L "$_dst" ] && [ "$(readlink "$_dst")" = "$_src" ]; then
+        rm -f "$_dst" && echo "[hook:moonraker] removed dangling $_dst"
+    fi
     echo "[hook:moonraker] no Happy-Hare checkout - nothing to link"
     exit 0
 fi

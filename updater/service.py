@@ -271,6 +271,7 @@ class UpdateService:
         self._reconciled = False
         self._offline_provision_tries = 0
         self._offline_followup_tries = 0
+        self._verified_restarts: set[str] = set()
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -435,10 +436,24 @@ class UpdateService:
         ok = True
         for c in apt:
             ok = await self._run_apt_update(c) and ok
+        # Provision hooks leave these to the batch, which restarts each one once.
+        pending = sorted(
+            {
+                c.service
+                for c in batch
+                if c.service and c.service not in _FIRE_AND_FORGET_SERVICES
+            }
+        )
+        self._verified_restarts.clear()
         for c in provision:
-            ok = await self._provision_component(c) and ok
+            ok = await self._provision_component(c, " ".join(pending)) and ok
         if batch:
             ok = await self._run_git_batch(batch) and ok
+        if provision:
+            # A batch that dropped or aborted never restarted these for the provision.
+            for svc in pending:
+                if svc not in self._verified_restarts:
+                    ok = await self._restart_one(svc) and ok
         return ok
 
     def _check_disk_space(self, components: list[ComponentConfig]) -> bool:
@@ -1691,8 +1706,15 @@ class UpdateService:
             return
         try:
             new_hash = await git_get_hash(c.path)
+            # A daemon restart can land mid-print; hooks then skip service restarts.
+            printing = "1" if await klipper_printing() else ""
             hook_ok, hook_err = await run_hook(
-                c.name, c.path, new_hash, _GIT_EMPTY_TREE, timeout=HOOK_TIMEOUT
+                c.name,
+                c.path,
+                new_hash,
+                _GIT_EMPTY_TREE,
+                timeout=HOOK_TIMEOUT,
+                extra_env={"BS_UPDATER_PRINTING": printing},
             )
             if not hook_ok:
                 self._log.warning("%s: post-reclone hook failed: %s", c.name, hook_err)
@@ -1965,7 +1987,9 @@ class UpdateService:
             )
         return None
 
-    async def _provision_component(self, component: ComponentConfig) -> bool:
+    async def _provision_component(
+        self, component: ComponentConfig, pending_restarts: str = ""
+    ) -> bool:
         """Clone and set up a missing opted-in component."""
         if not component.url:
             return self._cb_error_done(component.name, "no clone url")
@@ -2001,6 +2025,7 @@ class UpdateService:
                     new_hash,
                     _GIT_EMPTY_TREE,
                     timeout=HOOK_TIMEOUT,
+                    extra_env={"BS_UPDATER_PENDING_RESTARTS": pending_restarts},
                 ),
                 component.name,
                 3,
@@ -2248,6 +2273,7 @@ class UpdateService:
             self._log.error("%s active but health check failed", service)
             return False
         self._log.info("%s active after restart", service)
+        self._verified_restarts.add(service)
         return True
 
     async def _preflight_git_update(self, component: ComponentConfig) -> bool | None:
