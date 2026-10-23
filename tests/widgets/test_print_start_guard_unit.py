@@ -7,20 +7,35 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Same stubbing and eviction as test_slider_page_request_unit.py, see there for why.
-for _name in ("configfile", "lib.files", "lib.printer"):
+# Same stub/evict/restore as test_print_tab_z_offset_unit.py, see there for why.
+_STUBS = ("configfile", "lib.files", "lib.printer")
+_EVICT = ("lib.panels.printTab", "lib.ui", "lib.utils.icon_button")
+_saved = {
+    m: sys.modules[m]
+    for m in list(sys.modules)
+    if m in _STUBS or m in _EVICT or m.startswith("lib.panels.widgets")
+}
+for _name in _STUBS:
     sys.modules[_name] = types.ModuleType(_name)
 sys.modules["configfile"].BlocksScreenConfig = MagicMock
 sys.modules["configfile"].get_configparser = MagicMock(return_value=MagicMock())
 sys.modules["lib.files"].Files = MagicMock
 sys.modules["lib.printer"].Printer = MagicMock
-sys.modules.pop("lib.utils.icon_button", None)
-sys.modules.pop("lib.panels.printTab", None)
-sys.modules.pop("lib.ui", None)
-for _stubbed in [_m for _m in sys.modules if _m.startswith("lib.panels.widgets")]:
-    sys.modules.pop(_stubbed, None)
+for _name in [
+    m for m in sys.modules if m in _EVICT or m.startswith("lib.panels.widgets")
+]:
+    sys.modules.pop(_name)
 
 from lib.panels.printTab import PrintTab  # noqa: E402
+
+# Put the stand-ins back so this import leaves sys.modules as found.
+for _name in [
+    m
+    for m in sys.modules
+    if m in _STUBS or m in _EVICT or m.startswith("lib.panels.widgets")
+]:
+    del sys.modules[_name]
+sys.modules.update(_saved)
 
 
 def _tab(amu_manager: object) -> SimpleNamespace:
