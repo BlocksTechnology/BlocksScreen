@@ -2443,8 +2443,8 @@ class TestRunFollowup:
         assert on_busy.call_args_list == [call(True), call(False)]
 
     @pytest.mark.asyncio
-    async def test_failed_update_is_not_retried(self, svc, env):
-        # One-shot: the marker is gone before update_all, so a crash cannot loop it.
+    async def test_crash_mid_update_still_counts_the_try(self, svc, env):
+        # The try is recorded before update_all, so a crash or reboot cannot loop it.
         self._mark(svc)
         env.side_effect = RuntimeError("boom")
         with (
@@ -2454,7 +2454,93 @@ class TestRunFollowup:
             pytest.raises(RuntimeError),
         ):
             await svc.run_followup()
+        assert svc._followup_path.read_text() == f"{self.BASE}\n1\n"
+
+    @pytest.mark.asyncio
+    async def test_failed_update_retries_then_leaves_it_to_update(self, svc, env):
+        self._mark(svc)
+        env.return_value = False
+        tries = updater_service._FOLLOWUP_TRIES
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+        ):
+            results = [await svc.run_followup() for _ in range(tries)]
+        assert results == [(True, False)] * (tries - 1) + [(False, True)]
+        assert env.await_count == tries
         assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_retry_after_failure_succeeds_and_clears(self, svc, env):
+        self._mark(svc)
+        env.side_effect = [False, True]
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+        ):
+            assert await svc.run_followup() == (True, False)
+            assert await svc.run_followup() == (False, True)
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_used_up_marker_is_dropped_without_updating(self, svc, env):
+        self._mark(svc, f"{self.BASE}\n{updater_service._FOLLOWUP_TRIES}")
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+        ):
+            assert await svc.run_followup() == (False, False)
+        env.assert_not_called()
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_unwritable_marker_runs_once(self, svc, env):
+        self._mark(svc)
+        env.return_value = False
+        with (
+            patch.object(
+                UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+            ),
+            patch.object(UpdateService, "_write_followup", return_value=False),
+        ):
+            assert await svc.run_followup() == (False, True)
+        env.assert_awaited_once()
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_undeletable_unwritable_marker_is_not_retried(self, svc, env):
+        # The marker survives with its count unchanged, so a retry would loop forever.
+        self._mark(svc)
+        env.return_value = False
+        with (
+            patch.object(
+                UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+            ),
+            patch.object(UpdateService, "_write_followup", return_value=False),
+            patch.object(UpdateService, "_clear_followup"),
+        ):
+            assert await svc.run_followup() == (False, True)
+        env.assert_awaited_once()
+
+    def test_failed_marker_write_keeps_the_old_marker(self, svc):
+        self._mark(svc)
+        with patch.object(Path, "replace", side_effect=OSError("disk full")):
+            assert svc._write_followup(self.BASE, 1) is False
+        assert svc._followup_path.read_text().split() == [self.BASE]
+        assert not svc._followup_path.with_name(
+            svc._followup_path.name + ".tmp"
+        ).exists()
+
+    @pytest.mark.parametrize(
+        ("text", "want"),
+        [
+            ("a" * 40, ("a" * 40, 0)),
+            (f"{'a' * 40}\n2", ("a" * 40, 2)),
+            (f"{'a' * 40}\nx", ("", 0)),
+            (f"{'a' * 40}\n1\n2", ("", 0)),
+        ],
+    )
+    def test_read_followup_formats(self, svc, text, want):
+        self._mark(svc, text)
+        assert svc._read_followup() == want
+        assert svc._followup_path.exists() == bool(want[0])
 
     @pytest.mark.asyncio
     async def test_nothing_dirty_clears_marker(self, svc, env):

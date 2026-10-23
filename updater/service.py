@@ -178,6 +178,7 @@ _RECOVERY_SETTLE_S = 90.0
 _FORWARD_HEAL_BASE_S = 1800.0
 _FORWARD_HEAL_JITTER_S = 300.0
 _OFFLINE_PROVISION_TRIES = 6  # ~30 min of 300s polls, for late Wi-Fi
+_FOLLOWUP_TRIES = 3  # counted in the marker, so a crash or reboot mid-try still counts
 
 # Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
@@ -570,7 +571,7 @@ class UpdateService:
         self, on_busy: Callable[[bool], None] | None = None
     ) -> tuple[bool, bool]:
         """Apply manifest entries changed by the last BlocksScreen update; (retry, ran)."""
-        base = await asyncio.to_thread(self._read_followup)
+        base, tries = await asyncio.to_thread(self._read_followup)
         if not base:
             return False, False
         if await klipper_printing() or await self.deploy_running():
@@ -593,12 +594,34 @@ class UpdateService:
                     # Still shown dirty, so a later Update applies it.
                     self._log.info("followup: still offline, leaving it to Update")
                     dirty = set()
-                # One-shot: a failing entry must not re-run on every boot.
-                await asyncio.to_thread(self._clear_followup)
+                if dirty and tries >= _FOLLOWUP_TRIES:
+                    self._log.warning(
+                        "followup: %d tries failed, leaving %s to Update",
+                        tries,
+                        sorted(dirty),
+                    )
+                    dirty = set()
+                # Bounded, not one-shot: the try is recorded before it runs.
+                recorded = bool(dirty) and await asyncio.to_thread(
+                    self._write_followup, base, tries + 1
+                )
+                if not recorded:
+                    await asyncio.to_thread(self._clear_followup)
                 if not dirty:
                     return False, False
-                self._log.info("followup: applying %s", sorted(dirty))
-                await self.update_all(dirty)
+                self._log.info(
+                    "followup: applying %s (try %d/%d)",
+                    sorted(dirty),
+                    tries + 1,
+                    _FOLLOWUP_TRIES,
+                )
+                if not await self.update_all(dirty):
+                    # An unrecorded try may not be retried: its count never advances.
+                    if recorded and tries + 1 < _FOLLOWUP_TRIES:
+                        self._log.warning("followup: update failed, retrying next poll")
+                        return True, False
+                    self._log.warning("followup: update failed, leaving it to Update")
+                await asyncio.to_thread(self._clear_followup)
             finally:
                 if on_busy:
                     on_busy(False)
@@ -633,16 +656,34 @@ class UpdateService:
                 return False
         return True
 
-    def _read_followup(self) -> str:
-        """The follow-up base hash, or empty when absent or malformed."""
+    def _read_followup(self) -> tuple[str, int]:
+        """The follow-up (base hash, tries so far); empty base when absent or malformed."""
         try:
-            base = self._followup_path.read_text().strip()
+            fields = self._followup_path.read_text().split()
         except OSError:
-            return ""
-        if _GIT_SHA_RE.match(base):
-            return base
+            return "", 0
+        # The hook writes the hash alone; _write_followup appends the try count.
+        if fields and _GIT_SHA_RE.match(fields[0]):
+            if len(fields) == 1:
+                return fields[0], 0
+            if len(fields) == 2 and fields[1].isdigit():
+                return fields[0], int(fields[1])
         self._clear_followup()
-        return ""
+        return "", 0
+
+    def _write_followup(self, base: str, tries: int) -> bool:
+        """Record a try in the marker; False when it cannot be written."""
+        # Atomic: a power cut mid-write must not leave a truncated, dropped marker.
+        tmp = self._followup_path.with_name(self._followup_path.name + ".tmp")
+        try:
+            tmp.write_text(f"{base}\n{tries}\n")
+            tmp.replace(self._followup_path)
+        except OSError:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
+            self._log.warning("followup: cannot record try, running it once")
+            return False
+        return True
 
     def _clear_followup(self) -> None:
         """Remove the follow-up marker."""
