@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import subprocess
 import time
 from contextlib import ExitStack, nullcontext
 from pathlib import Path
@@ -3893,3 +3894,90 @@ class TestUpdaterDowngradeGuard:
         assert result is False  # BlocksScreen dropped
         done = {c.args[0]: c.args[1] for c in cb.on_component_done.call_args_list}
         assert done == {"klipper": True, "BlocksScreen": False}
+
+
+def _git_run(repo: Path, *args: str) -> str:
+    """Run git in repo with a throwaway identity and no signing."""
+    return subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+        + ["-c", "commit.gpgsign=false", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+class TestPinnedCheckoutIsEnforced:
+    """A pinned repo (Happy-Hare v3) is put back on its pin whatever the user did to it."""
+
+    def _clone(self, tmp_path: Path) -> tuple[Path, dict[str, str]]:
+        """Clone of an origin with v3 (old -> pin -> v3tip) and main (old -> v4)."""
+        src = tmp_path / "src"
+        src.mkdir()
+        _git_run(src, "init", "-q", "-b", "v3")
+        shas = {}
+        for n in ("old", "pin", "v3tip"):
+            (src / "f.txt").write_text(n)
+            _git_run(src, "add", "f.txt")
+            _git_run(src, "commit", "-q", "-m", n)
+            shas[n] = _git_run(src, "rev-parse", "HEAD")
+        _git_run(src, "checkout", "-q", "-b", "main", shas["old"])
+        (src / "f.txt").write_text("v4")
+        _git_run(src, "commit", "-q", "-am", "v4")
+        shas["v4"] = _git_run(src, "rev-parse", "HEAD")
+        _git_run(tmp_path, "clone", "-q", "-b", "v3", str(src), "Happy-Hare")
+        return tmp_path / "Happy-Hare", shas
+
+    def _tamper(self, repo: Path, shas: dict[str, str], how: str) -> None:
+        """Leave the checkout the way a user might."""
+        if how == "edited":
+            _git_run(repo, "reset", "-q", "--hard", shas["pin"])
+            (repo / "f.txt").write_text("user edit")
+        elif how == "v4":
+            _git_run(repo, "checkout", "-q", "main")
+        else:
+            _git_run(repo, "reset", "-q", "--hard", shas[how])
+
+    def _comp(self, repo: Path, pin: str) -> ComponentConfig:
+        return ComponentConfig(
+            name="Happy-Hare",
+            kind="git",
+            path=repo,
+            branch="v3",
+            version=pin,
+            reset_mode="hard",
+        )
+
+    @pytest.mark.asyncio
+    async def test_clean_checkout_on_pin_is_current(self, tmp_path):
+        repo, shas = self._clone(tmp_path)
+        _git_run(repo, "reset", "-q", "--hard", shas["pin"])
+        status = await updater_service.check_git_status(
+            "Happy-Hare", repo, "v3", shas["pin"], skip_fetch=True
+        )
+        assert status.needs_update is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("how", ["edited", "v4", "v3tip", "old"])
+    async def test_tampered_checkout_needs_update(self, tmp_path, how):
+        repo, shas = self._clone(tmp_path)
+        self._tamper(repo, shas, how)
+        status = await updater_service.check_git_status(
+            "Happy-Hare", repo, "v3", shas["pin"], skip_fetch=True
+        )
+        assert status.needs_update is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("how", ["edited", "v4", "v3tip", "old"])
+    async def test_apply_puts_tampered_checkout_back_on_pin(self, tmp_path, how):
+        repo, shas = self._clone(tmp_path)
+        self._tamper(repo, shas, how)
+        svc = UpdateService(callback=MagicMock())
+        ok, err = await svc._stage_apply_ref(
+            self._comp(repo, shas["pin"]), shas["v3tip"]
+        )
+        assert (ok, err) == (True, "")
+        assert _git_run(repo, "rev-parse", "HEAD") == shas["pin"]
+        assert _git_run(repo, "branch", "--show-current") == "v3"
+        assert _git_run(repo, "status", "--porcelain", "--untracked-files=no") == ""
