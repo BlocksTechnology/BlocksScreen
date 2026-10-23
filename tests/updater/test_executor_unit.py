@@ -39,6 +39,7 @@ from updater.executor import (
     git_remote_url,
     git_repair,
     git_reset_to_hash,
+    git_show_file,
     git_prune_extra_remotes,
     git_untracked_paths,
     enable_service,
@@ -937,6 +938,53 @@ class TestCheckGitStatus:
             )
         assert result.error == "branch origin/wip/dead not found - fix components.yaml"
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("pin", "behind"), [(b"abc1234\n", 0), (b"def5678\n", 1)])
+    async def test_pinned_version_dirty_only_off_the_pin(self, tmp_path, pin, behind):
+        # A moved pin must count as pending, or Update never applies it.
+        procs = [
+            _make_proc(0, b"abc1234\n", b""),  # git_get_hash
+            _make_proc(0, b"main\n", b""),  # git_get_current_branch
+            _make_proc(0, pin, b""),  # git_ref_hash version^{commit}
+            _make_proc(0, b"https://github.com/x/y\n", b""),  # git_remote_url
+            _make_proc(0, b"", b""),  # git_is_dirty (clean)
+            _make_proc(0, b"v1.0\n", b""),  # git_describe current
+            _make_proc(0, b"v1.1\n", b""),  # git_describe version
+        ]
+        exec_mock = AsyncMock(side_effect=procs)
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            result = await check_git_status(
+                "Spoolman", tmp_path, version="def5678", skip_fetch=True
+            )
+        assert result.commits_behind == behind
+        assert result.remote_version == "v1.1"
+        describe_args = exec_mock.await_args_list[-1].args
+        assert describe_args[-1] == "def5678"
+
+
+class TestGitShowFile:
+    @pytest.mark.asyncio
+    async def test_returns_content_at_ref(self, tmp_path):
+        exec_mock = AsyncMock(return_value=_make_proc(0, b"components: []\n", b""))
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            out = await git_show_file(tmp_path, "a" * 40, "updater/components.yaml")
+        assert out == "components: []\n"
+        assert exec_mock.await_args.args[-1] == f"{'a' * 40}:updater/components.yaml"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("ref", ["main", "--output=/tmp/x", ""])
+    async def test_rejects_non_sha_ref_without_running_git(self, tmp_path, ref):
+        exec_mock = AsyncMock()
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            assert await git_show_file(tmp_path, ref, "updater/components.yaml") == ""
+        exec_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_git_failure_returns_empty(self, tmp_path):
+        exec_mock = AsyncMock(return_value=_make_proc(128, b"", b"fatal: bad object\n"))
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            assert await git_show_file(tmp_path, "a" * 40, "x") == ""
+
 
 class TestCheckAptStatus:
     @pytest.mark.asyncio
@@ -1176,6 +1224,7 @@ class TestServiceUnitMissing:
         with patch("asyncio.create_subprocess_exec") as mock_exec:
             assert await service_unit_missing("bad;name.service") is False
         mock_exec.assert_not_called()
+
 
 class TestRunHook:
     """run_hook: resolve under hooks dir, pass timeout, reject traversal."""

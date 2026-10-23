@@ -474,6 +474,24 @@ class TestDeployHold:
         assert svc._busy is False
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("followed_up", [False, True])
+    async def test_hold_end_runs_pending_followup(self, svc, monkeypatch, followed_up):
+        """The boot hold blocks the follow-up; it runs on release, not a poll later."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_DEPLOY_POLL_S", 0.01)
+        svc._provisioned = True
+        svc._followed_up = followed_up
+        svc._svc.run_followup = AsyncMock(return_value=(False, False))
+        svc._svc.deploy_pending.return_value = True
+        svc._set_busy(False)
+        await asyncio.sleep(0.03)
+        svc._svc.run_followup.assert_not_awaited()
+        svc._svc.deploy_pending.return_value = False
+        await asyncio.sleep(0.05)
+        assert svc._svc.run_followup.await_count == (0 if followed_up else 1)
+
+    @pytest.mark.asyncio
     async def test_update_rejected_during_hold(self, svc):
         """install-updater restarts moonraker: no new batch may start under it."""
         svc._svc.deploy_pending.return_value = True
@@ -602,6 +620,55 @@ class TestBootProvision:
         sleeps = await self._run_polls(svc, polls=3)
         assert svc._svc.provision_missing.await_count == 2
         assert sleeps == [dbus_service._FETCH_RETRY_INTERVAL_S, 86_400.0, 86_400.0]
+
+    @pytest.mark.asyncio
+    async def test_followup_runs_once_after_provisioning(self, svc):
+        svc._svc.poll_interval = 86_400.0
+        sleeps = await self._run_polls(svc, polls=3)
+        svc._svc.run_followup.assert_awaited_once_with(svc._set_busy)
+        assert sleeps == [86_400.0] * 3
+
+    @pytest.mark.asyncio
+    async def test_deferred_followup_repolls_soon(self, svc):
+        from updater import dbus_service
+
+        svc._svc.poll_interval = 86_400.0
+        svc._svc.run_followup = AsyncMock(side_effect=[(True, False), (False, False)])
+        sleeps = await self._run_polls(svc, polls=3)
+        assert svc._svc.run_followup.await_count == 2
+        assert sleeps == [dbus_service._FETCH_RETRY_INTERVAL_S, 86_400.0, 86_400.0]
+
+    @pytest.mark.asyncio
+    async def test_followup_that_ran_sweeps_apt(self, svc):
+        svc._provisioned = True
+        svc._svc.run_followup = AsyncMock(return_value=(False, True))
+        await svc._followup_pass()
+        await asyncio.gather(*svc._background_tasks)
+        svc._svc.background_apt_upgrade.assert_awaited_once()
+        assert svc._followed_up is True
+
+    @pytest.mark.asyncio
+    async def test_followup_skips_apt_when_restart_pending(self, svc):
+        svc._provisioned = True
+        svc._svc.daemon_restart_pending = True
+        svc._svc.run_followup = AsyncMock(return_value=(False, True))
+        await svc._followup_pass()
+        svc._svc.background_apt_upgrade.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_followup_waits_while_busy(self, svc):
+        svc._provisioned = True
+        svc._busy = True
+        await svc._followup_pass()
+        svc._svc.run_followup.assert_not_awaited()
+        assert svc._followed_up is False
+
+    @pytest.mark.asyncio
+    async def test_failed_followup_is_not_retried(self, svc):
+        svc._provisioned = True
+        svc._svc.run_followup = AsyncMock(side_effect=RuntimeError("boom"))
+        await svc._followup_pass()
+        assert svc._followed_up is True
 
 
 class TestProvisioningFlag:

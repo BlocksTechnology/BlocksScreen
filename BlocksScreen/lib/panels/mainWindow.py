@@ -181,7 +181,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
-        self.printPanel = PrintTab(self.printTab, self.file_data, self.ws, self.printer)
+        self.printPanel = PrintTab(
+            self.printTab, self.file_data, self.ws, self.printer, self.amu_manager
+        )
+        self.printPanel.notify.connect(self.notiPage.new_notication)
         self.usb_manager.usb_mounted.connect(
             self.printPanel.filesPage_widget.on_usb_added
         )
@@ -358,10 +361,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cancelpage.on_print_stats_update
         )
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
-        # Reprint routes through on_print_start for the same full reset as a fresh print.
-        self.cancelpage.reprint_start.connect(
-            self.printPanel.jobStatusPage_widget.on_print_start
-        )
+        # Reprint takes the fresh-print path: same unloaded check and full reset.
+        self.cancelpage.reprint_start.connect(self.printPanel.start_print)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
         self.printer.display_update.connect(self._handle_display_status)
 

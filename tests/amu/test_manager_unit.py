@@ -857,3 +857,38 @@ class TestStaleMMUJob:
             ("print_stats", "printing"),
         ]
         assert self._run(manager, qtbot, *events) == []
+
+
+class TestPrintStartRefusal:
+    def test_no_state_allows(self, manager) -> None:
+        assert manager.print_start_refusal() == ""
+
+    @pytest.mark.parametrize(
+        "sensors",
+        [
+            {},
+            {"toolhead": True, "mmu_pre_gate": True},
+            {"toolhead": None, "mmu_pre_gate": None},
+        ],
+    )
+    def test_loaded_missing_or_disabled_allows(self, manager, sensors) -> None:
+        manager.update_mmu_state(_status(sensors=sensors))
+        assert manager.print_start_refusal() == ""
+
+    # .151 2026-10-21 11:10:20: toolhead False with both pre-gates True raised PRINT_START.
+    def test_toolhead_empty_refuses(self, manager) -> None:
+        manager.update_mmu_state(
+            _status(sensors={"toolhead": False, "mmu_pre_gate": True})
+        )
+        assert "toolhead" in manager.print_start_refusal()
+
+    def test_pre_gate_empty_refuses(self, manager) -> None:
+        manager.update_mmu_state(
+            _status(sensors={"toolhead": None, "mmu_pre_gate": False})
+        )
+        assert "gate" in manager.print_start_refusal()
+
+    def test_klippy_disconnect_drops_refusal(self, manager) -> None:
+        manager.update_mmu_state(_status(sensors={"toolhead": False}))
+        manager.on_klippy_state("shutdown")
+        assert manager.print_start_refusal() == ""
