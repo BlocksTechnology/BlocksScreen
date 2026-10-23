@@ -6,6 +6,7 @@ import signal
 import socket
 import subprocess  # nosec B404
 import sys
+import threading
 import typing
 from pathlib import Path
 
@@ -163,7 +164,9 @@ def _setup_sigterm(app: BlocksScreenApp) -> None:
 
 
 def on_quit() -> None:
-    logging.info("Final exit cleanup")
+    # Daemon threads alive here can emit into widgets sip destroys at exit (the stop SEGV).
+    _alive = [t.name for t in threading.enumerate() if t is not threading.main_thread()]
+    logging.info("Final exit cleanup, threads still alive: %s", _alive)
     LogManager.shutdown()
 
 

@@ -2,6 +2,7 @@
 
 import asyncio
 import sys
+import threading
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -38,6 +39,7 @@ def _make_worker():
     w._escalated = False
     w._init_lock = asyncio.Lock()
     w._system_bus = MagicMock()
+    w._thread = threading.Thread(target=lambda: None)
     return w
 
 
@@ -543,6 +545,12 @@ class TestShutdown:
         worker.shutdown()
         owner_task.cancel.assert_called_once()
         listener.cancel.assert_called_once()
+
+    def test_shutdown_joins_loop_thread(self, worker):
+        worker._thread = threading.Thread(target=worker._loop.run_forever, daemon=True)
+        worker._thread.start()
+        worker.shutdown()
+        assert not worker._thread.is_alive()
 
 
 class TestReplayBusy:
