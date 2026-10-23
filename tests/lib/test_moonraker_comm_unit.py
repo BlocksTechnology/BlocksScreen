@@ -1,7 +1,13 @@
 """Unit tests for moonrakerComm."""
 
+import base64
+import hashlib
+import importlib
 import json
+import socket
+import sys
 import threading
+import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -280,6 +286,101 @@ class TestReconnectCycle:
         assert ws.request_table == {}
         qtbot.wait(20)
         callback.assert_not_called()
+
+
+class TestShutdown:
+    def test_disconnect_wakes_dispatcher_and_stops_poll(self, ws):
+        ws.ws = MagicMock()
+        ws._wst = MagicMock(is_alive=MagicMock(return_value=False))
+        ws.wb_disconnect()
+        ws.ws.sock.sock.shutdown.assert_called_once_with(socket.SHUT_RD)
+        ws.ws.close.assert_not_called()  # teardown on the ws thread sends the close frame
+        assert ws.ws.keep_running is False
+        ws.query_klippy_status_timer.stopTimer.assert_called_once()
+
+    def test_disconnect_falls_back_to_close(self, ws):
+        ws.ws = MagicMock()
+        ws.ws.sock.sock.shutdown.side_effect = OSError("not connected")
+        ws._wst = MagicMock(is_alive=MagicMock(return_value=False))
+        ws.wb_disconnect()
+        ws.ws.close.assert_called_once()
+
+    def test_callbacks_silent_after_disconnect(self, ws, monkeypatch, qtbot):
+        ws.wb_disconnect()
+        connect = MagicMock()
+        monkeypatch.setattr(ws, "connect", connect)
+        emitted = []
+        ws.connected_signal.connect(lambda: emitted.append("open"))
+        ws.connection_lost[str].connect(emitted.append)
+        ws.server_components_signal.connect(emitted.append)
+        ws.ws = MagicMock()
+        ws.request_table[1] = ("server.info", {}, None)
+        ws.on_open(None)
+        ws.on_message(None, json.dumps({"id": 1, "result": {"components": []}}))
+        ws.on_close(None, 1000, "bye")
+        assert ws.reconnect() is False
+        qtbot.wait(20)
+        assert emitted == []
+        assert ws.connected is False
+        connect.assert_not_called()
+
+    def test_real_socket_thread_exits_within_join(self, ws, qtbot, monkeypatch):
+        # Unfixed, ~40% of closes left run_forever in epoll for ping_timeout (10 s).
+        monkeypatch.delitem(sys.modules, "websocket", raising=False)  # conftest stub
+        monkeypatch.setattr(
+            moonrakerComm, "websocket", importlib.import_module("websocket")
+        )
+        port = _serve_ws()
+        ws._host, ws._port = "127.0.0.1", port
+        ws.moonRest.get_oneshot_token.return_value = "t"
+        for _ in range(8):
+            ws._closing = False
+            assert ws.connect() is True
+            qtbot.waitUntil(lambda: ws.connected, timeout=3000)
+            start = time.monotonic()
+            ws.wb_disconnect()
+            assert not ws._wst.is_alive()
+            assert time.monotonic() - start < 2
+            ws.connected = False
+
+
+def _serve_ws() -> int:
+    """Minimal RFC 6455 server: handshake, then answer a close frame like Moonraker."""
+    srv = socket.create_server(("127.0.0.1", 0))
+
+    def _client(conn: socket.socket) -> None:
+        with conn:
+            req = b""
+            while b"\r\n\r\n" not in req:
+                req += conn.recv(4096)
+            key = next(
+                line.split(b":", 1)[1].strip()
+                for line in req.split(b"\r\n")
+                if line.lower().startswith(b"sec-websocket-key")
+            )
+            accept = base64.b64encode(hashlib.sha1(key + _WS_GUID).digest())  # nosec B324
+            conn.sendall(
+                b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                b"Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + b"\r\n\r\n"
+            )
+            while (hdr := conn.recv(2)) and len(hdr) == 2:
+                length = hdr[1] & 0x7F
+                conn.recv(4 + length)
+                if hdr[0] & 0x0F == 8:
+                    conn.sendall(b"\x88\x02\x03\xe8")
+                    return
+
+    def _accept() -> None:
+        while True:
+            threading.Thread(
+                target=_client, args=(srv.accept()[0],), daemon=True
+            ).start()
+
+    threading.Thread(target=_accept, daemon=True).start()
+    return srv.getsockname()[1]
+
+
+_WS_GUID = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 @pytest.fixture
