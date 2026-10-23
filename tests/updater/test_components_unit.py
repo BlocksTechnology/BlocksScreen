@@ -553,9 +553,7 @@ def test_shipped_happy_hare_is_pinned_without_service():
     hh = next(c for c in configs if c.name == "Happy-Hare")
     assert hh.install_if_missing and hh.url
     assert hh.version == "d5cce9f96991b270ff570b7497bbf6b4463a82b9"
-    # v3 is enforced: edits, v4 or any other commit are reset back to the pin.
     assert (hh.branch, hh.reset_mode) == ("v3", "hard")
-    # A failed provision disables component.service; it must never be moonraker.
     assert hh.service is None
     names = [c.name for c in configs]
     assert names.index("moonraker") < names.index("Happy-Hare")

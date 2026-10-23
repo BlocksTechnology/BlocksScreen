@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -71,6 +72,7 @@ class TestDeviceDiscoveryHook:
 
 
 HH_HOOK = HOOK.parent / "Happy-Hare.sh"
+_NOT_ROOT = pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file modes")
 _MOONRAKER_CONF = (
     "[server]\nhost: 0.0.0.0\n\n[mmu_server]\nenable_file_preprocessor: True\n"
 )
@@ -115,9 +117,14 @@ def hh_home(tmp_path: Path) -> Path:
 
 
 def _run_hh_hook(
-    tmp_path: Path, home: Path, prev: str = "", new: str = ""
+    tmp_path: Path,
+    home: Path,
+    prev: str = "",
+    new: str = "",
+    hook: Path = HH_HOOK,
+    **extra: str,
 ) -> subprocess.CompletedProcess:
-    """Run the Happy-Hare hook with a stub sudo that records its argv."""
+    """Run a Happy-Hare/Moonraker hook with a stub sudo that records its argv."""
     stub_bin = tmp_path / "stub-bin"
     stub_bin.mkdir(exist_ok=True)
     sudo = stub_bin / "sudo"
@@ -129,9 +136,10 @@ def _run_hh_hook(
         "COMPONENT_PATH": str(home / "Happy-Hare"),
         "PREV_HASH": prev,
         "NEW_HASH": new,
+        **extra,
     }
     return subprocess.run(
-        ["bash", str(HH_HOOK)], env=env, capture_output=True, text=True, check=False
+        ["bash", str(hook)], env=env, capture_output=True, text=True, check=False
     )
 
 
@@ -153,8 +161,60 @@ class TestHappyHareHook:
         assert "/moonraker/components/mmu_server.py" in _exclude(hh_home)
         assert _git(hh_home / "moonraker", "status", "--porcelain") == ""
         assert _sudo_calls(tmp_path) == [
-            "systemctl restart --no-block moonraker.service"
+            "-n systemctl --no-block restart moonraker.service"
         ]
+
+    def test_restart_argv_matches_sudoers_rule(self, tmp_path, hh_home):
+        _run_hh_hook(tmp_path, hh_home)
+        root = HOOK.parents[2]
+        rule = re.search(
+            r"NOPASSWD: /usr/bin/(systemctl --no-block restart) %s",
+            (root / "scripts" / "install-updater.sh").read_text(),
+        )
+        assert rule is not None
+        manifest = (root / "updater" / "components.yaml").read_text()
+        assert re.search(r"^\s*service: moonraker\.service$", manifest, re.M)
+        assert _sudo_calls(tmp_path) == [f"-n {rule[1]} moonraker.service"]
+
+    def test_pending_moonraker_restart_skips_restart(self, tmp_path, hh_home):
+        result = _run_hh_hook(
+            tmp_path,
+            hh_home,
+            BS_UPDATER_PENDING_RESTARTS="klipper.service moonraker.service",
+        )
+        assert result.returncode == 0, result.stderr
+        assert _sudo_calls(tmp_path) == []
+
+    def test_other_pending_restarts_still_restart(self, tmp_path, hh_home):
+        result = _run_hh_hook(
+            tmp_path, hh_home, BS_UPDATER_PENDING_RESTARTS="klipper.service"
+        )
+        assert result.returncode == 0, result.stderr
+        assert len(_sudo_calls(tmp_path)) == 1
+
+    def test_link_only_skips_restart(self, tmp_path, hh_home):
+        result = _run_hh_hook(tmp_path, hh_home, HH_LINK_ONLY="1")
+        assert result.returncode == 0, result.stderr
+        assert (
+            hh_home / "moonraker" / "moonraker" / "components" / "mmu_server.py"
+        ).is_symlink()
+        assert _sudo_calls(tmp_path) == []
+
+    @_NOT_ROOT
+    def test_unwritable_exclude_warns_and_links(self, tmp_path, hh_home):
+        info = hh_home / "moonraker" / ".git" / "info"
+        info.mkdir(exist_ok=True)
+        (info / "exclude").write_text("*.pyc\n")
+        (info / "exclude").chmod(0o444)
+        try:
+            result = _run_hh_hook(tmp_path, hh_home)
+        finally:
+            (info / "exclude").chmod(0o644)
+        assert result.returncode == 0, result.stderr
+        assert "WARN" in result.stdout
+        assert (
+            hh_home / "moonraker" / "moonraker" / "components" / "mmu_server.py"
+        ).is_symlink()
 
     def test_unchanged_update_is_idempotent(self, tmp_path, hh_home):
         _run_hh_hook(tmp_path, hh_home)
@@ -208,6 +268,68 @@ class TestHappyHareHook:
         (hh_home / "Happy-Hare" / "components" / "mmu_server.py").unlink()
         result = _run_hh_hook(tmp_path, hh_home)
         assert result.returncode == 1
+
+
+MR_HOOK = HOOK.with_name("moonraker.sh")
+_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
+class TestMoonrakerHook:
+    """A Moonraker reclone must get the mmu_server link back."""
+
+    def _run(self, tmp_path: Path, home: Path, prev: str = "abc"):
+        return _run_hh_hook(
+            tmp_path,
+            home,
+            prev,
+            hook=MR_HOOK,
+            COMPONENT_PATH=str(home / "moonraker"),
+        )
+
+    def _dst(self, home: Path) -> Path:
+        return home / "moonraker" / "moonraker" / "components" / "mmu_server.py"
+
+    def test_update_relinks_without_restart(self, tmp_path, hh_home):
+        result = self._run(tmp_path, hh_home)
+        assert result.returncode == 0, result.stderr
+        assert self._dst(hh_home).is_symlink()
+        assert "/moonraker/components/mmu_server.py" in _exclude(hh_home)
+        assert _sudo_calls(tmp_path) == []
+
+    def test_boot_reclone_relinks_and_restarts(self, tmp_path, hh_home):
+        result = self._run(tmp_path, hh_home, _EMPTY_TREE)
+        assert result.returncode == 0, result.stderr
+        assert self._dst(hh_home).is_symlink()
+        assert _sudo_calls(tmp_path) == [
+            "-n systemctl --no-block restart moonraker.service"
+        ]
+
+    def test_intact_link_restores_exclude_without_restart(self, tmp_path, hh_home):
+        _run_hh_hook(tmp_path, hh_home)
+        exclude = hh_home / "moonraker" / ".git" / "info" / "exclude"
+        exclude.write_text("")
+        result = self._run(tmp_path, hh_home, _EMPTY_TREE)
+        assert result.returncode == 0, result.stderr
+        assert self._dst(hh_home).is_symlink()
+        assert "/moonraker/components/mmu_server.py" in _exclude(hh_home)
+        assert len(_sudo_calls(tmp_path)) == 1
+
+    def test_no_happy_hare_skips(self, tmp_path, hh_home):
+        subprocess.run(["rm", "-rf", str(hh_home / "Happy-Hare")], check=True)
+        result = self._run(tmp_path, hh_home)
+        assert result.returncode == 0, result.stderr
+        assert not self._dst(hh_home).exists()
+
+    @_NOT_ROOT
+    def test_relink_failure_never_fails_hook(self, tmp_path, hh_home):
+        components = self._dst(hh_home).parent
+        components.chmod(0o555)
+        try:
+            result = self._run(tmp_path, hh_home)
+        finally:
+            components.chmod(0o755)
+        assert result.returncode == 0, result.stderr
+        assert "WARN" in result.stdout
 
 
 UI_HOOK = HOOK.with_name("BlocksScreen.sh")

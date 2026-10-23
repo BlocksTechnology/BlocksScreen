@@ -1253,6 +1253,23 @@ class TestRunHook:
         assert run.await_args.kwargs["timeout"] == 60.0
 
     @pytest.mark.asyncio
+    async def test_extra_env_never_overrides_component_vars(
+        self, tmp_path, monkeypatch
+    ):
+        import updater.executor as ex
+
+        monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
+        (tmp_path / "comp.sh").write_text("#!/bin/bash\nexit 0\n")
+        (tmp_path / "comp.sh").chmod(0o755)
+        with patch.object(ex, "_run", new=AsyncMock(return_value=(True, ""))) as run:
+            await run_hook(
+                "comp", tmp_path, "n", "p", extra_env={"X": "1", "NEW_HASH": "bad"}
+            )
+        env = run.await_args.kwargs["env"]
+        assert env["X"] == "1"
+        assert env["NEW_HASH"] == "n"
+
+    @pytest.mark.asyncio
     async def test_hook_path_traversal_rejected(self, tmp_path, monkeypatch):
         import updater.executor as ex
 

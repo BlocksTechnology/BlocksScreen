@@ -925,6 +925,28 @@ class TestAtomicBatch:
         assert all(c.args[1] is True for c in cb.on_component_done.call_args_list)
 
     @pytest.mark.asyncio
+    async def test_hooks_get_pending_restarts(self, tmp_path):
+        svc, comps = self._svc(tmp_path, MagicMock(), n=2, service="moonraker.service")
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")) as hook,
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+        ):
+            await svc._run_git_batch(comps)
+        assert hook.call_count == 2
+        for call in hook.call_args_list:
+            pending = call.kwargs["extra_env"]["BS_UPDATER_PENDING_RESTARTS"]
+            assert pending == "moonraker.service"
+
+    @pytest.mark.asyncio
     async def test_inflight_marker_written_then_cleared_on_success(self, tmp_path):
         cb = MagicMock()
         svc, comps = self._svc(tmp_path, cb, n=1)
@@ -2445,7 +2467,6 @@ class TestRunFollowup:
 
     @pytest.mark.asyncio
     async def test_crash_mid_update_still_counts_the_try(self, svc, env):
-        # The try is recorded before update_all, so a crash or reboot cannot loop it.
         self._mark(svc)
         env.side_effect = RuntimeError("boom")
         with (
@@ -2466,7 +2487,7 @@ class TestRunFollowup:
             UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
         ):
             results = [await svc.run_followup() for _ in range(tries)]
-        assert results == [(True, False)] * (tries - 1) + [(False, True)]
+        assert results == [(True, True)] * (tries - 1) + [(False, True)]
         assert env.await_count == tries
         assert not svc._followup_path.exists()
 
@@ -2477,7 +2498,7 @@ class TestRunFollowup:
         with patch.object(
             UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
         ):
-            assert await svc.run_followup() == (True, False)
+            assert await svc.run_followup() == (True, True)
             assert await svc.run_followup() == (False, True)
         assert not svc._followup_path.exists()
 

@@ -976,6 +976,7 @@ async def run_hook(
     new_hash: str,
     prev_hash: str,
     timeout: float = 60.0,
+    extra_env: dict[str, str] | None = None,
 ) -> tuple[bool, str]:
     """Run the component's update hook if present, refusing paths outside hooks/."""
     hook = (_HOOKS_DIR / f"{name}.sh").resolve()
@@ -990,6 +991,7 @@ async def run_hook(
     env = _make_clean_env()
     env.update(
         {
+            **(extra_env or {}),
             "COMPONENT_NAME": name,
             "COMPONENT_PATH": str(path) if path else "",
             "NEW_HASH": new_hash,

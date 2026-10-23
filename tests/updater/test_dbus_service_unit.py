@@ -648,6 +648,16 @@ class TestBootProvision:
         assert svc._followed_up is True
 
     @pytest.mark.asyncio
+    async def test_retrying_followup_emits_status_without_apt(self, svc):
+        svc._provisioned = True
+        svc._emit_status = AsyncMock()
+        svc._svc.run_followup = AsyncMock(return_value=(True, True))
+        await svc._followup_pass()
+        svc._emit_status.assert_awaited_once()
+        svc._svc.background_apt_upgrade.assert_not_called()
+        assert svc._followed_up is False
+
+    @pytest.mark.asyncio
     async def test_followup_skips_apt_when_restart_pending(self, svc):
         svc._provisioned = True
         svc._svc.daemon_restart_pending = True

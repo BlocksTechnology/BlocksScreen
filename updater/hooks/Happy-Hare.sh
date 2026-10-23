@@ -32,13 +32,26 @@ fi
 # Moonraker reports untracked .py files as a repo anomaly; info/exclude is never committed or cleaned.
 _exclude=$(git -C "$_moonraker" rev-parse --path-format=absolute --git-path info/exclude 2>/dev/null || true)
 _pattern="/moonraker/components/mmu_server.py"
-if [ -n "$_exclude" ] && ! grep -qxF "$_pattern" "$_exclude" 2>/dev/null; then
-    mkdir -p "$(dirname "$_exclude")"
+_add_exclude() {
+    mkdir -p "$(dirname "$_exclude")" || return 1
     if [ -s "$_exclude" ] && [ -n "$(tail -c1 "$_exclude")" ]; then
-        echo >>"$_exclude"
+        echo >>"$_exclude" || return 1
     fi
     echo "$_pattern" >>"$_exclude"
-    echo "[hook:Happy-Hare] added $_pattern to $_exclude"
+}
+# Cosmetic only, so a failure must not fail the hook: a failed provision deletes the checkout under the link.
+if [ -n "$_exclude" ] && ! grep -qxF "$_pattern" "$_exclude" 2>/dev/null; then
+    if _add_exclude; then
+        echo "[hook:Happy-Hare] added $_pattern to $_exclude"
+    else
+        echo "[hook:Happy-Hare] WARN: could not write $_exclude - Moonraker may report its repo dirty"
+    fi
+fi
+
+if [ -n "${HH_LINK_ONLY:-}" ] \
+        || [[ " ${BS_UPDATER_PENDING_RESTARTS:-} " == *" moonraker.service "* ]]; then
+    echo "[hook:Happy-Hare] link only - caller restarts Moonraker"
+    exit 0
 fi
 
 if ! $_linked && [ -n "${PREV_HASH:-}" ] && [ -n "${NEW_HASH:-}" ] \
@@ -56,7 +69,8 @@ if ! grep -q '^\[mmu_server\]' "$_conf" 2>/dev/null; then
 fi
 
 echo "[hook:Happy-Hare] restarting moonraker.service to load mmu_server"
-sudo systemctl restart --no-block moonraker.service 2>/dev/null || {
+# Argv order must match the install-updater.sh sudoers rule exactly.
+sudo -n systemctl --no-block restart moonraker.service 2>/dev/null || {
     echo "[hook:Happy-Hare] WARN: could not restart moonraker.service - loads on next restart"
 }
 echo "[hook:Happy-Hare] done"

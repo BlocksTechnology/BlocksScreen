@@ -619,7 +619,7 @@ class UpdateService:
                     # An unrecorded try may not be retried: its count never advances.
                     if recorded and tries + 1 < _FOLLOWUP_TRIES:
                         self._log.warning("followup: update failed, retrying next poll")
-                        return True, False
+                        return True, True
                     self._log.warning("followup: update failed, leaving it to Update")
                 await asyncio.to_thread(self._clear_followup)
             finally:
@@ -836,6 +836,12 @@ class UpdateService:
                     new_hashes[c.name],
                     prev[c.name],
                     timeout=HOOK_TIMEOUT,
+                    # Hooks leave these to the verified restart phase.
+                    extra_env={
+                        "BS_UPDATER_PENDING_RESTARTS": " ".join(
+                            sorted({a.service for a in alive if a.service})
+                        )
+                    },
                 ),
                 c.name,
                 3,
