@@ -580,23 +580,24 @@ class UpdateService:
             if not acquired:
                 self._log.info("followup: update in progress, deferring")
                 return True, False
-            await self.reconcile_if_pending()
-            dirty = await self._followup_targets(base)
-            if dirty and not await self._followup_reachable(dirty):
-                self._offline_followup_tries += 1
-                if self._offline_followup_tries < _OFFLINE_PROVISION_TRIES:
-                    return True, False
-                # Still shown dirty, so a later Update applies it.
-                self._log.info("followup: still offline, leaving it to Update")
-                dirty = set()
-            # One-shot: a failing entry must not re-run on every boot.
-            await asyncio.to_thread(self._clear_followup)
-            if not dirty:
-                return False, False
-            self._log.info("followup: applying %s", sorted(dirty))
+            # Busy before the network checks below, so an Update press is refused, not raced.
             if on_busy:
                 on_busy(True)
             try:
+                await self.reconcile_if_pending()
+                dirty = await self._followup_targets(base)
+                if dirty and not await self._followup_reachable(dirty):
+                    self._offline_followup_tries += 1
+                    if self._offline_followup_tries < _OFFLINE_PROVISION_TRIES:
+                        return True, False
+                    # Still shown dirty, so a later Update applies it.
+                    self._log.info("followup: still offline, leaving it to Update")
+                    dirty = set()
+                # One-shot: a failing entry must not re-run on every boot.
+                await asyncio.to_thread(self._clear_followup)
+                if not dirty:
+                    return False, False
+                self._log.info("followup: applying %s", sorted(dirty))
                 await self.update_all(dirty)
             finally:
                 if on_busy:

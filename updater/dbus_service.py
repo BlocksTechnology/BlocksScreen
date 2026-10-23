@@ -244,6 +244,9 @@ class UpdaterInterface(
         # A provisioning pass that started under the hold still owns busy.
         if not self._provisioning:
             self._emit_busy(busy=False)
+            # The follow-up skipped while the hold owned busy: run it now, not at the next poll.
+            if self._provisioned and not self._followed_up:
+                self._spawn(self._followup_pass(), name="followup_after_deploy")
 
     def _validate_component_name(self, name: str) -> bool:
         """SEC: verify component exists to prevent abuse on unknown names."""

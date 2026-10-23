@@ -2427,6 +2427,22 @@ class TestRunFollowup:
         assert not svc._followup_path.exists()
 
     @pytest.mark.asyncio
+    async def test_busy_before_network_checks(self, svc, env):
+        # An Update pressed during the remote checks must be refused, not race the lock.
+        self._mark(svc)
+        on_busy = MagicMock()
+        seen = []
+
+        async def targets(_self, _base):
+            seen.append(list(on_busy.call_args_list))
+            return set()
+
+        with patch.object(UpdateService, "_followup_targets", targets):
+            assert await svc.run_followup(on_busy) == (False, False)
+        assert seen == [[call(True)]]
+        assert on_busy.call_args_list == [call(True), call(False)]
+
+    @pytest.mark.asyncio
     async def test_failed_update_is_not_retried(self, svc, env):
         # One-shot: the marker is gone before update_all, so a crash cannot loop it.
         self._mark(svc)

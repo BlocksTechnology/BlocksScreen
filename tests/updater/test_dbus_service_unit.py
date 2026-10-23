@@ -474,6 +474,24 @@ class TestDeployHold:
         assert svc._busy is False
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("followed_up", [False, True])
+    async def test_hold_end_runs_pending_followup(self, svc, monkeypatch, followed_up):
+        """The boot hold blocks the follow-up; it runs on release, not a poll later."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_DEPLOY_POLL_S", 0.01)
+        svc._provisioned = True
+        svc._followed_up = followed_up
+        svc._svc.run_followup = AsyncMock(return_value=(False, False))
+        svc._svc.deploy_pending.return_value = True
+        svc._set_busy(False)
+        await asyncio.sleep(0.03)
+        svc._svc.run_followup.assert_not_awaited()
+        svc._svc.deploy_pending.return_value = False
+        await asyncio.sleep(0.05)
+        assert svc._svc.run_followup.await_count == (0 if followed_up else 1)
+
+    @pytest.mark.asyncio
     async def test_update_rejected_during_hold(self, svc):
         """install-updater restarts moonraker: no new batch may start under it."""
         svc._svc.deploy_pending.return_value = True
