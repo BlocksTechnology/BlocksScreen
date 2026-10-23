@@ -21,6 +21,17 @@ components:
     reset_mode: hard
     order: 3
 
+  # Only mmu_server.py is used (hook links it). No service: a failed provision would disable moonraker.
+  - name: Happy-Hare
+    type: git
+    path: ~/Happy-Hare
+    url: https://github.com/moggieuk/Happy-Hare.git
+    branch: v3
+    version: d5cce9f96991b270ff570b7497bbf6b4463a82b9
+    reset_mode: hard
+    order: 4
+    install_if_missing: true
+
   - name: RF50-Klipper
     type: git
     path: ~/RF50-Klipper
