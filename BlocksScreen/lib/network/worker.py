@@ -133,6 +133,8 @@ class NetworkManagerWorker(QObject):
         self._stale_logged_gen = -1
         # Wi-Fi FAILED count, latched by the StateChanged listener.
         self._wifi_failures = 0
+        # Last logged state minus signal: an unchanged snapshot logs at DEBUG only.
+        self._last_state_key: tuple | None = None
 
         self._asyncio_loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
         self._asyncio_thread = threading.Thread(
@@ -1021,14 +1023,20 @@ class NetworkManagerWorker(QObject):
             carrier, vlans = await asyncio.gather(
                 self._has_ethernet_carrier(), self._get_active_vlans()
             )
-            logger.info(
-                "state: conn=%s ssid='%s' ip=%s wifi=%s eth=%s hotspot=%s sig=%d",
+            state_key = (
                 connectivity.name,
                 current_ssid,
                 current_ip or "-",
                 wifi_enabled,
                 eth_connected,
                 hotspot_enabled,
+            )
+            changed = state_key != self._last_state_key
+            self._last_state_key = state_key
+            logger.log(
+                logging.INFO if changed else logging.DEBUG,
+                "state: conn=%s ssid='%s' ip=%s wifi=%s eth=%s hotspot=%s sig=%d",
+                *state_key,
                 signal,
             )
             return NetworkState(
@@ -1294,7 +1302,8 @@ class NetworkManagerWorker(QObject):
                 seen_ssids.add(info.ssid)
 
         networks.sort(key=lambda n: (-n.network_status, -n.signal_strength))
-        logger.info("scan: %d visible of %d AP(s)", len(networks), len(ap_paths))
+        # Counts drift on every periodic scan: INFO here flooded the field logs.
+        logger.debug("scan: %d visible of %d AP(s)", len(networks), len(ap_paths))
         self.networks_scanned.emit(networks)
 
     async def _request_scan_if_allowed(self) -> None:
