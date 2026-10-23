@@ -178,6 +178,7 @@ _RECOVERY_SETTLE_S = 90.0
 _FORWARD_HEAL_BASE_S = 1800.0
 _FORWARD_HEAL_JITTER_S = 300.0
 _OFFLINE_PROVISION_TRIES = 6  # ~30 min of 300s polls, for late Wi-Fi
+_FOLLOWUP_TRIES = 3  # counted in the marker, so a crash or reboot mid-try still counts
 
 # Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
@@ -270,6 +271,7 @@ class UpdateService:
         self._reconciled = False
         self._offline_provision_tries = 0
         self._offline_followup_tries = 0
+        self._verified_restarts: set[str] = set()
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -434,10 +436,24 @@ class UpdateService:
         ok = True
         for c in apt:
             ok = await self._run_apt_update(c) and ok
+        # Provision hooks leave these to the batch, which restarts each one once.
+        pending = sorted(
+            {
+                c.service
+                for c in batch
+                if c.service and c.service not in _FIRE_AND_FORGET_SERVICES
+            }
+        )
+        self._verified_restarts.clear()
         for c in provision:
-            ok = await self._provision_component(c) and ok
+            ok = await self._provision_component(c, " ".join(pending)) and ok
         if batch:
             ok = await self._run_git_batch(batch) and ok
+        if provision:
+            # A batch that dropped or aborted never restarted these for the provision.
+            for svc in pending:
+                if svc not in self._verified_restarts:
+                    ok = await self._restart_one(svc) and ok
         return ok
 
     def _check_disk_space(self, components: list[ComponentConfig]) -> bool:
@@ -570,7 +586,7 @@ class UpdateService:
         self, on_busy: Callable[[bool], None] | None = None
     ) -> tuple[bool, bool]:
         """Apply manifest entries changed by the last BlocksScreen update; (retry, ran)."""
-        base = await asyncio.to_thread(self._read_followup)
+        base, tries = await asyncio.to_thread(self._read_followup)
         if not base:
             return False, False
         if await klipper_printing() or await self.deploy_running():
@@ -593,12 +609,34 @@ class UpdateService:
                     # Still shown dirty, so a later Update applies it.
                     self._log.info("followup: still offline, leaving it to Update")
                     dirty = set()
-                # One-shot: a failing entry must not re-run on every boot.
-                await asyncio.to_thread(self._clear_followup)
+                if dirty and tries >= _FOLLOWUP_TRIES:
+                    self._log.warning(
+                        "followup: %d tries failed, leaving %s to Update",
+                        tries,
+                        sorted(dirty),
+                    )
+                    dirty = set()
+                # Bounded, not one-shot: the try is recorded before it runs.
+                recorded = bool(dirty) and await asyncio.to_thread(
+                    self._write_followup, base, tries + 1
+                )
+                if not recorded:
+                    await asyncio.to_thread(self._clear_followup)
                 if not dirty:
                     return False, False
-                self._log.info("followup: applying %s", sorted(dirty))
-                await self.update_all(dirty)
+                self._log.info(
+                    "followup: applying %s (try %d/%d)",
+                    sorted(dirty),
+                    tries + 1,
+                    _FOLLOWUP_TRIES,
+                )
+                if not await self.update_all(dirty):
+                    # An unrecorded try may not be retried: its count never advances.
+                    if recorded and tries + 1 < _FOLLOWUP_TRIES:
+                        self._log.warning("followup: update failed, retrying next poll")
+                        return True, True
+                    self._log.warning("followup: update failed, leaving it to Update")
+                await asyncio.to_thread(self._clear_followup)
             finally:
                 if on_busy:
                     on_busy(False)
@@ -633,16 +671,34 @@ class UpdateService:
                 return False
         return True
 
-    def _read_followup(self) -> str:
-        """The follow-up base hash, or empty when absent or malformed."""
+    def _read_followup(self) -> tuple[str, int]:
+        """The follow-up (base hash, tries so far); empty base when absent or malformed."""
         try:
-            base = self._followup_path.read_text().strip()
+            fields = self._followup_path.read_text().split()
         except OSError:
-            return ""
-        if _GIT_SHA_RE.match(base):
-            return base
+            return "", 0
+        # The hook writes the hash alone; _write_followup appends the try count.
+        if fields and _GIT_SHA_RE.match(fields[0]):
+            if len(fields) == 1:
+                return fields[0], 0
+            if len(fields) == 2 and fields[1].isdigit():
+                return fields[0], int(fields[1])
         self._clear_followup()
-        return ""
+        return "", 0
+
+    def _write_followup(self, base: str, tries: int) -> bool:
+        """Record a try in the marker; False when it cannot be written."""
+        # Atomic: a power cut mid-write must not leave a truncated, dropped marker.
+        tmp = self._followup_path.with_name(self._followup_path.name + ".tmp")
+        try:
+            tmp.write_text(f"{base}\n{tries}\n")
+            tmp.replace(self._followup_path)
+        except OSError:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
+            self._log.warning("followup: cannot record try, running it once")
+            return False
+        return True
 
     def _clear_followup(self) -> None:
         """Remove the follow-up marker."""
@@ -795,6 +851,12 @@ class UpdateService:
                     new_hashes[c.name],
                     prev[c.name],
                     timeout=HOOK_TIMEOUT,
+                    # Hooks leave these to the verified restart phase.
+                    extra_env={
+                        "BS_UPDATER_PENDING_RESTARTS": " ".join(
+                            sorted({a.service for a in alive if a.service})
+                        )
+                    },
                 ),
                 c.name,
                 3,
@@ -1644,8 +1706,15 @@ class UpdateService:
             return
         try:
             new_hash = await git_get_hash(c.path)
+            # A daemon restart can land mid-print; hooks then skip service restarts.
+            printing = "1" if await klipper_printing() else ""
             hook_ok, hook_err = await run_hook(
-                c.name, c.path, new_hash, _GIT_EMPTY_TREE, timeout=HOOK_TIMEOUT
+                c.name,
+                c.path,
+                new_hash,
+                _GIT_EMPTY_TREE,
+                timeout=HOOK_TIMEOUT,
+                extra_env={"BS_UPDATER_PRINTING": printing},
             )
             if not hook_ok:
                 self._log.warning("%s: post-reclone hook failed: %s", c.name, hook_err)
@@ -1918,7 +1987,9 @@ class UpdateService:
             )
         return None
 
-    async def _provision_component(self, component: ComponentConfig) -> bool:
+    async def _provision_component(
+        self, component: ComponentConfig, pending_restarts: str = ""
+    ) -> bool:
         """Clone and set up a missing opted-in component."""
         if not component.url:
             return self._cb_error_done(component.name, "no clone url")
@@ -1954,6 +2025,7 @@ class UpdateService:
                     new_hash,
                     _GIT_EMPTY_TREE,
                     timeout=HOOK_TIMEOUT,
+                    extra_env={"BS_UPDATER_PENDING_RESTARTS": pending_restarts},
                 ),
                 component.name,
                 3,
@@ -2201,6 +2273,7 @@ class UpdateService:
             self._log.error("%s active but health check failed", service)
             return False
         self._log.info("%s active after restart", service)
+        self._verified_restarts.add(service)
         return True
 
     async def _preflight_git_update(self, component: ComponentConfig) -> bool | None:

@@ -343,7 +343,8 @@ class UpdaterInterface(
             _log.error("followup pass failed: %s", exc, exc_info=True)
             retry, ran = False, False
         self._followed_up = not retry
-        if not ran:
+        # A failed try that will retry sweeps apt once the follow-up settles.
+        if not ran or retry:
             return
         # The restart that led here skipped the Update's background apt sweep.
         if not self._svc.daemon_restart_pending:
