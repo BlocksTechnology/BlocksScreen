@@ -21,12 +21,12 @@ if [ ! -f "$_src" ]; then
 fi
 
 # An update restarts moonraker.service after this hook; a boot reclone (empty-tree PREV_HASH) does not.
-_link_only=1
-if [ "${PREV_HASH:-}" = "4b825dc642cb6eb9a060e54bf8d69288fbee4904" ] \
-        && [ "$(readlink "$_dst" 2>/dev/null || true)" != "$_src" ]; then
-    _link_only=
+_pending=${BS_UPDATER_PENDING_RESTARTS:-}
+if [ "${PREV_HASH:-}" != "4b825dc642cb6eb9a060e54bf8d69288fbee4904" ] \
+        || [ "$(readlink "$_dst" 2>/dev/null || true)" = "$_src" ]; then
+    _pending="$_pending moonraker.service"
 fi
 # Never fail: a failed hook rolls back the Moonraker update over an optional link.
-COMPONENT_PATH="$_hh" PREV_HASH="" NEW_HASH="" HH_LINK_ONLY="$_link_only" \
+COMPONENT_PATH="$_hh" PREV_HASH="" NEW_HASH="" BS_UPDATER_PENDING_RESTARTS="$_pending" \
     bash "$(dirname "$0")/Happy-Hare.sh" || echo "[hook:moonraker] WARN: relinking mmu_server failed"
 exit 0

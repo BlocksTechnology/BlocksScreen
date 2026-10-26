@@ -97,9 +97,9 @@ fi
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- updater/components.yaml 2>/dev/null; then
     _followup="${HOME}/.cache/blockscreen/updater_followup"
-    if [ ! -e "$_followup" ]; then  # keep the oldest base across chained updates
-        mkdir -p "$(dirname "$_followup")"
-        printf '%s\n' "$PREV_HASH" >"$_followup"
-        echo "[hook:BlocksScreen] components.yaml changed - follow-up queued"
-    fi
+    # Oldest base wins across chained updates; the try count resets.
+    _base=$(head -n1 "$_followup" 2>/dev/null || true)
+    mkdir -p "$(dirname "$_followup")"
+    printf '%s\n' "${_base:-$PREV_HASH}" >"$_followup.tmp" && mv -f "$_followup.tmp" "$_followup"
+    echo "[hook:BlocksScreen] components.yaml changed - follow-up queued"
 fi

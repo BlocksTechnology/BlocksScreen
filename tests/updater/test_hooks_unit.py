@@ -124,12 +124,17 @@ def _run_hh_hook(
     hook: Path = HH_HOOK,
     **extra: str,
 ) -> subprocess.CompletedProcess:
-    """Run a Happy-Hare/Moonraker hook with a stub sudo that records its argv."""
+    """Run a Happy-Hare/Moonraker hook with stub sudo (records argv) and systemctl."""
     stub_bin = tmp_path / "stub-bin"
     stub_bin.mkdir(exist_ok=True)
-    sudo = stub_bin / "sudo"
-    sudo.write_text(f'#!/bin/bash\necho "$*" >>{tmp_path}/sudo.log\n')
-    sudo.chmod(0o755)
+    stubs = {
+        "sudo": f'echo "$*" >>{tmp_path}/sudo.log; exit {extra.pop("SUDO_RC", "0")}',
+        "systemctl": f'exit {extra.pop("ACTIVE_RC", "0")}',
+        "sleep": "exit 0",
+    }
+    for name, body in stubs.items():
+        (stub_bin / name).write_text(f"#!/bin/bash\n{body}\n")
+        (stub_bin / name).chmod(0o755)
     env = {
         "PATH": f"{stub_bin}:{os.environ['PATH']}",
         "HOME": str(home),
@@ -160,15 +165,13 @@ class TestHappyHareHook:
         assert dst.resolve() == hh_home / "Happy-Hare" / "components" / "mmu_server.py"
         assert "/moonraker/components/mmu_server.py" in _exclude(hh_home)
         assert _git(hh_home / "moonraker", "status", "--porcelain") == ""
-        assert _sudo_calls(tmp_path) == [
-            "-n systemctl --no-block restart moonraker.service"
-        ]
+        assert _sudo_calls(tmp_path) == ["-n systemctl restart moonraker.service"]
 
     def test_restart_argv_matches_sudoers_rule(self, tmp_path, hh_home):
         _run_hh_hook(tmp_path, hh_home)
         root = HOOK.parents[2]
         rule = re.search(
-            r"NOPASSWD: /usr/bin/(systemctl --no-block restart) %s",
+            r"NOPASSWD: /usr/bin/(systemctl restart) %s",
             (root / "scripts" / "install-updater.sh").read_text(),
         )
         assert rule is not None
@@ -192,13 +195,18 @@ class TestHappyHareHook:
         assert result.returncode == 0, result.stderr
         assert len(_sudo_calls(tmp_path)) == 1
 
-    def test_link_only_skips_restart(self, tmp_path, hh_home):
-        result = _run_hh_hook(tmp_path, hh_home, HH_LINK_ONLY="1")
+    def test_failed_restart_warns_and_links(self, tmp_path, hh_home):
+        result = _run_hh_hook(tmp_path, hh_home, SUDO_RC="1")
         assert result.returncode == 0, result.stderr
+        assert "WARN: could not restart" in result.stdout
         assert (
             hh_home / "moonraker" / "moonraker" / "components" / "mmu_server.py"
         ).is_symlink()
-        assert _sudo_calls(tmp_path) == []
+
+    def test_inactive_after_restart_warns(self, tmp_path, hh_home):
+        result = _run_hh_hook(tmp_path, hh_home, ACTIVE_RC="3")
+        assert result.returncode == 0, result.stderr
+        assert "WARN: moonraker.service not active" in result.stdout
 
     def test_printing_links_without_restart(self, tmp_path, hh_home):
         result = _run_hh_hook(tmp_path, hh_home, BS_UPDATER_PRINTING="1")
@@ -308,9 +316,7 @@ class TestMoonrakerHook:
         result = self._run(tmp_path, hh_home, _EMPTY_TREE)
         assert result.returncode == 0, result.stderr
         assert self._dst(hh_home).is_symlink()
-        assert _sudo_calls(tmp_path) == [
-            "-n systemctl --no-block restart moonraker.service"
-        ]
+        assert _sudo_calls(tmp_path) == ["-n systemctl restart moonraker.service"]
 
     def test_intact_link_restores_exclude_without_restart(self, tmp_path, hh_home):
         _run_hh_hook(tmp_path, hh_home)
@@ -430,9 +436,10 @@ class TestBlocksScreenHook:
         first = _commit(ui_repo, {"updater/components.yaml": "a: 1\n"})
         mid = _commit(ui_repo, {"updater/components.yaml": "a: 2\n"})
         last = _commit(ui_repo, {"updater/components.yaml": "a: 3\n"})
-        self._run(tmp_path, ui_repo, first, mid)
-        _, followup = self._run(tmp_path, ui_repo, mid, last)
-        assert followup.read_text().strip() == first
+        _, followup = self._run(tmp_path, ui_repo, first, mid)
+        followup.write_text(f"{first}\n2\n")
+        self._run(tmp_path, ui_repo, mid, last)
+        assert followup.read_text().split() == [first]
 
     def test_outside_updater_no_restart_sentinel(self, tmp_path, ui_repo):
         # CLI/manual runs: nothing defers the restart, so none is requested.

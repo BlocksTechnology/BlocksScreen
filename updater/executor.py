@@ -988,10 +988,9 @@ async def run_hook(
         return (True, "no hook")
     if not os.access(hook, os.X_OK):
         return (False, "hook not executable")
-    env = _make_clean_env()
+    env = {**(extra_env or {}), **_make_clean_env()}
     env.update(
         {
-            **(extra_env or {}),
             "COMPONENT_NAME": name,
             "COMPONENT_PATH": str(path) if path else "",
             "NEW_HASH": new_hash,

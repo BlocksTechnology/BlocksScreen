@@ -27,6 +27,7 @@ components:
     path: ~/Happy-Hare
     url: https://github.com/moggieuk/Happy-Hare.git
     branch: v3
+    # Needs f888c935 (Moonraker Spoolman fix); bump only while mmu.py VERSION matches the fleet's 3.42.
     version: d5cce9f96991b270ff570b7497bbf6b4463a82b9
     reset_mode: hard
     order: 4

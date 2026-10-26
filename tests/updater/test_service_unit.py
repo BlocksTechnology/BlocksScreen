@@ -831,46 +831,29 @@ class TestUpdateAll:
         )
         return [moonraker, ui, hh]
 
+    @pytest.mark.parametrize("batch_ok", [True, False])
     @pytest.mark.asyncio
-    async def test_provision_defers_batch_restarts_and_batch_does_them(self, tmp_path):
-        svc = UpdateService()
-
-        async def batch(_b):
-            svc._verified_restarts.add("moonraker.service")
-            return True
-
+    async def test_provision_defers_batch_restarts_to_the_batch(
+        self, tmp_path, batch_ok
+    ):
+        """A failed batch restarts nothing more: the UI restart stays last."""
         with (
             patch("updater.service.UpdateService._preflight_fetch", return_value=set()),
-            patch("updater.service.UpdateService._run_git_batch", side_effect=batch),
+            patch(
+                "updater.service.UpdateService._run_git_batch", return_value=batch_ok
+            ),
             patch(
                 "updater.service.UpdateService._provision_component",
                 return_value=True,
             ) as mock_provision,
             patch("updater.service.UpdateService._restart_one") as mock_restart,
         ):
+            svc = UpdateService()
             svc._components = self._provision_case(tmp_path)
             await svc.update_all()
         # The fire-and-forget UI restart is never verified, so it is never pending.
         assert mock_provision.call_args[0][1] == "moonraker.service"
         mock_restart.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_provision_restarts_what_a_failed_batch_skipped(self, tmp_path):
-        with (
-            patch("updater.service.UpdateService._preflight_fetch", return_value=set()),
-            patch("updater.service.UpdateService._run_git_batch", return_value=False),
-            patch(
-                "updater.service.UpdateService._provision_component",
-                return_value=True,
-            ),
-            patch(
-                "updater.service.UpdateService._restart_one", return_value=True
-            ) as mock_restart,
-        ):
-            svc = UpdateService()
-            svc._components = self._provision_case(tmp_path)
-            await svc.update_all()
-        mock_restart.assert_awaited_once_with("moonraker.service")
 
     @pytest.mark.asyncio
     async def test_empty_batch_skips_git(self, tmp_path):

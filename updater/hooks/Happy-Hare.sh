@@ -31,7 +31,9 @@ if [ "$(readlink "$_dst" 2>/dev/null || true)" != "$_src" ]; then
 fi
 
 # Moonraker reports untracked .py files as a repo anomaly; info/exclude is never committed or cleaned.
-_exclude=$(git -C "$_moonraker" rev-parse --path-format=absolute --git-path info/exclude 2>/dev/null || true)
+_exclude=$(git -C "$_moonraker" rev-parse --git-path info/exclude 2>/dev/null || true)
+# Relative to the repo unless absolute; --path-format=absolute needs git 2.31.
+[[ -z "$_exclude" || "$_exclude" == /* ]] || _exclude="$_moonraker/$_exclude"
 _pattern="/moonraker/components/mmu_server.py"
 _add_exclude() {
     mkdir -p "$(dirname "$_exclude")" || return 1
@@ -49,8 +51,7 @@ if [ -n "$_exclude" ] && ! grep -qxF "$_pattern" "$_exclude" 2>/dev/null; then
     fi
 fi
 
-if [ -n "${HH_LINK_ONLY:-}" ] \
-        || [[ " ${BS_UPDATER_PENDING_RESTARTS:-} " == *" moonraker.service "* ]]; then
+if [[ " ${BS_UPDATER_PENDING_RESTARTS:-} " == *" moonraker.service "* ]]; then
     echo "[hook:Happy-Hare] link only - caller restarts Moonraker"
     exit 0
 fi
@@ -74,8 +75,16 @@ if ! grep -q '^\[mmu_server\]' "$_conf" 2>/dev/null; then
 fi
 
 echo "[hook:Happy-Hare] restarting moonraker.service to load mmu_server"
-# Argv order must match the install-updater.sh sudoers rule exactly.
-sudo -n systemctl --no-block restart moonraker.service 2>/dev/null || {
+# Blocking, so later steps never race Moonraker's startup; argv must match sudoers.
+if ! sudo -n systemctl restart moonraker.service 2>/dev/null; then
     echo "[hook:Happy-Hare] WARN: could not restart moonraker.service - loads on next restart"
-}
-echo "[hook:Happy-Hare] done"
+    exit 0
+fi
+for _ in $(seq 30); do
+    if systemctl is-active --quiet moonraker.service; then
+        echo "[hook:Happy-Hare] done"
+        exit 0
+    fi
+    sleep 1
+done
+echo "[hook:Happy-Hare] WARN: moonraker.service not active after restart"

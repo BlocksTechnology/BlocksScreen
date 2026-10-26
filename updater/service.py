@@ -271,7 +271,6 @@ class UpdateService:
         self._reconciled = False
         self._offline_provision_tries = 0
         self._offline_followup_tries = 0
-        self._verified_restarts: set[str] = set()
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -444,16 +443,10 @@ class UpdateService:
                 if c.service and c.service not in _FIRE_AND_FORGET_SERVICES
             }
         )
-        self._verified_restarts.clear()
         for c in provision:
             ok = await self._provision_component(c, " ".join(pending)) and ok
         if batch:
             ok = await self._run_git_batch(batch) and ok
-        if provision:
-            # A batch that dropped or aborted never restarted these for the provision.
-            for svc in pending:
-                if svc not in self._verified_restarts:
-                    ok = await self._restart_one(svc) and ok
         return ok
 
     def _check_disk_space(self, components: list[ComponentConfig]) -> bool:
@@ -2273,7 +2266,6 @@ class UpdateService:
             self._log.error("%s active but health check failed", service)
             return False
         self._log.info("%s active after restart", service)
-        self._verified_restarts.add(service)
         return True
 
     async def _preflight_git_update(self, component: ComponentConfig) -> bool | None:
