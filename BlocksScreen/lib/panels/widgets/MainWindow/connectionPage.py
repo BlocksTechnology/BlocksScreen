@@ -127,6 +127,9 @@ class ConnectionPage(QtWidgets.QFrame):
     call_cancel_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="call-cancel-panel"
     )
+    page_shown: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="connection-page-shown"
+    )
 
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /) -> None:
         super().__init__(parent)
@@ -402,6 +405,8 @@ class ConnectionPage(QtWidgets.QFrame):
             self.ws.api.refresh_update_status()
             self.call_load_panel.emit(False, "", False)
             self.call_cancel_panel.emit(False)
+        # Top-level popups (e.g. filament load) would stay above this child frame.
+        self.page_shown.emit()
         super().showEvent(a0)
 
     def eventFilter(self, a0: QtCore.QObject | None, a1: QtCore.QEvent | None) -> bool:
