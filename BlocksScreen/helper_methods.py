@@ -8,6 +8,7 @@
 
 import ctypes
 import enum
+import json
 import logging
 import math
 import os
@@ -316,6 +317,24 @@ def format_duration(seconds: int) -> str:
 def format_weight(grams: float) -> str:
     """Grams as "g", or "kg" past 499g."""
     return f"{grams / 1000:.2f}kg" if grams > 499 else f"{grams:.2f}g"
+
+
+def parse_materials(filament_type: object) -> list[str]:
+    """filament_type (str, list, JSON or CSV) as unique material names, in order."""
+    if isinstance(filament_type, str):
+        text = filament_type.strip()
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                types = json.loads(text)
+            except json.JSONDecodeError:
+                types = [text]
+        else:
+            types = text.split(",")
+    elif isinstance(filament_type, list):
+        types = filament_type
+    else:
+        types = [filament_type] if filament_type else []
+    return list(dict.fromkeys(name for t in types if (name := str(t).strip())))
 
 
 def normalize(

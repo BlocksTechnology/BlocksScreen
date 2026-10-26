@@ -111,3 +111,14 @@ def test_slicer_nozzle_temp_beats_fallback(render, direction):
 def test_unknown_material_has_no_nozzle_fallback(render, direction):
     joined = " ".join(render({"filament_type": "Unobtainium"}, direction))
     assert "Nozzle Temperature" not in joined
+
+
+@pytest.mark.parametrize(
+    ("raw", "shown"),
+    [('["PLA", "PLA"]', "PLA"), ('["PLA", "PETG", "PLA"]', "PLA, PETG")],
+)
+def test_multi_tool_filament_type_is_deduped(render, raw, shown):
+    """Moonraker sends a JSON list per tool; repeats collapse to one name each."""
+    texts = render({"filament_type": raw}, QtCore.Qt.LayoutDirection.LeftToRight)
+    assert shown in texts
+    assert not any("[" in t for t in texts)

@@ -188,6 +188,8 @@ class FileMetadataWidget(QtWidgets.QWidget):
         """Value text, None to skip."""
         if value is None or value in ("", [], {}, "Unknown"):
             return None
+        if key == "filament_type":
+            return ", ".join(helper_methods.parse_materials(value)) or None
         if isinstance(value, bool):
             return "Yes" if value else "No"
         if isinstance(value, (int, float)):
