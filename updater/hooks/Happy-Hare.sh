@@ -75,16 +75,9 @@ if ! grep -q '^\[mmu_server\]' "$_conf" 2>/dev/null; then
 fi
 
 echo "[hook:Happy-Hare] restarting moonraker.service to load mmu_server"
-# Blocking, so later steps never race Moonraker's startup; argv must match sudoers.
-if ! sudo -n systemctl restart moonraker.service 2>/dev/null; then
+# Blocking, so a failed restart is reported; argv must match the sudoers rule.
+if sudo -n systemctl restart moonraker.service 2>/dev/null; then
+    echo "[hook:Happy-Hare] done"
+else
     echo "[hook:Happy-Hare] WARN: could not restart moonraker.service - loads on next restart"
-    exit 0
 fi
-for _ in $(seq 30); do
-    if systemctl is-active --quiet moonraker.service; then
-        echo "[hook:Happy-Hare] done"
-        exit 0
-    fi
-    sleep 1
-done
-echo "[hook:Happy-Hare] WARN: moonraker.service not active after restart"

@@ -834,7 +834,7 @@ class TestUpdateAll:
     @pytest.mark.parametrize("batch_ok", [True, False])
     @pytest.mark.asyncio
     async def test_provision_defers_batch_restarts_to_the_batch(
-        self, tmp_path, batch_ok
+        self, tmp_path, batch_ok, caplog
     ):
         """A failed batch restarts nothing more: the UI restart stays last."""
         with (
@@ -854,6 +854,7 @@ class TestUpdateAll:
         # The fire-and-forget UI restart is never verified, so it is never pending.
         assert mock_provision.call_args[0][1] == "moonraker.service"
         mock_restart.assert_not_called()
+        assert ("provision deferred" in caplog.text) is not batch_ok
 
     @pytest.mark.asyncio
     async def test_empty_batch_skips_git(self, tmp_path):

@@ -445,8 +445,14 @@ class UpdateService:
         )
         for c in provision:
             ok = await self._provision_component(c, " ".join(pending)) and ok
-        if batch:
-            ok = await self._run_git_batch(batch) and ok
+        if batch and not await self._run_git_batch(batch):
+            ok = False
+            if provision and pending:
+                self._log.warning(
+                    "provision deferred %s to a failed batch: a dropped one loads it "
+                    "on its next restart",
+                    pending,
+                )
         return ok
 
     def _check_disk_space(self, components: list[ComponentConfig]) -> bool:

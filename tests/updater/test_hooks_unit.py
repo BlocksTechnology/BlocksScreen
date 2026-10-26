@@ -124,13 +124,11 @@ def _run_hh_hook(
     hook: Path = HH_HOOK,
     **extra: str,
 ) -> subprocess.CompletedProcess:
-    """Run a Happy-Hare/Moonraker hook with stub sudo (records argv) and systemctl."""
+    """Run a Happy-Hare/Moonraker hook with a stub sudo that records its argv."""
     stub_bin = tmp_path / "stub-bin"
     stub_bin.mkdir(exist_ok=True)
     stubs = {
         "sudo": f'echo "$*" >>{tmp_path}/sudo.log; exit {extra.pop("SUDO_RC", "0")}',
-        "systemctl": f'exit {extra.pop("ACTIVE_RC", "0")}',
-        "sleep": "exit 0",
     }
     for name, body in stubs.items():
         (stub_bin / name).write_text(f"#!/bin/bash\n{body}\n")
@@ -202,11 +200,6 @@ class TestHappyHareHook:
         assert (
             hh_home / "moonraker" / "moonraker" / "components" / "mmu_server.py"
         ).is_symlink()
-
-    def test_inactive_after_restart_warns(self, tmp_path, hh_home):
-        result = _run_hh_hook(tmp_path, hh_home, ACTIVE_RC="3")
-        assert result.returncode == 0, result.stderr
-        assert "WARN: moonraker.service not active" in result.stdout
 
     def test_printing_links_without_restart(self, tmp_path, hh_home):
         result = _run_hh_hook(tmp_path, hh_home, BS_UPDATER_PRINTING="1")
