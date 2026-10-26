@@ -75,6 +75,7 @@ def _make_worker(qapp, *, running=True, with_wifi=True, with_wired=False):
     w._stale_logged_gen = -1
     w._wifi_failures = 0
     w._last_state_key = None
+    w._last_scan_visible = -1
     w._system_bus = MagicMock(name="mock_system_bus")
     w._primary_wifi_path = (
         "/org/freedesktop/NetworkManager/Devices/2" if with_wifi else ""
@@ -122,6 +123,7 @@ def _bare_worker(qapp):
     w._stale_logged_gen = -1
     w._wifi_failures = 0
     w._last_state_key = None
+    w._last_scan_visible = -1
     w._system_bus = None
     w._primary_wifi_path = ""
     w._primary_wifi_iface = ""
@@ -160,6 +162,7 @@ def _make(qapp, *, running=True, wifi=True, wired=True):
     w._stale_logged_gen = -1
     w._wifi_failures = 0
     w._last_state_key = None
+    w._last_scan_visible = -1
     w._system_bus = MagicMock(name="mock_bus")
     w._primary_wifi_path = "/org/freedesktop/NetworkManager/Devices/2" if wifi else ""
     w._primary_wifi_iface = "wlan0" if wifi else ""
@@ -959,15 +962,45 @@ class TestBuildCurrentState:
         w._is_ethernet_connected = AsyncMock(return_value=False)
         w._has_ethernet_carrier = AsyncMock(return_value=False)
         w._get_active_vlans = AsyncMock(return_value=[])
-        signals = iter([(67, "wpa-psk"), (68, "wpa-psk"), (68, "wpa-psk")])
+        signals = iter(
+            [(67, "wpa-psk"), (68, "wpa-psk"), (40, "wpa-psk"), (40, "wpa-psk")]
+        )
         w._wifi_signal_and_security = AsyncMock(side_effect=lambda _: next(signals))
         with caplog.at_level(logging.DEBUG, logger=_worker_mod.logger.name):
             await w._build_current_state()
-            await w._build_current_state()  # only the signal moved
+            await w._build_current_state()  # same signal band
+            await w._build_current_state()  # band dropped
             w._get_current_ip = AsyncMock(return_value="192.168.1.152")
             await w._build_current_state()
         levels = [r.levelno for r in caplog.records if r.msg.startswith("state:")]
-        assert levels == [logging.INFO, logging.DEBUG, logging.INFO]
+        assert levels == [logging.INFO, logging.DEBUG, logging.INFO, logging.INFO]
+
+    @pytest.mark.parametrize("failure", ["no_bus", "raises"])
+    @pytest.mark.asyncio
+    async def test_recovery_to_same_state_logs_at_info(self, qapp, caplog, failure):
+        w = _make_worker(qapp)
+        w._nm = _ProxyFactory(AsyncProxyMock(connectivity=4, wireless_enabled=True))
+        w._get_current_ssid = AsyncMock(return_value="BLOCKS")
+        w._get_current_ip = AsyncMock(return_value="192.168.1.151")
+        w._is_ethernet_connected = AsyncMock(return_value=False)
+        w._has_ethernet_carrier = AsyncMock(return_value=False)
+        w._get_active_vlans = AsyncMock(return_value=[])
+        w._wifi_signal_and_security = AsyncMock(return_value=(67, "wpa-psk"))
+        with caplog.at_level(logging.DEBUG, logger=_worker_mod.logger.name):
+            await w._build_current_state()
+            if failure == "no_bus":
+                bus, w._system_bus = w._system_bus, None
+                await w._build_current_state()
+                w._system_bus = bus
+            else:
+                ssid, w._get_current_ssid = w._get_current_ssid, AsyncMock(
+                    side_effect=RuntimeError("NM restarted")
+                )
+                await w._build_current_state()
+                w._get_current_ssid = ssid
+            await w._build_current_state()
+        levels = [r.levelno for r in caplog.records if r.msg.startswith("state:")]
+        assert levels == [logging.INFO, logging.INFO]
 
     @pytest.mark.asyncio
     async def test_connected_with_ssid_gets_signal_and_security(self, qapp):
@@ -1098,6 +1131,36 @@ class TestBuildCurrentState:
 
 
 class TestScanNetworks:
+    @pytest.mark.asyncio
+    async def test_scan_count_to_or_from_zero_logs_at_info(self, qapp, caplog):
+        w = _make_worker(qapp)
+        w._ensure_dbus_connection = AsyncMock(return_value=True)
+        w._nm = _ProxyFactory(AsyncProxyMock(wireless_enabled=True))
+        wifi_proxy = AsyncProxyMock(request_scan=AsyncMock(), last_scan=100)
+        w._wifi = _ProxyFactory(wifi_proxy)
+        w._get_current_ssid = AsyncMock(return_value="")
+        w._get_saved_ssid_names_cached = AsyncMock(return_value=[])
+        w._parse_ap = AsyncMock(
+            side_effect=lambda p, *_: NetworkInfo(
+                ssid=p,
+                signal_strength=75,
+                network_status=NetworkStatus.DISCOVERED,
+                security_type=SecurityType.WPA2_PSK,
+            )
+        )
+        with caplog.at_level(logging.DEBUG, logger=_worker_mod.logger.name):
+            for aps in (["a"], ["a", "b"], [], [], ["a"]):
+                wifi_proxy.get_all_access_points = AsyncMock(return_value=aps)
+                await w._scan_networks_once()
+        levels = [r.levelno for r in caplog.records if r.msg.startswith("scan: %d")]
+        assert levels == [
+            logging.DEBUG,
+            logging.DEBUG,
+            logging.INFO,
+            logging.DEBUG,
+            logging.INFO,
+        ]
+
     @pytest.mark.asyncio
     async def test_scan_no_wifi_path_emits_empty(self, qapp):
         w = _make_worker(qapp, with_wifi=False)
