@@ -32,6 +32,7 @@ from .models import (
     VlanInfo,
     is_connectable_security,
     is_hidden_ssid,
+    signal_to_bars,
 )
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,9 @@ class NetworkManagerWorker(QObject):
         self._stale_logged_gen = -1
         # Wi-Fi FAILED count, latched by the StateChanged listener.
         self._wifi_failures = 0
+        # Last logged state, signal as bars: an unchanged snapshot logs at DEBUG only.
+        self._last_state_key: tuple | None = None
+        self._last_scan_visible = -1
 
         self._asyncio_loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
         self._asyncio_thread = threading.Thread(
@@ -982,6 +986,7 @@ class NetworkManagerWorker(QObject):
     async def _build_current_state(self) -> NetworkState:
         """Read all relevant NM properties and assemble a NetworkState snapshot."""
         if not self._system_bus:
+            self._last_state_key = None
             return NetworkState()
         try:
             wifi_iface = self._get_wifi_iface_name()
@@ -1021,14 +1026,21 @@ class NetworkManagerWorker(QObject):
             carrier, vlans = await asyncio.gather(
                 self._has_ethernet_carrier(), self._get_active_vlans()
             )
-            logger.info(
-                "state: conn=%s ssid='%s' ip=%s wifi=%s eth=%s hotspot=%s sig=%d",
+            state_key = (
                 connectivity.name,
                 current_ssid,
                 current_ip or "-",
                 wifi_enabled,
                 eth_connected,
                 hotspot_enabled,
+                signal_to_bars(signal),
+            )
+            changed = state_key != self._last_state_key
+            self._last_state_key = state_key
+            logger.log(
+                logging.INFO if changed else logging.DEBUG,
+                "state: conn=%s ssid='%s' ip=%s wifi=%s eth=%s hotspot=%s sig=%d",
+                *state_key[:-1],
                 signal,
             )
             return NetworkState(
@@ -1045,6 +1057,7 @@ class NetworkManagerWorker(QObject):
             )
         except Exception as exc:
             logger.error("Error building current state: %s", exc)
+            self._last_state_key = None
             return NetworkState()
 
     async def _resolve_current_ip(
@@ -1294,7 +1307,15 @@ class NetworkManagerWorker(QObject):
                 seen_ssids.add(info.ssid)
 
         networks.sort(key=lambda n: (-n.network_status, -n.signal_strength))
-        logger.info("scan: %d visible of %d AP(s)", len(networks), len(ap_paths))
+        # Counts drift on every periodic scan: only going to or from none is INFO.
+        emptied = (len(networks) == 0) != (self._last_scan_visible == 0)
+        self._last_scan_visible = len(networks)
+        logger.log(
+            logging.INFO if emptied else logging.DEBUG,
+            "scan: %d visible of %d AP(s)",
+            len(networks),
+            len(ap_paths),
+        )
         self.networks_scanned.emit(networks)
 
     async def _request_scan_if_allowed(self) -> None:

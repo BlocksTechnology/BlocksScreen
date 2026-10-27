@@ -913,7 +913,7 @@ class UpdateService:
         # Shrink the marker before any restart: survivors stand from here on.
         await self._settle_inflight(pending_revert)
         self._log.info(
-            "git batch complete: %d/%d component(s) updated; queueing UI restart(s)",
+            "git batch complete: %d/%d component(s) updated",
             len(alive),
             len(batch),
         )
