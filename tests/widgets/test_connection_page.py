@@ -146,6 +146,17 @@ class TestVisibility:
         shown_page._set_state(ConnectionState.DISCONNECTED)
         assert not shown_page.isVisible()
 
+    def test_show_emits_page_shown(self, shown_page, qtbot):
+        shown_page.hide()
+        with qtbot.waitSignal(shown_page.page_shown):
+            shown_page._set_state(ConnectionState.WEBSOCKET_LOST)
+
+    def test_manual_show_emits_page_shown_with_toggle_off(self, page, qtbot):
+        # Top-level popups cover this frame whether or not it auto-showed.
+        page.hide()
+        with qtbot.waitSignal(page.page_shown):
+            page.show()
+
 
 class TestRestartButton:
     def test_error_state_emits_firmware_restart(self, page, qtbot):
