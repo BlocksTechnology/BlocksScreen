@@ -459,10 +459,9 @@ class FilesPage(QtWidgets.QWidget):
     @classmethod
     def _filament_label(cls, filament_type) -> str:
         """filament_type as a comma-joined label."""
-        label = ",".join(helper_methods.parse_materials(filament_type))
-        if not label or label == "Unknown":
-            return "Unknown Filament"
-        return label
+        return ", ".join(helper_methods.parse_materials(filament_type)) or (
+            "Unknown Filament"
+        )
 
     def _delayed_scrollbar_update(self) -> None:
         """Update scrollbar after model changes."""

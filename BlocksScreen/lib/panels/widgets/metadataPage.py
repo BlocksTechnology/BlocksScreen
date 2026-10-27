@@ -164,10 +164,11 @@ class FileMetadataWidget(QtWidgets.QWidget):
             self._rows_layout.setRowStretch(row, 1 if row < used else 0)
 
     def _filament_nozzle_temp(self, filament_type: object) -> int | None:
-        """Typical nozzle temp for the material, or None."""
-        if not isinstance(filament_type, str):
+        """Typical nozzle temp for a single-material print, or None."""
+        materials = helper_methods.parse_materials(filament_type)
+        if len(materials) != 1:
             return None
-        name = filament_type.upper()
+        name = materials[0].upper()
         for material, temp in _FILAMENT_NOZZLE_TEMP.items():
             if material in name:
                 return temp

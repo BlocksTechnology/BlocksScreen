@@ -107,6 +107,17 @@ def test_slicer_nozzle_temp_beats_fallback(render, direction):
     assert "235 °C" not in joined
 
 
+@pytest.mark.parametrize(
+    ("raw", "temp"), [('["PETG", "PETG"]', "235 °C"), ('["PETG", "PLA"]', None)]
+)
+def test_nozzle_fallback_needs_a_single_material(render, raw, temp):
+    """Mixed tools have no one typical nozzle temp."""
+    joined = " ".join(render({"filament_type": raw}, _DIRECTIONS[0]))
+    assert ("Nozzle Temperature" in joined) is (temp is not None)
+    if temp:
+        assert temp in joined
+
+
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 def test_unknown_material_has_no_nozzle_fallback(render, direction):
     joined = " ".join(render({"filament_type": "Unobtainium"}, direction))
