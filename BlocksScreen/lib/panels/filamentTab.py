@@ -188,6 +188,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.load_state = False
         self.load_popup.hide()
 
+    @QtCore.pyqtSlot(name="hide_load_popup")
+    def hide_load_popup(self) -> None:
+        """Hide the load/unload popup; a later Loading/Unloading state shows it again."""
+        self.load_state = False
+        self.load_popup.hide()
+
     @QtCore.pyqtSlot(list, name="handle_moonraker_components")
     def handle_moonraker_components(self, components: list) -> None:
         """Re-check spoolman on each server.info: updates add it without a UI restart."""

@@ -42,3 +42,10 @@ def test_none_state_after_klipper_restart_is_ignored() -> None:
     tab = MagicMock()
     FilamentTab.on_mmu_state_changed(tab, None)
     assert tab.mock_calls == []
+
+
+def test_hide_load_popup_clears_load_state_and_hides() -> None:
+    tab = MagicMock(load_state=True)
+    FilamentTab.hide_load_popup(tab)
+    assert tab.load_state is False
+    tab.load_popup.hide.assert_called_once_with()

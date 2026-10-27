@@ -216,6 +216,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
         self.in_case_error.connect(self.printPanel.in_case_error)
         self.in_case_error.connect(self.filamentPanel.in_case_error)
+        self.conn_window.page_shown.connect(self.filamentPanel.hide_load_popup)
 
         self.show_notifications.connect(self.notiPage.new_notication)
 
