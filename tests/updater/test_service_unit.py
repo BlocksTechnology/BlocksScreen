@@ -1090,6 +1090,7 @@ class TestAtomicBatch:
                 return_value=(True, ""),
             ),
             patch("updater.service.git_reset_to_hash", return_value=(False, "boom")),
+            patch("updater.service.restart_service", return_value=(False, "failed")),
         ):
             await svc._run_git_batch(comps)
         assert svc._inflight_path.exists()
@@ -1111,6 +1112,7 @@ class TestAtomicBatch:
                 return_value=(True, ""),
             ),
             patch("updater.service.git_reset_to_hash", side_effect=OSError("disk")),
+            patch("updater.service.restart_service", return_value=(False, "failed")),
         ):
             await svc._run_git_batch(comps)
         assert svc._inflight_path.exists()
