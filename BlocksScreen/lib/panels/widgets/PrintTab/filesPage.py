@@ -1,4 +1,3 @@
-import json
 import logging
 
 import helper_methods
@@ -457,31 +456,12 @@ class FilesPage(QtWidgets.QWidget):
         filament = self._filament_label(filedata.get("filament_type"))
         return f"{filament} - {self._format_print_time(seconds)}"
 
-    @staticmethod
-    def _parse_materials(filament_type) -> list[str]:
-        """filament_type (str, list, JSON or CSV) as material names."""
-        if isinstance(filament_type, str):
-            text = filament_type.strip()
-            if text.startswith("[") and text.endswith("]"):
-                try:
-                    types = json.loads(text)
-                except json.JSONDecodeError:
-                    types = [text]
-            else:
-                types = text.split(",")
-        elif isinstance(filament_type, list):
-            types = filament_type
-        else:
-            types = [filament_type] if filament_type else []
-        return [name for t in types if (name := str(t).strip())]
-
     @classmethod
     def _filament_label(cls, filament_type) -> str:
         """filament_type as a comma-joined label."""
-        label = ",".join(dict.fromkeys(cls._parse_materials(filament_type)))
-        if not label or label == "Unknown":
-            return "Unknown Filament"
-        return label
+        return ", ".join(helper_methods.parse_materials(filament_type)) or (
+            "Unknown Filament"
+        )
 
     def _delayed_scrollbar_update(self) -> None:
         """Update scrollbar after model changes."""
