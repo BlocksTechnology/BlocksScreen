@@ -271,6 +271,7 @@ class UpdateService:
         self._reconciled = False
         self._offline_provision_tries = 0
         self._offline_followup_tries = 0
+        self._restarted_services: set[str] = set()
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -433,6 +434,7 @@ class UpdateService:
     ) -> bool:
         """Run apt, provisioning, then the git batch (its UI restart must come last)."""
         ok = True
+        self._restarted_services.clear()
         for c in apt:
             ok = await self._run_apt_update(c) and ok
         # Provision hooks leave these to the batch, which restarts each one once.
@@ -443,16 +445,23 @@ class UpdateService:
                 if c.service and c.service not in _FIRE_AND_FORGET_SERVICES
             }
         )
+        provisioned = False
         for c in provision:
-            ok = await self._provision_component(c, " ".join(pending)) and ok
+            done = await self._provision_component(c, " ".join(pending))
+            provisioned = provisioned or done
+            ok = ok and done
         if batch and not await self._run_git_batch(batch):
             ok = False
-            if provision and pending:
-                self._log.warning(
-                    "provision deferred %s to a failed batch: a dropped one loads it "
-                    "on its next restart",
-                    pending,
-                )
+        # Only Moonraker loads provisioned code (HH mmu_server) on a deferred restart.
+        if (
+            provisioned
+            and "moonraker.service" in pending
+            and "moonraker.service" not in self._restarted_services
+        ):
+            self._log.warning(
+                "provision deferred the moonraker.service restart to a batch that "
+                "never ran it: it loads on Moonraker's next restart"
+            )
         return ok
 
     def _check_disk_space(self, components: list[ComponentConfig]) -> bool:
@@ -2252,6 +2261,7 @@ class UpdateService:
     async def _restart_one(self, service: str, health_url: str | None = None) -> bool:
         """Restart a service and verify it came active (kill-fallback aware)."""
         self._log.info("restarting %s and waiting for active", service)
+        self._restarted_services.add(service)
         ok, err = await restart_service(service)
         if not ok:
             if await service_unit_missing(service):

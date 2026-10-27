@@ -831,30 +831,38 @@ class TestUpdateAll:
         )
         return [moonraker, ui, hh]
 
+    @pytest.mark.parametrize(
+        ("provision_ok", "moonraker_restarted", "warns"),
+        [(True, False, True), (True, True, False), (False, False, False)],
+    )
     @pytest.mark.parametrize("batch_ok", [True, False])
     @pytest.mark.asyncio
     async def test_provision_defers_batch_restarts_to_the_batch(
-        self, tmp_path, batch_ok, caplog
+        self, tmp_path, batch_ok, provision_ok, moonraker_restarted, warns, caplog
     ):
         """A failed batch restarts nothing more: the UI restart stays last."""
+        svc = UpdateService()
+
+        async def batch(_batch):
+            if moonraker_restarted:
+                svc._restarted_services.add("moonraker.service")
+            return batch_ok
+
         with (
             patch("updater.service.UpdateService._preflight_fetch", return_value=set()),
-            patch(
-                "updater.service.UpdateService._run_git_batch", return_value=batch_ok
-            ),
+            patch.object(svc, "_run_git_batch", side_effect=batch),
             patch(
                 "updater.service.UpdateService._provision_component",
-                return_value=True,
+                return_value=provision_ok,
             ) as mock_provision,
             patch("updater.service.UpdateService._restart_one") as mock_restart,
         ):
-            svc = UpdateService()
             svc._components = self._provision_case(tmp_path)
             await svc.update_all()
         # The fire-and-forget UI restart is never verified, so it is never pending.
         assert mock_provision.call_args[0][1] == "moonraker.service"
         mock_restart.assert_not_called()
-        assert ("provision deferred" in caplog.text) is not batch_ok
+        assert ("provision deferred" in caplog.text) is warns
 
     @pytest.mark.asyncio
     async def test_empty_batch_skips_git(self, tmp_path):
