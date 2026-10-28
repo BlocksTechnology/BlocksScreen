@@ -27,16 +27,22 @@ class Filament:
     def __init__(
         self,
         name: str,
-        temperature: int,
+        htemp: int,
+        btemp: int,
         brand: str | None = None,
         spool_type: SpoolMaterial | None = None,
         spool_weight: float | None = None,
     ):
-        if not isinstance(name, str) or not isinstance(temperature, int):
+        if (
+            not isinstance(name, str)
+            or not isinstance(htemp, int)
+            or not isinstance(btemp, int)
+        ):
             raise TypeError("__init__() invalid argument type")
 
         self._name: str = name
-        self._temperature: int = temperature
+        self._htemp: int = htemp
+        self._btemp: int = btemp
         self._weight: float | None = None
         self._brand: str | None = brand
         self._spool_type: Filament.SpoolMaterial | None = None
@@ -51,8 +57,12 @@ class Filament:
         return self._name
 
     @property
-    def temperature(self) -> int:
-        return self._temperature
+    def htemp(self) -> int:
+        return self._htemp
+
+    @property
+    def btemp(self) -> int:
+        return self._btemp
 
     @property
     def weight(self) -> float | None:

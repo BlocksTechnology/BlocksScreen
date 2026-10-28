@@ -110,6 +110,13 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 body,
             )
         )
+        self.spoolmanPanel.request_delete_filament.connect(
+            lambda filament_id: self._spoolman(
+                self.spoolmanPanel.on_delete_filament_result,
+                self.ws.api.delete_filament,
+                filament_id,
+            )
+        )
         self.spoolmanPanel.request_add_filament.connect(
             lambda body: self._spoolman(
                 self.spoolmanPanel.on_add_filament_result,
@@ -545,6 +552,13 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 body,
             )
         )
+        self._add_spool_page.request_delete_filament.connect(
+            lambda filament_id: self._spoolman(
+                self._add_spool_page.on_delete_filament_result,
+                self.ws.api.delete_filament,
+                filament_id,
+            )
+        )
         self._add_spool_page.accepted.connect(self._add_popup.hide)
         self._add_spool_page.accepted.connect(self._request_spools)
 
@@ -689,8 +703,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._request_spools()
         self.popup.show()
 
-    @QtCore.pyqtSlot(int, str, str, "PyQt_PyObject", name="open-pregate-popup")
-    def open_pregate_popup(self, temp, material, name, callback=None):
+    @QtCore.pyqtSlot(int, int, str, str, "PyQt_PyObject", name="open-pregate-popup")
+    def open_pregate_popup(self, temp, bed_temp, material, name, callback=None):
         """Open the pre-gate popup pre-filled with a detected filament and *callback*."""
         self._popup_name.setText(name)
         self._popup_material.setText(material)
@@ -699,7 +713,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._material_filter = material
 
         self._add_spool_page.setFilter(material)
-        self._add_filament_page.setData(material, temp)
+        self._add_filament_page.setData(material, temp, bed_temp)
         self.handle_popup(True)
 
     def on_popup_accept(self):

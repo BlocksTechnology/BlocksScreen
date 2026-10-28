@@ -18,13 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 class FilamentTypes(enum.Enum):
-    PLA = Filament(name="PLA", temperature=220)
-    PETG = Filament(name="PETG", temperature=240)
-    ABS = Filament(name="ABS", temperature=250)
-    PP = Filament(name="PP", temperature=250)
-    NYLON = Filament(name="NYLON", temperature=270)
-    PC = Filament(name="PC", temperature=230)
-    UNKNOWN = Filament(name="UNKNOWN", temperature=250)
+    PLA = Filament(name="PLA", htemp=220, btemp=50)
+    PETG = Filament(name="PETG", htemp=240, btemp=75)
+    ABS = Filament(name="ABS", htemp=250, btemp=100)
+    ASA = Filament(name="ASA", htemp=250, btemp=90)
+    NYLON = Filament(name="NYLON", htemp=270, btemp=70)
+    PC = Filament(name="PC", htemp=230, btemp=110)
+    UNKNOWN = Filament(name="UNKNOWN", htemp=250, btemp=60)
 
 
 class BasicFilamentPanel(QtWidgets.QStackedWidget):
@@ -33,7 +33,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     request_back = QtCore.pyqtSignal(name="request_back")
     request_change_tab = QtCore.pyqtSignal(int, name="request_change_tab")
     filament_selected = QtCore.pyqtSignal(
-        int, str, str, "PyQt_PyObject", name="filament_selected"
+        int, int, str, str, "PyQt_PyObject", name="filament_selected"
     )
 
     class FilamentStates(enum.Enum):
@@ -271,7 +271,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         callback_action = partial(self.load_filament, 0, filament_type)
 
         self.filament_selected.emit(
-            filament_type.value.temperature,
+            filament_type.value.htemp,
+            filament_type.value.btemp,
             filament_type.value.name,
             filament_type.value.name,
             callback_action,
@@ -721,11 +722,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             ),
             (
                 "load_PP_btn",
-                "PP",
+                "ASA",
                 ":/top_bar_icons/media/topbar/pp_filament_topbar.svg",
                 1,
                 1,
-                FilamentTypes.PP,
+                FilamentTypes.ASA,
             ),
             (
                 "load_nylon_btn",

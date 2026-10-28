@@ -265,6 +265,37 @@ class TestAddSpoolPage:
         add_spool.on_add_spool_result(UNREACHABLE)
         assert add_spool._submit_btn.isEnabled()
 
+    def test_delete_needs_a_selected_filament(self, add_spool):
+        add_spool.on_filaments_received(_spools({"id": 1, "name": "PLA"}))
+        assert not add_spool._delete_btn.isEnabled()
+        add_spool._on_filament_selected(add_spool._fil_model.entries[1])
+        assert add_spool._delete_btn.isEnabled()
+
+    def test_confirmed_delete_sends_the_filament_id(self, add_spool):
+        add_spool.on_filaments_received(_spools({"id": 7, "name": "PLA"}))
+        add_spool._on_filament_selected(add_spool._fil_model.entries[1])
+        sent = []
+        add_spool.request_delete_filament.connect(sent.append)
+        add_spool._on_confirm_delete()
+        assert sent == [7]
+        assert not add_spool._delete_btn.isEnabled()
+
+    def test_failed_delete_shows_toast(self, add_spool, monkeypatch):
+        toast = MagicMock()
+        monkeypatch.setattr(add_spool._popup, "new_message", toast)
+        add_spool.on_filaments_received(_spools({"id": 7, "name": "PLA"}))
+        add_spool._on_filament_selected(add_spool._fil_model.entries[1])
+        add_spool._on_confirm_delete()
+        add_spool.on_delete_filament_result(UNREACHABLE)
+        assert "Could not delete filament" in toast.call_args.kwargs["message"]
+        assert add_spool._delete_btn.isEnabled()
+
+    def test_deleted_filament_refetches_the_list(self, add_spool):
+        fetched = []
+        add_spool.request_filaments.connect(lambda: fetched.append(1))
+        add_spool.on_delete_filament_result({"response": None, "error": None})
+        assert fetched == [1]
+
 
 class TestAddFilamentPage:
     @pytest.fixture

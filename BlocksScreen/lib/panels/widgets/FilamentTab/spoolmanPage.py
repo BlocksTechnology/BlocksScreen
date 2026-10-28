@@ -36,6 +36,9 @@ class SpoolmanPage(QtWidgets.QWidget):
     request_add_spool: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, dict, name="request-add-spool"
     )
+    request_delete_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, name="request-delete-filament"
+    )
     request_add_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="request-add-filament"
     )
@@ -61,6 +64,9 @@ class SpoolmanPage(QtWidgets.QWidget):
 
         self._add_spool_page.request_filaments.connect(self.request_filaments)
         self._add_spool_page.request_add_spool.connect(self.request_add_spool)
+        self._add_spool_page.request_delete_filament.connect(
+            self.request_delete_filament
+        )
         self._add_spool_page.open_add_filament.connect(
             lambda: self._add_stack.setCurrentIndex(1)
         )
@@ -503,6 +509,11 @@ class SpoolmanPage(QtWidgets.QWidget):
     def on_add_spool_result(self, result: dict) -> None:
         """Handle results for adding a spool."""
         self._add_spool_page.on_add_spool_result(result)
+
+    @QtCore.pyqtSlot(dict, name="on-delete-filament-result")
+    def on_delete_filament_result(self, result: dict) -> None:
+        """Handle results for deleting a filament."""
+        self._add_spool_page.on_delete_filament_result(result)
 
     @QtCore.pyqtSlot(dict, name="on-add-filament-result")
     def on_add_filament_result(self, result: dict) -> None:

@@ -20,9 +20,10 @@ from PyQt6 import QtWidgets, sip
 
 
 class _Filament:
-    def __init__(self, name="", temperature=0):
+    def __init__(self, name="", htemp=0, btemp=0):
         self.name = name
-        self.temperature = temperature
+        self.htemp = htemp
+        self.btemp = btemp
 
 
 _filament_stub = MagicMock()

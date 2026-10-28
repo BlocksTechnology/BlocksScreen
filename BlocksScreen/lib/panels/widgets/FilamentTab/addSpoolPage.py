@@ -75,6 +75,9 @@ class AddSpoolPage(QtWidgets.QWidget):
     request_add_spool: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, dict, name="request-add-spool"
     )
+    request_delete_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, name="request-delete-filament"
+    )
     open_add_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="open-add-filament"
     )
@@ -94,7 +97,10 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._material_filter: str | None = None
 
         self._build_ui()
-        self._popup = Popup(self)
+        self._popup = Popup(self, True)
+        self._confirm_delete_popup = BasePopup(self, True, True)
+        self._confirm_delete_popup.set_message("Do you want to delete this filament")
+        self._confirm_delete_popup.accepted.connect(self._on_confirm_delete)
 
         self._keyboard = CustomQwertyKeyboard(self)
         self._keyboard.hide()
@@ -116,6 +122,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         """Clear state and trigger a fresh filament fetch. Call before showing."""
         self._selected_filament_id = None
         self._submit_btn.setEnabled(False)
+        self._delete_btn.setEnabled(False)
         self._lot_field.setEnabled(False)
         self._weight_field.setEnabled(False)
         self._location_field.setEnabled(False)
@@ -197,6 +204,29 @@ class AddSpoolPage(QtWidgets.QWidget):
                 message_type=Popup.MessageType.ERROR, message="Could not add spool"
             )
 
+    @QtCore.pyqtSlot(dict, name="on-delete-filament-result")
+    def on_delete_filament_result(self, result: dict) -> None:
+        """Handle v2 proxy response for DELETE /v1/filament/{id}; refetch on success."""
+        if result.get("error") is not None:
+            self._delete_btn.setEnabled(self._selected_filament_id is not None)
+            self._popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message="Could not delete filament, it may still have spools using this filament",
+            )
+            return
+        self.reset()
+
+    def _on_delete_clicked(self) -> None:
+        if self._selected_filament_id is None:
+            return
+        self._confirm_delete_popup.show()
+
+    def _on_confirm_delete(self) -> None:
+        if self._selected_filament_id is None:
+            return
+        self._delete_btn.setEnabled(False)
+        self.request_delete_filament.emit(int(self._selected_filament_id))
+
     @QtCore.pyqtSlot(ListItem, name="on-filament-selected")
     def _on_filament_selected(self, item: ListItem) -> None:
         if not item:
@@ -211,6 +241,7 @@ class AddSpoolPage(QtWidgets.QWidget):
             self._weight_field.setEnabled(True)
             self._location_field.setEnabled(True)
             self._submit_btn.setEnabled(True)
+            self._delete_btn.setEnabled(True)
 
     def _show_keyboard(
         self,
@@ -427,7 +458,21 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._submit_btn.setPixmap(
             QtGui.QPixmap(":/filament_related/media/btn_icons/add spool.svg")
         )
-        right_lay.addWidget(self._submit_btn)
+
+        self._delete_btn = IconButton(right_frame)
+        self._delete_btn.setFixedSize(QtCore.QSize(60, 60))
+        self._delete_btn.setFlat(True)
+        self._delete_btn.setPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
+        )
+        self._delete_btn.setEnabled(False)
+        self._delete_btn.clicked.connect(self._on_delete_clicked)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_row.addWidget(self._delete_btn, 0)
+        btn_row.addWidget(self._submit_btn, 1)
+        right_lay.addLayout(btn_row)
 
         body.addWidget(right_frame, 1)
         root.addLayout(body, 1)

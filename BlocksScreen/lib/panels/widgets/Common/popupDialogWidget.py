@@ -21,11 +21,12 @@ class Popup(QtWidgets.QDialog):
         WARNING = QtGui.QColor("#E7E147")
         ERROR = QtGui.QColor("#CA4949")
 
-    def __init__(self, parent) -> None:
+    def __init__(self, parent, force: bool = False) -> None:
         super().__init__(parent)
         self.timeout_timer = QtCore.QTimer(self)
         self.timeout_timer.setSingleShot(True)
         self.messages: deque = deque()
+        self.force: bool = force
         self.isShown = False
         self.persistent_notifications: deque = deque()
         self.message_type: Popup.MessageType = Popup.MessageType.INFO
@@ -164,7 +165,7 @@ class Popup(QtWidgets.QDialog):
             message = message_entry.get("message")
             timeout = message_entry.get("timeout")
             self.timeout_timer.setInterval(timeout)
-            if message == self.text_label.text():
+            if message == self.text_label.text() and not self.force:
                 self.messages = deque(
                     m for m in self.messages if m.get("message") != message
                 )

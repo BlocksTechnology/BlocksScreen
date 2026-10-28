@@ -64,9 +64,10 @@ class AddFilamentPage(QtWidgets.QWidget):
             self.on_numpad_request
         )
 
-    def setData(self, material: str, extruder_temp: int):
+    def setData(self, material: str, extruder_temp: int, bed_temp: int):
         self._material_field.setText(material)
         self._ext_temp_field.setText(str(extruder_temp))
+        self._bed_temp_field.setText(str(bed_temp))
         self.update()
 
     def reset(self):
