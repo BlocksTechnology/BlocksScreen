@@ -31,6 +31,8 @@ if typing.TYPE_CHECKING:
 USB_SETTLE_TIMEOUT_MS = 120_000  # Happy Hare pre-processing of a large file
 # RF50-Klipper's SDCARD_PRINT_FILE override emits this for USB files (Mainsail starts).
 USB_PRINT_ACTION = "// action:blocks_usb_print "
+# The override hands USB files over only once this is True; older pairs print directly.
+USB_PRINT_FLAG = "blocksscreen_usb"
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +229,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.printer.request_available_objects_signal.connect(self.klipper_ready_signal)
         self.printer.gcode_response.connect(self._on_gcode_response)
+        self.printer.gcode_macro_update.connect(self._on_gcode_macro_update)
         self.babystepPage = BabystepPage(self)
         self.babystepPage.request_back.connect(self.back_button)
         self.addWidget(self.babystepPage)
@@ -390,6 +393,16 @@ class PrintTab(QtWidgets.QStackedWidget):
             # The macro sends USB paths only; a local one would bypass the touchscreen.
             if file != line and helper_methods.is_usb_path(file):
                 self.start_print(file)
+
+    @QtCore.pyqtSlot(str, dict, name="on_gcode_macro_update")
+    def _on_gcode_macro_update(self, name: str, values: dict) -> None:
+        """Tell the RF50-Klipper USB override that BlocksScreen handles its files."""
+        # False only on the override that knows the flag; Klipper resets it on restart.
+        if name.upper() == "SDCARD_PRINT_FILE" and values.get(USB_PRINT_FLAG) is False:
+            self.run_gcode_signal.emit(
+                f"SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE VARIABLE={USB_PRINT_FLAG}"
+                " VALUE=True"
+            )
 
     def _start_usb_import(self, file: str) -> None:
         """Copy a USB gcode to the gcodes root off-thread, then print the copy."""

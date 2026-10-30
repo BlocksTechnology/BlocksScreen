@@ -95,6 +95,21 @@ def test_usb_print_action_from_macro(lines, started) -> None:
         tab.start_print.assert_called_once_with(started)
 
 
+@pytest.mark.parametrize(
+    ("name", "values", "sent"),
+    [
+        ("SDCARD_PRINT_FILE", {"blocksscreen_usb": False}, True),
+        ("SDCARD_PRINT_FILE", {"blocksscreen_usb": True}, False),
+        ("SDCARD_PRINT_FILE", {}, False),  # another override, no flag to set
+        ("PRINT_START", {"blocksscreen_usb": False}, False),
+    ],
+)
+def test_usb_flag_set_only_on_flagged_override(name, values, sent) -> None:
+    tab = SimpleNamespace(run_gcode_signal=MagicMock())
+    PrintTab._on_gcode_macro_update(tab, name, values)
+    assert tab.run_gcode_signal.emit.called is sent
+
+
 class TestUsbImportDone:
     @pytest.fixture
     def tab(self, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
