@@ -87,12 +87,17 @@ class TestStartPrint:
     ],
 )
 def test_usb_print_action_from_macro(lines, started) -> None:
-    tab = SimpleNamespace(start_print=MagicMock())
+    tab = SimpleNamespace(start_print=MagicMock(), run_gcode_signal=MagicMock())
     PrintTab._on_gcode_response(tab, lines)
     if started is None:
         tab.start_print.assert_not_called()
+        tab.run_gcode_signal.emit.assert_not_called()
     else:
         tab.start_print.assert_called_once_with(started)
+        tab.run_gcode_signal.emit.assert_called_once_with(
+            "SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE"
+            " VARIABLE=usb_pending VALUE='\"\"'"
+        )
 
 
 @pytest.mark.parametrize(

@@ -392,6 +392,11 @@ class PrintTab(QtWidgets.QStackedWidget):
             file = str(line).removeprefix(USB_PRINT_ACTION)
             # The macro sends USB paths only; a local one would bypass the touchscreen.
             if file != line and helper_methods.is_usb_path(file):
+                # Ack first: an unacked hand-off makes the macro print from USB itself.
+                self.run_gcode_signal.emit(
+                    "SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE"
+                    " VARIABLE=usb_pending VALUE='\"\"'"
+                )
                 self.start_print(file)
 
     @QtCore.pyqtSlot(str, dict, name="on_gcode_macro_update")
