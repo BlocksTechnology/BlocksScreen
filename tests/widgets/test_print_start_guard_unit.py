@@ -75,6 +75,26 @@ class TestStartPrint:
         tab.jobStatusPage_widget.on_print_start.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("lines", "started"),
+    [
+        (
+            ["// action:blocks_usb_print USB-STICK/my cube.gcode"],
+            "USB-STICK/my cube.gcode",
+        ),
+        (["// action:blocks_usb_print cube.gcode"], None),
+        (["// blocks_usb_print USB-STICK/cube.gcode", "ok"], None),
+    ],
+)
+def test_usb_print_action_from_macro(lines, started) -> None:
+    tab = SimpleNamespace(start_print=MagicMock())
+    PrintTab._on_gcode_response(tab, lines)
+    if started is None:
+        tab.start_print.assert_not_called()
+    else:
+        tab.start_print.assert_called_once_with(started)
+
+
 class TestUsbImportDone:
     @pytest.fixture
     def tab(self, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:

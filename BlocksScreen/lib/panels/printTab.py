@@ -29,6 +29,8 @@ if typing.TYPE_CHECKING:
     from devices.amu import AMUManager
 
 USB_SETTLE_TIMEOUT_MS = 120_000  # Happy Hare pre-processing of a large file
+# RF50-Klipper's SDCARD_PRINT_FILE override emits this for USB files (Mainsail starts).
+USB_PRINT_ACTION = "// action:blocks_usb_print "
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +226,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.jobStatusPage_widget.on_gcode_move_update
         )
         self.printer.request_available_objects_signal.connect(self.klipper_ready_signal)
+        self.printer.gcode_response.connect(self._on_gcode_response)
         self.babystepPage = BabystepPage(self)
         self.babystepPage.request_back.connect(self.back_button)
         self.addWidget(self.babystepPage)
@@ -378,6 +381,15 @@ class PrintTab(QtWidgets.QStackedWidget):
             self._start_usb_import(file)
             return
         self.jobStatusPage_widget.on_print_start(file)
+
+    @QtCore.pyqtSlot(list, name="on_gcode_response")
+    def _on_gcode_response(self, messages: list) -> None:
+        """Import a USB file whose print another client started through Klipper."""
+        for line in messages:
+            file = str(line).removeprefix(USB_PRINT_ACTION)
+            # The macro sends USB paths only; a local one would bypass the touchscreen.
+            if file != line and helper_methods.is_usb_path(file):
+                self.start_print(file)
 
     def _start_usb_import(self, file: str) -> None:
         """Copy a USB gcode to the gcodes root off-thread, then print the copy."""
