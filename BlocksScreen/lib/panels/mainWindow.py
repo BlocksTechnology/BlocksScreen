@@ -409,6 +409,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # E-stop/shutdown aborts the print with an error too; the connection page handles that, not the cancel page.
         if not self._klippy_ready:
             return
+        # The cancel loadscreen covers this page and only hides on standby, which needs its buttons; unforced keeps update loadscreens up.
+        self.show_loadscreen(False)
         self.cancelpage.setGeometry(0, 0, self.width(), self.height())
         self.cancelpage.raise_()
         self.cancelpage.updateGeometry()
