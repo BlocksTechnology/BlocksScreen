@@ -300,3 +300,54 @@ def test_real_confirmation_popup_opens_and_accepts(qtbot, monkeypatch) -> None:
     popup.accept()
     host._on_device_config_accept.assert_called_once()
     host._on_device_config_decline.assert_not_called()
+
+
+def _make_cancel_window(
+    klippy_ready: bool, update_in_progress: bool = False
+) -> SimpleNamespace:
+    win = SimpleNamespace(
+        _klippy_ready=klippy_ready,
+        _update_in_progress=update_in_progress,
+        _post_update_reconnect=False,
+        _klipper_auto_restart_pending=False,
+        update_page=MagicMock(),
+        filamentPanel=MagicMock(),
+        controlPanel=MagicMock(),
+        printPanel=MagicMock(),
+        utilitiesPanel=MagicMock(),
+        cancelpage=MagicMock(),
+        loadscreen=MagicMock(),
+        loadwidget=MagicMock(),
+        sender=lambda: None,
+        width=lambda: 800,
+        height=lambda: 480,
+    )
+    win.show_loadscreen = MethodType(MainWindow.show_loadscreen, win)
+    return win
+
+
+class TestCancelPageLoadscreen:
+    def test_cancel_page_hides_loadscreen(self) -> None:
+        # The "Cancelling print" loadscreen only hides on standby, which needs this page.
+        win = _make_cancel_window(klippy_ready=True)
+
+        MainWindow._show_cancel_page_if_operational(win)
+
+        win.loadscreen.hide.assert_called_once()
+        win.cancelpage.show.assert_called_once()
+
+    def test_update_loadscreen_stays_up(self) -> None:
+        win = _make_cancel_window(klippy_ready=True, update_in_progress=True)
+
+        MainWindow._show_cancel_page_if_operational(win)
+
+        win.loadscreen.hide.assert_not_called()
+        win.cancelpage.show.assert_called_once()
+
+    def test_shutdown_leaves_both_alone(self) -> None:
+        win = _make_cancel_window(klippy_ready=False)
+
+        MainWindow._show_cancel_page_if_operational(win)
+
+        win.loadscreen.hide.assert_not_called()
+        win.cancelpage.show.assert_not_called()
