@@ -22,11 +22,13 @@ from lib.printer import Printer
 from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
-from lib.utils.usb_import import UsbImportTask
+from lib.utils.usb_import import UsbImportTask, remember_import
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 if typing.TYPE_CHECKING:
     from devices.amu import AMUManager
+
+USB_SETTLE_TIMEOUT_MS = 120_000  # Happy Hare pre-processing of a large file
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +84,14 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._cancel_z_snapshot: float = 0.0
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
         self._usb_import_task: UsbImportTask | None = None
+        self._usb_key: str = ""
+        self._usb_local: str = ""
+        self._usb_created: set[str] = set()
+        # Moonraker announces a new gcode only once its pre-processing is done.
+        self._usb_settle_timer = QtCore.QTimer(self)
+        self._usb_settle_timer.setSingleShot(True)
+        self._usb_settle_timer.setInterval(USB_SETTLE_TIMEOUT_MS)
+        self._usb_settle_timer.timeout.connect(self._on_usb_settle_timeout)
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
@@ -142,6 +152,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.filesPage_widget.request_dir_info.connect(self.file_data.request_dir_info)
         self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
         self.file_data.file_added.connect(self.filesPage_widget.on_file_added)
+        self.file_data.file_added.connect(self._on_usb_file_added)
         self.file_data.file_removed.connect(self.filesPage_widget.on_file_removed)
         self.file_data.file_modified.connect(self.filesPage_widget.on_file_modified)
         self.file_data.dir_added.connect(self.filesPage_widget.on_dir_added)
@@ -374,21 +385,59 @@ class PrintTab(QtWidgets.QStackedWidget):
         if self._usb_import_task is not None:
             logger.info("USB import already running, ignoring %s", file)
             return
+        self._usb_created.clear()
         self._usb_import_task = UsbImportTask(pathlib.Path(self.gcode_path), file)
         self._usb_import_task.signals.done.connect(self._on_usb_import_done)
         self.call_load_panel.emit(True, "Copying file from USB...\nPlease wait", False)
         QtCore.QThreadPool.globalInstance().start(self._usb_import_task)
 
-    @QtCore.pyqtSlot(str, str, str, name="on_usb_import_done")
-    def _on_usb_import_done(self, usb_file: str, local_file: str, error: str) -> None:
-        """Print the local copy, or report why the copy failed."""
-        self._usb_import_task = None
-        self.call_load_panel.emit(False, "", False)
+    @QtCore.pyqtSlot(str, str, str, bool, str, name="on_usb_import_done")
+    def _on_usb_import_done(
+        self, usb_file: str, local_file: str, key: str, reused: bool, error: str
+    ) -> None:
+        """Print a reused copy now, a new one once Moonraker has processed it."""
         if error:
+            self._usb_import_task = None
+            self.call_load_panel.emit(False, "", False)
             self.notify.emit("PrintTab", f"USB print failed: {error}", 2, True)
             return
-        logger.info("Printing local copy %s of %s", local_file, usb_file)
-        self.jobStatusPage_widget.on_print_start(local_file)
+        logger.info("Local copy of %s is %s", usb_file, local_file)
+        self._usb_key, self._usb_local = key, local_file
+        # Printing before Happy Hare rewrites the file runs the unprocessed gcode.
+        if reused or local_file in self._usb_created:
+            self._usb_print_local_copy()
+        else:
+            self._usb_settle_timer.start()
+
+    @QtCore.pyqtSlot(dict, name="on_usb_file_added")
+    def _on_usb_file_added(self, item: dict) -> None:
+        """Release a waiting USB print when Moonraker announces its local copy."""
+        if self._usb_import_task is None:
+            return
+        name = str(item.get("path", "")).removeprefix("/")
+        self._usb_created.add(name)  # may beat the worker's done signal
+        if name == self._usb_local:
+            self._usb_print_local_copy()
+
+    @QtCore.pyqtSlot(name="on_usb_settle_timeout")
+    def _on_usb_settle_timeout(self) -> None:
+        """Print anyway if Moonraker never announced the copy."""
+        logger.warning("No create_file for %s, printing it as is", self._usb_local)
+        self._usb_print_local_copy()
+
+    def _usb_print_local_copy(self) -> None:
+        """Index the settled local copy and start printing it."""
+        self._usb_settle_timer.stop()
+        local = self._usb_local
+        try:
+            remember_import(pathlib.Path(self.gcode_path), self._usb_key, local)
+        except OSError as e:
+            logger.warning("Could not index USB copy %s: %s", local, e)
+        self._usb_import_task = None
+        self._usb_key = self._usb_local = ""
+        self.call_load_panel.emit(False, "", False)
+        logger.info("Printing local copy %s", local)
+        self.jobStatusPage_widget.on_print_start(local)
 
     @QtCore.pyqtSlot(str, str, name="delete_file")
     @QtCore.pyqtSlot(str, name="delete_file")

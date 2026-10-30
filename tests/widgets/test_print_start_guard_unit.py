@@ -76,22 +76,76 @@ class TestStartPrint:
 
 
 class TestUsbImportDone:
-    def _done_tab(self) -> SimpleNamespace:
+    @pytest.fixture
+    def tab(self, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         tab = _tab(None)
         tab._usb_import_task = object()
+        tab._usb_key = tab._usb_local = ""
+        tab._usb_created = set()
+        tab._usb_settle_timer = MagicMock()
+        tab.gcode_path = "/tmp/gcodes"
         tab.call_load_panel = MagicMock()
+        tab._usb_print_local_copy = lambda: PrintTab._usb_print_local_copy(tab)
+        tab.remember = MagicMock()
+        # printTab was evicted from sys.modules, so patch the function's globals.
+        monkeypatch.setitem(
+            PrintTab._usb_print_local_copy.__globals__, "remember_import", tab.remember
+        )
         return tab
 
-    def test_prints_local_copy(self) -> None:
-        tab = self._done_tab()
-        PrintTab._on_usb_import_done(tab, "USB-STICK/cube.gcode", "cube.gcode", "")
+    def _printed(self, tab: SimpleNamespace) -> None:
         assert tab._usb_import_task is None
         tab.call_load_panel.emit.assert_called_once_with(False, "", False)
         tab.jobStatusPage_widget.on_print_start.assert_called_once_with("cube.gcode")
+        tab.remember.assert_called_once()
+        assert tab.remember.call_args.args[1:] == ("k", "cube.gcode")
 
-    def test_error_notifies_and_does_not_print(self) -> None:
-        tab = self._done_tab()
-        PrintTab._on_usb_import_done(tab, "USB-STICK/cube.gcode", "", "Bad")
+    def test_reused_copy_prints_at_once(self, tab) -> None:
+        PrintTab._on_usb_import_done(
+            tab, "USB-STICK/cube.gcode", "cube.gcode", "k", True, ""
+        )
+        self._printed(tab)
+
+    def test_new_copy_waits_for_moonraker(self, tab) -> None:
+        PrintTab._on_usb_import_done(
+            tab, "USB-STICK/cube.gcode", "cube.gcode", "k", False, ""
+        )
+        tab._usb_settle_timer.start.assert_called_once()
+        tab.jobStatusPage_widget.on_print_start.assert_not_called()
+        PrintTab._on_usb_file_added(tab, {"path": "other.gcode"})
+        tab.jobStatusPage_widget.on_print_start.assert_not_called()
+        PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
+        self._printed(tab)
+
+    def test_create_before_done_prints_at_once(self, tab) -> None:
+        PrintTab._on_usb_file_added(tab, {"path": "/cube.gcode"})
+        PrintTab._on_usb_import_done(
+            tab, "USB-STICK/cube.gcode", "cube.gcode", "k", False, ""
+        )
+        tab._usb_settle_timer.start.assert_not_called()
+        self._printed(tab)
+
+    def test_timeout_prints_anyway(self, tab) -> None:
+        PrintTab._on_usb_import_done(
+            tab, "USB-STICK/cube.gcode", "cube.gcode", "k", False, ""
+        )
+        PrintTab._on_usb_settle_timeout(tab)
+        self._printed(tab)
+
+    def test_index_failure_still_prints(self, tab) -> None:
+        tab.remember.side_effect = OSError("read-only")
+        PrintTab._on_usb_import_done(
+            tab, "USB-STICK/cube.gcode", "cube.gcode", "k", True, ""
+        )
+        tab.jobStatusPage_widget.on_print_start.assert_called_once_with("cube.gcode")
+
+    def test_file_added_ignored_when_idle(self, tab) -> None:
+        tab._usb_import_task = None
+        PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
+        assert tab._usb_created == set()
+
+    def test_error_notifies_and_does_not_print(self, tab) -> None:
+        PrintTab._on_usb_import_done(tab, "USB-STICK/cube.gcode", "", "", False, "Bad")
         assert tab._usb_import_task is None
         tab.jobStatusPage_widget.on_print_start.assert_not_called()
         tab.notify.emit.assert_called_once_with(
