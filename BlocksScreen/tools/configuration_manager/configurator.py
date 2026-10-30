@@ -376,10 +376,26 @@ class ConfigManager:
                     src_rel = src.relative_to(self.repo)
                     target = self.config_dir / src_rel
 
-                    if target.exists() and target.is_symlink():
+                    if target.is_symlink():
                         continue
-                    ensure_dir(pathlib.Path(*target.parts[:-1]))
-                    target.symlink_to(src)
+                    try:
+                        real = target.resolve()
+                        # Behind a folder link this is the repo's own file.
+                        if self.repo.resolve() in real.parents or real != (
+                            self.config_dir.resolve() / src_rel
+                        ):
+                            continue
+                        if target.is_file():
+                            name = "_".join(src_rel.parts)
+                            backup = self.backup_dir / f"{name}.{_timestamp()}"
+                            shutil.move(target, backup)
+                            _logger.warning(
+                                "Replaced local %s, original kept at %s", target, backup
+                            )
+                        ensure_dir(pathlib.Path(*target.parts[:-1]))
+                        target.symlink_to(src)
+                    except (OSError, RuntimeError) as e:
+                        _logger.error("Could not symlink %s: %s", target, e)
                 return
             elif mode:
                 for entry in sorted(

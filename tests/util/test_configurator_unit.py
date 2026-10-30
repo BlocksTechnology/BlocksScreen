@@ -449,6 +449,49 @@ class TestSymlinkConfig:
         assert target.is_symlink()
         assert target.resolve() == src.resolve()
 
+    def test_local_file_replaced_and_backed_up(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src_a = _write(mock_home / "repo" / "sub" / "a.cfg", "repo")
+        src_b = _write(mock_home / "repo" / "b.cfg", "x")
+        _write(mgr.config_dir / "sub" / "a.cfg", "local")
+        mgr._symlink_config([src_a, src_b])
+        assert (mgr.config_dir / "sub" / "a.cfg").resolve() == src_a.resolve()
+        assert (mgr.config_dir / "b.cfg").resolve() == src_b.resolve()
+        backups = list(mgr.backup_dir.glob("sub_a.cfg.*"))
+        assert [b.read_text() for b in backups] == ["local"]
+
+    def test_failed_link_does_not_stop_later_ones(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src_a = _write(mock_home / "repo" / "a.cfg", "repo")
+        src_b = _write(mock_home / "repo" / "b.cfg", "x")
+        (mgr.config_dir / "a.cfg").mkdir()
+        mgr._symlink_config([src_a, src_b])
+        assert (mgr.config_dir / "a.cfg").is_dir()
+        assert (mgr.config_dir / "b.cfg").resolve() == src_b.resolve()
+
+    def test_repo_file_behind_folder_link_untouched(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src = _write(mock_home / "repo" / "config" / "a.cfg", "repo")
+        (mgr.config_dir / "config").symlink_to(src.parent, target_is_directory=True)
+        mgr._symlink_config([src])
+        assert not src.is_symlink() and src.read_text() == "repo"
+        assert list(mgr.backup_dir.iterdir()) == []
+
+    def test_config_dir_linked_to_repo_untouched(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.symlink_to(mgr.repo, target_is_directory=True)
+        src = _write(mock_home / "repo" / "a.cfg", "repo")
+        mgr._symlink_config([src])
+        assert not src.is_symlink() and src.read_text() == "repo"
+        assert list(mgr.backup_dir.iterdir()) == []
+
 
 # =========================================================================
 # merge_cfg — configparser merge (no marker, variables.cfg style)
