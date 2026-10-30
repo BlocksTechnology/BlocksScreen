@@ -66,3 +66,34 @@ class TestStartPrint:
         tab.notify.emit.assert_called_once_with(
             "PrintTab", "No filament at the toolhead.", 2, True
         )
+
+    def test_usb_file_is_imported_not_printed(self) -> None:
+        tab = _tab(None)
+        tab._start_usb_import = MagicMock()
+        PrintTab.start_print(tab, "USB-STICK/cube.gcode")
+        tab._start_usb_import.assert_called_once_with("USB-STICK/cube.gcode")
+        tab.jobStatusPage_widget.on_print_start.assert_not_called()
+
+
+class TestUsbImportDone:
+    def _done_tab(self) -> SimpleNamespace:
+        tab = _tab(None)
+        tab._usb_import_task = object()
+        tab.call_load_panel = MagicMock()
+        return tab
+
+    def test_prints_local_copy(self) -> None:
+        tab = self._done_tab()
+        PrintTab._on_usb_import_done(tab, "USB-STICK/cube.gcode", "cube.gcode", "")
+        assert tab._usb_import_task is None
+        tab.call_load_panel.emit.assert_called_once_with(False, "", False)
+        tab.jobStatusPage_widget.on_print_start.assert_called_once_with("cube.gcode")
+
+    def test_error_notifies_and_does_not_print(self) -> None:
+        tab = self._done_tab()
+        PrintTab._on_usb_import_done(tab, "USB-STICK/cube.gcode", "", "Bad")
+        assert tab._usb_import_task is None
+        tab.jobStatusPage_widget.on_print_start.assert_not_called()
+        tab.notify.emit.assert_called_once_with(
+            "PrintTab", "USB print failed: Bad", 2, True
+        )

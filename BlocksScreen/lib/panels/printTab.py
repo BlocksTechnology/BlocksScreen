@@ -1,8 +1,10 @@
 import logging
 import os
+import pathlib
 import typing
 from functools import partial
 
+import helper_methods
 from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
@@ -20,6 +22,7 @@ from lib.printer import Printer
 from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
+from lib.utils.usb_import import UsbImportTask
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 if typing.TYPE_CHECKING:
@@ -78,6 +81,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._finish_print_handled: bool = False
         self._cancel_z_snapshot: float = 0.0
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
+        self._usb_import_task: UsbImportTask | None = None
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
@@ -359,7 +363,32 @@ class PrintTab(QtWidgets.QStackedWidget):
             logger.warning("Print start of %s blocked: %s", file, reason)
             self.notify.emit("PrintTab", reason, 2, True)
             return
+        if helper_methods.is_usb_path(file):
+            self._start_usb_import(file)
+            return
         self.jobStatusPage_widget.on_print_start(file)
+
+    def _start_usb_import(self, file: str) -> None:
+        """Copy a USB gcode to the gcodes root off-thread, then print the copy."""
+        # Printing from the stick would fail mid-job if it is pulled or glitches.
+        if self._usb_import_task is not None:
+            logger.info("USB import already running, ignoring %s", file)
+            return
+        self._usb_import_task = UsbImportTask(pathlib.Path(self.gcode_path), file)
+        self._usb_import_task.signals.done.connect(self._on_usb_import_done)
+        self.call_load_panel.emit(True, "Copying file from USB...\nPlease wait", False)
+        QtCore.QThreadPool.globalInstance().start(self._usb_import_task)
+
+    @QtCore.pyqtSlot(str, str, str, name="on_usb_import_done")
+    def _on_usb_import_done(self, usb_file: str, local_file: str, error: str) -> None:
+        """Print the local copy, or report why the copy failed."""
+        self._usb_import_task = None
+        self.call_load_panel.emit(False, "", False)
+        if error:
+            self.notify.emit("PrintTab", f"USB print failed: {error}", 2, True)
+            return
+        logger.info("Printing local copy %s of %s", local_file, usb_file)
+        self.jobStatusPage_widget.on_print_start(local_file)
 
     @QtCore.pyqtSlot(str, str, name="delete_file")
     @QtCore.pyqtSlot(str, name="delete_file")
