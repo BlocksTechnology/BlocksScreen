@@ -1380,6 +1380,9 @@ class UpdateService:
         """Initialize sample ring from persisted baseline on daemon start."""
         state = self._read_state()
         for name, comp_state in state.items():
+            # Runs before reconcile drops malformed entries.
+            if not isinstance(comp_state, dict):
+                continue
             baseline = comp_state.get("nrestarts_baseline", 0)
             if (
                 isinstance(baseline, int)
@@ -1654,6 +1657,7 @@ class UpdateService:
         )
         by_name = {c.name: c for c in self._components}
         unresolved: dict[str, str] = {}
+        reverted: set[str] = set()
         for name, prev_hash in inflight.items():
             comp = by_name.get(name)
             if comp is None or comp.path is None or not comp.path.exists():
@@ -1674,10 +1678,34 @@ class UpdateService:
                 )
                 if not rok:
                     unresolved[name] = prev_hash
+                    continue
+                # The UI waits on our lock at start, the rest boots unordered with us.
+                if comp.service and comp.service not in _FIRE_AND_FORGET_SERVICES:
+                    reverted.add(comp.service)
+                if comp.restart_klipper:
+                    reverted.add(self._klipper_service())
         if unresolved:
             await asyncio.to_thread(self._write_inflight, unresolved)
         else:
             await asyncio.to_thread(self._clear_inflight)
+        await self._restart_reverted(reverted)
+
+    async def _restart_reverted(self, services: set[str]) -> None:
+        """Restart services that may have started on the code a boot revert just undid."""
+        if not services:
+            return
+        if await klipper_printing():
+            self._log.warning(
+                "reconcile: printing - %s keep the reverted code until next restart",
+                ", ".join(sorted(services)),
+            )
+            return
+        for service in sorted(services):
+            ok, err = await restart_service(service)
+            if ok:
+                self._log.info("reconcile: restarted %s on reverted code", service)
+            else:
+                self._log.warning("reconcile: restart %s failed: %s", service, err)
 
     async def _boot_repair_component(self, c: ComponentConfig) -> bool:
         """Repair one git component with an unreadable HEAD at boot; True if recloned."""
@@ -2403,6 +2431,9 @@ class UpdateService:
             and not await self._restart_one(klipper_svc)
         ):
             await self._rollback(component, prev_hash, "restart")
+            # _rollback restarts only component.service; klipper loaded the new code too.
+            if not await self._safe_restart(klipper_svc):
+                self._log.error("%s did not recover after revert", klipper_svc)
             return False, ""
         return True, new_hash
 

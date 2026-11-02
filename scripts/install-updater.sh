@@ -154,12 +154,6 @@ echo_info "Adding blocks to video group (required for framebuffer splash) ..."
 sudo usermod -aG video blocks 2>/dev/null || true
 echo_ok "blocks added to video group"
 
-echo_info "Enabling persistent journald (retain logs across reboots for field debugging) ..."
-sudo mkdir -p /var/log/journal
-sudo systemd-tmpfiles --create --prefix /var/log/journal 2>/dev/null || true
-sudo systemctl restart systemd-journald 2>/dev/null || true
-echo_ok "Persistent journald enabled"
-
 echo_info "Scoping git safe.directory to component repos ..."
 # Scope root git trust to component paths instead of '*'.
 sudo git config --system --unset-all safe.directory 2>/dev/null || true
@@ -232,6 +226,8 @@ export PIP_DISABLE_PIP_VERSION_CHECK=1
 { exec 201<"$BSENV" && flock -w 300 201; } || echo_warn "Venv lock not acquired (busy 300s or no venv); installing unlocked"
 # Older runs of this script ran pip as root; hand those files back or every pip-as-blocks run fails.
 [ -d "$BSENV" ] && sudo find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
+# Old dists pip failed to remove mid-upgrade (renamed ~ip, ~v...); they warn on every pip run.
+sudo find "$BSENV"/lib/python3*/site-packages -maxdepth 1 -name '~*' -exec rm -rf {} + 2>/dev/null || true
 # Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
 _as_blocks "$BSENV/bin/pip" install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||
     echo_warn "Pinned pip install FAILED; continuing with the venv's current pip"

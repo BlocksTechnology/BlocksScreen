@@ -616,6 +616,16 @@ class UpdaterWorker(QtCore.QObject):
             self._provisioning_signals += 1
             self.provisioning_changed.emit(provisioning)
 
+    async def _daemon_still_busy(self) -> bool:
+        """True if the daemon answers and still reports busy; any failure counts as gone."""
+        if self._proxy is None:
+            return False
+        try:
+            async with asyncio.timeout(5):
+                return await self._proxy.get_busy()
+        except (sdbus.SdBusBaseError, TimeoutError):
+            return False
+
     async def _busy_watchdog(self) -> None:
         """Emit daemon_unavailable after _BUSY_IDLE_LIMIT s of no daemon progress."""
         if self._busy_false_event is None:
@@ -627,6 +637,10 @@ class UpdaterWorker(QtCore.QObject):
             idle = self._loop.time() - self._last_activity
             remaining = _BUSY_IDLE_LIMIT - idle
             if remaining <= 0:
+                # A deploy hold (up to 900s) sends no progress: silence alone is not death.
+                if await self._daemon_still_busy():
+                    self._touch_activity()
+                    continue
                 _log.error(
                     "busy watchdog: no daemon activity for %.0fs - daemon unavailable",
                     idle,

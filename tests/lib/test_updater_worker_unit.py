@@ -204,10 +204,28 @@ class TestWatchdog:
         received = []
         worker.daemon_unavailable.connect(lambda: received.append(True))
         worker._busy_false_event.clear()
+        worker._proxy.get_busy = AsyncMock(return_value=False)
         # Last activity far in the past → idle exceeds the limit → emit at once.
         worker._last_activity = worker._loop.time() - 100_000
         await worker._busy_watchdog()
         assert received == [True]
+
+    @pytest.mark.asyncio
+    async def test_watchdog_silent_daemon_still_busy_is_alive(self, worker, qtbot):
+        """A deploy hold sends no progress for up to 900s; a busy answer resets the clock."""
+        received = []
+        worker.daemon_unavailable.connect(lambda: received.append(True))
+        worker._busy_false_event.clear()
+
+        async def busy():
+            worker._busy_false_event.set()  # end the loop after one re-arm
+            return True
+
+        worker._proxy.get_busy = AsyncMock(side_effect=busy)
+        worker._last_activity = worker._loop.time() - 100_000
+        await worker._busy_watchdog()
+        assert received == []
+        assert worker._loop.time() - worker._last_activity < 60
 
 
 class _Msg:

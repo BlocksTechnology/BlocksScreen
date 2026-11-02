@@ -60,7 +60,11 @@ if [ -r "$_common" ] && [ -f "$_conf" ]; then
     # shellcheck source=/dev/null
     . "$_common"
     if bs_ensure_spoolman_moonraker "$_conf" "hook:Spoolman"; then
-        sudo systemctl restart moonraker.service 2>/dev/null || true
+        if [ -n "${BS_UPDATER_PRINTING:-}" ]; then
+            echo "[hook:Spoolman] print running - [spoolman] loads on the next Moonraker restart"
+        else
+            sudo systemctl restart moonraker.service 2>/dev/null || true
+        fi
     fi
 fi
 echo "[hook:Spoolman] done"

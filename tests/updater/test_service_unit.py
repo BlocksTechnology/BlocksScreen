@@ -1320,6 +1320,50 @@ class TestAtomicBatch:
         assert restarted == {"crowsnest.service", "klipper.service"}
 
     @pytest.mark.asyncio
+    async def test_restart_klipper_failure_rerestarts_klipper_after_revert(
+        self, tmp_path
+    ):
+        """_rollback bounces only component.service; klipper must reload the old code too."""
+        comp = self._git(tmp_path, "cfg", 2, "crowsnest.service")
+        comp.restart_klipper = True
+        svc = UpdateService(callback=MagicMock())
+        svc._components = [comp]
+        svc._state_path = tmp_path / "state.json"
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._history_path = tmp_path / "history.jsonl"
+        with (
+            patch("updater.service.is_git_repo", return_value=True),
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://github.com/x/y"),
+            ),
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch.object(
+                UpdateService,
+                "_restart_one",
+                new=AsyncMock(side_effect=lambda s, *_: s != "klipper.service"),
+            ),
+            patch.object(UpdateService, "_rollback", new=AsyncMock()) as mock_rb,
+            patch.object(
+                UpdateService, "_safe_restart", new=AsyncMock(return_value=True)
+            ) as mock_safe,
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+        ):
+            result = await svc._run_git_update(comp)
+        assert result is False
+        mock_rb.assert_awaited_once()
+        mock_safe.assert_awaited_once_with("klipper.service")
+
+    @pytest.mark.asyncio
     async def test_cancel_after_commit_does_not_revert(self, tmp_path):
         """A self-restart SIGTERM (CancelledError) post-success must not revert."""
         cb = MagicMock()
@@ -3319,9 +3363,31 @@ class TestInflightRollback:
             patch(
                 "updater.service.git_reset_to_hash", return_value=(True, "")
             ) as mock_reset,
+            patch(
+                "updater.service.restart_service", return_value=(True, "")
+            ) as mock_rs,
         ):
             await svc._revert_inflight()
         mock_reset.assert_awaited_once_with(comp.path, "a" * 40)
+        mock_rs.assert_awaited_once_with("klipper.service")
+        assert svc._read_inflight() == {}
+
+    @pytest.mark.asyncio
+    async def test_revert_while_printing_skips_restart(self, tmp_path, printing):
+        """Klipper booted unordered on the undone code, but a running print wins."""
+        printing.return_value = True
+        comp = self._git(tmp_path)
+        svc = UpdateService()
+        svc._components = [comp]
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._write_inflight({"klipper": "a" * 40})
+        with (
+            patch("updater.service.git_get_hash", return_value="b" * 40),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+            patch("updater.service.restart_service") as mock_rs,
+        ):
+            await svc._revert_inflight()
+        mock_rs.assert_not_called()
         assert svc._read_inflight() == {}
 
     @pytest.mark.asyncio
@@ -3381,9 +3447,11 @@ class TestInflightRollback:
             patch(
                 "updater.service.git_reset_to_hash", return_value=(False, "disk full")
             ),
+            patch("updater.service.restart_service") as mock_rs,
         ):
             await svc._revert_inflight()
         assert svc._read_inflight() == {"klipper": "a" * 40}  # kept for retry
+        mock_rs.assert_not_called()
 
 
 class TestPingWhile:

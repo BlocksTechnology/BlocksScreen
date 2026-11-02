@@ -12,6 +12,7 @@ from pathlib import Path
 
 import sdbus
 
+from updater.executor import klipper_printing
 from updater.locking import process_lock
 from updater.models import ComponentStatus
 from updater.service import UpdateService
@@ -406,6 +407,11 @@ class UpdaterInterface(
                 if not acquired:
                     _log.warning("%s: a CLI run holds the lock; skipping", label)
                     self.error.emit((target, "another update is running"))
+                    return False
+                # The UI checks too, but a print can start while its confirm popup is open.
+                if await klipper_printing():
+                    _log.warning("%s: printer is printing; skipping", label)
+                    self.error.emit((target, "printer is printing"))
                     return False
                 ran = True
                 await self._svc.reconcile_if_pending()
