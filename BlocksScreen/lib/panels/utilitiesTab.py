@@ -43,7 +43,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.config_page: ConfigPage = ConfigPage(self)
         self.leds_page: LedsPage = LedsPage(self)
-        self.axes_page: AxisMaintPage = AxisMaintPage(self)
+        self.axes_page: AxisMaintPage = AxisMaintPage(self, ws.api.run_gcode)
         self.routines_page: RoutineCheckPage = RoutineCheckPage(self)
         self.troubleshoot_page: TroubleshootPage = TroubleshootPage(self)
 
@@ -104,7 +104,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.on_object_list.connect(self.routines_page.on_object_list)
 
         # --- Axis Maintenance ---
-        self.axes_page.run_gcode_signal.connect(self.run_gcode_signal)
         self.axes_page.call_load_panel.connect(self.call_load_panel)
         self.axes_page.request_back.connect(self.request_back)
 
