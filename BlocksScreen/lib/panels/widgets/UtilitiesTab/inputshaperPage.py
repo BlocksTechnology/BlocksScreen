@@ -199,6 +199,8 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self.run_gcode_signal.emit("G28\nM400")
             self.aut = True
             self.run_gcode_signal.emit(gcode)
+            # Queued ahead of the SAVE_CONFIG sent once both axes report back
+            self.run_gcode_signal.emit("G28")
         elif gcode == "":
             # Picking an axis needs the dialog, which logic-only mode never built.
             if self.logic:
@@ -217,6 +219,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         else:
             self.run_gcode_signal.emit("G28\nM400")
             self.run_gcode_signal.emit(gcode)
+            self.run_gcode_signal.emit("G28")
             if not self.logic:
                 self.setCurrentIndex(self.indexOf(self.manual_is))
 

@@ -340,6 +340,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         )
         self.run_gcode_signal.emit("G28\nM400")
         self.run_gcode_signal.emit("Z_TILT_ADJUST")
+        # Separate script so the toolhead homes even if Z_TILT_ADJUST errors out
+        self.run_gcode_signal.emit("G28")
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
     def on_klippy_status(self, state: str):
