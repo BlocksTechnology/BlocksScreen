@@ -499,12 +499,12 @@ class MoonAPI(QtCore.QObject):
         return self._ws.send_request(method="printer.query_endstops.status")
 
     @QtCore.pyqtSlot(str, name="run_gcode")
-    def run_gcode(self, gcode: str):
-        """Run Gcode"""
+    def run_gcode(self, gcode: str, callback=None):
+        """Run Gcode; ``callback`` gets the reply once the script has finished"""
         if isinstance(gcode, str) is False or gcode is None:
             return False
         return self._ws.send_request(
-            method="printer.gcode.script", params={"script": gcode}
+            method="printer.gcode.script", params={"script": gcode}, callback=callback
         )
 
     def gcode_help(self):

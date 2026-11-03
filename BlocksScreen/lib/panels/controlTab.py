@@ -23,6 +23,10 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
 
+_ZTILT_PROGRESS = re.compile(
+    r"Retries:\s*\d+/\d+.*?range:\s*([\d.]+)\s*tolerance:\s*([\d.]+)"
+)
+
 
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
@@ -60,7 +64,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._true_zero_state: bool | None = None
         self._motion_active: bool = False
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.ztilt_state = False
+        self._ztilt_running: bool = False
+        self._ztilt_failed: bool = False
         self.ztilt_result_screen = BasePopup(self, False, False)
         self.ztilt_result_screen_timer = QtCore.QTimer()
         self.ztilt_result_screen_timer.setSingleShot(True)
@@ -158,7 +163,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.ws.klippy_state_signal.connect(self.probe_helper_page.on_klippy_status)
         self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
         self.printer.gcode_response.connect(self._handle_gcode_response)
-        self.printer.z_tilt_update.connect(self._handle_z_tilt_object_update)
 
         self.cp_button_6.hide()
 
@@ -252,15 +256,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._button_change(False)
         return super().showEvent(a0)
 
-    def _handle_z_tilt_object_update(self, value, state):
-        if not self.isVisible():
-            return
-        if state:
-            self.call_load_panel.emit(False, "", False)
-            self.ztilt_result_screen.set_message("Z-axis calibration was successful.")
-            self.ztilt_result_screen.show()
-            self.ztilt_result_screen_timer.start()
-
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_slidePage_request")
     def on_slidePage_request(
@@ -297,51 +292,69 @@ class ControlTab(QtWidgets.QStackedWidget):
         if _swapping == "cleaning":
             self.call_load_panel.emit(True, "Cleaning print core", False)
 
-    def _handle_gcode_response(self, messages: list):
-        """Handle gcode response for Z-tilt adjustment"""
-        pattern = r"Retries:\s*(\d+)/(\d+).*?range:\s*([\d.]+)\s*tolerance:\s*([\d.]+)"
+    def _handle_gcode_response(self, messages: list) -> None:
+        """Show Z tilt progress from each probing pass result."""
+        if not self._ztilt_running:
+            return
+        for message in messages:
+            match = _ZTILT_PROGRESS.search(message or "")
+            if match:
+                self.call_load_panel.emit(
+                    True,
+                    f"Calibrating Z tilt\nDeviation {float(match[1]):.3f} mm,"
+                    f" target {float(match[2]):.3f} mm",
+                    False,
+                )
 
-        for msg_list in messages:
-            if not msg_list:
-                continue
-
-            if (
-                "Retries:" in msg_list
-                and "range:" in msg_list
-                and "tolerance:" in msg_list
-            ):
-                match = re.search(pattern, msg_list)
-
-                if match:
-                    retries_done = int(match.group(1))
-                    retries_total = int(match.group(2))
-                    probed_range = float(match.group(3))
-                    tolerance = float(match.group(4))
-                    if retries_done == retries_total:
-                        self.call_load_panel.emit(False, "", False)
-                        self.ztilt_result_screen.set_message(
-                            "Something went wrong during Z-axis calibration."
-                        )
-                        self.ztilt_result_screen.show()
-                        self.ztilt_result_screen_timer.start()
-                        return
-                    self.call_load_panel.emit(
-                        True,
-                        f"Retries: {retries_done}/{retries_total}"
-                        f" | Range: {probed_range:.6f}"
-                        f" | Tolerance: {tolerance:.6f}",
-                        False,
-                    )
-
-    def handle_ztilt(self):
-        """Handle Z-Tilt Adjustment"""
-        self.call_load_panel.emit(
-            True, "Please wait, performing Z-axis calibration.", False
+    def handle_ztilt(self) -> None:
+        """Run Z_TILT_ADJUST between two homes, keeping the overlay up until the end."""
+        self._ztilt_running = True
+        self._ztilt_failed = False
+        self.call_load_panel.emit(True, "Calibrating Z tilt\nPlease wait", False)
+        api = self.ws.api
+        # Separate scripts so the final G28 runs even if Z_TILT_ADJUST errors out
+        sent = (
+            api.run_gcode("G28\nM400")
+            and api.run_gcode("Z_TILT_ADJUST", callback=self._on_ztilt_done)
+            and api.run_gcode("G28", callback=self._on_ztilt_homed)
         )
-        self.run_gcode_signal.emit("G28\nM400")
-        self.run_gcode_signal.emit("Z_TILT_ADJUST")
-        # Separate script so the toolhead homes even if Z_TILT_ADJUST errors out
-        self.run_gcode_signal.emit("G28")
+        if not sent:
+            self._ztilt_running = False
+            self.call_load_panel.emit(False, "", False)
+
+    def _on_ztilt_done(self, reply) -> None:
+        """Switch the overlay to the final home once Z_TILT_ADJUST returns."""
+        if not self._ztilt_running:
+            return
+        self._ztilt_failed = isinstance(reply, dict) and "error" in reply
+        status = (
+            "Z tilt calibration failed" if self._ztilt_failed else "Z tilt complete"
+        )
+        self.call_load_panel.emit(
+            True, f"{status}\nHoming the printer, please wait", False
+        )
+
+    def _on_ztilt_homed(self, reply) -> None:
+        """Close the overlay and report the result once the final G28 returns."""
+        if not self._ztilt_running:
+            return
+        self._ztilt_running = False
+        self.call_load_panel.emit(False, "", False)
+        error = reply.get("error") if isinstance(reply, dict) else None
+        if error and error.get("code") == -1:
+            return  # Connection lost; ConnectionPage takes over
+        if self._ztilt_failed:
+            message = "Z tilt calibration failed.\nCheck the bed and try again."
+        elif error:
+            message = (
+                "Homing failed after Z tilt calibration.\n"
+                "Home the printer before printing."
+            )
+        else:
+            message = "Z tilt calibration complete."
+        self.ztilt_result_screen.set_message(message)
+        self.ztilt_result_screen.show()
+        self.ztilt_result_screen_timer.start()
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
     def on_klippy_status(self, state: str):
