@@ -61,3 +61,18 @@ def test_progress_lines_restart_the_watchdog(page, qtbot):
 
     assert loads[-1][0] is True
     qtbot.waitUntil(lambda: loads[-1][0] is False, timeout=2000)
+
+
+def test_sweep_progress_reaches_overlay(page):
+    p, loads, _ = page
+    p.handle_is("SHAPER_CALIBRATE")
+    p.handle_gcode_response(["// Testing axis x"])
+    p.handle_gcode_response(["// Testing frequency 62 Hz"])
+    assert loads[-1] == (True, "Measuring resonances\nX axis: 62 Hz")
+    p.handle_gcode_response(["// Calculating the best input shaper parameters for y axis"])
+    assert loads[-1][1] == "Calculating the best input shaper\nY axis"
+
+    # Single-axis runs print no "Testing axis" line, so the axis comes from AXIS=
+    p.handle_is("SHAPER_CALIBRATE AXIS=Y")
+    p.handle_gcode_response(["// Testing frequency 40 Hz"])
+    assert loads[-1][1] == "Measuring resonances\nY axis: 40 Hz"

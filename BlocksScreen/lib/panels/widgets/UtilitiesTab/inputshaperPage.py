@@ -12,6 +12,13 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
 
+_TESTING_AXIS = re.compile(r"Testing axis (\w+)")
+_TESTING_FREQ = re.compile(r"Testing frequency (\d+) Hz")
+_CALCULATING = re.compile(
+    r"Calculating the best input shaper parameters for (\w+) axis"
+)
+_GCODE_AXIS = re.compile(r"AXIS=(\w+)", re.IGNORECASE)
+
 
 class InputShaperPage(QtWidgets.QStackedWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
@@ -35,6 +42,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.is_aut_types: dict = {}
         self.aut: bool = False
         self._saving: bool = False
+        self._sweep_axis: str = ""
 
         # Inactivity timeout; the sweep reports progress every 1 Hz
         self._is_watchdog: QtCore.QTimer = QtCore.QTimer(self)
@@ -121,6 +129,9 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                 self.call_load_panel.emit(False, "", False)
                 return
             self._is_watchdog.start()
+            if not self._saving and (progress := self._progress_text(message)):
+                self.call_load_panel.emit(True, progress, False)
+                return
 
         pattern_fitted = re.compile(
             r"Fitted shaper '(?P<name>\w+)' frequency = (?P<freq>[\d\.]+) Hz \(vibrations = (?P<vib>[\d\.]+)%"
@@ -201,6 +212,18 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self.call_load_panel.emit(False, "", False)
             return
 
+    def _progress_text(self, message: str) -> str | None:
+        """Return overlay text for a sweep or fitting progress line, else None."""
+        if match := _TESTING_AXIS.search(message):
+            self._sweep_axis = match[1].upper()
+            return f"Measuring resonances\n{self._sweep_axis} axis"
+        if match := _TESTING_FREQ.search(message):
+            axis = f"{self._sweep_axis} axis: " if self._sweep_axis else ""
+            return f"Measuring resonances\n{axis}{match[1]} Hz"
+        if match := _CALCULATING.search(message):
+            return f"Calculating the best input shaper\n{match[1].upper()} axis"
+        return None
+
     def set_type_dictionary(self, types: dict) -> None:
         """Receives the dictionary of input shaper types from the utilities tab"""
         self.type_dict = types
@@ -216,6 +239,9 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                 ``""`` to ask which axis to calibrate, or a single-axis
                 ``SHAPER_CALIBRATE AXIS=...`` command to send as is.
         """
+        # Klipper names the axis only when sweeping both, so a single-axis run takes it from AXIS=
+        axis = _GCODE_AXIS.search(gcode)
+        self._sweep_axis = axis[1].upper() if axis else ""
         if gcode == "SHAPER_CALIBRATE":
             self.is_aut_types.clear()
             self._saving = False

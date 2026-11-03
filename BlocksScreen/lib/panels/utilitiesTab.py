@@ -110,8 +110,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # ---- Input Shaper ----
         self.is_popup: BasePopup = BasePopup(self, dialog=True, floating=True)
+        # Unlocked wheels, open lids or a missing print core shift the resonances
         self.is_popup.set_message(
-            "Run input shaper calibration?\n\nBoth axes are measured and the result is saved."
+            "Run input shaper calibration?\n\n"
+            "Before starting, lock the printer wheels, close all lids\n"
+            "and load the print core.\n"
+            "Both axes are measured and the result is saved."
         )
         self.is_popup.confirm_button_text("Yes")
         self.is_popup.cancel_button_text("No")
