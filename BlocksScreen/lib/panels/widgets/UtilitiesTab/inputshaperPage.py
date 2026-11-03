@@ -34,6 +34,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.is_types: dict = {}
         self.is_aut_types: dict = {}
         self.aut: bool = False
+        self._saving: bool = False
 
         # Inactivity timeout; the sweep reports progress every 1 Hz
         self._is_watchdog: QtCore.QTimer = QtCore.QTimer(self)
@@ -111,6 +112,13 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                 # Klipper is restarting; ConnectionPage hides the overlay on Ready
                 self._is_watchdog.stop()
                 self.aut = False
+                self._saving = False
+                return
+            # Only a failed save errors here; Beacon also emits non-fatal "!!" mid-run
+            if self._saving and message.startswith("!!"):
+                self._is_watchdog.stop()
+                self._saving = False
+                self.call_load_panel.emit(False, "", False)
                 return
             self._is_watchdog.start()
 
@@ -169,6 +177,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                         False,
                     )
                     self.aut = False
+                    self._saving = True
                     return
                 return
 
@@ -209,6 +218,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         """
         if gcode == "SHAPER_CALIBRATE":
             self.is_aut_types.clear()
+            self._saving = False
             self.run_gcode_signal.emit("G28\nM400")
             self.aut = True
             self.run_gcode_signal.emit(gcode)

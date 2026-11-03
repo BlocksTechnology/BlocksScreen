@@ -36,6 +36,21 @@ def test_auto_run_keeps_overlay_until_klipper_restarts(page):
     assert not p.aut
 
 
+def test_failed_save_closes_overlay(page):
+    p, loads, _ = page
+    p.handle_is("SHAPER_CALIBRATE")
+    p.handle_gcode_response(["!! Probing within a faulty area"])
+    assert loads[-1][0] is True
+    for axis in "xy":
+        p.handle_gcode_response([_RECOMMENDED.format(a=axis)])
+
+    p.handle_gcode_response(
+        ["!! SAVE_CONFIG section 'heater_bed' option 'control' conflicts"]
+    )
+    assert loads[-1][0] is False
+    assert not p._is_watchdog.isActive()
+
+
 def test_progress_lines_restart_the_watchdog(page, qtbot):
     p, loads, _ = page
     p._is_watchdog.setInterval(300)
