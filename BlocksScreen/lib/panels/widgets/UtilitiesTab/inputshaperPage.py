@@ -35,10 +35,11 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.is_aut_types: dict = {}
         self.aut: bool = False
 
-        self._is_timeout_timer: QtCore.QTimer = QtCore.QTimer(self)
-        self._is_timeout_timer.setSingleShot(True)
-        self._is_timeout_timer.setInterval(300_000)  # 5 min: longest plausible IS run
-        self._is_timeout_timer.timeout.connect(self._on_is_timeout)
+        # Inactivity timeout; the sweep reports progress every 1 Hz
+        self._is_watchdog: QtCore.QTimer = QtCore.QTimer(self)
+        self._is_watchdog.setSingleShot(True)
+        self._is_watchdog.setInterval(120_000)
+        self._is_watchdog.timeout.connect(self._on_is_timeout)
 
         if self.logic:
             return
@@ -105,6 +106,14 @@ class InputShaperPage(QtWidgets.QStackedWidget):
 
         message = data[0]
 
+        if self._is_watchdog.isActive():
+            if "Klipper state:" in message:
+                # Klipper is restarting; ConnectionPage hides the overlay on Ready
+                self._is_watchdog.stop()
+                self.aut = False
+                return
+            self._is_watchdog.start()
+
         pattern_fitted = re.compile(
             r"Fitted shaper '(?P<name>\w+)' frequency = (?P<freq>[\d\.]+) Hz \(vibrations = (?P<vib>[\d\.]+)%"
         )
@@ -153,8 +162,12 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                 self.is_aut_types[axis] = recommended_type
                 if len(self.is_aut_types) == 2:
                     self.run_gcode_signal.emit("SAVE_CONFIG")
-                    self._is_timeout_timer.stop()
-                    self.call_load_panel.emit(False, "", False)
+                    # Overlay stays up through the queued G28 and restart
+                    self.call_load_panel.emit(
+                        True,
+                        "Saving input shaper settings\nThe printer will restart, please wait",
+                        False,
+                    )
                     self.aut = False
                     return
                 return
@@ -175,7 +188,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                     self.add_type_entry(key)
 
             self.build_model_list()
-            self._is_timeout_timer.stop()
+            self._is_watchdog.stop()
             self.call_load_panel.emit(False, "", False)
             return
 
@@ -199,7 +212,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self.run_gcode_signal.emit("G28\nM400")
             self.aut = True
             self.run_gcode_signal.emit(gcode)
-            # Queued ahead of the SAVE_CONFIG sent once both axes report back
+            # Runs before the SAVE_CONFIG restart
             self.run_gcode_signal.emit("G28")
         elif gcode == "":
             # Picking an axis needs the dialog, which logic-only mode never built.
@@ -211,9 +224,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self.dialog_page.confirm_font_color("#000000")
             self.dialog_page.cancel_button_text("X axis")
             self.dialog_page.confirm_button_text("Y axis")
-            self.dialog_page.set_message(
-                "Select the axis you want to execute the input shaper on:"
-            )
+            self.dialog_page.set_message("Select the axis to calibrate")
             self.dialog_page.show()
             return
         else:
@@ -223,8 +234,10 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             if not self.logic:
                 self.setCurrentIndex(self.indexOf(self.manual_is))
 
-        self._is_timeout_timer.start()
-        self.call_load_panel.emit(True, "Running Input Shaper...", False)
+        self._is_watchdog.start()
+        self.call_load_panel.emit(
+            True, "Measuring resonances\nThis takes a few minutes, please wait", False
+        )
 
     def reset_view_model(self) -> None:
         """Clears items from ListView
@@ -497,7 +510,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         font.setPointSize(12)
 
         self.vib_title_label = QtWidgets.QLabel(self.manual_is)
-        self.vib_title_label.setText("Vibrations: ")
+        self.vib_title_label.setText("Vibration:")
         self.vib_title_label.setMinimumSize(QtCore.QSize(60, 60))
         self.vib_title_label.setMaximumSize(
             QtCore.QSize(int(self.infobox_frame.size().width() * 0.40), 9999)
@@ -521,7 +534,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.info_box.addWidget(self.vib_label, 0, 1)
 
         self.sug_accel_title_label = QtWidgets.QLabel(self.manual_is)
-        self.sug_accel_title_label.setText("Sugested Max\nAcceleration:")
+        self.sug_accel_title_label.setText("Suggested Max\nAcceleration:")
         self.sug_accel_title_label.setMinimumSize(QtCore.QSize(60, 60))
         self.sug_accel_title_label.setMaximumSize(
             QtCore.QSize(int(self.infobox_frame.size().width() * 0.40), 9999)

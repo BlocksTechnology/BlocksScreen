@@ -111,7 +111,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         # ---- Input Shaper ----
         self.is_popup: BasePopup = BasePopup(self, dialog=True, floating=True)
         self.is_popup.set_message(
-            "Run the automatic input shaper?\n\nThe printer will calibrate both axes."
+            "Run input shaper calibration?\n\nBoth axes are measured and the result is saved."
         )
         self.is_popup.confirm_button_text("Yes")
         self.is_popup.cancel_button_text("No")
