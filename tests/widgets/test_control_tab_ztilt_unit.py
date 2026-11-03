@@ -1,4 +1,4 @@
-"""ControlTab Z tilt overlay stays up until the final G28 reply."""
+"""ControlTab Z Tilt overlay stays up until the final G28 reply."""
 
 import sys
 import types
@@ -54,7 +54,7 @@ def test_overlay_stays_until_final_home(tab):
     t._handle_gcode_response([_PASS])
     assert loads[-1] == (
         True,
-        "Calibrating Z tilt\nDeviation 0.013 mm, target 0.050 mm",
+        "Calibrating Z Tilt\nDeviation 0.013 mm, target 0.050 mm",
     )
 
     callbacks["Z_TILT_ADJUST"]("ok")
@@ -64,7 +64,7 @@ def test_overlay_stays_until_final_home(tab):
     callbacks["G28"]("ok")
     assert loads[-1][0] is False
     t.ztilt_result_screen.set_message.assert_called_once_with(
-        "Z tilt calibration complete."
+        "Z Tilt calibration complete."
     )
 
 
@@ -73,7 +73,7 @@ def test_ztilt_error_reported_after_home(tab):
     callbacks["Z_TILT_ADJUST"]({"error": {"code": 400, "message": "Too many retries"}})
     assert loads[-1] == (
         True,
-        "Z tilt calibration failed\nHoming the printer, please wait",
+        "Z Tilt calibration failed\nHoming the printer, please wait",
     )
 
     callbacks["G28"]("ok")

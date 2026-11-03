@@ -293,7 +293,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.call_load_panel.emit(True, "Cleaning print core", False)
 
     def _handle_gcode_response(self, messages: list) -> None:
-        """Show Z tilt progress from each probing pass result."""
+        """Show Z Tilt progress from each probing pass result."""
         if not self._ztilt_running:
             return
         for message in messages:
@@ -301,7 +301,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             if match:
                 self.call_load_panel.emit(
                     True,
-                    f"Calibrating Z tilt\nDeviation {float(match[1]):.3f} mm,"
+                    f"Calibrating Z Tilt\nDeviation {float(match[1]):.3f} mm,"
                     f" target {float(match[2]):.3f} mm",
                     False,
                 )
@@ -310,7 +310,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         """Run Z_TILT_ADJUST between two homes, keeping the overlay up until the end."""
         self._ztilt_running = True
         self._ztilt_failed = False
-        self.call_load_panel.emit(True, "Calibrating Z tilt\nPlease wait", False)
+        self.call_load_panel.emit(True, "Calibrating Z Tilt\nPlease wait", False)
         api = self.ws.api
         # Separate scripts so the final G28 runs even if Z_TILT_ADJUST errors out
         sent = (
@@ -328,7 +328,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             return
         self._ztilt_failed = isinstance(reply, dict) and "error" in reply
         status = (
-            "Z tilt calibration failed" if self._ztilt_failed else "Z tilt complete"
+            "Z Tilt calibration failed" if self._ztilt_failed else "Z Tilt complete"
         )
         self.call_load_panel.emit(
             True, f"{status}\nHoming the printer, please wait", False
@@ -344,14 +344,14 @@ class ControlTab(QtWidgets.QStackedWidget):
         if error and error.get("code") == -1:
             return  # Connection lost; ConnectionPage takes over
         if self._ztilt_failed:
-            message = "Z tilt calibration failed.\nCheck the bed and try again."
+            message = "Z Tilt calibration failed.\nCheck the bed and try again."
         elif error:
             message = (
-                "Homing failed after Z tilt calibration.\n"
+                "Homing failed after Z Tilt calibration.\n"
                 "Home the printer before printing."
             )
         else:
-            message = "Z tilt calibration complete."
+            message = "Z Tilt calibration complete."
         self.ztilt_result_screen.set_message(message)
         self.ztilt_result_screen.show()
         self.ztilt_result_screen_timer.start()
