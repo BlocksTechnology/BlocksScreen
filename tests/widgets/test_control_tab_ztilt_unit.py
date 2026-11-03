@@ -61,7 +61,7 @@ def test_overlay_stays_until_final_home(tab):
     assert loads[-1][0] is True
     t.ztilt_result_screen.show.assert_not_called()
 
-    callbacks["G28"]("ok")
+    callbacks["G28 Z"]("ok")
     assert loads[-1][0] is False
     t.ztilt_result_screen.set_message.assert_called_once_with(
         "Z-Tilt calibration complete."
@@ -76,7 +76,7 @@ def test_ztilt_error_reported_after_home(tab):
         "Z-Tilt calibration failed\nHoming the printer, please wait",
     )
 
-    callbacks["G28"]("ok")
+    callbacks["G28 Z"]("ok")
     assert loads[-1][0] is False
     assert "failed" in t.ztilt_result_screen.set_message.call_args.args[0]
     t._handle_gcode_response([_PASS])

@@ -312,11 +312,12 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._ztilt_failed = False
         self.call_load_panel.emit(True, "Calibrating Z-Tilt\nPlease wait", False)
         api = self.ws.api
-        # Separate scripts so the final G28 runs even if Z_TILT_ADJUST errors out
+        # Separate scripts so the final home runs even if Z_TILT_ADJUST errors out
+        # Z only: XY stay homed through the tilt, so the override skips them (~10 s)
         sent = (
             api.run_gcode("G28\nM400")
             and api.run_gcode("Z_TILT_ADJUST", callback=self._on_ztilt_done)
-            and api.run_gcode("G28", callback=self._on_ztilt_homed)
+            and api.run_gcode("G28 Z", callback=self._on_ztilt_homed)
         )
         if not sent:
             self._ztilt_running = False
