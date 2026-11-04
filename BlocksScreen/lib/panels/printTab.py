@@ -77,6 +77,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._pending_save_offset: float = 0.0
         self._finish_print_handled: bool = False
         self._cancel_z_snapshot: float = 0.0
+        self._cancel_pending: bool = False
+        self._print_state: str = ""
+        self._idle_state: str = ""
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
 
         self.setupMainPrintPage()
@@ -205,6 +208,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.print_stats_update[str, str].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
+        self.printer.idle_timeout_update[str, str].connect(self.on_idle_timeout_update)
         self.printer.gcode_move_update[str, list].connect(
             self.jobStatusPage_widget.on_gcode_move_update
         )
@@ -293,16 +297,22 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """Unblock tabs if on standby."""
-        if isinstance(value, str) and "state" in field and value == "standby":
-            self.call_load_panel.emit(False, "", False)
-            self.on_cancel_print.emit()
-            if not self._finish_print_handled and self._cancel_z_snapshot != 0:
-                self._active_z_offset = self._cancel_z_snapshot
-                self.save_config()
-                self._finish_print_handled = True
-                self.save_config_btn.setVisible(True)
-            self._cancel_z_snapshot = 0.0
+        """Unblock tabs on standby and drop the cancel loadscreen once cancelled."""
+        if not (isinstance(value, str) and "state" in field):
+            return
+        self._print_state = value
+        if value != "standby":
+            self._maybe_finish_cancel()
+            return
+        self._cancel_pending = False
+        self.call_load_panel.emit(False, "", False)
+        self.on_cancel_print.emit()
+        if not self._finish_print_handled and self._cancel_z_snapshot != 0:
+            self._active_z_offset = self._cancel_z_snapshot
+            self.save_config()
+            self._finish_print_handled = True
+            self.save_config_btn.setVisible(True)
+        self._cancel_z_snapshot = 0.0
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_numpad_request")
@@ -407,11 +417,33 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.save_config_btn.setVisible(False)
 
+    @QtCore.pyqtSlot(str, str, name="on_idle_timeout_update")
+    def on_idle_timeout_update(self, field: str, value: str) -> None:
+        """Track idle_timeout state to know when the CANCEL_PRINT macro has finished."""
+        if field == "state":
+            self._idle_state = value
+            self._maybe_finish_cancel()
+
+    def _maybe_finish_cancel(self) -> None:
+        """Drop the cancelling loadscreen once the cancel macro and its moves are done."""
+        # print_stats turns cancelled mid-macro; idle_timeout stays Printing until the gcode mutex and moves free.
+        if (
+            self._cancel_pending
+            and self._print_state == "cancelled"
+            and self._idle_state.lower() != "printing"
+        ):
+            self._cancel_pending = False
+            self.call_load_panel.emit(False, "", False)
+
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
         """Dismiss the Z-offset save popup and reset save state on unexpected shutdown."""
         if state in ("ready", "startup"):
             return
+        if self._cancel_pending:
+            # E-stop during the cancel macro: print_stats never reaches cancelled.
+            self._cancel_pending = False
+            self.call_load_panel.emit(False, "", False)
         self.BasePopup_z_offset.reject()
         self.save_config_btn.setVisible(False)
         self.babystepPage.baby_stepchange = False
@@ -445,6 +477,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             and self.babystepPage.baby_stepchange
         ):
             self._cancel_z_snapshot = self._active_z_offset
+        self._cancel_pending = True
         self.ws.api.cancel_print()
         self.call_load_panel.emit(True, "Cancelling print...\nPlease wait", False)
 
