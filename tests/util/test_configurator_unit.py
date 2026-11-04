@@ -64,14 +64,12 @@ def _make_manager(tmp_path: pathlib.Path, **attrs) -> ConfigManager:
 
     mock_cfg = MagicMock()
     mock_section = MagicMock()
-    mock_section.get.side_effect = (
-        lambda key, default="": {
-            "config_repo": str(repo),
-            "config_dir": str(config_dir),
-            "backup_dir": str(backup),
-            "variant": "RF50",
-        }.get(key, default)
-    )
+    mock_section.get.side_effect = lambda key, default="": {
+        "config_repo": str(repo),
+        "config_dir": str(config_dir),
+        "backup_dir": str(backup),
+        "variant": "RF50",
+    }.get(key, default)
     mock_cfg.get_section.return_value = mock_section
 
     inst = object.__new__(ConfigManager)
@@ -459,8 +457,62 @@ class TestSymlinkConfig:
         mgr._symlink_config([src_a, src_b])
         assert (mgr.config_dir / "sub" / "a.cfg").resolve() == src_a.resolve()
         assert (mgr.config_dir / "b.cfg").resolve() == src_b.resolve()
-        backups = list(mgr.backup_dir.glob("sub_a.cfg.*"))
+        backups = list(mgr.backup_dir.glob("sub/a.cfg.*"))
         assert [b.read_text() for b in backups] == ["local"]
+
+    def test_backups_never_collide(self, tmp_path, mock_home, monkeypatch):
+        monkeypatch.setattr(
+            "BlocksScreen.tools.configuration_manager.configurator._timestamp",
+            lambda: "T",
+        )
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        srcs = [
+            _write(mock_home / "repo" / "sub" / "a.cfg", "repo"),
+            _write(mock_home / "repo" / "sub_a.cfg", "repo"),
+        ]
+        _write(mgr.config_dir / "sub" / "a.cfg", "nested")
+        _write(mgr.config_dir / "sub_a.cfg", "flat")
+        mgr._symlink_config(srcs)
+        first = mgr._backup_file(srcs[1], pathlib.PurePath("sub_a.cfg"))
+        assert (mgr.backup_dir / "sub" / "a.cfg.T").read_text() == "nested"
+        assert (mgr.backup_dir / "sub_a.cfg.T").read_text() == "flat"
+        assert first.name == "sub_a.cfg.T.1"
+
+    def test_failed_link_keeps_local_file(self, tmp_path, mock_home, monkeypatch):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        src = _write(mock_home / "repo" / "a.cfg", "repo")
+        local = _write(mgr.config_dir / "a.cfg", "local")
+
+        def _boom(self, target):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(pathlib.Path, "replace", _boom)
+        mgr._symlink_config([src])
+        assert not local.is_symlink() and local.read_text() == "local"
+        assert not list(mgr.config_dir.glob(".*.bs-link"))
+
+    def test_link_to_other_file_repointed(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src = _write(mock_home / "repo" / "a.cfg", "repo")
+        old = _write(tmp_path / "old-clone" / "a.cfg", "old")
+        (mgr.config_dir / "a.cfg").symlink_to(old)
+        mgr._symlink_config([src])
+        assert (mgr.config_dir / "a.cfg").resolve() == src.resolve()
+        assert old.read_text() == "old"
+
+    def test_folder_link_outside_repo_skipped(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src = _write(mock_home / "repo" / "sub" / "a.cfg", "repo")
+        elsewhere = _write(tmp_path / "elsewhere" / "a.cfg", "theirs")
+        (mgr.config_dir / "sub").symlink_to(elsewhere.parent, target_is_directory=True)
+        mgr._symlink_config([src])
+        assert not elsewhere.is_symlink() and elsewhere.read_text() == "theirs"
 
     def test_failed_link_does_not_stop_later_ones(self, tmp_path, mock_home):
         mgr = _make_manager(tmp_path, repo=mock_home / "repo")
@@ -639,7 +691,8 @@ class TestMergeCfgMarker:
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
             "[stepper_x]\nstep_pin: PC2\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved_value: 123\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -747,9 +800,11 @@ class TestMergeCfgMarker:
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
             "[g]\nk: v\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# a: 1\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# b: 2\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -763,9 +818,7 @@ class TestMergeCfgMarker:
         mgr = _make_manager(tmp_path)
         src = _write(
             tmp_path / "src_printer.cfg",
-            "[header]\nval: 1\n"
-            + SV_CONFIG_MARKER + "\n"
-            + "#*# saved: val\n",
+            "[header]\nval: 1\n" + SV_CONFIG_MARKER + "\n" + "#*# saved: val\n",
         )
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
@@ -777,7 +830,6 @@ class TestMergeCfgMarker:
         assert "[header]" in merged
         assert SV_CONFIG_MARKER in merged
         assert "#*# saved: val" in merged
-
 
     def test_mcu_section_preserved_from_target(self, tmp_path):
         mgr = _make_manager(tmp_path)
@@ -792,7 +844,8 @@ class TestMergeCfgMarker:
             "[stepper_x]\nstep_pin: PC2\n"
             "[mcu]\nserial: /dev/ttyACM1\n"
             "[extruder]\nheater_pin: PA2\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved: val\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -806,15 +859,15 @@ class TestMergeCfgMarker:
         mgr = _make_manager(tmp_path)
         src = _write(
             tmp_path / "src_printer.cfg",
-            "[stepper_x]\nstep_pin: PC2\n"
-            "[extruder]\nheater_pin: PA2\n",
+            "[stepper_x]\nstep_pin: PC2\n[extruder]\nheater_pin: PA2\n",
         )
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
             "[stepper_x]\nstep_pin: PC2\n"
             "[mcu pi]\nserial: /tmp/klipper_host_mcu\n"
             "[extruder]\nheater_pin: PA2\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved: val\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -827,15 +880,15 @@ class TestMergeCfgMarker:
         mgr = _make_manager(tmp_path)
         src = _write(
             tmp_path / "src_printer.cfg",
-            "[mcu]\nserial: /dev/ttyACM0\n"
-            "[mcu Toolhead]\ncanbus_uuid: abc\n",
+            "[mcu]\nserial: /dev/ttyACM0\n[mcu Toolhead]\ncanbus_uuid: abc\n",
         )
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
             "[mcu]\nserial: /dev/ttyACM1\n"
             "[mcu Toolhead]\ncanbus_uuid: def\n"
             "[mcu pi]\nserial: /tmp/klipper_host_mcu\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved: val\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -858,7 +911,8 @@ class TestMergeCfgMarker:
             "[mcu]\nserial: /dev/ttyACM1\n"
             "[mcu Toolhead]\ncanbus_uuid: 456\n"
             "[mcu pi]\nserial: /tmp/klipper_host_mcu\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved: val\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -921,9 +975,7 @@ class TestCpyCfgFiles:
         src = _write(mgr.repo / "printer.cfg", "[header]\nopt: repo\n")
         tgt = _write(
             mgr.config_dir / "printer.cfg",
-            "[header]\nopt: target\n"
-            + SV_CONFIG_MARKER + "\n"
-            + "#*# user: saved\n",
+            "[header]\nopt: target\n" + SV_CONFIG_MARKER + "\n" + "#*# user: saved\n",
         )
         mgr.repo_fi_name = {"printer.cfg": [src]}
         mgr.config_fi_name = {"printer.cfg": [tgt]}
