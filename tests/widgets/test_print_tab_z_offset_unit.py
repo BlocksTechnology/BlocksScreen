@@ -56,9 +56,17 @@ def _tab(*, true_zero: bool) -> SimpleNamespace:
         _finish_print_handled=False,
         _active_z_offset=0.05,
         _cancel_z_snapshot=0.0,
+        _cancel_pending=False,
+        _print_state="printing",
+        _idle_state="Printing",
     )
     tab.save_config = lambda: PrintTab.save_config(tab)
+    tab._maybe_finish_cancel = lambda: PrintTab._maybe_finish_cancel(tab)
     return tab
+
+
+def _hides(tab: SimpleNamespace) -> int:
+    return sum(c.args[0] is False for c in tab.call_load_panel.emit.call_args_list)
 
 
 def _cancel_then_standby(tab: SimpleNamespace) -> None:
@@ -78,3 +86,32 @@ def test_cancel_then_standby_offers_save_only_without_true_zero(true_zero):
     else:
         tab.BasePopup_z_offset.open.assert_called_once_with()
         tab.save_config_btn.setVisible.assert_called_with(True)
+
+
+def test_cancel_loadscreen_waits_for_cancel_macro_to_finish():
+    tab = _tab(true_zero=True)
+    PrintTab.handle_cancel_print(tab)
+
+    PrintTab.on_print_stats_update(tab, "state", "cancelled")
+    assert _hides(tab) == 0
+
+    PrintTab.on_idle_timeout_update(tab, "state", "Ready")
+    assert _hides(tab) == 1
+    assert tab._cancel_pending is False
+
+
+def test_cancel_by_other_client_leaves_loadscreen_alone():
+    tab = _tab(true_zero=True)
+    tab._idle_state = "Ready"
+    PrintTab.on_print_stats_update(tab, "state", "cancelled")
+    assert _hides(tab) == 0
+
+
+def test_shutdown_during_cancel_clears_loadscreen():
+    tab = _tab(true_zero=True)
+    PrintTab.handle_cancel_print(tab)
+
+    PrintTab.on_klippy_state(tab, "shutdown")
+
+    assert _hides(tab) == 1
+    assert tab._cancel_pending is False
