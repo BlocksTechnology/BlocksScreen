@@ -1,12 +1,13 @@
 """Copies USB gcode files into local storage so prints survive drive removal."""
 
-import filecmp
+import functools
 import hashlib
 import json
 import logging
 import os
 import pathlib
 import shutil
+import threading
 
 import helper_methods
 from PyQt6 import QtCore
@@ -19,6 +20,8 @@ MIN_FREE_MARGIN = 64 * MB  # free space left on the SD card after the copy
 SAMPLE = 64 * 1024
 STATE_DIR_NAME = ".usb_import"
 INDEX_NAME = "index.json"
+PART_PREFIX = ".bs-usb-"  # scopes the stale-temp sweep to our own files
+_INDEX_LOCK = threading.Lock()  # the index is written from pool threads
 
 
 class UsbImportError(Exception):
@@ -30,10 +33,11 @@ def _state_dir(gcode_root: pathlib.Path) -> pathlib.Path:
     return gcode_root.parent / STATE_DIR_NAME
 
 
-def _source_key(src: pathlib.Path, size: int) -> str:
-    """Identity of a USB file from its name, size, head and tail."""
-    # Slicers stamp the header and append their config, so ends differ per slice.
-    h = hashlib.sha256(f"{src.name}\0{size}\0".encode())
+def _source_key(src: pathlib.Path, st: os.stat_result) -> str:
+    """Identity of a USB file from its name, size, mtime, head and tail."""
+    # rsync's quick check (size + mtime) plus samples; a false miss only costs a copy.
+    size = st.st_size
+    h = hashlib.sha256(f"{src.name}\0{size}\0{st.st_mtime_ns}\0".encode())
     with src.open("rb") as f:
         h.update(f.read(SAMPLE))
         if size > SAMPLE:
@@ -53,7 +57,8 @@ def _load_index(gcode_root: pathlib.Path) -> dict:
 
 def _indexed_copy(gcode_root: pathlib.Path, key: str) -> pathlib.Path | None:
     """The earlier local copy for *key*, if it is still there and untouched."""
-    entry = _load_index(gcode_root).get(key)
+    with _INDEX_LOCK:
+        entry = _load_index(gcode_root).get(key)
     if not isinstance(entry, dict) or not isinstance(entry.get("file"), str):
         return None
     local = gcode_root / entry["file"]
@@ -71,17 +76,37 @@ def remember_import(gcode_root: pathlib.Path, key: str, local_name: str) -> None
     # Moonraker and Happy Hare rewrite new gcodes, so the copy is only final now.
     root = gcode_root.resolve()
     st = (root / local_name).stat()
-    index = {
-        k: v
-        for k, v in _load_index(root).items()
-        if isinstance(v, dict) and (root / str(v.get("file"))).is_file()
-    }
-    index[key] = {"file": local_name, "size": st.st_size, "mtime_ns": st.st_mtime_ns}
-    state = _state_dir(root)
-    state.mkdir(exist_ok=True)
-    tmp = state / f".{INDEX_NAME}.part"
-    tmp.write_text(json.dumps(index, indent=1))
-    os.replace(tmp, state / INDEX_NAME)
+    with _INDEX_LOCK:
+        index = {
+            k: v
+            for k, v in _load_index(root).items()
+            if isinstance(v, dict) and (root / str(v.get("file"))).is_file()
+        }
+        index[key] = {
+            "file": local_name,
+            "size": st.st_size,
+            "mtime_ns": st.st_mtime_ns,
+        }
+        state = _state_dir(root)
+        state.mkdir(exist_ok=True)
+        tmp = state / f".{INDEX_NAME}.part"
+        tmp.write_text(json.dumps(index, indent=1))
+        os.replace(tmp, state / INDEX_NAME)
+
+
+def _remember_logged(gcode_root: pathlib.Path, key: str, local_name: str) -> None:
+    """remember_import for the thread pool, where a raise would only be lost."""
+    try:
+        remember_import(gcode_root, key, local_name)
+    except OSError as e:
+        logger.warning("Could not index USB copy %s: %s", local_name, e)
+
+
+def remember_import_async(gcode_root: pathlib.Path, key: str, local_name: str) -> None:
+    """Run remember_import off the UI thread; the index is only a reuse cache."""
+    QtCore.QThreadPool.globalInstance().start(
+        functools.partial(_remember_logged, gcode_root, key, local_name)
+    )
 
 
 def _tmp_dir(gcode_root: pathlib.Path) -> pathlib.Path:
@@ -97,22 +122,15 @@ def _tmp_dir(gcode_root: pathlib.Path) -> pathlib.Path:
     return gcode_root
 
 
-def _pick_destination(
-    src: pathlib.Path, size: int, dest_dir: pathlib.Path
-) -> tuple[pathlib.Path, bool]:
-    """(path, reused): a byte-identical existing file, else the first free name."""
+def _free_name(src: pathlib.Path, dest_dir: pathlib.Path) -> pathlib.Path:
+    """First unused name for *src* in *dest_dir*; never overwrites a local file."""
+    # No content match: only the index knows a local copy went through Moonraker.
     n = 0
     while True:
         cand = dest_dir / (src.name if n == 0 else f"{src.stem}_{n}{src.suffix}")
         if not cand.exists() and not cand.is_symlink():
-            return cand, False
-        if (
-            cand.is_file()
-            and cand.stat().st_size == size
-            and filecmp.cmp(src, cand, shallow=False)
-        ):
-            return cand, True
-        n += 1  # same name, other content: never overwrite a local file
+            return cand
+        n += 1
 
 
 def _fsync(path: pathlib.Path) -> None:
@@ -131,12 +149,13 @@ def _copy_atomic(
     tmp_dir: pathlib.Path,
 ) -> None:
     """Copy *src* to *final* via a synced temp file, so *final* is never partial."""
-    for stale in tmp_dir.glob(".*.part"):  # leftovers from a crash or power loss
+    # Leftovers from a crash or power loss; tmp_dir may be the shared gcodes root.
+    for stale in tmp_dir.glob(f"{PART_PREFIX}*.part"):
         stale.unlink(missing_ok=True)
     free = shutil.disk_usage(final.parent).free
     if free < src_st.st_size + MIN_FREE_MARGIN:
         raise UsbImportError(f"Not enough free space ({free // MB} MB free)")
-    tmp = tmp_dir / f".{final.name}.part"
+    tmp = tmp_dir / f"{PART_PREFIX}{final.name}.part"
     try:
         shutil.copyfile(src, tmp)  # kernel-side copy on Linux
         now = src.stat()
@@ -167,11 +186,11 @@ def import_usb_gcode(gcode_root: pathlib.Path, filename: str) -> tuple[str, bool
         raise UsbImportError("File not found, was the USB drive removed?")
     try:
         src_st = src.stat()
-        key = _source_key(src, src_st.st_size)
-        final, reused = _indexed_copy(root, key), True
+        key = _source_key(src, src_st)
+        final = _indexed_copy(root, key)
+        reused = final is not None
         if final is None:
-            final, reused = _pick_destination(src, src_st.st_size, root)
-        if not reused:
+            final = _free_name(src, root)
             _copy_atomic(src, src_st, final, _tmp_dir(root))
     except OSError as e:
         raise UsbImportError(
@@ -181,34 +200,51 @@ def import_usb_gcode(gcode_root: pathlib.Path, filename: str) -> tuple[str, bool
     return final.name, reused, key
 
 
-class _ImportSignals(QtCore.QObject):
-    """Worker result signal; QRunnable can't hold signals."""
+class UsbImportSignals(QtCore.QObject):
+    """Worker result signal, owned on the UI thread by the panel that waits."""
 
-    # (usb_file, local_file, key, reused, error)
-    done = QtCore.pyqtSignal(str, str, str, bool, str)
+    # (token, usb_file, local_file, key, reused, error)
+    done = QtCore.pyqtSignal(int, str, str, str, bool, str)
 
 
 class UsbImportTask(QtCore.QRunnable):
     """Runs import_usb_gcode off the UI thread."""
 
-    def __init__(self, gcode_root: pathlib.Path, filename: str) -> None:
+    def __init__(
+        self,
+        signals: UsbImportSignals,
+        token: int,
+        gcode_root: pathlib.Path,
+        filename: str,
+    ) -> None:
         super().__init__()
-        self.setAutoDelete(False)  # the caller holds it until done fires
+        self.setAutoDelete(
+            True
+        )  # pool-owned and QObject-free, so no cross-thread delete
+        self._signals = signals
+        self._token = token
         self._gcode_root = gcode_root
         self._filename = filename
-        self.signals = _ImportSignals()
+
+    def _report(self, local: str, key: str, reused: bool, error: str) -> None:
+        """Emit done; the receiver drops it if the token is stale."""
+        try:
+            self._signals.done.emit(
+                self._token, self._filename, local, key, reused, error
+            )
+        except RuntimeError:  # owner deleted, i.e. the app is closing
+            logger.debug("USB import of %s finished after shutdown", self._filename)
 
     @QtCore.pyqtSlot()
     def run(self) -> None:
         """Copy, then report the local copy or the error text."""
         try:
             local, reused, key = import_usb_gcode(self._gcode_root, self._filename)
-            self.signals.done.emit(self._filename, local, key, reused, "")
         except UsbImportError as e:
             logger.warning("USB import of %s failed: %s", self._filename, e)
-            self.signals.done.emit(self._filename, "", "", False, str(e))
+            self._report("", "", False, str(e))
         except Exception:  # never leave the loadscreen up on a bug
             logger.exception("USB import of %s crashed", self._filename)
-            self.signals.done.emit(
-                self._filename, "", "", False, "Unexpected error copying file"
-            )
+            self._report("", "", False, "Unexpected error copying file")
+        else:
+            self._report(local, key, reused, "")

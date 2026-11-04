@@ -1,12 +1,25 @@
 """import_usb_gcode copies USB gcodes into the gcodes root safely."""
 
+import importlib.util
 import os
 import pathlib
+import sys
 from collections import namedtuple
 
 import pytest
-from lib.utils import usb_import
-from lib.utils.usb_import import UsbImportError, import_usb_gcode, remember_import
+
+# tests/lib, a regular package, shadows the namespace package BlocksScreen/lib here.
+_BLOCKSSCREEN = pathlib.Path(__file__).parents[2] / "BlocksScreen"
+if str(_BLOCKSSCREEN) not in sys.path:
+    sys.path.append(str(_BLOCKSSCREEN))  # usb_import's bare helper_methods import
+_spec = importlib.util.spec_from_file_location(
+    "_usb_import_under_test", _BLOCKSSCREEN / "lib" / "utils" / "usb_import.py"
+)
+usb_import = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(usb_import)
+UsbImportError = usb_import.UsbImportError
+import_usb_gcode = usb_import.import_usb_gcode
+remember_import = usb_import.remember_import
 
 _Usage = namedtuple("_Usage", "total used free")
 
@@ -41,16 +54,9 @@ def test_copies_into_gcodes_root(layout) -> None:
     assert not list(_state(gcodes).glob("*.part"))
 
 
-def test_identical_existing_file_is_reused(layout) -> None:
-    gcodes, drive, _ = layout
-    (drive / "cube.gcode").write_bytes(b"G28\n")
-    (gcodes / "cube.gcode").write_bytes(b"G28\n")
-    assert import_usb_gcode(gcodes, "USB-STICK/cube.gcode")[:2] == ("cube.gcode", True)
-    assert sorted(p.name for p in gcodes.iterdir()) == ["USB-STICK", "cube.gcode"]
-
-
-@pytest.mark.parametrize("local", [b"G1\n", b"G29\n"])
-def test_same_name_other_content_gets_suffix(layout, local: bytes) -> None:
+@pytest.mark.parametrize("local", [b"G28\n", b"G1\n", b"G29\n"])
+def test_unindexed_same_name_file_gets_suffix(layout, local: bytes) -> None:
+    # Even an equal file: it may never have gone through Moonraker's processing.
     gcodes, drive, _ = layout
     (drive / "cube.gcode").write_bytes(b"G28\n")
     (gcodes / "cube.gcode").write_bytes(local)
@@ -60,17 +66,6 @@ def test_same_name_other_content_gets_suffix(layout, local: bytes) -> None:
     )
     assert (gcodes / "cube.gcode").read_bytes() == local
     assert (gcodes / "cube_1.gcode").read_bytes() == b"G28\n"
-
-
-def test_reuses_matching_suffixed_copy(layout) -> None:
-    gcodes, drive, _ = layout
-    (drive / "cube.gcode").write_bytes(b"G28\n")
-    (gcodes / "cube.gcode").write_bytes(b"G1\n")
-    (gcodes / "cube_1.gcode").write_bytes(b"G28\n")
-    assert import_usb_gcode(gcodes, "USB-STICK/cube.gcode")[:2] == (
-        "cube_1.gcode",
-        True,
-    )
 
 
 def test_processed_copy_is_reused_through_index(layout) -> None:
@@ -90,6 +85,23 @@ def test_edited_indexed_copy_is_not_reused(layout) -> None:
     name, _, key = import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
     remember_import(gcodes, key, name)
     (gcodes / name).write_bytes(b"G1 X10\n")  # replaced after indexing
+    assert import_usb_gcode(gcodes, "USB-STICK/cube.gcode")[:2] == (
+        "cube_1.gcode",
+        False,
+    )
+
+
+def test_same_size_usb_edit_is_not_reused(layout) -> None:
+    gcodes, drive, _ = layout
+    src = drive / "cube.gcode"
+    body = bytearray(b"G28\n" * 100_000)
+    src.write_bytes(body)
+    name, _, key = import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
+    remember_import(gcodes, key, name)
+    body[200_000:200_003] = b"G29"  # mid-file, outside both samples, same size
+    src.write_bytes(body)
+    st = src.stat()
+    os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
     assert import_usb_gcode(gcodes, "USB-STICK/cube.gcode")[:2] == (
         "cube_1.gcode",
         False,
@@ -129,17 +141,20 @@ def test_key_differs_by_tail(layout) -> None:
     a, b = drive / "a" / "cube.gcode", drive / "b" / "cube.gcode"
     a.write_bytes(head + b"; layer_height = 0.2\n")
     b.write_bytes(head + b"; layer_height = 0.3\n")
-    size = a.stat().st_size
-    assert usb_import._source_key(a, size) != usb_import._source_key(b, size)
+    os.utime(b, ns=(a.stat().st_atime_ns, a.stat().st_mtime_ns))
+    assert usb_import._source_key(a, a.stat()) != usb_import._source_key(b, b.stat())
 
 
-def test_stale_part_files_are_cleaned(layout) -> None:
+def test_only_own_stale_part_files_are_cleaned(layout, monkeypatch) -> None:
     gcodes, drive, _ = layout
-    _state(gcodes).mkdir()
-    (_state(gcodes) / ".old.gcode.part").write_bytes(b"x")
+    # State dir on another fs: the temp file lands in the shared gcodes root.
+    monkeypatch.setattr(usb_import, "_tmp_dir", lambda root: root)
+    (gcodes / ".bs-usb-old.gcode.part").write_bytes(b"x")
+    (gcodes / ".other-tool.gcode.part").write_bytes(b"x")
     (drive / "cube.gcode").write_bytes(b"G28\n")
     import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert not (_state(gcodes) / ".old.gcode.part").exists()
+    assert not (gcodes / ".bs-usb-old.gcode.part").exists()
+    assert (gcodes / ".other-tool.gcode.part").exists()
 
 
 @pytest.mark.parametrize(
@@ -199,11 +214,14 @@ def test_fsync_error_leaves_no_partial_file(layout, monkeypatch) -> None:
 def test_task_reports_copy(layout, qtbot) -> None:
     gcodes, drive, _ = layout
     (drive / "cube.gcode").write_bytes(b"G28\n")
-    task = usb_import.UsbImportTask(gcodes, "USB-STICK/cube.gcode")
-    with qtbot.waitSignal(task.signals.done) as blocker:
+    signals = usb_import.UsbImportSignals()
+    task = usb_import.UsbImportTask(signals, 7, gcodes, "USB-STICK/cube.gcode")
+    assert task.autoDelete()
+    with qtbot.waitSignal(signals.done) as blocker:
         task.run()
-    usb_file, local, key, reused, error = blocker.args
-    assert (usb_file, local, reused, error) == (
+    token, usb_file, local, key, reused, error = blocker.args
+    assert (token, usb_file, local, reused, error) == (
+        7,
         "USB-STICK/cube.gcode",
         "cube.gcode",
         False,
@@ -214,8 +232,14 @@ def test_task_reports_copy(layout, qtbot) -> None:
 
 def test_task_reports_error(layout, qtbot) -> None:
     gcodes, _, _ = layout
-    task = usb_import.UsbImportTask(gcodes, "USB-STICK/missing.gcode")
-    with qtbot.waitSignal(task.signals.done) as blocker:
+    signals = usb_import.UsbImportSignals()
+    task = usb_import.UsbImportTask(signals, 1, gcodes, "USB-STICK/missing.gcode")
+    with qtbot.waitSignal(signals.done) as blocker:
         task.run()
-    assert blocker.args[:4] == ["USB-STICK/missing.gcode", "", "", False]
-    assert "File not found" in blocker.args[4]
+    assert blocker.args[:5] == [1, "USB-STICK/missing.gcode", "", "", False]
+    assert "File not found" in blocker.args[5]
+
+
+def test_background_remember_logs_index_errors(tmp_path, caplog) -> None:
+    usb_import._remember_logged(tmp_path, "k", "missing.gcode")
+    assert "Could not index USB copy missing.gcode" in caplog.text
