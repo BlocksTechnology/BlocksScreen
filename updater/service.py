@@ -1289,10 +1289,7 @@ class UpdateService:
             self._log.error("component %s not found", name)
             self._cb("on_recover", name, False)
             return False
-        comp_state = self._read_state().get(name)
-        prev_hash = (
-            comp_state.get("prev_hash") if isinstance(comp_state, dict) else None
-        )
+        prev_hash = self._read_state().get(name, {}).get("prev_hash")
         if prev_hash is None:
             self._cb("on_recover", name, False)
             self._log.error("failed to get prev_hash for %s", name)
@@ -1380,9 +1377,6 @@ class UpdateService:
         """Initialize sample ring from persisted baseline on daemon start."""
         state = self._read_state()
         for name, comp_state in state.items():
-            # Runs before reconcile drops malformed entries.
-            if not isinstance(comp_state, dict):
-                continue
             baseline = comp_state.get("nrestarts_baseline", 0)
             if (
                 isinstance(baseline, int)
@@ -1409,8 +1403,6 @@ class UpdateService:
             lambda s: _ensure_comp(s, name).update(fast_attempt=attempt)
         )
         comp_state = (await asyncio.to_thread(self._read_state)).get(name, {})
-        if not isinstance(comp_state, dict):
-            comp_state = {}
         if attempt == 1:
             return await self._recovery_rung1(component, name, comp_state)
         if attempt == 2:
@@ -1521,8 +1513,7 @@ class UpdateService:
     async def _handle_crash_loop(self, nrestarts: int) -> None:
         """Run one recovery rung for the UI, or saturate if the ladder is exhausted."""
         state = await asyncio.to_thread(self._read_state)
-        comp = state.get(_UI_COMPONENT, {})
-        raw = comp.get("fast_attempt", 0) if isinstance(comp, dict) else 0
+        raw = state.get(_UI_COMPONENT, {}).get("fast_attempt", 0)
         current = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
         attempt = current + 1
         if attempt > 3:
@@ -1576,8 +1567,6 @@ class UpdateService:
         """One forward-heal pass: attempt the new origin/main tip if we are in fallback."""
         state = await asyncio.to_thread(self._read_state)
         comp_state = state.get(_UI_COMPONENT, {})
-        if not isinstance(comp_state, dict):
-            return False
         raw = comp_state.get("fast_attempt", 0)
         if not (isinstance(raw, int) and not isinstance(raw, bool)) or raw < 2:
             return False
@@ -1646,11 +1635,11 @@ class UpdateService:
         self._reconciled = True
         await self._reconcile_locked()
 
-    async def _revert_inflight(self) -> None:
-        """Revert power-cut batches; failed reverts stay in the marker for retry."""
+    async def _revert_inflight(self) -> set[str]:
+        """Revert power-cut batches; return the services now running undone code."""
         inflight = await asyncio.to_thread(self._read_inflight)
         if not inflight:
-            return
+            return set()
         self._log.warning(
             "reconcile: in-flight marker present - reverting %d interrupted repo(s)",
             len(inflight),
@@ -1688,10 +1677,10 @@ class UpdateService:
             await asyncio.to_thread(self._write_inflight, unresolved)
         else:
             await asyncio.to_thread(self._clear_inflight)
-        await self._restart_reverted(reverted)
+        return reverted
 
     async def _restart_reverted(self, services: set[str]) -> None:
-        """Restart services that may have started on the code a boot revert just undid."""
+        """Queue restarts for services that may have started on code a boot revert undid."""
         if not services:
             return
         if await klipper_printing():
@@ -1700,10 +1689,14 @@ class UpdateService:
                 ", ".join(sorted(services)),
             )
             return
+        # --no-block: systemd runs the restart and its Restart= retries, so the lock
+        # (and the UI start waiting on it) is not held through slow service starts.
         for service in sorted(services):
-            ok, err = await restart_service(service)
+            ok, err = await restart_service_noblock(service)
             if ok:
-                self._log.info("reconcile: restarted %s on reverted code", service)
+                self._log.info(
+                    "reconcile: queued restart of %s on reverted code", service
+                )
             else:
                 self._log.warning("reconcile: restart %s failed: %s", service, err)
 
@@ -1723,7 +1716,7 @@ class UpdateService:
                 self._history("boot_reclone", c.name)
                 return True
             comp_state = (await asyncio.to_thread(self._read_state)).get(c.name, {})
-            prev = comp_state.get("prev_hash") if isinstance(comp_state, dict) else None
+            prev = comp_state.get("prev_hash")
             if prev and _GIT_SHA_RE.match(prev):
                 rok, _ = await git_reset_to_hash(c.path, prev)
                 self._history("boot_reset", c.name, ok=rok, reverted_to=prev[:12])
@@ -1736,7 +1729,7 @@ class UpdateService:
                 )
             return False
 
-    async def _boot_reclone_hook(self, c: ComponentConfig) -> None:
+    async def _boot_reclone_hook(self, c: ComponentConfig, pending: set[str]) -> None:
         """Best-effort post-reclone hook to rebuild in-repo artifacts (e.g. Spoolman .venv)."""
         if c.path is None:
             return
@@ -1750,7 +1743,10 @@ class UpdateService:
                 new_hash,
                 _GIT_EMPTY_TREE,
                 timeout=HOOK_TIMEOUT,
-                extra_env={"BS_UPDATER_PRINTING": printing},
+                extra_env={
+                    "BS_UPDATER_PRINTING": printing,
+                    "BS_UPDATER_PENDING_RESTARTS": " ".join(sorted(pending)),
+                },
             )
             if not hook_ok:
                 self._log.warning("%s: post-reclone hook failed: %s", c.name, hook_err)
@@ -1758,8 +1754,8 @@ class UpdateService:
             self._log.warning("%s: post-reclone hook raised", c.name, exc_info=True)
 
     async def _reconcile_locked(self) -> None:
-        """Boot heal under the lock: revert in-flight, repair repos, run reclone hooks, sanitize state."""
-        await self._revert_inflight()
+        """Boot heal under the lock: revert, repair, reclone hooks, sanitize, then restart."""
+        reverted = await self._revert_inflight()
         self._log.info("reconcile: boot-checking git components for damage")
         recloned: list[ComponentConfig] = []
         for c in self._components:
@@ -1768,20 +1764,17 @@ class UpdateService:
             if await self._boot_repair_component(c):
                 recloned.append(c)
         for c in recloned:
-            await self._boot_reclone_hook(c)
+            await self._boot_reclone_hook(c, reverted)
         await self._reconcile_self_heal_state()
+        # Last, so one restart covers the revert and any reclone hook that defers to it.
+        await self._restart_reverted(reverted)
 
     async def _reconcile_self_heal_state(self) -> None:
         """Validate self-heal state fields; drop corrupt hashes, clamp counter."""
         async with self._state_lock:
             state = await asyncio.to_thread(self._read_state)
             changed = False
-            for name, comp_state in list(state.items()):
-                if not isinstance(comp_state, dict):
-                    self._log.warning("reconcile: %s entry not a dict - dropping", name)
-                    del state[name]
-                    changed = True
-                    continue
+            for name, comp_state in state.items():
                 for field in ("last_good", "golden", "last_failed_remote"):
                     if field in comp_state:
                         val = comp_state[field]
@@ -1816,9 +1809,13 @@ class UpdateService:
                 await asyncio.to_thread(self._write_state, state)
 
     async def _rollback(
-        self, component: ComponentConfig, prev_hash: str, reason: str
+        self,
+        component: ComponentConfig,
+        prev_hash: str,
+        reason: str,
+        also_restart: tuple[str, ...] = (),
     ) -> None:
-        """Reset one component to prev_hash, restart its service, and report failure."""
+        """Reset one component, restart every service that loaded it, then report."""
         self._log.warning(
             "%s: rolling back to %s (reason=%s)", component.name, prev_hash[:8], reason
         )
@@ -1831,6 +1828,10 @@ class UpdateService:
             component.service, component.health_url
         ):
             ok = False
+        for service in also_restart:
+            if not await self._safe_restart(service):
+                self._log.error("%s did not recover after revert", service)
+                ok = False
         self._history(
             "rollback", component.name, reason=reason, reverted_to=prev_hash[:12], ok=ok
         )
@@ -2430,10 +2431,8 @@ class UpdateService:
             and component.service != klipper_svc
             and not await self._restart_one(klipper_svc)
         ):
-            await self._rollback(component, prev_hash, "restart")
-            # _rollback restarts only component.service; klipper loaded the new code too.
-            if not await self._safe_restart(klipper_svc):
-                self._log.error("%s did not recover after revert", klipper_svc)
+            # Klipper loaded the new code too; restart it before the rollback is reported.
+            await self._rollback(component, prev_hash, "restart", (klipper_svc,))
             return False, ""
         return True, new_hash
 
@@ -2592,12 +2591,15 @@ class UpdateService:
             raise
 
     def _read_state(self) -> dict:
-        """Return the self-heal state dict, empty on missing/corrupt/wrong-shape."""
+        """Return name -> component-state dicts; drops a corrupt file or entry."""
         try:
             data = json.loads(self._state_path.read_text())
         except (OSError, ValueError):
             return {}
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        # Every caller does comp.get(); the next write persists the cleaned map.
+        return {k: v for k, v in data.items() if isinstance(v, dict)}
 
     def _read_inflight(self) -> dict[str, str]:
         """Return the in-flight batch marker as a name->prev_hash dict."""

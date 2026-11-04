@@ -154,6 +154,20 @@ echo_info "Adding blocks to video group (required for framebuffer splash) ..."
 sudo usermod -aG video blocks 2>/dev/null || true
 echo_ok "blocks added to video group"
 
+echo_info "Keeping journald volatile (persistent logs wear the microSD) ..."
+# A drop-in outranks journald.conf; a /var/log/journal left by older runs flips Storage=auto to persistent.
+_JD_DROPIN=/etc/systemd/journald.conf.d/50-blocksscreen-volatile.conf
+if ! grep -qsx 'Storage=volatile' "$_JD_DROPIN"; then
+    _jd_tmp=$(mktemp)
+    printf '[Journal]\nStorage=volatile\n' >"$_jd_tmp"
+    sudo mkdir -p "${_JD_DROPIN%/*}" && _install_atomic 0644 "$_jd_tmp" "$_JD_DROPIN"
+    rm -f "$_jd_tmp"
+    sudo systemctl restart systemd-journald 2>/dev/null || true
+fi
+# Unused once volatile; only frees the space the old persistent journal held.
+sudo rm -rf /var/log/journal
+echo_ok "journald volatile"
+
 echo_info "Scoping git safe.directory to component repos ..."
 # Scope root git trust to component paths instead of '*'.
 sudo git config --system --unset-all safe.directory 2>/dev/null || true
@@ -223,11 +237,18 @@ echo_info "Installing Python requirements ..."
 # Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 # Shared with bs-bootstrap and post-merge: a concurrent pip crashes when the pip pin below replaces pip under it.
-{ exec 201<"$BSENV" && flock -w 300 201; } || echo_warn "Venv lock not acquired (busy 300s or no venv); installing unlocked"
+_venv_locked=false
+if { exec 201<"$BSENV" && flock -w 300 201; }; then
+    _venv_locked=true
+else
+    echo_warn "Venv lock not acquired (busy 300s or no venv); installing unlocked"
+fi
 # Older runs of this script ran pip as root; hand those files back or every pip-as-blocks run fails.
 [ -d "$BSENV" ] && sudo find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
-# Old dists pip failed to remove mid-upgrade (renamed ~ip, ~v...); they warn on every pip run.
-sudo find "$BSENV"/lib/python3*/site-packages -maxdepth 1 -name '~*' -exec rm -rf {} + 2>/dev/null || true
+# Old dists pip failed to remove mid-upgrade (renamed ~ip, ~v...); a live pip still needs its own to roll back.
+if $_venv_locked; then
+    sudo find "$BSENV"/lib/python3*/site-packages -maxdepth 1 -name '~*' -exec rm -rf {} + 2>/dev/null || true
+fi
 # Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
 _as_blocks "$BSENV/bin/pip" install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||
     echo_warn "Pinned pip install FAILED; continuing with the venv's current pip"

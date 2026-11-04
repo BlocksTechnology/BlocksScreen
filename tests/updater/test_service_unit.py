@@ -1353,15 +1353,36 @@ class TestAtomicBatch:
                 new=AsyncMock(side_effect=lambda s, *_: s != "klipper.service"),
             ),
             patch.object(UpdateService, "_rollback", new=AsyncMock()) as mock_rb,
-            patch.object(
-                UpdateService, "_safe_restart", new=AsyncMock(return_value=True)
-            ) as mock_safe,
             patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
         ):
             result = await svc._run_git_update(comp)
         assert result is False
-        mock_rb.assert_awaited_once()
-        mock_safe.assert_awaited_once_with("klipper.service")
+        mock_rb.assert_awaited_once_with(
+            comp, "a" * 40, "restart", ("klipper.service",)
+        )
+
+    @pytest.mark.asyncio
+    async def test_rollback_reports_failure_when_extra_restart_fails(self, tmp_path):
+        """A klipper left down after the revert must not be reported as rolled back."""
+        comp = self._git(tmp_path, "cfg", 2, "crowsnest.service")
+        cb = MagicMock()
+        svc = UpdateService(callback=cb)
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._history_path = tmp_path / "history.jsonl"
+        with (
+            patch.object(UpdateService, "_safe_revert", AsyncMock(return_value=True)),
+            patch.object(
+                UpdateService,
+                "_safe_restart",
+                AsyncMock(side_effect=lambda s, *_: s != "klipper.service"),
+            ) as mock_safe,
+        ):
+            await svc._rollback(comp, "a" * 40, "restart", ("klipper.service",))
+        assert [c.args[0] for c in mock_safe.await_args_list] == [
+            "crowsnest.service",
+            "klipper.service",
+        ]
+        cb.on_rollback.assert_called_once_with("cfg", False)
 
     @pytest.mark.asyncio
     async def test_cancel_after_commit_does_not_revert(self, tmp_path):
@@ -3049,8 +3070,41 @@ class TestReconcile:
             patch("updater.service.klipper_printing", return_value=printing),
             patch("updater.service.run_hook", return_value=(True, "")) as hook,
         ):
-            await UpdateService()._boot_reclone_hook(comp)
-        assert hook.call_args.kwargs["extra_env"] == {"BS_UPDATER_PRINTING": flag}
+            await UpdateService()._boot_reclone_hook(comp, {"moonraker.service"})
+        assert hook.call_args.kwargs["extra_env"] == {
+            "BS_UPDATER_PRINTING": flag,
+            "BS_UPDATER_PENDING_RESTARTS": "moonraker.service",
+        }
+
+    @pytest.mark.asyncio
+    async def test_reverted_services_restart_after_reclone_hooks(self, tmp_path):
+        """Hooks defer to the pending restart, so it must run after them, not before."""
+        comp = self._git_comp(tmp_path)
+        svc = UpdateService()
+        svc._components = [comp]
+        order: list[str] = []
+        with (
+            patch.object(
+                UpdateService,
+                "_revert_inflight",
+                AsyncMock(return_value={"moonraker.service"}),
+            ),
+            patch.object(
+                UpdateService, "_boot_repair_component", AsyncMock(return_value=True)
+            ),
+            patch.object(
+                UpdateService,
+                "_boot_reclone_hook",
+                AsyncMock(side_effect=lambda c, p: order.append(f"hook:{p}")),
+            ),
+            patch.object(UpdateService, "_reconcile_self_heal_state", AsyncMock()),
+            patch(
+                "updater.service.restart_service_noblock",
+                AsyncMock(side_effect=lambda s: order.append(s) or (True, "")),
+            ),
+        ):
+            await svc._reconcile_locked()
+        assert order == ["hook:{'moonraker.service'}", "moonraker.service"]
 
 
 class TestWriteStateDurability:
@@ -3363,32 +3417,19 @@ class TestInflightRollback:
             patch(
                 "updater.service.git_reset_to_hash", return_value=(True, "")
             ) as mock_reset,
-            patch(
-                "updater.service.restart_service", return_value=(True, "")
-            ) as mock_rs,
         ):
-            await svc._revert_inflight()
+            reverted = await svc._revert_inflight()
         mock_reset.assert_awaited_once_with(comp.path, "a" * 40)
-        mock_rs.assert_awaited_once_with("klipper.service")
+        assert reverted == {"klipper.service"}
         assert svc._read_inflight() == {}
 
     @pytest.mark.asyncio
     async def test_revert_while_printing_skips_restart(self, tmp_path, printing):
         """Klipper booted unordered on the undone code, but a running print wins."""
         printing.return_value = True
-        comp = self._git(tmp_path)
-        svc = UpdateService()
-        svc._components = [comp]
-        svc._inflight_path = tmp_path / "inflight.json"
-        svc._write_inflight({"klipper": "a" * 40})
-        with (
-            patch("updater.service.git_get_hash", return_value="b" * 40),
-            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
-            patch("updater.service.restart_service") as mock_rs,
-        ):
-            await svc._revert_inflight()
+        with patch("updater.service.restart_service_noblock") as mock_rs:
+            await UpdateService()._restart_reverted({"klipper.service"})
         mock_rs.assert_not_called()
-        assert svc._read_inflight() == {}
 
     @pytest.mark.asyncio
     async def test_revert_skips_repo_already_at_prev(self, tmp_path):
@@ -3447,11 +3488,10 @@ class TestInflightRollback:
             patch(
                 "updater.service.git_reset_to_hash", return_value=(False, "disk full")
             ),
-            patch("updater.service.restart_service") as mock_rs,
         ):
-            await svc._revert_inflight()
+            reverted = await svc._revert_inflight()
         assert svc._read_inflight() == {"klipper": "a" * 40}  # kept for retry
-        mock_rs.assert_not_called()
+        assert reverted == set()
 
 
 class TestPingWhile:
