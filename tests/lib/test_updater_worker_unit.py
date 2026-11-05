@@ -20,6 +20,21 @@ def _limit(name: str) -> float:
     return getattr(uw, name)
 
 
+def test_busy_silent_max_tracks_daemon_hold_cap() -> None:
+    # updater_worker hardcodes the daemon's cap; read it from source, updater is stubbed here.
+    import ast
+    import pathlib
+
+    src = pathlib.Path(__file__).parents[2] / "updater" / "dbus_service.py"
+    cap = next(
+        ast.literal_eval(node.value)
+        for node in ast.parse(src.read_text()).body
+        if isinstance(node, ast.Assign)
+        and getattr(node.targets[0], "id", "") == "_DEPLOY_HOLD_CAP_S"
+    )
+    assert _limit("_BUSY_SILENT_MAX") == cap + _limit("_BUSY_IDLE_LIMIT")
+
+
 def _make_worker():
     """Create UpdaterWorker without starting the asyncio daemon thread."""
     from BlocksScreen.lib.updater_worker import UpdaterWorker

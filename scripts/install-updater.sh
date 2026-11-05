@@ -165,7 +165,9 @@ if ! grep -qsx 'Storage=volatile' "$_JD_DROPIN"; then
     sudo systemctl restart systemd-journald 2>/dev/null || true
 fi
 # Unused once volatile; only frees the space the old persistent journal held.
-sudo rm -rf /var/log/journal
+if grep -qsx 'Storage=volatile' "$_JD_DROPIN"; then
+    sudo rm -rf /var/log/journal
+fi
 echo_ok "journald volatile"
 
 echo_info "Scoping git safe.directory to component repos ..."

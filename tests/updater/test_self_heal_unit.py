@@ -48,6 +48,14 @@ class TestStateFields:
         state = svc._read_state()
         assert state == {}
 
+    def test_read_state_drops_and_logs_non_dict_entries(self, tmp_path: Path, caplog):
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._state_path.write_text('{"ok": {"a": 1}, "bad": 3}')
+        with caplog.at_level("WARNING"):
+            assert svc._read_state() == {"ok": {"a": 1}}
+        assert "bad" in caplog.text
+
     def test_write_state_is_atomic_via_temp_file(self, tmp_path: Path):
         svc = UpdateService()
         svc._state_path = tmp_path / "state.json"

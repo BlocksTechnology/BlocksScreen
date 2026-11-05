@@ -2599,6 +2599,8 @@ class UpdateService:
         if not isinstance(data, dict):
             return {}
         # Every caller does comp.get(); the next write persists the cleaned map.
+        if bad := [k for k, v in data.items() if not isinstance(v, dict)]:
+            self._log.warning("state: dropping non-dict entries %s", bad)
         return {k: v for k, v in data.items() if isinstance(v, dict)}
 
     def _read_inflight(self) -> dict[str, str]:
