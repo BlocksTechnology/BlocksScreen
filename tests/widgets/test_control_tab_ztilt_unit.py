@@ -38,6 +38,7 @@ def tab():
     t = SimpleNamespace(
         _ztilt_running=False,
         _ztilt_failed=False,
+        _ztilt_run_id=0,
         ws=SimpleNamespace(api=SimpleNamespace(run_gcode=run_gcode)),
         call_load_panel=SimpleNamespace(emit=lambda s, m, _f: loads.append((s, m))),
         ztilt_result_screen=MagicMock(),
@@ -45,6 +46,8 @@ def tab():
     )
     for name in (
         "_ztilt_stop",
+        "_ztilt_send",
+        "_ztilt_current",
         "_on_ztilt_first_home",
         "_on_ztilt_done",
         "_on_ztilt_homed",
@@ -125,3 +128,17 @@ def test_klippy_disconnect_closes_quietly(tab):
     assert not t._ztilt_running
     callbacks["G28 Z"](gone)
     t.ztilt_result_screen.show.assert_not_called()
+
+
+def test_late_reply_from_ended_run_does_not_end_new_run(tab):
+    # A 503 ends run 1 while its G28 Z reply is still in flight; a re-tap starts run 2.
+    t, loads, callbacks = tab
+    _home(callbacks)
+    gone = {"error": {"code": 503, "message": "Klippy Disconnected"}}
+    callbacks["Z_TILT_ADJUST"](gone)
+    stale_home = callbacks["G28 Z"]
+    callbacks.clear()
+    ControlTab.handle_ztilt(t)
+    stale_home(gone)
+    assert t._ztilt_running
+    assert loads[-1] == (True, "Calibrating Z-Tilt\nPlease wait")

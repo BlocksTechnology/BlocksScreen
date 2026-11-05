@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import logging
 import re
 import typing
+from collections.abc import Callable
 
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.Common.basePopup import BasePopup
@@ -67,6 +69,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self._ztilt_running: bool = False
         self._ztilt_failed: bool = False
+        # Bumped per stop, so a late reply can't end a newer run.
+        self._ztilt_run_id: int = 0
         self.ztilt_result_screen = BasePopup(self, False, False)
         self.ztilt_result_screen_timer = QtCore.QTimer()
         self.ztilt_result_screen_timer.setSingleShot(True)
@@ -316,21 +320,31 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._ztilt_running = True
         self._ztilt_failed = False
         self.call_load_panel.emit(True, "Calibrating Z-Tilt\nPlease wait", False)
-        if not self.ws.api.run_gcode("G28\nM400", callback=self._on_ztilt_first_home):
+        if not self._ztilt_send("G28\nM400", self._on_ztilt_first_home):
             self._ztilt_stop()
+
+    def _ztilt_send(self, gcode: str, handler: Callable[[int, object], None]) -> bool:
+        """Send ``gcode`` with its reply bound to this run; False if not sent."""
+        callback = functools.partial(handler, self._ztilt_run_id)
+        return bool(self.ws.api.run_gcode(gcode, callback=callback))
+
+    def _ztilt_current(self, run_id: int) -> bool:
+        """Whether a reply belongs to the run still in progress."""
+        return self._ztilt_running and run_id == self._ztilt_run_id
 
     def _ztilt_stop(self, message: str = "") -> None:
         """End the Z-Tilt run, closing the overlay and showing ``message`` if any."""
         self._ztilt_running = False
+        self._ztilt_run_id += 1
         self.call_load_panel.emit(False, "", False)
         if message:
             self.ztilt_result_screen.set_message(message)
             self.ztilt_result_screen.show()
             self.ztilt_result_screen_timer.start()
 
-    def _on_ztilt_first_home(self, reply: object) -> None:
+    def _on_ztilt_first_home(self, run_id: int, reply: object) -> None:
         """Queue Z_TILT_ADJUST and the final home once the first home succeeds."""
-        if not self._ztilt_running:
+        if not self._ztilt_current(run_id):
             return
         error = reply_error(reply)
         if is_disconnect_error(error):
@@ -339,18 +353,17 @@ class ControlTab(QtWidgets.QStackedWidget):
         if error is not None:
             self._ztilt_stop("Homing failed.\nCheck the printer and try again.")
             return
-        api = self.ws.api
         # Separate scripts so the final home runs even if Z_TILT_ADJUST errors out
         # Z only: XY stay homed through the tilt, so the override skips them (~10 s)
         if not (
-            api.run_gcode("Z_TILT_ADJUST", callback=self._on_ztilt_done)
-            and api.run_gcode("G28 Z", callback=self._on_ztilt_homed)
+            self._ztilt_send("Z_TILT_ADJUST", self._on_ztilt_done)
+            and self._ztilt_send("G28 Z", self._on_ztilt_homed)
         ):
             self._ztilt_stop()
 
-    def _on_ztilt_done(self, reply: object) -> None:
+    def _on_ztilt_done(self, run_id: int, reply: object) -> None:
         """Switch the overlay to the final home once Z_TILT_ADJUST returns."""
-        if not self._ztilt_running:
+        if not self._ztilt_current(run_id):
             return
         error = reply_error(reply)
         if is_disconnect_error(error):
@@ -364,9 +377,9 @@ class ControlTab(QtWidgets.QStackedWidget):
             True, f"{status}\nHoming the printer, please wait", False
         )
 
-    def _on_ztilt_homed(self, reply: object) -> None:
+    def _on_ztilt_homed(self, run_id: int, reply: object) -> None:
         """Close the overlay and report the result once the final G28 returns."""
-        if not self._ztilt_running:
+        if not self._ztilt_current(run_id):
             return
         error = reply_error(reply)
         if is_disconnect_error(error):

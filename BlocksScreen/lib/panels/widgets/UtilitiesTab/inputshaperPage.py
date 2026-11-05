@@ -245,7 +245,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         return bool(run and run(gcode, functools.partial(handler, self._run_id)))
 
     def _on_first_home(self, run_id: int, reply: object) -> None:
-        """Queue the sweep and the final home once the first home succeeds."""
+        """Queue the sweep, plus the final home on single-axis runs, once homed."""
         if run_id != self._run_id:
             return
         error = reply_error(reply)
@@ -256,16 +256,17 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self._fail("Homing failed.\nCheck the printer and try again.")
             return
         self._is_watchdog.start()
-        # Separate scripts so the final home still runs after a failed sweep
+        # Separate scripts so the final home still runs after a failed sweep.
+        # Auto runs skip it: SAVE_CONFIG restarts Klipper, which unhomes anyway.
         if not (
             self._send(self._gcode, self._on_calibrate_done)
-            and self._send("G28", self._on_is_homed)
+            and (self.aut or self._send("G28", self._on_is_homed))
         ):
             _logger.warning("Input shaper: request not sent, Moonraker unreachable")
             self._end()
 
     def _on_calibrate_done(self, run_id: int, reply: object) -> None:
-        """Record the sweep result; the final home's reply decides what follows."""
+        """Save an auto run's result; single-axis runs wait for the final home."""
         if run_id != self._run_id:
             return
         error = reply_error(reply)
@@ -276,6 +277,15 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             _logger.warning("Input shaper: sweep ended without both axis results")
             error = {"message": "missing axis results"}
         self._is_failed = error is not None
+        if self.aut:
+            if self._is_failed:
+                self._fail(
+                    "Input shaper calibration failed.\n"
+                    "Check the accelerometer and try again."
+                )
+            else:
+                self._save()
+            return
         self._is_watchdog.start()
         status = (
             "Input shaper calibration failed"
@@ -287,7 +297,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         )
 
     def _on_is_homed(self, run_id: int, reply: object) -> None:
-        """After the final home, save an automatic run's result or end the run."""
+        """End a single-axis run once the final home replies."""
         if run_id != self._run_id:
             return
         error = reply_error(reply)
@@ -300,16 +310,16 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                 "Check the accelerometer and try again."
             )
             return
-        if not self.aut:
-            if error is not None:
-                self._fail(
-                    "Homing failed after input shaper calibration.\n"
-                    "Check the printer and try again."
-                )
-                return
-            self._end()
+        if error is not None:
+            self._fail(
+                "Homing failed after input shaper calibration.\n"
+                "Check the printer and try again."
+            )
             return
-        # A failed home still saves: the restart leaves the printer unhomed anyway
+        self._end()
+
+    def _save(self) -> None:
+        """SAVE_CONFIG an auto run's result; Klipper restarts on success."""
         self._saving = True
         # SAVE_CONFIG always replies or drops the link, so no timeout mid-restart
         self._is_watchdog.stop()

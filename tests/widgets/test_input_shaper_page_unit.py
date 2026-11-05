@@ -34,7 +34,9 @@ def _start(p, sent, gcode="SHAPER_CALIBRATE"):
     p.handle_is(gcode)
     assert list(sent) == [_HOME]
     sent[_HOME]("ok")
-    assert list(sent) == [_HOME, gcode, "G28"]
+    # Auto runs end in SAVE_CONFIG, whose restart unhomes anyway: no final home.
+    final = [] if gcode == "SHAPER_CALIBRATE" else ["G28"]
+    assert list(sent) == [_HOME, gcode, *final]
 
 
 def _sweep_both_axes(p):
@@ -42,19 +44,14 @@ def _sweep_both_axes(p):
         p.handle_gcode_response([_RECOMMENDED.format(a=axis)])
 
 
-def test_auto_run_saves_after_final_home(page):
+def test_auto_run_saves_after_sweep(page):
     p, loads, sent, fails = page
     _start(p, sent)
     _sweep_both_axes(p)
     assert "SAVE_CONFIG" not in sent
 
     sent["SHAPER_CALIBRATE"]("ok")
-    assert loads[-1] == (True, "Resonances measured\nHoming the printer, please wait")
-    # A "!!" from the final home is not a failed save
-    p.handle_gcode_response(["!! Probe triggered prior to movement"])
-    assert loads[-1][0] is True
-
-    sent["G28"]("ok")
+    assert "G28" not in sent
     assert loads[-1][1].startswith("Saving input shaper settings")
     sent["SAVE_CONFIG"]("ok")
     assert loads[-1][0] is True  # Klipper restarts; ConnectionPage takes over
@@ -78,7 +75,6 @@ def test_failed_save_reports_and_closes_overlay(page):
     _start(p, sent)
     _sweep_both_axes(p)
     sent["SHAPER_CALIBRATE"]("ok")
-    sent["G28"]("ok")
     # The save must not be timed out while Klipper restarts
     assert p._saving and not p._is_watchdog.isActive()
     sent["SAVE_CONFIG"]({"error": {"code": 400, "message": "conflicts"}})
@@ -89,16 +85,10 @@ def test_failed_save_reports_and_closes_overlay(page):
     ]
 
 
-def test_failed_sweep_reported_after_final_home(page):
+def test_failed_auto_sweep_reported_at_once(page):
     p, loads, sent, fails = page
     _start(p, sent)
     sent["SHAPER_CALIBRATE"](_FAIL)
-    assert loads[-1] == (
-        True,
-        "Input shaper calibration failed\nHoming the printer, please wait",
-    )
-    assert fails == []
-    sent["G28"]("ok")
     assert loads[-1][0] is False
     assert fails == [
         "Input shaper calibration failed.\nCheck the accelerometer and try again."
@@ -111,7 +101,6 @@ def test_sweep_without_both_results_does_not_save(page):
     _start(p, sent)
     p.handle_gcode_response([_RECOMMENDED.format(a="x")])
     sent["SHAPER_CALIBRATE"]("ok")
-    sent["G28"]("ok")
     assert loads[-1][0] is False
     assert len(fails) == 1
     assert "SAVE_CONFIG" not in sent
@@ -124,8 +113,6 @@ def test_klippy_disconnect_closes_quietly(page):
     sent["SHAPER_CALIBRATE"](_GONE)
     assert loads[-1][0] is False
     assert not p._running
-    # The final home's late reply belongs to a finished run
-    sent["G28"](_GONE)
     assert "SAVE_CONFIG" not in sent
     assert fails == []
 
@@ -165,12 +152,10 @@ def test_timeout_reports_and_drops_late_replies(page, qtbot):
     _start(p, sent)
     _sweep_both_axes(p)
     old["SHAPER_CALIBRATE"]("ok")
-    old["G28"]("ok")
     assert "SAVE_CONFIG" not in sent
     assert p._running
 
     sent["SHAPER_CALIBRATE"]("ok")
-    sent["G28"]("ok")
     assert "SAVE_CONFIG" in sent
 
 
@@ -183,6 +168,24 @@ def test_single_axis_closes_on_final_home(page):
     assert loads[-1][0] is False
     assert "SAVE_CONFIG" not in sent
     assert fails == []
+
+
+def test_single_axis_failed_sweep_reported_after_final_home(page):
+    p, loads, sent, fails = page
+    _start(p, sent, "SHAPER_CALIBRATE AXIS=X")
+    sent["SHAPER_CALIBRATE AXIS=X"](_FAIL)
+    assert loads[-1] == (
+        True,
+        "Input shaper calibration failed\nHoming the printer, please wait",
+    )
+    # A "!!" from the final home does not end the run early
+    p.handle_gcode_response(["!! Probe triggered prior to movement"])
+    assert loads[-1][0] is True and fails == []
+    sent["G28"]("ok")
+    assert loads[-1][0] is False
+    assert fails == [
+        "Input shaper calibration failed.\nCheck the accelerometer and try again."
+    ]
 
 
 def test_single_axis_final_home_failure_is_reported(page):
@@ -231,7 +234,6 @@ def test_sweep_progress_reaches_overlay(page):
     )
     assert loads[-1][1] == "Calculating the best input shaper\nY axis"
     sent["SHAPER_CALIBRATE"](_FAIL)
-    sent["G28"]("ok")
 
     # Single-axis runs print no "Testing axis" line, so the axis comes from AXIS=
     sent.clear()
