@@ -1,6 +1,7 @@
 import logging
 import re
 import typing
+from collections.abc import Callable
 
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.Common.optionCardWidget import OptionCard
@@ -8,6 +9,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
+from lib.utils.moonraker_reply import is_disconnect_error, reply_error
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
@@ -23,10 +25,6 @@ _GCODE_AXIS = re.compile(r"AXIS=(\w+)", re.IGNORECASE)
 class InputShaperPage(QtWidgets.QStackedWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
-    )
-    # (gcode, callback): callback gets Moonraker's reply once Klipper finishes the script
-    run_gcode_callback: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, object, name="run-gcode-callback"
     )
     call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
     request_back_button = QtCore.pyqtSignal(name="request-back-button")
@@ -45,8 +43,11 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.is_types: dict = {}
         self.is_aut_types: dict = {}
         self.aut: bool = False
+        self._running: bool = False
         self._saving: bool = False
         self._is_failed: bool = False
+        # MoonAPI.run_gcode(gcode, callback); its False return means the request was not sent
+        self.gcode_runner: Callable[..., bool] | None = None
         self._sweep_axis: str = ""
 
         # Inactivity timeout; the sweep reports progress every 1 Hz
@@ -121,18 +122,6 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         message = data[0]
 
         if self._is_watchdog.isActive():
-            if "Klipper state:" in message:
-                # Klipper is restarting; ConnectionPage hides the overlay on Ready
-                self._is_watchdog.stop()
-                self.aut = False
-                self._saving = False
-                return
-            # Only a failed save errors here; Beacon also emits non-fatal "!!" mid-run
-            if self._saving and message.startswith("!!"):
-                self._is_watchdog.stop()
-                self._saving = False
-                self.call_load_panel.emit(False, "", False)
-                return
             self._is_watchdog.start()
             if not self._saving and (progress := self._progress_text(message)):
                 self.call_load_panel.emit(True, progress, False)
@@ -183,18 +172,8 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             recommended_type = match_recommended.group("type")
             self.is_types["Axis"] = axis
             if self.aut:
+                # SAVE_CONFIG waits for the sweep reply: Klipper writes the CSV after this line
                 self.is_aut_types[axis] = recommended_type
-                if len(self.is_aut_types) == 2:
-                    self.run_gcode_signal.emit("SAVE_CONFIG")
-                    # Overlay stays up through the queued G28 and restart
-                    self.call_load_panel.emit(
-                        True,
-                        "Saving input shaper settings\nThe printer will restart, please wait",
-                        False,
-                    )
-                    self.aut = False
-                    self._saving = True
-                    return
                 return
 
             reordered = {}
@@ -212,9 +191,8 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                 else:
                     self.add_type_entry(key)
 
+            # The overlay closes on the final home's reply
             self.build_model_list()
-            self._is_watchdog.stop()
-            self.call_load_panel.emit(False, "", False)
             return
 
     def _progress_text(self, message: str) -> str | None:
@@ -234,39 +212,76 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.type_dict = types
 
     def _on_is_timeout(self) -> None:
-        self.call_load_panel.emit(False, "", False)
+        _logger.warning("Input shaper: no progress for 120 s, closing the overlay")
+        self._end()
 
-    def _send_calibrate(self, gcode: str) -> None:
-        """Queue home, the sweep and the final home; replies drive the error path."""
-        self._is_failed = False
-        self.run_gcode_signal.emit("G28\nM400")
-        self.run_gcode_callback.emit(gcode, self._on_calibrate_done)
-        # Runs before the SAVE_CONFIG restart, and still runs after a failed sweep
-        self.run_gcode_callback.emit("G28", self._on_is_homed)
-
-    def _on_calibrate_done(self, reply) -> None:
-        """Hold the overlay through the final home when SHAPER_CALIBRATE errors."""
-        error = reply.get("error") if isinstance(reply, dict) else None
-        if not error:
-            return
-        # Without this the overlay waits out the 120 s watchdog after e.g. an ADXL fault
-        self._is_watchdog.stop()
+    def _end(self, close: bool = True) -> None:
+        """Reset run state; replies still in flight are ignored after this."""
+        self._running = False
         self.aut = False
-        if isinstance(error, dict) and error.get("code") == -1:
+        self._saving = False
+        self._is_failed = False
+        self._is_watchdog.stop()
+        if close:
             self.call_load_panel.emit(False, "", False)
-            return  # Connection lost; ConnectionPage takes over
-        self._is_failed = True
-        self.call_load_panel.emit(
-            True,
-            "Input shaper calibration failed\nHoming the printer, please wait",
-            False,
+
+    def _send_calibrate(self, gcode: str) -> bool:
+        """Queue home, the sweep and the final home; False if a request was not sent."""
+        run = self.gcode_runner
+        # Separate scripts so the final home still runs after a failed sweep
+        return bool(
+            run
+            and run("G28\nM400")
+            and run(gcode, self._on_calibrate_done)
+            and run("G28", self._on_is_homed)
         )
 
-    def _on_is_homed(self, _reply) -> None:
-        """Close the overlay after the final home that follows a failed sweep."""
-        if self._is_failed:
-            self._is_failed = False
-            self.call_load_panel.emit(False, "", False)
+    def _on_calibrate_done(self, reply: object) -> None:
+        """Record the sweep result; the final home's reply decides what follows."""
+        if not self._running:
+            return
+        error = reply_error(reply)
+        if is_disconnect_error(error):
+            self._end()
+            return  # Connection lost; ConnectionPage takes over
+        if error is None and self.aut and len(self.is_aut_types) < 2:
+            _logger.warning("Input shaper: sweep ended without both axis results")
+            error = {"message": "missing axis results"}
+        self._is_failed = error is not None
+        status = (
+            "Input shaper calibration failed"
+            if self._is_failed
+            else "Resonances measured"
+        )
+        self.call_load_panel.emit(
+            True, f"{status}\nHoming the printer, please wait", False
+        )
+
+    def _on_is_homed(self, reply: object) -> None:
+        """After the final home, save an automatic run's result or close the overlay."""
+        if not self._running:
+            return
+        if is_disconnect_error(reply_error(reply)) or self._is_failed or not self.aut:
+            self._end()
+            return
+        # A failed home still saves: the restart leaves the printer unhomed anyway
+        self._saving = True
+        self.call_load_panel.emit(
+            True,
+            "Saving input shaper settings\nThe printer will restart, please wait",
+            False,
+        )
+        run = self.gcode_runner
+        if not (run and run("SAVE_CONFIG", self._on_save_done)):
+            self._end()
+
+    def _on_save_done(self, reply: object) -> None:
+        """Close the overlay if SAVE_CONFIG failed; on success Klipper restarts."""
+        if not self._running:
+            return
+        error = reply_error(reply)
+        # Success or lost link: the restart's ConnectionPage replaces the overlay
+        self._end(close=error is not None and not is_disconnect_error(error))
 
     def handle_is(self, gcode: str) -> None:
         """Start an input shaper run.
@@ -276,15 +291,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                 ``""`` to ask which axis to calibrate, or a single-axis
                 ``SHAPER_CALIBRATE AXIS=...`` command to send as is.
         """
-        # Klipper names the axis only when sweeping both, so a single-axis run takes it from AXIS=
-        axis = _GCODE_AXIS.search(gcode)
-        self._sweep_axis = axis[1].upper() if axis else ""
-        if gcode == "SHAPER_CALIBRATE":
-            self.is_aut_types.clear()
-            self._saving = False
-            self.aut = True
-            self._send_calibrate(gcode)
-        elif gcode == "":
+        if gcode == "":
             # Picking an axis needs the dialog, which logic-only mode never built.
             if self.logic:
                 return
@@ -297,15 +304,27 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self.dialog_page.set_message("Select the axis to calibrate")
             self.dialog_page.show()
             return
-        else:
-            self._send_calibrate(gcode)
-            if not self.logic:
-                self.setCurrentIndex(self.indexOf(self.manual_is))
-
+        if self._running:
+            # An error popup can hide the overlay mid-run; a second tap would queue a second run
+            _logger.info("Input shaper already running, ignoring %s", gcode)
+            return
+        # Klipper names the axis only when sweeping both, so a single-axis run takes it from AXIS=
+        axis = _GCODE_AXIS.search(gcode)
+        self._sweep_axis = axis[1].upper() if axis else ""
+        self.is_aut_types.clear()
+        self._running = True
+        self._saving = False
+        self._is_failed = False
+        self.aut = gcode == "SHAPER_CALIBRATE"
+        if not self.aut and not self.logic:
+            self.setCurrentIndex(self.indexOf(self.manual_is))
         self._is_watchdog.start()
         self.call_load_panel.emit(
             True, "Measuring resonances\nThis takes a few minutes, please wait", False
         )
+        if not self._send_calibrate(gcode):
+            _logger.warning("Input shaper: request not sent, Moonraker unreachable")
+            self._end()
 
     def reset_view_model(self) -> None:
         """Clears items from ListView

@@ -81,3 +81,21 @@ def test_ztilt_error_reported_after_home(tab):
     assert "failed" in t.ztilt_result_screen.set_message.call_args.args[0]
     t._handle_gcode_response([_PASS])
     assert loads[-1][0] is False
+
+
+def test_second_tap_ignored_while_running(tab):
+    t, _, callbacks = tab
+    callbacks.clear()
+    ControlTab.handle_ztilt(t)
+    assert callbacks == {}
+    assert t._ztilt_running
+
+
+def test_klippy_disconnect_closes_quietly(tab):
+    t, loads, callbacks = tab
+    gone = {"error": {"code": 503, "message": "Klippy Disconnected"}}
+    callbacks["Z_TILT_ADJUST"](gone)
+    assert loads[-1][0] is False
+    assert not t._ztilt_running
+    callbacks["G28 Z"](gone)
+    t.ztilt_result_screen.show.assert_not_called()

@@ -19,6 +19,7 @@ from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.icon_button import IconButton
 from lib.utils.menu_grid import fixed_menu_grid
+from lib.utils.moonraker_reply import is_disconnect_error, reply_error
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
@@ -308,6 +309,10 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def handle_ztilt(self) -> None:
         """Run Z_TILT_ADJUST between two homes, keeping the overlay up until the end."""
+        if self._ztilt_running:
+            # An error popup can hide the overlay mid-run; a second tap would queue a second run
+            _logger.info("Z-Tilt already running, ignoring the request")
+            return
         self._ztilt_running = True
         self._ztilt_failed = False
         self.call_load_panel.emit(True, "Calibrating Z-Tilt\nPlease wait", False)
@@ -323,11 +328,16 @@ class ControlTab(QtWidgets.QStackedWidget):
             self._ztilt_running = False
             self.call_load_panel.emit(False, "", False)
 
-    def _on_ztilt_done(self, reply) -> None:
+    def _on_ztilt_done(self, reply: object) -> None:
         """Switch the overlay to the final home once Z_TILT_ADJUST returns."""
         if not self._ztilt_running:
             return
-        self._ztilt_failed = isinstance(reply, dict) and "error" in reply
+        error = reply_error(reply)
+        if is_disconnect_error(error):
+            self._ztilt_running = False
+            self.call_load_panel.emit(False, "", False)
+            return  # Connection lost; ConnectionPage takes over
+        self._ztilt_failed = error is not None
         status = (
             "Z-Tilt calibration failed" if self._ztilt_failed else "Z-Tilt complete"
         )
@@ -335,14 +345,14 @@ class ControlTab(QtWidgets.QStackedWidget):
             True, f"{status}\nHoming the printer, please wait", False
         )
 
-    def _on_ztilt_homed(self, reply) -> None:
+    def _on_ztilt_homed(self, reply: object) -> None:
         """Close the overlay and report the result once the final G28 returns."""
         if not self._ztilt_running:
             return
         self._ztilt_running = False
         self.call_load_panel.emit(False, "", False)
-        error = reply.get("error") if isinstance(reply, dict) else None
-        if error and error.get("code") == -1:
+        error = reply_error(reply)
+        if is_disconnect_error(error):
             return  # Connection lost; ConnectionPage takes over
         if self._ztilt_failed:
             message = "Z-Tilt calibration failed.\nCheck the bed and try again."
