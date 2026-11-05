@@ -290,7 +290,8 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         """After the final home, save an automatic run's result or end the run."""
         if run_id != self._run_id:
             return
-        if is_disconnect_error(reply_error(reply)):
+        error = reply_error(reply)
+        if is_disconnect_error(error):
             self._end()
             return
         if self._is_failed:
@@ -300,10 +301,18 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             )
             return
         if not self.aut:
+            if error is not None:
+                self._fail(
+                    "Homing failed after input shaper calibration.\n"
+                    "Check the printer and try again."
+                )
+                return
             self._end()
             return
         # A failed home still saves: the restart leaves the printer unhomed anyway
         self._saving = True
+        # SAVE_CONFIG always replies or drops the link, so no timeout mid-restart
+        self._is_watchdog.stop()
         self.call_load_panel.emit(
             True,
             "Saving input shaper settings\nThe printer will restart, please wait",
@@ -313,12 +322,17 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self._end()
 
     def _on_save_done(self, run_id: int, reply: object) -> None:
-        """Close the overlay if SAVE_CONFIG failed; on success Klipper restarts."""
+        """Report a failed SAVE_CONFIG; on success Klipper restarts."""
         if run_id != self._run_id:
             return
         error = reply_error(reply)
+        if error is not None and not is_disconnect_error(error):
+            self._fail(
+                "Saving the input shaper result failed.\nCheck the printer config."
+            )
+            return
         # Success or lost link: the restart's ConnectionPage replaces the overlay
-        self._end(close=error is not None and not is_disconnect_error(error))
+        self._end(close=False)
 
     def handle_is(self, gcode: str) -> None:
         """Start an input shaper run.

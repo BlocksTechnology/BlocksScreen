@@ -73,15 +73,20 @@ def test_failed_first_home_skips_sweep(page):
     assert not p._running
 
 
-def test_failed_save_closes_overlay(page):
-    p, loads, sent, _ = page
+def test_failed_save_reports_and_closes_overlay(page):
+    p, loads, sent, fails = page
     _start(p, sent)
     _sweep_both_axes(p)
     sent["SHAPER_CALIBRATE"]("ok")
     sent["G28"]("ok")
+    # The save must not be timed out while Klipper restarts
+    assert p._saving and not p._is_watchdog.isActive()
     sent["SAVE_CONFIG"]({"error": {"code": 400, "message": "conflicts"}})
     assert loads[-1][0] is False
     assert not p._running
+    assert fails == [
+        "Saving the input shaper result failed.\nCheck the printer config."
+    ]
 
 
 def test_failed_sweep_reported_after_final_home(page):
@@ -178,6 +183,18 @@ def test_single_axis_closes_on_final_home(page):
     assert loads[-1][0] is False
     assert "SAVE_CONFIG" not in sent
     assert fails == []
+
+
+def test_single_axis_final_home_failure_is_reported(page):
+    p, loads, sent, fails = page
+    _start(p, sent, "SHAPER_CALIBRATE AXIS=X")
+    sent["SHAPER_CALIBRATE AXIS=X"]("ok")
+    sent["G28"]({"error": {"code": 400, "message": "Endstop x still triggered"}})
+    assert loads[-1][0] is False
+    assert fails == [
+        "Homing failed after input shaper calibration.\n"
+        "Check the printer and try again."
+    ]
 
 
 def test_progress_lines_restart_the_watchdog(page, qtbot):
