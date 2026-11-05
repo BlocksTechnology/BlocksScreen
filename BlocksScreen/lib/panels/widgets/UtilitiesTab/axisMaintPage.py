@@ -19,14 +19,10 @@ class AxisMaintPage(QtWidgets.QWidget):
 
     call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
-    def __init__(
-        self,
-        parent: typing.Optional["QtWidgets.QWidget"],
-        run_gcode: Callable[..., bool],
-    ) -> None:
+    def __init__(self, parent: typing.Optional["QtWidgets.QWidget"]) -> None:
         super().__init__(parent)
 
-        self._run_gcode = run_gcode
+        self.gcode_runner: Callable[..., bool] | None = None
         self.current_object: str | None = None
         self.answerPage = BasePopup(self, False, True)
         self.answerPage.accepted.connect(self._run_AXIS_MAINTENANCE_gcode)
@@ -59,11 +55,14 @@ class AxisMaintPage(QtWidgets.QWidget):
         self._send(f"AXIS_MAINTENANCE_{axis}\nM400", self._on_homed)
 
     def _send(self, script: str, on_done: Callable[[object], None]) -> None:
-        # Moonraker answers printer.gcode.script only after Klipper has run the whole script
-        if not self._run_gcode(script, callback=on_done):
+        """Run ``script``; ``on_done`` gets the reply, or an error if unsent."""
+        # Moonraker replies to gcode.script only after Klipper ran the whole script
+        run = self.gcode_runner
+        if not (run and run(script, callback=on_done)):
             on_done({"error": {"code": -1, "message": "not connected"}})
 
     def _on_homed(self, result: object) -> None:
+        """Drop the loading screen and show the oil prompt once homing succeeded."""
         self.call_load_panel.emit(False, "", False)
         if isinstance(result, dict) and "error" in result:
             _logger.warning("Axis maintenance homing failed: %s", result["error"])
@@ -71,6 +70,7 @@ class AxisMaintPage(QtWidgets.QWidget):
         self.answerPage.show()
 
     def _on_cycle_done(self, result: object) -> None:
+        """Drop the loading screen when the maintenance cycle ends."""
         self.call_load_panel.emit(False, "", False)
         if isinstance(result, dict) and "error" in result:
             _logger.warning("Axis maintenance cycle failed: %s", result["error"])

@@ -17,7 +17,8 @@ def page(qtbot):
         calls.append((script, callback))
         return True
 
-    p = AxisMaintPage(None, run_gcode)
+    p = AxisMaintPage(None)
+    p.gcode_runner = run_gcode
     qtbot.addWidget(p)
     p.am_x.setChecked(True)
     p.answerPage.show = MagicMock()
@@ -46,7 +47,15 @@ def test_homing_error_skips_oil_prompt(page, qtbot):
 
 
 def test_offline_send_drops_loading_without_prompt(page, qtbot):
-    page._run_gcode = lambda script, callback=None: False
+    page.gcode_runner = lambda script, callback=None: False
+    with qtbot.waitSignals([page.call_load_panel, page.call_load_panel]):
+        page.axis_maintenance()
+
+    page.answerPage.show.assert_not_called()
+
+
+def test_no_runner_drops_loading_without_prompt(page, qtbot):
+    page.gcode_runner = None
     with qtbot.waitSignals([page.call_load_panel, page.call_load_panel]):
         page.axis_maintenance()
 
