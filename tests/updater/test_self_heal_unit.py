@@ -48,6 +48,14 @@ class TestStateFields:
         state = svc._read_state()
         assert state == {}
 
+    def test_read_state_drops_and_logs_non_dict_entries(self, tmp_path: Path, caplog):
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._state_path.write_text('{"ok": {"a": 1}, "bad": 3}')
+        with caplog.at_level("WARNING"):
+            assert svc._read_state() == {"ok": {"a": 1}}
+        assert "bad" in caplog.text
+
     def test_write_state_is_atomic_via_temp_file(self, tmp_path: Path):
         svc = UpdateService()
         svc._state_path = tmp_path / "state.json"
@@ -299,6 +307,15 @@ class TestNRestartsTracking:
     def test_nrestarts_sample_ring_init_on_daemon_start(self):
         svc = UpdateService()
         assert not hasattr(svc, "_nrestarts_samples") or svc._nrestarts_samples == {}
+
+    def test_read_state_drops_malformed_entry(self, tmp_path: Path):
+        """A non-dict entry must not reach callers that do comp.get() (daemon start)."""
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._state_path.write_text('{"x": "bad", "y": {"nrestarts_baseline": 3}}')
+        assert svc._read_state() == {"y": {"nrestarts_baseline": 3}}
+        svc._prime_nrestarts_sample_ring()
+        assert svc._nrestarts_samples["y"][0][1] == 3
 
     def test_nrestarts_sample_ring_primed_from_baseline(self, tmp_path: Path):
         async def run_test():
