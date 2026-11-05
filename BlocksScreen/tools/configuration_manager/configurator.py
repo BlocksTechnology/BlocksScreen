@@ -117,6 +117,18 @@ def check_broken_symlinks(dir: pathlib.Path) -> list[pathlib.Path]:
         return []
 
 
+def _atomic_symlink(src: pathlib.Path, target: pathlib.Path) -> None:
+    """Point `target` at `src` with one rename, so a crash never leaves it missing."""
+    tmp = target.with_name(f".{target.name}.bs-link")
+    tmp.unlink(missing_ok=True)
+    tmp.symlink_to(src)
+    try:
+        tmp.replace(target)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def resolve_symlink(file: pathlib.Path, resolved: set[str]) -> bool:
     """Whether `file` resolves to one of the `resolved` symlink targets"""
     return file.resolve().as_posix() in resolved
@@ -372,14 +384,13 @@ class ConfigManager:
         try:
             # symlinks each file, ensure correct directories
             if not mode:
+                repo_real = self.repo.resolve()
+                config_real = self.config_dir.resolve()
                 for src in symlink_list:
-                    src_rel = src.relative_to(self.repo)
-                    target = self.config_dir / src_rel
-
-                    if target.exists() and target.is_symlink():
-                        continue
-                    ensure_dir(pathlib.Path(*target.parts[:-1]))
-                    target.symlink_to(src)
+                    try:
+                        self._link_repo_file(src, repo_real, config_real)
+                    except (OSError, RuntimeError, ValueError) as e:
+                        _logger.error("Could not symlink %s: %s", src, e)
                 return
             elif mode:
                 for entry in sorted(
@@ -391,19 +402,55 @@ class ConfigManager:
                     target = self.config_dir / name
                     if target.exists():
                         continue
-                    ensure_dir(target.parent)
-                    if entry.is_dir():
-                        target.symlink_to(entry.resolve(), target_is_directory=True)
-                        _logger.info("Directory symlink: %s -> %s", target, entry)
-                    elif entry.is_file() and name not in self.cpy_files:
-                        target.symlink_to(entry.resolve())
-                        _logger.info("File symlink %s -> %s", target, entry)
+                    try:
+                        ensure_dir(target.parent)
+                        if entry.is_dir():
+                            target.symlink_to(entry.resolve(), target_is_directory=True)
+                            _logger.info("Directory symlink: %s -> %s", target, entry)
+                        elif entry.is_file() and name not in self.cpy_files:
+                            target.symlink_to(entry.resolve())
+                            _logger.info("File symlink %s -> %s", target, entry)
+                    except OSError as e:
+                        _logger.error("Could not symlink %s: %s", target, e)
 
         except Exception as e:
             _logger.error(
                 "Caught exception while creating symbolic links for configuration files: %s"
                 % e
             )
+
+    def _link_repo_file(
+        self, src: pathlib.Path, repo_real: pathlib.Path, config_real: pathlib.Path
+    ) -> None:
+        """Make the config copy of repo file `src` a symlink to it; the repo always wins."""
+        src_rel = src.relative_to(self.repo)
+        target = self.config_dir / src_rel
+        parent_real = target.parent.resolve()
+        # Behind a folder link into the repo (or config/ itself linked) this is the repo file.
+        if parent_real == repo_real or repo_real in parent_real.parents:
+            return
+        if parent_real != config_real / src_rel.parent:
+            _logger.warning("Skipping %s: its folder links to %s", target, parent_real)
+            return
+        if target.is_symlink():
+            if target.resolve() == src.resolve():
+                return
+            _logger.warning("Repointing %s from %s", target, target.readlink())
+        elif target.is_file():
+            backup = self._backup_file(target, src_rel)
+            _logger.warning("Replacing local %s, original kept at %s", target, backup)
+        ensure_dir(target.parent)
+        _atomic_symlink(src, target)
+
+    def _backup_file(self, path: pathlib.Path, rel: pathlib.PurePath) -> pathlib.Path:
+        """Copy `path` under backup_dir mirroring `rel`, never overwriting an older backup."""
+        base = self.backup_dir / rel.parent / f"{rel.name}.{_timestamp()}"
+        ensure_dir(base.parent)
+        backup, n = base, 1
+        while backup.exists():
+            backup, n = base.with_name(f"{base.name}.{n}"), n + 1
+        shutil.copy2(path, backup)
+        return backup
 
     def _section_blocks(self, lines):
         blocks = []
@@ -709,8 +756,7 @@ class ConfigManager:
                 _logger.warning("Dropping variables.cfg %s = %r: %s", key, raw, e)
                 continue
             keep[key] = raw
-        backup = self.backup_dir / f"variables.cfg.{_timestamp()}"
-        shutil.copy2(target, backup)
+        backup = self._backup_file(target, pathlib.PurePath(target.name))
         lines = [f"{k} = {v}\n" for k, v in sorted(keep.items())]
         atomic_write_text(target, "[Variables]\n" + "".join(lines) + "\n")
         _logger.info("Repaired variables.cfg, original kept at %s", backup)
@@ -833,6 +879,9 @@ class ConfigManager:
         """Synchronizes configuration repo with the machines configuration"""
         # Every step only writes on a difference, so none is gated.
         try:
+            # A crash mid _atomic_symlink leaves its temp link, which would count as linked.
+            for stale in self.config_dir.rglob(".*.bs-link"):
+                stale.unlink(missing_ok=True)
             missing = self._get_missing_symlinks(self.config_dir, self.repo)
             if self.check_nested():
                 self._cleanup_nested()
