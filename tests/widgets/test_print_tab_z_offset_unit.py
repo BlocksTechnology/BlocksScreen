@@ -56,6 +56,7 @@ def _tab(*, true_zero: bool) -> SimpleNamespace:
         _finish_print_handled=False,
         _active_z_offset=0.05,
         _cancel_z_snapshot=0.0,
+        _usb_pending=False,
     )
     tab.save_config = lambda: PrintTab.save_config(tab)
     return tab
