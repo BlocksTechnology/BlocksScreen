@@ -69,10 +69,36 @@ def test_sweep_progress_reaches_overlay(page):
     p.handle_gcode_response(["// Testing axis x"])
     p.handle_gcode_response(["// Testing frequency 62 Hz"])
     assert loads[-1] == (True, "Measuring resonances\nX axis: 62 Hz")
-    p.handle_gcode_response(["// Calculating the best input shaper parameters for y axis"])
+    p.handle_gcode_response(
+        ["// Calculating the best input shaper parameters for y axis"]
+    )
     assert loads[-1][1] == "Calculating the best input shaper\nY axis"
 
     # Single-axis runs print no "Testing axis" line, so the axis comes from AXIS=
     p.handle_is("SHAPER_CALIBRATE AXIS=Y")
     p.handle_gcode_response(["// Testing frequency 40 Hz"])
     assert loads[-1][1] == "Measuring resonances\nY axis: 40 Hz"
+
+
+def test_failed_sweep_closes_overlay_after_final_home(page):
+    p, loads, _ = page
+    sent: list[tuple[str, object]] = []
+    p.run_gcode_callback.connect(lambda gcode, cb: sent.append((gcode, cb)))
+    p.handle_is("SHAPER_CALIBRATE")
+    assert [g for g, _ in sent] == ["SHAPER_CALIBRATE", "G28"]
+
+    sent[0][1]({"error": {"code": 400, "message": "Invalid adxl345 id"}})
+    assert not p._is_watchdog.isActive()
+    assert loads[-1] == (
+        True,
+        "Input shaper calibration failed\nHoming the printer, please wait",
+    )
+    sent[1][1]({"result": "ok"})
+    assert loads[-1][0] is False
+
+    # A successful sweep leaves the overlay to the SAVE_CONFIG restart
+    sent.clear()
+    p.handle_is("SHAPER_CALIBRATE")
+    sent[0][1]({"result": "ok"})
+    sent[1][1]({"result": "ok"})
+    assert loads[-1][0] is True

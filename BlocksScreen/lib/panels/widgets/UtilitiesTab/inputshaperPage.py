@@ -24,6 +24,10 @@ class InputShaperPage(QtWidgets.QStackedWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
     )
+    # (gcode, callback): callback gets Moonraker's reply once Klipper finishes the script
+    run_gcode_callback: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, object, name="run-gcode-callback"
+    )
     call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
     request_back_button = QtCore.pyqtSignal(name="request-back-button")
 
@@ -42,6 +46,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.is_aut_types: dict = {}
         self.aut: bool = False
         self._saving: bool = False
+        self._is_failed: bool = False
         self._sweep_axis: str = ""
 
         # Inactivity timeout; the sweep reports progress every 1 Hz
@@ -231,6 +236,38 @@ class InputShaperPage(QtWidgets.QStackedWidget):
     def _on_is_timeout(self) -> None:
         self.call_load_panel.emit(False, "", False)
 
+    def _send_calibrate(self, gcode: str) -> None:
+        """Queue home, the sweep and the final home; replies drive the error path."""
+        self._is_failed = False
+        self.run_gcode_signal.emit("G28\nM400")
+        self.run_gcode_callback.emit(gcode, self._on_calibrate_done)
+        # Runs before the SAVE_CONFIG restart, and still runs after a failed sweep
+        self.run_gcode_callback.emit("G28", self._on_is_homed)
+
+    def _on_calibrate_done(self, reply) -> None:
+        """Hold the overlay through the final home when SHAPER_CALIBRATE errors."""
+        error = reply.get("error") if isinstance(reply, dict) else None
+        if not error:
+            return
+        # Without this the overlay waits out the 120 s watchdog after e.g. an ADXL fault
+        self._is_watchdog.stop()
+        self.aut = False
+        if isinstance(error, dict) and error.get("code") == -1:
+            self.call_load_panel.emit(False, "", False)
+            return  # Connection lost; ConnectionPage takes over
+        self._is_failed = True
+        self.call_load_panel.emit(
+            True,
+            "Input shaper calibration failed\nHoming the printer, please wait",
+            False,
+        )
+
+    def _on_is_homed(self, _reply) -> None:
+        """Close the overlay after the final home that follows a failed sweep."""
+        if self._is_failed:
+            self._is_failed = False
+            self.call_load_panel.emit(False, "", False)
+
     def handle_is(self, gcode: str) -> None:
         """Start an input shaper run.
 
@@ -245,11 +282,8 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         if gcode == "SHAPER_CALIBRATE":
             self.is_aut_types.clear()
             self._saving = False
-            self.run_gcode_signal.emit("G28\nM400")
             self.aut = True
-            self.run_gcode_signal.emit(gcode)
-            # Runs before the SAVE_CONFIG restart
-            self.run_gcode_signal.emit("G28")
+            self._send_calibrate(gcode)
         elif gcode == "":
             # Picking an axis needs the dialog, which logic-only mode never built.
             if self.logic:
@@ -264,9 +298,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self.dialog_page.show()
             return
         else:
-            self.run_gcode_signal.emit("G28\nM400")
-            self.run_gcode_signal.emit(gcode)
-            self.run_gcode_signal.emit("G28")
+            self._send_calibrate(gcode)
             if not self.logic:
                 self.setCurrentIndex(self.indexOf(self.manual_is))
 
