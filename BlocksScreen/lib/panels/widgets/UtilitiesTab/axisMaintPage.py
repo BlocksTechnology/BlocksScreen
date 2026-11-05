@@ -1,4 +1,6 @@
+import logging
 import typing
+from collections.abc import Callable
 
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
@@ -7,23 +9,20 @@ from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+_logger = logging.getLogger(__name__)
+
 
 class AxisMaintPage(QtWidgets.QWidget):
     """Axis Maintenance page of the utilities tab."""
 
     request_back = QtCore.pyqtSignal(name="request-back-button")
 
-    run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="run-gcode"
-    )
     call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
-    def __init__(
-        self,
-        parent: typing.Optional["QtWidgets.QWidget"],
-    ) -> None:
+    def __init__(self, parent: typing.Optional["QtWidgets.QWidget"]) -> None:
         super().__init__(parent)
 
+        self.gcode_runner: Callable[..., bool] | None = None
         self.current_object: str | None = None
         self.answerPage = BasePopup(self, False, True)
         self.answerPage.accepted.connect(self._run_AXIS_MAINTENANCE_gcode)
@@ -33,41 +32,48 @@ class AxisMaintPage(QtWidgets.QWidget):
         self.am_execute.clicked.connect(self.axis_maintenance)
 
     def _run_AXIS_MAINTENANCE_gcode(self):
-        if self.current_object:
-            self.run_gcode_signal.emit(
-                f"AXIS_MAINTENANCE_FINISH_{self.current_object}\nM400"
-            )
-
+        axis = self.current_object
+        if axis:
             self.call_load_panel.emit(
-                True,
-                f"Running maintenance cycle on {self.current_object.upper()} axis...",
-                False,
+                True, f"Running maintenance cycle on {axis.upper()} axis...", False
             )
-
-            QtCore.QTimer.singleShot(
-                50000, lambda: self.call_load_panel.emit(False, "", False)
-            )
+            self._send(f"AXIS_MAINTENANCE_FINISH_{axis}\nM400", self._on_cycle_done)
 
         else:
             self.answerPage.hide()
 
     def axis_maintenance(self) -> None:
         """Routine, checks axis movement for printer debugging"""
-        self.current_object = self.axis_maintenance_gb.checkedButton().text().lower()
-        self.run_gcode_signal.emit(f"AXIS_MAINTENANCE_{self.current_object}\nM400")
+        axis = self.axis_maintenance_gb.checkedButton().text().lower()
+        self.current_object = axis
 
         self.answerPage.set_message(
-            f"Apply oil to the {self.current_object.upper()} axis, then press Confirm.",
+            f"Apply oil to the {axis.upper()} axis, then press Confirm.",
         )
 
-        self.call_load_panel.emit(
-            True, f"Homing {self.current_object.upper()} axis...", False
-        )
-        QtCore.QTimer.singleShot(10000, self._on_homed)
+        self.call_load_panel.emit(True, f"Homing {axis.upper()} axis...", False)
+        self._send(f"AXIS_MAINTENANCE_{axis}\nM400", self._on_homed)
 
-    def _on_homed(self) -> None:
+    def _send(self, script: str, on_done: Callable[[object], None]) -> None:
+        """Run ``script``; ``on_done`` gets the reply, or an error if unsent."""
+        # Moonraker replies to gcode.script only after Klipper ran the whole script
+        run = self.gcode_runner
+        if not (run and run(script, callback=on_done)):
+            on_done({"error": {"code": -1, "message": "not connected"}})
+
+    def _on_homed(self, result: object) -> None:
+        """Drop the loading screen and show the oil prompt once homing succeeded."""
         self.call_load_panel.emit(False, "", False)
+        if isinstance(result, dict) and "error" in result:
+            _logger.warning("Axis maintenance homing failed: %s", result["error"])
+            return
         self.answerPage.show()
+
+    def _on_cycle_done(self, result: object) -> None:
+        """Drop the loading screen when the maintenance cycle ends."""
+        self.call_load_panel.emit(False, "", False)
+        if isinstance(result, dict) and "error" in result:
+            _logger.warning("Axis maintenance cycle failed: %s", result["error"])
 
     def _setup_ui(self) -> None:
         self.setObjectName("axes_page")

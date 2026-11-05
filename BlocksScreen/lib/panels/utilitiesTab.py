@@ -104,7 +104,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.on_object_list.connect(self.routines_page.on_object_list)
 
         # --- Axis Maintenance ---
-        self.axes_page.run_gcode_signal.connect(self.run_gcode_signal)
         self.axes_page.call_load_panel.connect(self.call_load_panel)
         self.axes_page.request_back.connect(self.request_back)
 
@@ -122,6 +121,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # --- Websocket/Printer Signals ---
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
+        self.axes_page.gcode_runner = self.ws.api.run_gcode
 
     def restart_screen(self) -> None:
         """Restart BlocksScreen so config changes read at startup take effect."""
