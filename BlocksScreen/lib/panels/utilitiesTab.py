@@ -124,6 +124,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.is_page.gcode_runner = self.ws.api.run_gcode
         self.is_page.call_load_panel.connect(self.call_load_panel)
         self.printer.gcode_response.connect(self.is_page.handle_gcode_response)
+        self.is_result_popup: BasePopup = BasePopup(self, False, False)
+        self.is_result_timer = QtCore.QTimer(self)
+        self.is_result_timer.setSingleShot(True)
+        self.is_result_timer.setInterval(5000)
+        self.is_result_timer.timeout.connect(self.is_result_popup.hide)
+        self.is_page.run_failed.connect(self.show_is_result)
 
         # --- Websocket/Printer Signals ---
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
@@ -141,6 +147,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         """Start the automatic input shaper calibration."""
         self.is_popup.hide()
         self.is_page.handle_is("SHAPER_CALIBRATE")
+
+    def show_is_result(self, message: str) -> None:
+        """Show why an input shaper run did not finish."""
+        self.is_result_popup.set_message(message)
+        self.is_result_popup.show()
+        self.is_result_timer.start()
 
     def troubleshoot_request(self) -> None:
         """Show troubleshoot page"""

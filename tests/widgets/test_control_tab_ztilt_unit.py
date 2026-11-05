@@ -43,14 +43,27 @@ def tab():
         ztilt_result_screen=MagicMock(),
         ztilt_result_screen_timer=MagicMock(),
     )
-    for name in ("_on_ztilt_done", "_on_ztilt_homed", "_handle_gcode_response"):
+    for name in (
+        "_ztilt_stop",
+        "_on_ztilt_first_home",
+        "_on_ztilt_done",
+        "_on_ztilt_homed",
+        "_handle_gcode_response",
+    ):
         setattr(t, name, getattr(ControlTab, name).__get__(t))
     ControlTab.handle_ztilt(t)
+    assert list(callbacks) == ["G28\nM400"]
     return t, loads, callbacks
+
+
+def _home(callbacks):
+    callbacks["G28\nM400"]("ok")
+    assert list(callbacks) == ["G28\nM400", "Z_TILT_ADJUST", "G28 Z"]
 
 
 def test_overlay_stays_until_final_home(tab):
     t, loads, callbacks = tab
+    _home(callbacks)
     t._handle_gcode_response([_PASS])
     assert loads[-1] == (
         True,
@@ -70,6 +83,7 @@ def test_overlay_stays_until_final_home(tab):
 
 def test_ztilt_error_reported_after_home(tab):
     t, loads, callbacks = tab
+    _home(callbacks)
     callbacks["Z_TILT_ADJUST"]({"error": {"code": 400, "message": "Too many retries"}})
     assert loads[-1] == (
         True,
@@ -91,8 +105,20 @@ def test_second_tap_ignored_while_running(tab):
     assert t._ztilt_running
 
 
+def test_first_home_failure_skips_ztilt(tab):
+    t, loads, callbacks = tab
+    callbacks["G28\nM400"]({"error": {"code": 400, "message": "Endstop x still"}})
+    assert "Z_TILT_ADJUST" not in callbacks
+    assert loads[-1][0] is False
+    assert not t._ztilt_running
+    t.ztilt_result_screen.set_message.assert_called_once_with(
+        "Homing failed.\nCheck the printer and try again."
+    )
+
+
 def test_klippy_disconnect_closes_quietly(tab):
     t, loads, callbacks = tab
+    _home(callbacks)
     gone = {"error": {"code": 503, "message": "Klippy Disconnected"}}
     callbacks["Z_TILT_ADJUST"](gone)
     assert loads[-1][0] is False

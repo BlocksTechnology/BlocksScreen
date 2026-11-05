@@ -308,25 +308,45 @@ class ControlTab(QtWidgets.QStackedWidget):
                 )
 
     def handle_ztilt(self) -> None:
-        """Run Z_TILT_ADJUST between two homes, keeping the overlay up until the end."""
+        """Home, run Z_TILT_ADJUST, home Z again; the overlay stays up until the end."""
         if self._ztilt_running:
-            # An error popup can hide the overlay mid-run; a second tap would queue a second run
+            # An error popup can hide the overlay mid-run; a re-tap would queue a 2nd run
             _logger.info("Z-Tilt already running, ignoring the request")
             return
         self._ztilt_running = True
         self._ztilt_failed = False
         self.call_load_panel.emit(True, "Calibrating Z-Tilt\nPlease wait", False)
+        if not self.ws.api.run_gcode("G28\nM400", callback=self._on_ztilt_first_home):
+            self._ztilt_stop()
+
+    def _ztilt_stop(self, message: str = "") -> None:
+        """End the Z-Tilt run, closing the overlay and showing ``message`` if any."""
+        self._ztilt_running = False
+        self.call_load_panel.emit(False, "", False)
+        if message:
+            self.ztilt_result_screen.set_message(message)
+            self.ztilt_result_screen.show()
+            self.ztilt_result_screen_timer.start()
+
+    def _on_ztilt_first_home(self, reply: object) -> None:
+        """Queue Z_TILT_ADJUST and the final home once the first home succeeds."""
+        if not self._ztilt_running:
+            return
+        error = reply_error(reply)
+        if is_disconnect_error(error):
+            self._ztilt_stop()
+            return  # Connection lost; ConnectionPage takes over
+        if error is not None:
+            self._ztilt_stop("Homing failed.\nCheck the printer and try again.")
+            return
         api = self.ws.api
         # Separate scripts so the final home runs even if Z_TILT_ADJUST errors out
         # Z only: XY stay homed through the tilt, so the override skips them (~10 s)
-        sent = (
-            api.run_gcode("G28\nM400")
-            and api.run_gcode("Z_TILT_ADJUST", callback=self._on_ztilt_done)
+        if not (
+            api.run_gcode("Z_TILT_ADJUST", callback=self._on_ztilt_done)
             and api.run_gcode("G28 Z", callback=self._on_ztilt_homed)
-        )
-        if not sent:
-            self._ztilt_running = False
-            self.call_load_panel.emit(False, "", False)
+        ):
+            self._ztilt_stop()
 
     def _on_ztilt_done(self, reply: object) -> None:
         """Switch the overlay to the final home once Z_TILT_ADJUST returns."""
@@ -334,8 +354,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             return
         error = reply_error(reply)
         if is_disconnect_error(error):
-            self._ztilt_running = False
-            self.call_load_panel.emit(False, "", False)
+            self._ztilt_stop()
             return  # Connection lost; ConnectionPage takes over
         self._ztilt_failed = error is not None
         status = (
@@ -349,10 +368,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         """Close the overlay and report the result once the final G28 returns."""
         if not self._ztilt_running:
             return
-        self._ztilt_running = False
-        self.call_load_panel.emit(False, "", False)
         error = reply_error(reply)
         if is_disconnect_error(error):
+            self._ztilt_stop()
             return  # Connection lost; ConnectionPage takes over
         if self._ztilt_failed:
             message = "Z-Tilt calibration failed.\nCheck the bed and try again."
@@ -363,9 +381,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
         else:
             message = "Z-Tilt calibration complete."
-        self.ztilt_result_screen.set_message(message)
-        self.ztilt_result_screen.show()
-        self.ztilt_result_screen_timer.start()
+        self._ztilt_stop(message)
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
     def on_klippy_status(self, state: str):

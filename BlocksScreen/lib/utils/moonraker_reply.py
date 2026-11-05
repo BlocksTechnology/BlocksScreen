@@ -1,6 +1,6 @@
 """Helpers for the callback replies of ``MoonAPI`` requests."""
 
-# -1: websocket closed; 503: Moonraker failing pending requests when Klippy disconnects
+# -1: websocket closed; 503: Moonraker fails pending requests on a Klippy disconnect
 _DISCONNECT_CODES = frozenset({-1, 503})
 
 
@@ -13,5 +13,5 @@ def reply_error(reply: object) -> dict | None:
 
 
 def is_disconnect_error(error: dict | None) -> bool:
-    """True if a reply error means the link to Klipper was lost, not a command failure."""
+    """True if a reply error means the link to Klipper was lost, not a failed command."""
     return error is not None and error.get("code") in _DISCONNECT_CODES

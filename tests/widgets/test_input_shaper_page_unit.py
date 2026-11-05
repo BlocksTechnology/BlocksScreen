@@ -5,6 +5,7 @@ import pytest
 _RECOMMENDED = "// Recommended shaper_type_{a} = mzv, shaper_freq_{a} = 41.0 Hz"
 _FAIL = {"error": {"code": 400, "message": "Invalid adxl345 id"}}
 _GONE = {"error": {"code": 503, "message": "Klippy Disconnected"}}
+_HOME = "G28\nM400"
 
 
 @pytest.fixture
@@ -16,6 +17,7 @@ def page(qtbot):
     p = InputShaperPage(logic=True)
     qtbot.addWidget(p)
     loads: list[tuple[bool, str]] = []
+    fails: list[str] = []
     sent: dict[str, object] = {}
 
     def runner(gcode, callback=None):
@@ -24,7 +26,15 @@ def page(qtbot):
 
     p.gcode_runner = runner
     p.call_load_panel.connect(lambda show, msg, _force: loads.append((show, msg)))
-    return p, loads, sent
+    p.run_failed.connect(fails.append)
+    return p, loads, sent, fails
+
+
+def _start(p, sent, gcode="SHAPER_CALIBRATE"):
+    p.handle_is(gcode)
+    assert list(sent) == [_HOME]
+    sent[_HOME]("ok")
+    assert list(sent) == [_HOME, gcode, "G28"]
 
 
 def _sweep_both_axes(p):
@@ -33,9 +43,8 @@ def _sweep_both_axes(p):
 
 
 def test_auto_run_saves_after_final_home(page):
-    p, loads, sent = page
-    p.handle_is("SHAPER_CALIBRATE")
-    assert list(sent) == ["G28\nM400", "SHAPER_CALIBRATE", "G28"]
+    p, loads, sent, fails = page
+    _start(p, sent)
     _sweep_both_axes(p)
     assert "SAVE_CONFIG" not in sent
 
@@ -51,11 +60,22 @@ def test_auto_run_saves_after_final_home(page):
     assert loads[-1][0] is True  # Klipper restarts; ConnectionPage takes over
     assert not p._running and not p._saving
     assert not p._is_watchdog.isActive()
+    assert fails == []
+
+
+def test_failed_first_home_skips_sweep(page):
+    p, loads, sent, fails = page
+    p.handle_is("SHAPER_CALIBRATE")
+    sent[_HOME]({"error": {"code": 400, "message": "Endstop x still triggered"}})
+    assert list(sent) == [_HOME]
+    assert loads[-1][0] is False
+    assert fails == ["Homing failed.\nCheck the printer and try again."]
+    assert not p._running
 
 
 def test_failed_save_closes_overlay(page):
-    p, loads, sent = page
-    p.handle_is("SHAPER_CALIBRATE")
+    p, loads, sent, _ = page
+    _start(p, sent)
     _sweep_both_axes(p)
     sent["SHAPER_CALIBRATE"]("ok")
     sent["G28"]("ok")
@@ -64,32 +84,37 @@ def test_failed_save_closes_overlay(page):
     assert not p._running
 
 
-def test_failed_sweep_closes_overlay_after_final_home(page):
-    p, loads, sent = page
-    p.handle_is("SHAPER_CALIBRATE")
+def test_failed_sweep_reported_after_final_home(page):
+    p, loads, sent, fails = page
+    _start(p, sent)
     sent["SHAPER_CALIBRATE"](_FAIL)
     assert loads[-1] == (
         True,
         "Input shaper calibration failed\nHoming the printer, please wait",
     )
+    assert fails == []
     sent["G28"]("ok")
     assert loads[-1][0] is False
+    assert fails == [
+        "Input shaper calibration failed.\nCheck the accelerometer and try again."
+    ]
     assert "SAVE_CONFIG" not in sent
 
 
 def test_sweep_without_both_results_does_not_save(page):
-    p, loads, sent = page
-    p.handle_is("SHAPER_CALIBRATE")
+    p, loads, sent, fails = page
+    _start(p, sent)
     p.handle_gcode_response([_RECOMMENDED.format(a="x")])
     sent["SHAPER_CALIBRATE"]("ok")
     sent["G28"]("ok")
     assert loads[-1][0] is False
+    assert len(fails) == 1
     assert "SAVE_CONFIG" not in sent
 
 
 def test_klippy_disconnect_closes_quietly(page):
-    p, loads, sent = page
-    p.handle_is("SHAPER_CALIBRATE")
+    p, loads, sent, fails = page
+    _start(p, sent)
     _sweep_both_axes(p)
     sent["SHAPER_CALIBRATE"](_GONE)
     assert loads[-1][0] is False
@@ -97,55 +122,68 @@ def test_klippy_disconnect_closes_quietly(page):
     # The final home's late reply belongs to a finished run
     sent["G28"](_GONE)
     assert "SAVE_CONFIG" not in sent
+    assert fails == []
 
 
 def test_second_start_ignored_while_running(page):
-    p, _, sent = page
+    p, _, sent, _ = page
     p.handle_is("SHAPER_CALIBRATE")
-    first = sent["SHAPER_CALIBRATE"]
     sent.clear()
     p.handle_is("SHAPER_CALIBRATE AXIS=X")
+    p.handle_is("")  # The axis dialog is not opened mid-run either
     assert sent == {}
     assert p.aut
-    first("ok")
 
 
 def test_unsent_request_closes_overlay(page):
-    p, loads, _ = page
+    p, loads, _, _ = page
     p.gcode_runner = lambda _gcode, _callback=None: False
     p.handle_is("SHAPER_CALIBRATE")
     assert loads[-1][0] is False
     assert not p._running and not p._is_watchdog.isActive()
 
 
-def test_watchdog_timeout_drops_late_replies(page, qtbot):
-    p, loads, sent = page
+def test_timeout_reports_and_drops_late_replies(page, qtbot):
+    p, loads, sent, fails = page
     p._is_watchdog.setInterval(50)
-    p.handle_is("SHAPER_CALIBRATE")
+    _start(p, sent)
+    old = dict(sent)
     qtbot.waitUntil(lambda: loads[-1][0] is False, timeout=2000)
     assert not p._running and not p.aut
+    assert fails == [
+        "Input shaper calibration timed out.\nCheck the printer and try again."
+    ]
 
+    # A new run must not be finished by the timed-out run's replies
+    p._is_watchdog.setInterval(120_000)
+    sent.clear()
+    _start(p, sent)
     _sweep_both_axes(p)
+    old["SHAPER_CALIBRATE"]("ok")
+    old["G28"]("ok")
+    assert "SAVE_CONFIG" not in sent
+    assert p._running
+
     sent["SHAPER_CALIBRATE"]("ok")
     sent["G28"]("ok")
-    assert loads[-1][0] is False
-    assert "SAVE_CONFIG" not in sent
+    assert "SAVE_CONFIG" in sent
 
 
 def test_single_axis_closes_on_final_home(page):
-    p, loads, sent = page
-    p.handle_is("SHAPER_CALIBRATE AXIS=X")
+    p, loads, sent, fails = page
+    _start(p, sent, "SHAPER_CALIBRATE AXIS=X")
     sent["SHAPER_CALIBRATE AXIS=X"]("ok")
     assert loads[-1][0] is True
     sent["G28"]("ok")
     assert loads[-1][0] is False
     assert "SAVE_CONFIG" not in sent
+    assert fails == []
 
 
 def test_progress_lines_restart_the_watchdog(page, qtbot):
-    p, loads, _ = page
+    p, loads, sent, _ = page
     p._is_watchdog.setInterval(300)
-    p.handle_is("SHAPER_CALIBRATE")
+    _start(p, sent)
     for _ in range(5):
         qtbot.wait(100)
         p.handle_gcode_response(["// Testing frequency 20 Hz"])
@@ -154,9 +192,20 @@ def test_progress_lines_restart_the_watchdog(page, qtbot):
     qtbot.waitUntil(lambda: loads[-1][0] is False, timeout=2000)
 
 
+def test_unrelated_output_does_not_feed_the_watchdog(page, qtbot):
+    p, loads, sent, _ = page
+    p._is_watchdog.setInterval(300)
+    _start(p, sent)
+    for _ in range(5):
+        qtbot.wait(100)
+        p.handle_gcode_response(["// MMU: gate 0 idle"])
+    assert loads[-1][0] is False
+    assert not p._running
+
+
 def test_sweep_progress_reaches_overlay(page):
-    p, loads, sent = page
-    p.handle_is("SHAPER_CALIBRATE")
+    p, loads, sent, _ = page
+    _start(p, sent)
     p.handle_gcode_response(["// Testing axis x"])
     p.handle_gcode_response(["// Testing frequency 62 Hz"])
     assert loads[-1] == (True, "Measuring resonances\nX axis: 62 Hz")
@@ -168,6 +217,7 @@ def test_sweep_progress_reaches_overlay(page):
     sent["G28"]("ok")
 
     # Single-axis runs print no "Testing axis" line, so the axis comes from AXIS=
-    p.handle_is("SHAPER_CALIBRATE AXIS=Y")
+    sent.clear()
+    _start(p, sent, "SHAPER_CALIBRATE AXIS=Y")
     p.handle_gcode_response(["// Testing frequency 40 Hz"])
     assert loads[-1][1] == "Measuring resonances\nY axis: 40 Hz"

@@ -450,7 +450,7 @@ class ConfigManager:
         return keys
 
     def _save_config_fields(self, save_lines: list[str]) -> dict[str, set[str]]:
-        """Map each SAVE_CONFIG section to its field names, parsed like Klipper's autosave loader."""
+        """Map each SAVE_CONFIG section to its field names, as Klipper's autosave does."""
         fields: dict[str, set[str]] = {}
         section = None
         for line in save_lines:
@@ -470,7 +470,7 @@ class ConfigManager:
     def _strip_duplicates(
         self, lines: list[str], saved: dict[str, set[str]]
     ) -> list[str]:
-        """Comment out fields SAVE_CONFIG owns; port of Klipper klippy/configfile.py _strip_duplicates."""
+        """Comment out fields SAVE_CONFIG owns; port of Klipper's _strip_duplicates."""
         out = []
         section = ""
         is_dup_field = False
@@ -589,7 +589,7 @@ class ConfigManager:
                             if name is not None and name not in tgt_sc_map:
                                 merged_save_lines.extend(block)
 
-                        # Header is rebuilt from the repo, so re-apply SAVE_CONFIG's commenting or the repo value wins
+                        # Header comes from the repo: re-comment SAVE_CONFIG keys or repo wins
                         merged_header_lines = self._strip_duplicates(
                             merged_header_lines,
                             self._save_config_fields(merged_save_lines),
