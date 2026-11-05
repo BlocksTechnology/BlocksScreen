@@ -157,6 +157,36 @@ def test_only_own_stale_part_files_are_cleaned(layout, monkeypatch) -> None:
     assert (gcodes / ".other-tool.gcode.part").exists()
 
 
+def test_later_imports_keep_running_copies_temp(layout) -> None:
+    # An aborted copy still runs in the pool; a new import must not delete its temp.
+    gcodes, drive, _ = layout
+    (drive / "a.gcode").write_bytes(b"G28\n")
+    (drive / "b.gcode").write_bytes(b"G1\n")
+    import_usb_gcode(gcodes, "USB-STICK/a.gcode")
+    running = _state(gcodes) / ".bs-usb-inflight.part"
+    running.write_bytes(b"x")
+    import_usb_gcode(gcodes, "USB-STICK/b.gcode")
+    assert running.exists()
+
+
+def test_name_taken_during_copy_gets_suffix(layout, monkeypatch) -> None:
+    # A concurrent import committing the same name first must not be overwritten.
+    gcodes, drive, _ = layout
+    (drive / "cube.gcode").write_bytes(b"G28\n")
+    real_copy = usb_import.shutil.copyfile
+
+    def copy_then_race(src, dst):
+        real_copy(src, dst)
+        (gcodes / "cube.gcode").write_bytes(b"other")
+
+    monkeypatch.setattr(usb_import.shutil, "copyfile", copy_then_race)
+    name, _, _ = import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
+    assert name == "cube_1.gcode"
+    assert (gcodes / "cube.gcode").read_bytes() == b"other"
+    assert (gcodes / "cube_1.gcode").read_bytes() == b"G28\n"
+    assert oct((gcodes / "cube_1.gcode").stat().st_mode & 0o777) == "0o644"
+
+
 @pytest.mark.parametrize(
     ("filename", "message"),
     [

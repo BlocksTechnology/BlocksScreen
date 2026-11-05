@@ -103,6 +103,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._usb_key: str = ""
         self._usb_local: str = ""
         self._usb_created: set[str] = set()
+        self._usb_from_console: bool = False  # started by another client via Klipper
         # Moonraker announces a new gcode only once its pre-processing is done.
         self._usb_settle_timer = QtCore.QTimer(self)
         self._usb_settle_timer.setSingleShot(True)
@@ -421,10 +422,15 @@ class PrintTab(QtWidgets.QStackedWidget):
                 continue
             # Ack even a refusal: the fallback would print from USB past the same checks.
             self.run_gcode_signal.emit(USB_PRINT_ACK)
+            self._usb_from_console = True
             if reason := self._begin_print(file):
-                self.run_gcode_signal.emit(
-                    f'RESPOND TYPE=error MSG="USB print refused: {reason}"'
-                )
+                self._console_error(f"USB print refused: {reason}")
+
+    def _console_error(self, message: str) -> None:
+        """Report a failed console-started USB print back to the Klipper console."""
+        self._usb_from_console = False
+        msg = message.replace('"', "'")  # a quote would end RESPOND's MSG early
+        self.run_gcode_signal.emit(f'RESPOND TYPE=error MSG="{msg}"')
 
     @QtCore.pyqtSlot(str, dict, name="on_gcode_macro_update")
     def _on_gcode_macro_update(self, name: str, values: dict) -> None:
@@ -459,6 +465,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.call_load_panel.emit(False, "", False)
         if message:
             self.notify.emit("PrintTab", message, 2, True)
+            if self._usb_from_console:
+                self._console_error(message)
+        self._usb_from_console = False
 
     @QtCore.pyqtSlot(int, str, str, str, bool, str, name="on_usb_import_done")
     def _on_usb_import_done(
@@ -508,11 +517,13 @@ class PrintTab(QtWidgets.QStackedWidget):
     def _usb_print_local_copy(self) -> None:
         """Index the settled local copy and start printing it."""
         local, key = self._usb_local, self._usb_key
+        from_console, self._usb_from_console = self._usb_from_console, False
         self._end_usb_print()
         remember_import_async(pathlib.Path(self.gcode_path), key, local)
         logger.info("Printing local copy %s", local)
         # Checked again: another client may have started a job during the copy.
-        self._begin_print(local)
+        if (reason := self._begin_print(local)) and from_console:
+            self._console_error(f"USB print refused: {reason}")
 
     @QtCore.pyqtSlot(str, str, name="delete_file")
     @QtCore.pyqtSlot(str, name="delete_file")
@@ -566,6 +577,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         if state in ("ready", "startup"):
             return
         if self._usb_pending:  # e.g. FIRMWARE_RESTART or a thermal shutdown mid-copy
+            self._usb_from_console = False  # a non-ready Klipper rejects RESPOND
             self._end_usb_print(f"USB print cancelled: Klipper is {state}.")
         self.BasePopup_z_offset.reject()
         self.save_config_btn.setVisible(False)

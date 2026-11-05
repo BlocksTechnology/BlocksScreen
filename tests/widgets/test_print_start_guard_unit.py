@@ -49,10 +49,12 @@ def _tab(amu_manager: object, printing_state: str = "standby") -> SimpleNamespac
         amu_manager=amu_manager,
         printer=SimpleNamespace(printing_state=printing_state),
         _usb_pending=False,
+        _usb_from_console=False,
         notify=MagicMock(),
         jobStatusPage_widget=MagicMock(),
+        run_gcode_signal=MagicMock(),
     )
-    return _bind(tab, "_print_refusal", "_begin_print")
+    return _bind(tab, "_print_refusal", "_begin_print", "_console_error")
 
 
 class TestStartPrint:
@@ -182,6 +184,14 @@ class TestUsbImportDone:
             tab, token, "USB-STICK/cube.gcode", local, "k", reused, error
         )
 
+    @staticmethod
+    def _responds(tab) -> list[str]:
+        return [
+            c.args[0]
+            for c in tab.run_gcode_signal.emit.call_args_list
+            if c.args[0].startswith("RESPOND")
+        ]
+
     def _printed(self, tab: SimpleNamespace) -> None:
         assert tab._usb_pending is False
         tab.call_load_panel.emit.assert_called_with(False, "", False)
@@ -243,6 +253,34 @@ class TestUsbImportDone:
         tab.notify.emit.assert_called_once_with(
             "PrintTab", "USB print failed: Bad", 2, True
         )
+
+    @pytest.mark.parametrize(("from_console", "sent"), [(True, 1), (False, 0)])
+    def test_import_error_reaches_console_only_if_started_there(
+        self, tab, from_console, sent
+    ) -> None:
+        tab._usb_from_console = from_console
+        self._done(tab, local="", error='No "space"')
+        assert (
+            self._responds(tab)
+            == ["RESPOND TYPE=error MSG=\"USB print failed: No 'space'\""][:sent]
+        )
+        assert tab._usb_from_console is False
+
+    def test_refusal_after_copy_reaches_console(self, tab) -> None:
+        tab._usb_from_console = True
+        tab.printer.printing_state = "printing"
+        self._done(tab, reused=True)
+        assert self._responds(tab) == [
+            'RESPOND TYPE=error MSG="USB print refused: A print is already running."'
+        ]
+
+    def test_klipper_shutdown_skips_console(self, tab) -> None:
+        tab._usb_from_console = True
+        tab.BasePopup_z_offset = MagicMock()
+        tab.save_config_btn = MagicMock()
+        tab.babystepPage = MagicMock()
+        PrintTab.on_klippy_state(tab, "shutdown")
+        assert self._responds(tab) == []
 
     @pytest.mark.parametrize("state", ["shutdown", "error", "disconnected"])
     def test_klipper_leaving_ready_aborts(self, tab, state) -> None:

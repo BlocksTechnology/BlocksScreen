@@ -7,6 +7,7 @@ import logging
 import os
 import pathlib
 import shutil
+import tempfile
 import threading
 
 import helper_methods
@@ -22,6 +23,8 @@ STATE_DIR_NAME = ".usb_import"
 INDEX_NAME = "index.json"
 PART_PREFIX = ".bs-usb-"  # scopes the stale-temp sweep to our own files
 _INDEX_LOCK = threading.Lock()  # the index is written from pool threads
+_COMMIT_LOCK = threading.Lock()  # name pick + rename, so two copies never pick one name
+_SWEPT: set[pathlib.Path] = set()  # temp dirs already cleaned in this process
 
 
 class UsbImportError(Exception):
@@ -142,21 +145,33 @@ def _fsync(path: pathlib.Path) -> None:
         os.close(fd)
 
 
+def _sweep_stale_parts(tmp_dir: pathlib.Path) -> None:
+    """Delete our temp files left by a crash or power loss, once per process."""
+    # Later sweeps would delete the temp file of an aborted copy still running.
+    with _COMMIT_LOCK:
+        if tmp_dir in _SWEPT:
+            return
+        _SWEPT.add(tmp_dir)
+        for stale in tmp_dir.glob(f"{PART_PREFIX}*.part"):
+            stale.unlink(missing_ok=True)
+
+
 def _copy_atomic(
     src: pathlib.Path,
     src_st: os.stat_result,
-    final: pathlib.Path,
+    dest_dir: pathlib.Path,
     tmp_dir: pathlib.Path,
-) -> None:
-    """Copy *src* to *final* via a synced temp file, so *final* is never partial."""
-    # Leftovers from a crash or power loss; tmp_dir may be the shared gcodes root.
-    for stale in tmp_dir.glob(f"{PART_PREFIX}*.part"):
-        stale.unlink(missing_ok=True)
-    free = shutil.disk_usage(final.parent).free
+) -> pathlib.Path:
+    """Copy *src* into *dest_dir* via a synced temp file; returns the final path."""
+    _sweep_stale_parts(tmp_dir)  # tmp_dir may be the shared gcodes root
+    free = shutil.disk_usage(dest_dir).free
     if free < src_st.st_size + MIN_FREE_MARGIN:
         raise UsbImportError(f"Not enough free space ({free // MB} MB free)")
-    tmp = tmp_dir / f"{PART_PREFIX}{final.name}.part"
+    fd, tmp_name = tempfile.mkstemp(suffix=".part", prefix=PART_PREFIX, dir=tmp_dir)
+    os.close(fd)
+    tmp = pathlib.Path(tmp_name)
     try:
+        os.chmod(tmp, 0o644)  # mkstemp's 0600 would carry over to the gcode
         shutil.copyfile(src, tmp)  # kernel-side copy on Linux
         now = src.stat()
         if (now.st_size, now.st_mtime_ns) != (src_st.st_size, src_st.st_mtime_ns):
@@ -164,10 +179,13 @@ def _copy_atomic(
         if tmp.stat().st_size != src_st.st_size:
             raise UsbImportError("Copy incomplete")
         _fsync(tmp)
-        os.replace(tmp, final)
-        _fsync(final.parent)  # persist the rename itself across power loss
+        with _COMMIT_LOCK:
+            final = _free_name(src, dest_dir)
+            os.replace(tmp, final)
+        _fsync(dest_dir)  # persist the rename itself across power loss
     finally:
         tmp.unlink(missing_ok=True)
+    return final
 
 
 def import_usb_gcode(gcode_root: pathlib.Path, filename: str) -> tuple[str, bool, str]:
@@ -190,8 +208,7 @@ def import_usb_gcode(gcode_root: pathlib.Path, filename: str) -> tuple[str, bool
         final = _indexed_copy(root, key)
         reused = final is not None
         if final is None:
-            final = _free_name(src, root)
-            _copy_atomic(src, src_st, final, _tmp_dir(root))
+            final = _copy_atomic(src, src_st, root, _tmp_dir(root))
     except OSError as e:
         raise UsbImportError(
             f"Copy failed, was the USB drive removed? ({e.strerror})"
@@ -218,9 +235,8 @@ class UsbImportTask(QtCore.QRunnable):
         filename: str,
     ) -> None:
         super().__init__()
-        self.setAutoDelete(
-            True
-        )  # pool-owned and QObject-free, so no cross-thread delete
+        # Pool-owned and QObject-free, so no cross-thread delete.
+        self.setAutoDelete(True)
         self._signals = signals
         self._token = token
         self._gcode_root = gcode_root
