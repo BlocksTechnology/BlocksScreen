@@ -117,13 +117,11 @@ def check_broken_symlinks(dir: pathlib.Path) -> list[pathlib.Path]:
         return []
 
 
-def _atomic_symlink(
-    src: pathlib.Path, target: pathlib.Path, is_dir: bool = False
-) -> None:
+def _atomic_symlink(src: pathlib.Path, target: pathlib.Path) -> None:
     """Point `target` at `src` with one rename, so a crash never leaves it missing."""
     tmp = target.with_name(f".{target.name}.bs-link")
     tmp.unlink(missing_ok=True)
-    tmp.symlink_to(src, target_is_directory=is_dir)
+    tmp.symlink_to(src)
     try:
         tmp.replace(target)
     except OSError:
