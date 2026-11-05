@@ -9,11 +9,10 @@ import hashlib
 import logging
 import os
 import pathlib
-import shutil
 import subprocess
 import sys
 import threading
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -64,14 +63,12 @@ def _make_manager(tmp_path: pathlib.Path, **attrs) -> ConfigManager:
 
     mock_cfg = MagicMock()
     mock_section = MagicMock()
-    mock_section.get.side_effect = (
-        lambda key, default="": {
-            "config_repo": str(repo),
-            "config_dir": str(config_dir),
-            "backup_dir": str(backup),
-            "variant": "RF50",
-        }.get(key, default)
-    )
+    mock_section.get.side_effect = lambda key, default="": {
+        "config_repo": str(repo),
+        "config_dir": str(config_dir),
+        "backup_dir": str(backup),
+        "variant": "RF50",
+    }.get(key, default)
     mock_cfg.get_section.return_value = mock_section
 
     inst = object.__new__(ConfigManager)
@@ -596,7 +593,8 @@ class TestMergeCfgMarker:
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
             "[stepper_x]\nstep_pin: PC2\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved_value: 123\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -704,9 +702,11 @@ class TestMergeCfgMarker:
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
             "[g]\nk: v\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# a: 1\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# b: 2\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -720,9 +720,7 @@ class TestMergeCfgMarker:
         mgr = _make_manager(tmp_path)
         src = _write(
             tmp_path / "src_printer.cfg",
-            "[header]\nval: 1\n"
-            + SV_CONFIG_MARKER + "\n"
-            + "#*# saved: val\n",
+            "[header]\nval: 1\n" + SV_CONFIG_MARKER + "\n" + "#*# saved: val\n",
         )
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
@@ -734,7 +732,6 @@ class TestMergeCfgMarker:
         assert "[header]" in merged
         assert SV_CONFIG_MARKER in merged
         assert "#*# saved: val" in merged
-
 
     def test_mcu_section_preserved_from_target(self, tmp_path):
         mgr = _make_manager(tmp_path)
@@ -749,7 +746,8 @@ class TestMergeCfgMarker:
             "[stepper_x]\nstep_pin: PC2\n"
             "[mcu]\nserial: /dev/ttyACM1\n"
             "[extruder]\nheater_pin: PA2\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved: val\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -763,15 +761,15 @@ class TestMergeCfgMarker:
         mgr = _make_manager(tmp_path)
         src = _write(
             tmp_path / "src_printer.cfg",
-            "[stepper_x]\nstep_pin: PC2\n"
-            "[extruder]\nheater_pin: PA2\n",
+            "[stepper_x]\nstep_pin: PC2\n[extruder]\nheater_pin: PA2\n",
         )
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
             "[stepper_x]\nstep_pin: PC2\n"
             "[mcu pi]\nserial: /tmp/klipper_host_mcu\n"
             "[extruder]\nheater_pin: PA2\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved: val\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -784,15 +782,15 @@ class TestMergeCfgMarker:
         mgr = _make_manager(tmp_path)
         src = _write(
             tmp_path / "src_printer.cfg",
-            "[mcu]\nserial: /dev/ttyACM0\n"
-            "[mcu Toolhead]\ncanbus_uuid: abc\n",
+            "[mcu]\nserial: /dev/ttyACM0\n[mcu Toolhead]\ncanbus_uuid: abc\n",
         )
         tgt = _write(
             tmp_path / "tgt_printer.cfg",
             "[mcu]\nserial: /dev/ttyACM1\n"
             "[mcu Toolhead]\ncanbus_uuid: def\n"
             "[mcu pi]\nserial: /tmp/klipper_host_mcu\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved: val\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -815,7 +813,8 @@ class TestMergeCfgMarker:
             "[mcu]\nserial: /dev/ttyACM1\n"
             "[mcu Toolhead]\ncanbus_uuid: 456\n"
             "[mcu pi]\nserial: /tmp/klipper_host_mcu\n"
-            + SV_CONFIG_MARKER + "\n"
+            + SV_CONFIG_MARKER
+            + "\n"
             + "#*# saved: val\n",
         )
         assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
@@ -828,6 +827,32 @@ class TestMergeCfgMarker:
         assert "canbus_uuid: 456" in merged
         assert "canbus_uuid: 123" not in merged
         assert "/tmp/klipper_host_mcu" not in merged
+
+    def test_save_config_keys_stay_commented_in_header(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(
+            tmp_path / "src_printer.cfg",
+            "[input_shaper]\nshaper_freq_x: 57.0\nshaper_type_x: mzv\n"
+            "[bed_mesh]\nspeed: 100\nzero_ref: 1,\n  2\n",
+        )
+        save = (
+            SV_CONFIG_MARKER + "\n#*# DO NOT EDIT THIS BLOCK OR BELOW.\n#*#\n"
+            "#*# [input_shaper]\n#*# shaper_freq_x = 108.8\n"
+            "#*# [bed_mesh]\n#*# zero_ref = 3,\n#*# \t4\n"
+        )
+        tgt = _write(
+            tmp_path / "tgt_printer.cfg",
+            "[input_shaper]\n#shaper_freq_x: 57.0\nshaper_type_x: mzv\n"
+            "[bed_mesh]\nspeed: 100\n#zero_ref: 1,\n#  2\n" + save,
+        )
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
+        merged = tgt.read_text()
+        header = merged[: merged.index(SV_CONFIG_MARKER)]
+        assert "#shaper_freq_x: 57.0\nshaper_type_x: mzv\n" in header
+        assert "speed: 100\n#zero_ref: 1,\n#  2\n" in header
+        assert merged.endswith(save)
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
+        assert tgt.read_text() == merged
 
 
 # =========================================================================
@@ -878,9 +903,7 @@ class TestCpyCfgFiles:
         src = _write(mgr.repo / "printer.cfg", "[header]\nopt: repo\n")
         tgt = _write(
             mgr.config_dir / "printer.cfg",
-            "[header]\nopt: target\n"
-            + SV_CONFIG_MARKER + "\n"
-            + "#*# user: saved\n",
+            "[header]\nopt: target\n" + SV_CONFIG_MARKER + "\n" + "#*# user: saved\n",
         )
         mgr.repo_fi_name = {"printer.cfg": [src]}
         mgr.config_fi_name = {"printer.cfg": [tgt]}

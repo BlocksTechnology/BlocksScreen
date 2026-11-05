@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import logging
 import re
 import typing
+from collections.abc import Callable
 
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.Common.basePopup import BasePopup
@@ -19,9 +21,14 @@ from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.icon_button import IconButton
 from lib.utils.menu_grid import fixed_menu_grid
+from lib.utils.moonraker_reply import is_disconnect_error, reply_error
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
+
+_ZTILT_PROGRESS = re.compile(
+    r"Retries:\s*\d+/\d+.*?range:\s*([\d.]+)\s*tolerance:\s*([\d.]+)"
+)
 
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -60,7 +67,10 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._true_zero_state: bool | None = None
         self._motion_active: bool = False
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.ztilt_state = False
+        self._ztilt_running: bool = False
+        self._ztilt_failed: bool = False
+        # Bumped per stop, so a late reply can't end a newer run.
+        self._ztilt_run_id: int = 0
         self.ztilt_result_screen = BasePopup(self, False, False)
         self.ztilt_result_screen_timer = QtCore.QTimer()
         self.ztilt_result_screen_timer.setSingleShot(True)
@@ -158,7 +168,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.ws.klippy_state_signal.connect(self.probe_helper_page.on_klippy_status)
         self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
         self.printer.gcode_response.connect(self._handle_gcode_response)
-        self.printer.z_tilt_update.connect(self._handle_z_tilt_object_update)
 
         self.cp_button_6.hide()
 
@@ -252,15 +261,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._button_change(False)
         return super().showEvent(a0)
 
-    def _handle_z_tilt_object_update(self, value, state):
-        if not self.isVisible():
-            return
-        if state:
-            self.call_load_panel.emit(False, "", False)
-            self.ztilt_result_screen.set_message("Z-axis calibration was successful.")
-            self.ztilt_result_screen.show()
-            self.ztilt_result_screen_timer.start()
-
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_slidePage_request")
     def on_slidePage_request(
@@ -297,49 +297,104 @@ class ControlTab(QtWidgets.QStackedWidget):
         if _swapping == "cleaning":
             self.call_load_panel.emit(True, "Cleaning print core", False)
 
-    def _handle_gcode_response(self, messages: list):
-        """Handle gcode response for Z-tilt adjustment"""
-        pattern = r"Retries:\s*(\d+)/(\d+).*?range:\s*([\d.]+)\s*tolerance:\s*([\d.]+)"
+    def _handle_gcode_response(self, messages: list) -> None:
+        """Show Z-Tilt progress from each probing pass result."""
+        if not self._ztilt_running:
+            return
+        for message in messages:
+            match = _ZTILT_PROGRESS.search(message or "")
+            if match:
+                self.call_load_panel.emit(
+                    True,
+                    f"Calibrating Z-Tilt\nDeviation {float(match[1]):.3f} mm,"
+                    f" target {float(match[2]):.3f} mm",
+                    False,
+                )
 
-        for msg_list in messages:
-            if not msg_list:
-                continue
+    def handle_ztilt(self) -> None:
+        """Home, run Z_TILT_ADJUST, home Z again; the overlay stays up until the end."""
+        if self._ztilt_running:
+            # An error popup can hide the overlay mid-run; a re-tap would queue a 2nd run
+            _logger.info("Z-Tilt already running, ignoring the request")
+            return
+        self._ztilt_running = True
+        self._ztilt_failed = False
+        self.call_load_panel.emit(True, "Calibrating Z-Tilt\nPlease wait", False)
+        if not self._ztilt_send("G28\nM400", self._on_ztilt_first_home):
+            self._ztilt_stop()
 
-            if (
-                "Retries:" in msg_list
-                and "range:" in msg_list
-                and "tolerance:" in msg_list
-            ):
-                match = re.search(pattern, msg_list)
+    def _ztilt_send(self, gcode: str, handler: Callable[[int, object], None]) -> bool:
+        """Send ``gcode`` with its reply bound to this run; False if not sent."""
+        callback = functools.partial(handler, self._ztilt_run_id)
+        return bool(self.ws.api.run_gcode(gcode, callback=callback))
 
-                if match:
-                    retries_done = int(match.group(1))
-                    retries_total = int(match.group(2))
-                    probed_range = float(match.group(3))
-                    tolerance = float(match.group(4))
-                    if retries_done == retries_total:
-                        self.call_load_panel.emit(False, "", False)
-                        self.ztilt_result_screen.set_message(
-                            "Something went wrong during Z-axis calibration."
-                        )
-                        self.ztilt_result_screen.show()
-                        self.ztilt_result_screen_timer.start()
-                        return
-                    self.call_load_panel.emit(
-                        True,
-                        f"Retries: {retries_done}/{retries_total}"
-                        f" | Range: {probed_range:.6f}"
-                        f" | Tolerance: {tolerance:.6f}",
-                        False,
-                    )
+    def _ztilt_current(self, run_id: int) -> bool:
+        """Whether a reply belongs to the run still in progress."""
+        return self._ztilt_running and run_id == self._ztilt_run_id
 
-    def handle_ztilt(self):
-        """Handle Z-Tilt Adjustment"""
-        self.call_load_panel.emit(
-            True, "Please wait, performing Z-axis calibration.", False
+    def _ztilt_stop(self, message: str = "") -> None:
+        """End the Z-Tilt run, closing the overlay and showing ``message`` if any."""
+        self._ztilt_running = False
+        self._ztilt_run_id += 1
+        self.call_load_panel.emit(False, "", False)
+        if message:
+            self.ztilt_result_screen.set_message(message)
+            self.ztilt_result_screen.show()
+            self.ztilt_result_screen_timer.start()
+
+    def _on_ztilt_first_home(self, run_id: int, reply: object) -> None:
+        """Queue Z_TILT_ADJUST and the final home once the first home succeeds."""
+        if not self._ztilt_current(run_id):
+            return
+        error = reply_error(reply)
+        if is_disconnect_error(error):
+            self._ztilt_stop()
+            return  # Connection lost; ConnectionPage takes over
+        if error is not None:
+            self._ztilt_stop("Homing failed.\nCheck the printer and try again.")
+            return
+        # Separate scripts so the final home runs even if Z_TILT_ADJUST errors out
+        # Z only: XY stay homed through the tilt, so the override skips them (~10 s)
+        if not (
+            self._ztilt_send("Z_TILT_ADJUST", self._on_ztilt_done)
+            and self._ztilt_send("G28 Z", self._on_ztilt_homed)
+        ):
+            self._ztilt_stop()
+
+    def _on_ztilt_done(self, run_id: int, reply: object) -> None:
+        """Switch the overlay to the final home once Z_TILT_ADJUST returns."""
+        if not self._ztilt_current(run_id):
+            return
+        error = reply_error(reply)
+        if is_disconnect_error(error):
+            self._ztilt_stop()
+            return  # Connection lost; ConnectionPage takes over
+        self._ztilt_failed = error is not None
+        status = (
+            "Z-Tilt calibration failed" if self._ztilt_failed else "Z-Tilt complete"
         )
-        self.run_gcode_signal.emit("G28\nM400")
-        self.run_gcode_signal.emit("Z_TILT_ADJUST")
+        self.call_load_panel.emit(
+            True, f"{status}\nHoming the printer, please wait", False
+        )
+
+    def _on_ztilt_homed(self, run_id: int, reply: object) -> None:
+        """Close the overlay and report the result once the final G28 returns."""
+        if not self._ztilt_current(run_id):
+            return
+        error = reply_error(reply)
+        if is_disconnect_error(error):
+            self._ztilt_stop()
+            return  # Connection lost; ConnectionPage takes over
+        if self._ztilt_failed:
+            message = "Z-Tilt calibration failed.\nCheck the bed and try again."
+        elif error:
+            message = (
+                "Homing failed after Z-Tilt calibration.\n"
+                "Home the printer before printing."
+            )
+        else:
+            message = "Z-Tilt calibration complete."
+        self._ztilt_stop(message)
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
     def on_klippy_status(self, state: str):
