@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import subprocess
 import time
 from contextlib import ExitStack, nullcontext
 from pathlib import Path
@@ -39,6 +40,28 @@ class TestLoggingCallback:
         cb.on_error("klipper", "network")
         cb.on_rollback("klipper", False)
         cb.on_recover("klipper", True)
+
+
+class TestNeedsUpdate:
+    @pytest.mark.parametrize(
+        "fields",
+        [
+            {"commits_behind": 1},
+            {"packages_upgradable": 2},
+            {"has_local_changes": True},
+            {"needs_install": True},
+            {"branch_mismatch": True},
+            {"kind": "git", "error": "fetch failed"},
+        ],
+    )
+    def test_dirty(self, fields):
+        assert ComponentStatus(name="c", **fields).needs_update
+
+    @pytest.mark.parametrize(
+        "fields", [{}, {"kind": "apt", "error": "locked"}, {"packages_upgradable": -1}]
+    )
+    def test_clean(self, fields):
+        assert not ComponentStatus(name="c", **fields).needs_update
 
 
 class TestBackoff:
@@ -785,13 +808,61 @@ class TestUpdateAll:
             ),
             patch(
                 "updater.service.UpdateService._provision_component",
-                side_effect=lambda _c: seen.append("provision"),
+                side_effect=lambda _c, _p: seen.append("provision"),
             ),
         ):
             svc = UpdateService()
             svc._components = [present, missing]
             await svc.update_all()
         assert seen == ["provision", "batch"]
+
+    def _provision_case(self, tmp_path: Path) -> list[ComponentConfig]:
+        moonraker = self._git(tmp_path, "moonraker", 3)
+        moonraker.service = "moonraker.service"
+        ui = self._git(tmp_path, "BlocksScreen", 99)
+        ui.service = "BlocksScreen.service"
+        hh = ComponentConfig(
+            name="Happy-Hare",
+            kind="git",
+            path=tmp_path / "absent",
+            order=4,
+            url="https://github.com/x/y",
+            install_if_missing=True,
+        )
+        return [moonraker, ui, hh]
+
+    @pytest.mark.parametrize(
+        ("provision_ok", "moonraker_restarted", "warns"),
+        [(True, False, True), (True, True, False), (False, False, False)],
+    )
+    @pytest.mark.parametrize("batch_ok", [True, False])
+    @pytest.mark.asyncio
+    async def test_provision_defers_batch_restarts_to_the_batch(
+        self, tmp_path, batch_ok, provision_ok, moonraker_restarted, warns, caplog
+    ):
+        """A failed batch restarts nothing more: the UI restart stays last."""
+        svc = UpdateService()
+
+        async def batch(_batch):
+            if moonraker_restarted:
+                svc._restarted_services.add("moonraker.service")
+            return batch_ok
+
+        with (
+            patch("updater.service.UpdateService._preflight_fetch", return_value=set()),
+            patch.object(svc, "_run_git_batch", side_effect=batch),
+            patch(
+                "updater.service.UpdateService._provision_component",
+                return_value=provision_ok,
+            ) as mock_provision,
+            patch("updater.service.UpdateService._restart_one") as mock_restart,
+        ):
+            svc._components = self._provision_case(tmp_path)
+            await svc.update_all()
+        # The fire-and-forget UI restart is never verified, so it is never pending.
+        assert mock_provision.call_args[0][1] == "moonraker.service"
+        mock_restart.assert_not_called()
+        assert ("provision deferred" in caplog.text) is warns
 
     @pytest.mark.asyncio
     async def test_empty_batch_skips_git(self, tmp_path):
@@ -902,6 +973,68 @@ class TestAtomicBatch:
         assert all(c.args[1] is True for c in cb.on_component_done.call_args_list)
 
     @pytest.mark.asyncio
+    async def test_hooks_get_pending_restarts(self, tmp_path):
+        svc, comps = self._svc(tmp_path, MagicMock(), n=2, service="moonraker.service")
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")) as hook,
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+        ):
+            await svc._run_git_batch(comps)
+        assert hook.call_count == 2
+        for hook_call in hook.call_args_list:
+            pending = hook_call.kwargs["extra_env"]["BS_UPDATER_PENDING_RESTARTS"]
+            assert pending == "moonraker.service"
+
+    @pytest.mark.asyncio
+    async def test_dropped_component_leaves_pending_restarts(self, tmp_path):
+        """A Happy-Hare hook after a failed Moonraker hook must restart Moonraker itself."""
+        comps = [
+            self._git(tmp_path, "klipper", 2, "klipper.service"),
+            self._git(tmp_path, "moonraker", 3, "moonraker.service"),
+            self._git(tmp_path, "Happy-Hare", 4, "klipper.service"),
+        ]
+        svc = UpdateService(callback=MagicMock())
+        svc._components = comps
+        svc._state_path = tmp_path / "state.json"
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+            patch(
+                "updater.service.run_hook",
+                side_effect=[(True, ""), (False, "boom"), (True, "")],
+            ) as hook,
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+        ):
+            await svc._run_git_batch(comps)
+        pending = [
+            c.kwargs["extra_env"]["BS_UPDATER_PENDING_RESTARTS"]
+            for c in hook.call_args_list
+        ]
+        assert pending == [
+            "klipper.service moonraker.service",
+            "klipper.service moonraker.service",
+            "klipper.service",
+        ]
+
+    @pytest.mark.asyncio
     async def test_inflight_marker_written_then_cleared_on_success(self, tmp_path):
         cb = MagicMock()
         svc, comps = self._svc(tmp_path, cb, n=1)
@@ -965,6 +1098,7 @@ class TestAtomicBatch:
                 return_value=(True, ""),
             ),
             patch("updater.service.git_reset_to_hash", return_value=(False, "boom")),
+            patch("updater.service.restart_service", return_value=(False, "failed")),
         ):
             await svc._run_git_batch(comps)
         assert svc._inflight_path.exists()
@@ -986,6 +1120,7 @@ class TestAtomicBatch:
                 return_value=(True, ""),
             ),
             patch("updater.service.git_reset_to_hash", side_effect=OSError("disk")),
+            patch("updater.service.restart_service", return_value=(False, "failed")),
         ):
             await svc._run_git_batch(comps)
         assert svc._inflight_path.exists()
@@ -1760,6 +1895,9 @@ class TestProvisionMissingComponent:
         from updater.service import _GIT_EMPTY_TREE
 
         assert mock_hook.call_args[0][3] == _GIT_EMPTY_TREE
+        assert mock_hook.call_args.kwargs["extra_env"] == {
+            "BS_UPDATER_PENDING_RESTARTS": ""
+        }
         cb.on_component_done.assert_called_once_with("newcomp", True)
 
     @pytest.mark.asyncio
@@ -2327,6 +2465,272 @@ class TestProvisionMissing:
         assert order == ["heal", "clone"]
 
 
+class TestRunFollowup:
+    """run_followup applies manifest entries the pre-update daemon never loaded."""
+
+    BASE = "a" * 40
+
+    @pytest.fixture
+    def svc(self, tmp_path):
+        s = UpdateService()
+        s._followup_path = tmp_path / "updater_followup"
+        s._components = [
+            ComponentConfig(name="BlocksScreen", kind="git", path=tmp_path),
+            ComponentConfig(
+                name="Spoolman", kind="git", url="https://x/s", version="b" * 40
+            ),
+            ComponentConfig(name="klipper", kind="git", url="https://x/k"),
+        ]
+        return s
+
+    @pytest.fixture(autouse=True)
+    def env(self):
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(
+                UpdateService, "deploy_running", AsyncMock(return_value=False)
+            ),
+            patch.object(
+                UpdateService, "update_all", AsyncMock(return_value=True)
+            ) as ua,
+            patch("updater.service.git_remote_reachable", AsyncMock(return_value=True)),
+        ):
+            yield ua
+
+    def _mark(self, svc, text: str | None = None) -> None:
+        svc._followup_path.write_text(f"{text or self.BASE}\n")
+
+    @pytest.mark.asyncio
+    async def test_no_marker_is_a_noop(self, svc, env):
+        with patch.object(UpdateService, "_followup_targets") as targets:
+            assert await svc.run_followup() == (False, False)
+        targets.assert_not_called()
+        env.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_malformed_marker_is_dropped(self, svc):
+        self._mark(svc, "not-a-sha")
+        assert await svc.run_followup() == (False, False)
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("cause", ["printing", "deploy", "lock"])
+    async def test_defers_and_keeps_marker(self, svc, env, printing, cause):
+        self._mark(svc)
+        printing.return_value = cause == "printing"
+        with (
+            patch.object(
+                UpdateService,
+                "deploy_running",
+                AsyncMock(return_value=cause == "deploy"),
+            ),
+            patch("updater.service.process_lock", lambda: nullcontext(cause != "lock")),
+        ):
+            assert await svc.run_followup() == (True, False)
+        assert svc._followup_path.exists()
+        env.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_applies_targets_and_clears_marker(self, svc, env):
+        self._mark(svc)
+        on_busy = MagicMock()
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+        ):
+            assert await svc.run_followup(on_busy) == (False, True)
+        env.assert_awaited_once_with({"Spoolman"})
+        assert on_busy.call_args_list == [call(True), call(False)]
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_busy_before_network_checks(self, svc, env):
+        # An Update pressed during the remote checks must be refused, not race the lock.
+        self._mark(svc)
+        on_busy = MagicMock()
+        seen = []
+
+        async def targets(_self, _base):
+            seen.append(list(on_busy.call_args_list))
+            return set()
+
+        with patch.object(UpdateService, "_followup_targets", targets):
+            assert await svc.run_followup(on_busy) == (False, False)
+        assert seen == [[call(True)]]
+        assert on_busy.call_args_list == [call(True), call(False)]
+
+    @pytest.mark.asyncio
+    async def test_crash_mid_update_still_counts_the_try(self, svc, env):
+        self._mark(svc)
+        env.side_effect = RuntimeError("boom")
+        with (
+            patch.object(
+                UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+            ),
+            pytest.raises(RuntimeError),
+        ):
+            await svc.run_followup()
+        assert svc._followup_path.read_text() == f"{self.BASE}\n1\n"
+
+    @pytest.mark.asyncio
+    async def test_failed_update_retries_then_leaves_it_to_update(self, svc, env):
+        self._mark(svc)
+        env.return_value = False
+        tries = updater_service._FOLLOWUP_TRIES
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+        ):
+            results = [await svc.run_followup() for _ in range(tries)]
+        assert results == [(True, True)] * (tries - 1) + [(False, True)]
+        assert env.await_count == tries
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_retry_after_failure_succeeds_and_clears(self, svc, env):
+        self._mark(svc)
+        env.side_effect = [False, True]
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+        ):
+            assert await svc.run_followup() == (True, True)
+            assert await svc.run_followup() == (False, True)
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_used_up_marker_is_dropped_without_updating(self, svc, env):
+        self._mark(svc, f"{self.BASE}\n{updater_service._FOLLOWUP_TRIES}")
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+        ):
+            assert await svc.run_followup() == (False, False)
+        env.assert_not_called()
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_unwritable_marker_runs_once(self, svc, env):
+        self._mark(svc)
+        env.return_value = False
+        with (
+            patch.object(
+                UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+            ),
+            patch.object(UpdateService, "_write_followup", return_value=False),
+        ):
+            assert await svc.run_followup() == (False, True)
+        env.assert_awaited_once()
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_undeletable_unwritable_marker_is_not_retried(self, svc, env):
+        # The marker survives with its count unchanged, so a retry would loop forever.
+        self._mark(svc)
+        env.return_value = False
+        with (
+            patch.object(
+                UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+            ),
+            patch.object(UpdateService, "_write_followup", return_value=False),
+            patch.object(UpdateService, "_clear_followup"),
+        ):
+            assert await svc.run_followup() == (False, True)
+        env.assert_awaited_once()
+
+    def test_failed_marker_write_keeps_the_old_marker(self, svc):
+        self._mark(svc)
+        with patch.object(Path, "replace", side_effect=OSError("disk full")):
+            assert svc._write_followup(self.BASE, 1) is False
+        assert svc._followup_path.read_text().split() == [self.BASE]
+        assert not svc._followup_path.with_name(
+            svc._followup_path.name + ".tmp"
+        ).exists()
+
+    @pytest.mark.parametrize(
+        ("text", "want"),
+        [
+            ("a" * 40, ("a" * 40, 0)),
+            (f"{'a' * 40}\n2", ("a" * 40, 2)),
+            (f"{'a' * 40}\nx", ("", 0)),
+            (f"{'a' * 40}\n1\n2", ("", 0)),
+        ],
+    )
+    def test_read_followup_formats(self, svc, text, want):
+        self._mark(svc, text)
+        assert svc._read_followup() == want
+        assert svc._followup_path.exists() == bool(want[0])
+
+    @pytest.mark.asyncio
+    async def test_nothing_dirty_clears_marker(self, svc, env):
+        self._mark(svc)
+        with patch.object(
+            UpdateService, "_followup_targets", AsyncMock(return_value=set())
+        ):
+            assert await svc.run_followup() == (False, False)
+        env.assert_not_called()
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_offline_defers_then_leaves_it_to_update(self, svc, env):
+        self._mark(svc)
+        tries = updater_service._OFFLINE_PROVISION_TRIES
+        with (
+            patch.object(
+                UpdateService, "_followup_targets", AsyncMock(return_value={"Spoolman"})
+            ),
+            patch(
+                "updater.service.git_remote_reachable", AsyncMock(return_value=False)
+            ),
+        ):
+            results = [await svc.run_followup() for _ in range(tries)]
+        assert results == [(True, False)] * (tries - 1) + [(False, False)]
+        env.assert_not_called()
+        assert not svc._followup_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_targets_are_changed_and_dirty_entries_except_ui(self, svc):
+        old = [
+            ComponentConfig(name="BlocksScreen", kind="git"),  # changed, but excluded
+            ComponentConfig(name="Spoolman", kind="git", url="https://x/s"),  # new pin
+            ComponentConfig(name="klipper", kind="git", url="https://x/k"),  # same
+        ]
+        statuses = {
+            n: ComponentStatus(name=n, commits_behind=1)
+            for n in ("BlocksScreen", "Spoolman", "klipper")
+        }
+        with (
+            patch(
+                "updater.service.git_show_file", AsyncMock(return_value="yaml")
+            ) as show,
+            patch("updater.service.load_components", return_value=(old, 60.0)),
+            patch.object(
+                UpdateService, "check_status", AsyncMock(return_value=statuses)
+            ),
+        ):
+            assert await svc._followup_targets(self.BASE) == {"Spoolman"}
+        show.assert_awaited_once_with(
+            svc._components[0].path, self.BASE, "updater/components.yaml"
+        )
+
+    @pytest.mark.asyncio
+    async def test_clean_changed_entry_is_not_a_target(self, svc):
+        statuses = {"Spoolman": ComponentStatus(name="Spoolman")}
+        with (
+            patch("updater.service.git_show_file", AsyncMock(return_value="yaml")),
+            patch("updater.service.load_components", return_value=([], 60.0)),
+            patch.object(
+                UpdateService, "check_status", AsyncMock(return_value=statuses)
+            ),
+        ):
+            assert await svc._followup_targets(self.BASE) == set()
+
+    @pytest.mark.asyncio
+    async def test_missing_base_manifest_has_no_targets(self, svc):
+        with (
+            patch("updater.service.git_show_file", AsyncMock(return_value="")),
+            patch.object(UpdateService, "check_status") as check,
+        ):
+            assert await svc._followup_targets(self.BASE) == set()
+        check.assert_not_called()
+
+
 class TestReclone:
     """_reclone_component: temp-clone + atomic swap as the deepest corruption rung."""
 
@@ -2591,6 +2995,18 @@ class TestReconcile:
                 await svc.reconcile_if_pending()
             await svc.reconcile_if_pending()
         mock_heal.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("printing", "flag"), [(True, "1"), (False, "")])
+    async def test_reclone_hook_flags_running_print(self, tmp_path, printing, flag):
+        comp = self._git_comp(tmp_path)
+        with (
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch("updater.service.klipper_printing", return_value=printing),
+            patch("updater.service.run_hook", return_value=(True, "")) as hook,
+        ):
+            await UpdateService()._boot_reclone_hook(comp)
+        assert hook.call_args.kwargs["extra_env"] == {"BS_UPDATER_PRINTING": flag}
 
 
 class TestWriteStateDurability:
@@ -3232,7 +3648,7 @@ class TestNonRepoComponent:
             svc._history_path = tmp_path / "history.jsonl"
             svc._components = [comp]
             await svc.update_all()
-        mock_prov.assert_awaited_once_with(comp)
+        mock_prov.assert_awaited_once_with(comp, "")
         cb.on_error.assert_not_called()
         assert not comp.path.exists()  # moved aside
         moved = list(tmp_path.glob("Spoolman.pre-updater-*"))
@@ -3604,3 +4020,90 @@ class TestUpdaterDowngradeGuard:
         assert result is False  # BlocksScreen dropped
         done = {c.args[0]: c.args[1] for c in cb.on_component_done.call_args_list}
         assert done == {"klipper": True, "BlocksScreen": False}
+
+
+def _git_run(repo: Path, *args: str) -> str:
+    """Run git in repo with a throwaway identity and no signing."""
+    return subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+        + ["-c", "commit.gpgsign=false", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+class TestPinnedCheckoutIsEnforced:
+    """A pinned repo (Happy-Hare v3) is put back on its pin whatever the user did to it."""
+
+    def _clone(self, tmp_path: Path) -> tuple[Path, dict[str, str]]:
+        """Clone of an origin with v3 (old -> pin -> v3tip) and main (old -> v4)."""
+        src = tmp_path / "src"
+        src.mkdir()
+        _git_run(src, "init", "-q", "-b", "v3")
+        shas = {}
+        for n in ("old", "pin", "v3tip"):
+            (src / "f.txt").write_text(n)
+            _git_run(src, "add", "f.txt")
+            _git_run(src, "commit", "-q", "-m", n)
+            shas[n] = _git_run(src, "rev-parse", "HEAD")
+        _git_run(src, "checkout", "-q", "-b", "main", shas["old"])
+        (src / "f.txt").write_text("v4")
+        _git_run(src, "commit", "-q", "-am", "v4")
+        shas["v4"] = _git_run(src, "rev-parse", "HEAD")
+        _git_run(tmp_path, "clone", "-q", "-b", "v3", str(src), "Happy-Hare")
+        return tmp_path / "Happy-Hare", shas
+
+    def _tamper(self, repo: Path, shas: dict[str, str], how: str) -> None:
+        """Leave the checkout the way a user might."""
+        if how == "edited":
+            _git_run(repo, "reset", "-q", "--hard", shas["pin"])
+            (repo / "f.txt").write_text("user edit")
+        elif how == "v4":
+            _git_run(repo, "checkout", "-q", "main")
+        else:
+            _git_run(repo, "reset", "-q", "--hard", shas[how])
+
+    def _comp(self, repo: Path, pin: str) -> ComponentConfig:
+        return ComponentConfig(
+            name="Happy-Hare",
+            kind="git",
+            path=repo,
+            branch="v3",
+            version=pin,
+            reset_mode="hard",
+        )
+
+    @pytest.mark.asyncio
+    async def test_clean_checkout_on_pin_is_current(self, tmp_path):
+        repo, shas = self._clone(tmp_path)
+        _git_run(repo, "reset", "-q", "--hard", shas["pin"])
+        status = await updater_service.check_git_status(
+            "Happy-Hare", repo, "v3", shas["pin"], skip_fetch=True
+        )
+        assert status.needs_update is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("how", ["edited", "v4", "v3tip", "old"])
+    async def test_tampered_checkout_needs_update(self, tmp_path, how):
+        repo, shas = self._clone(tmp_path)
+        self._tamper(repo, shas, how)
+        status = await updater_service.check_git_status(
+            "Happy-Hare", repo, "v3", shas["pin"], skip_fetch=True
+        )
+        assert status.needs_update is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("how", ["edited", "v4", "v3tip", "old"])
+    async def test_apply_puts_tampered_checkout_back_on_pin(self, tmp_path, how):
+        repo, shas = self._clone(tmp_path)
+        self._tamper(repo, shas, how)
+        svc = UpdateService(callback=MagicMock())
+        ok, err = await svc._stage_apply_ref(
+            self._comp(repo, shas["pin"]), shas["v3tip"]
+        )
+        assert (ok, err) == (True, "")
+        assert _git_run(repo, "rev-parse", "HEAD") == shas["pin"]
+        assert _git_run(repo, "branch", "--show-current") == "v3"
+        assert _git_run(repo, "status", "--porcelain", "--untracked-files=no") == ""

@@ -403,6 +403,12 @@ done
 me=$(gh api user --jq .login)
 # GitHub rejects a review request to the PR author, so you are left off the list.
 people=()
+# Teams come first and only from this endpoint, the collaborator list never has them; none on a personal repo.
+if teams=$(gh api "repos/$repo/teams" --paginate --jq '.[].slug' 2>/dev/null); then
+    while read -r slug; do
+        if [[ -n $slug ]]; then people+=("${repo%%/*}/$slug"); fi
+    done <<<"$teams"
+fi
 if collaborators=$(gh api "repos/$repo/collaborators" --paginate --jq '.[].login'); then
     while read -r login; do
         if [[ -n $login && ${login,,} != "${me,,}" ]]; then people+=("$login"); fi

@@ -133,7 +133,7 @@ class CustomNumpad(QtWidgets.QWidget):
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sizePolicy)
         self.setObjectName("blocks_numpad")
-        self.setMinimumSize(QtCore.QSize(710, 400))
+        self.setMinimumSize(QtCore.QSize(710, 410))
         self.setMaximumSize(QtCore.QSize(800, 480))
         self.main_content_layout = QtWidgets.QVBoxLayout()
         self.main_content_layout.setObjectName("main_content_layout")

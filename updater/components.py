@@ -223,12 +223,14 @@ def _merge(base: list[dict], override: list[dict]) -> list[dict]:
     return list(base_by_name.values())
 
 
-def _load_bundled_yaml(yaml) -> dict | None:
-    """Read + parse the bundled components.yaml; None on any read/parse error."""
+def _load_bundled_yaml(yaml, text: str | None = None) -> dict | None:
+    """Parse text, else the bundled components.yaml; None on any read/parse error."""
     bundled_path = Path(__file__).parent / "components.yaml"
     try:
-        with open(bundled_path) as f:  # noqa: PTH123
-            bundled_data = yaml.safe_load(f)
+        if text is None:
+            with open(bundled_path) as f:  # noqa: PTH123
+                text = f.read()
+        bundled_data = yaml.safe_load(text)
     except OSError:
         logger.exception("bundled_data not found")
         return None
@@ -300,8 +302,10 @@ def _build_configs(raw_components: list[dict]) -> list[ComponentConfig]:
     return configs
 
 
-def load_components() -> tuple[list[ComponentConfig], float]:
-    """Load/validate components from bundled YAML merged with the user override."""
+def load_components(
+    bundled_text: str | None = None,
+) -> tuple[list[ComponentConfig], float]:
+    """Load/validate components from bundled YAML (or bundled_text) merged with the user override."""
     try:
         import yaml  # noqa: PLC0415
 
@@ -311,7 +315,7 @@ def load_components() -> tuple[list[ComponentConfig], float]:
         logger.exception("PyYAML missing or broken; updater idle until venv repair")
         return [], 1440 * 60.0
 
-    bundled_data = _load_bundled_yaml(yaml)
+    bundled_data = _load_bundled_yaml(yaml, bundled_text)
     if bundled_data is None:
         return [], 1440 * 60.0
     raw_components: list[dict] = bundled_data.get("components", [])

@@ -1,6 +1,7 @@
 # Moonraker api
 import json
 import logging
+import socket
 import threading
 import typing
 
@@ -57,6 +58,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self.daemon = True
 
         self.connected = False
+        # Set once on shutdown: ws callbacks must not touch Qt while widgets are destroyed.
+        self._closing = False
         self._reconnect_count = 0
         self._klippy_state: str | None = None
         self.callback_table: dict = {}
@@ -109,7 +112,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     def reconnect(self) -> bool:
         """Watchdog tick, retries forever per Moonraker's client startup sequence"""
         # Non-blocking: a tick and a Qt-thread call must not open two sockets
-        if not self._connect_lock.acquire(blocking=False):
+        if self._closing or not self._connect_lock.acquire(blocking=False):
             return False
         try:
             with self._state_lock:
@@ -171,13 +174,24 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         return True
 
     def wb_disconnect(self) -> None:
-        """Websocket disconnect"""
+        """Stop the timers and the websocket thread before the widget tree is destroyed"""
+        self._closing = True
+        self.query_klippy_status_timer.stopTimer()
         if self._retry_timer is not None:
             self._retry_timer.stopTimer()
         if self._wst is not None and self.ws is not None:
-            self.ws.close()
+            self.ws.keep_running = False
+            # ws.close() frees the fd under the dispatcher's epoll (it sleeps ping_timeout); SHUT_RD wakes it
+            _raw = getattr(self.ws.sock, "sock", None)
+            try:
+                if _raw is not None:
+                    _raw.shutdown(socket.SHUT_RD)
+            except OSError:
+                self.ws.close()
             if self._wst.is_alive():
                 self._wst.join(timeout=self.timeout + 1)
+            if self._wst.is_alive():
+                logger.warning("Websocket thread still alive after shutdown join")
             logger.info("Websocket closed")
 
     def on_error(self, *args) -> None:
@@ -195,6 +209,10 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         """
         # First argument is ws, second is close status code, third is close message
         if self.ws is None:
+            return
+        if self._closing:
+            with self._state_lock:
+                self.connected = False
             return
         _close_status_code = args[1] if len(args) == 3 else None
         _close_message = args[2] if len(args) == 3 else None
@@ -242,6 +260,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             TypeError: When QApplication.instance `is` None
         """
         _ws = args[0] if len(args) == 1 else None
+        if self._closing:
+            return
         with self._state_lock:
             self.connected = True
             self._reconnect_count = 0
@@ -266,6 +286,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         Raises:
             TypeError: Raised when events cannot be sent because QApplication.instance is None
         """
+        if self._closing:
+            return
         _message = (
             args[1] if len(args) == 2 else args[0]
         )  # First argument is ws second is message

@@ -46,6 +46,7 @@ from updater.executor import (
     git_remote_reachable,
     git_repair,
     git_reset_to_hash,
+    git_show_file,
     git_tree_has_path,
     git_untracked_paths,
     is_git_repo,
@@ -68,6 +69,8 @@ _INFLIGHT_PATH = Path.home() / ".cache" / "blockscreen" / "updater_inflight.json
 # Present = fast recovery saturated (golden also looped).
 _FAULT_MARKER_PATH = Path.home() / ".cache" / "blockscreen" / "selfheal_fault.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
+# Written by hooks/BlocksScreen.sh: pre-update BlocksScreen hash whose manifest is stale.
+_FOLLOWUP_PATH = Path.home() / ".cache" / "blockscreen" / "updater_followup"
 _APT_STATUS_CACHE = Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json"
 _HISTORY_MAX_BYTES = 1_000_000
 _HISTORY_KEEP_LINES = 2000
@@ -175,6 +178,7 @@ _RECOVERY_SETTLE_S = 90.0
 _FORWARD_HEAL_BASE_S = 1800.0
 _FORWARD_HEAL_JITTER_S = 300.0
 _OFFLINE_PROVISION_TRIES = 6  # ~30 min of 300s polls, for late Wi-Fi
+_FOLLOWUP_TRIES = 3  # counted in the marker, so a crash or reboot mid-try still counts
 
 # Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
@@ -260,11 +264,14 @@ class UpdateService:
         self._inflight_path = _INFLIGHT_PATH
         self._history_path = _HISTORY_PATH
         self._fault_marker_path = _FAULT_MARKER_PATH
+        self._followup_path = _FOLLOWUP_PATH
         self._log = logging.getLogger("updater")
         self._nrestarts_samples: dict[str, list[tuple[float, int]]] = {}
         self._restart_pending_until = 0.0
         self._reconciled = False
         self._offline_provision_tries = 0
+        self._offline_followup_tries = 0
+        self._restarted_services: set[str] = set()
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -427,12 +434,34 @@ class UpdateService:
     ) -> bool:
         """Run apt, provisioning, then the git batch (its UI restart must come last)."""
         ok = True
+        self._restarted_services.clear()
         for c in apt:
             ok = await self._run_apt_update(c) and ok
+        # Provision hooks leave these to the batch, which restarts each one once.
+        pending = sorted(
+            {
+                c.service
+                for c in batch
+                if c.service and c.service not in _FIRE_AND_FORGET_SERVICES
+            }
+        )
+        provisioned = False
         for c in provision:
-            ok = await self._provision_component(c) and ok
-        if batch:
-            ok = await self._run_git_batch(batch) and ok
+            done = await self._provision_component(c, " ".join(pending))
+            provisioned = provisioned or done
+            ok = ok and done
+        if batch and not await self._run_git_batch(batch):
+            ok = False
+        # Only Moonraker loads provisioned code (HH mmu_server) on a deferred restart.
+        if (
+            provisioned
+            and "moonraker.service" in pending
+            and "moonraker.service" not in self._restarted_services
+        ):
+            self._log.warning(
+                "provision deferred the moonraker.service restart to a batch that "
+                "never ran it: it loads on Moonraker's next restart"
+            )
         return ok
 
     def _check_disk_space(self, components: list[ComponentConfig]) -> bool:
@@ -560,6 +589,129 @@ class UpdateService:
                 if on_busy:
                     on_busy(False)
         return retry
+
+    async def run_followup(
+        self, on_busy: Callable[[bool], None] | None = None
+    ) -> tuple[bool, bool]:
+        """Apply manifest entries changed by the last BlocksScreen update; (retry, ran)."""
+        base, tries = await asyncio.to_thread(self._read_followup)
+        if not base:
+            return False, False
+        if await klipper_printing() or await self.deploy_running():
+            self._log.info("followup: printing or deploy running, deferring")
+            return True, False
+        with process_lock() as acquired:
+            if not acquired:
+                self._log.info("followup: update in progress, deferring")
+                return True, False
+            # Busy before the network checks below, so an Update press is refused, not raced.
+            if on_busy:
+                on_busy(True)
+            try:
+                await self.reconcile_if_pending()
+                dirty = await self._followup_targets(base)
+                if dirty and not await self._followup_reachable(dirty):
+                    self._offline_followup_tries += 1
+                    if self._offline_followup_tries < _OFFLINE_PROVISION_TRIES:
+                        return True, False
+                    # Still shown dirty, so a later Update applies it.
+                    self._log.info("followup: still offline, leaving it to Update")
+                    dirty = set()
+                if dirty and tries >= _FOLLOWUP_TRIES:
+                    self._log.warning(
+                        "followup: %d tries failed, leaving %s to Update",
+                        tries,
+                        sorted(dirty),
+                    )
+                    dirty = set()
+                # Bounded, not one-shot: the try is recorded before it runs.
+                recorded = bool(dirty) and await asyncio.to_thread(
+                    self._write_followup, base, tries + 1
+                )
+                if not recorded:
+                    await asyncio.to_thread(self._clear_followup)
+                if not dirty:
+                    return False, False
+                self._log.info(
+                    "followup: applying %s (try %d/%d)",
+                    sorted(dirty),
+                    tries + 1,
+                    _FOLLOWUP_TRIES,
+                )
+                if not await self.update_all(dirty):
+                    # An unrecorded try may not be retried: its count never advances.
+                    if recorded and tries + 1 < _FOLLOWUP_TRIES:
+                        self._log.warning("followup: update failed, retrying next poll")
+                        return True, True
+                    self._log.warning("followup: update failed, leaving it to Update")
+                await asyncio.to_thread(self._clear_followup)
+            finally:
+                if on_busy:
+                    on_busy(False)
+        return False, True
+
+    async def _followup_targets(self, base: str) -> set[str]:
+        """Dirty components whose manifest entry differs from the one at base."""
+        ui = next((c for c in self._components if c.name == _UI_COMPONENT), None)
+        text = await git_show_file(
+            ui.path if ui else None, base, "updater/components.yaml"
+        )
+        if not text:
+            self._log.warning("followup: no manifest at %s, dropping", base[:8])
+            return set()
+        old = {c.name: c for c in load_components(text)[0]}
+        # BlocksScreen itself already updated: re-running it could loop.
+        changed = {
+            c.name
+            for c in self._components
+            if c.name != _UI_COMPONENT and old.get(c.name) != c
+        }
+        statuses = await self.check_status()
+        dirty = {n for n in changed if n in statuses and statuses[n].needs_update}
+        self._log.info("followup: changed=%s dirty=%s", sorted(changed), sorted(dirty))
+        return dirty
+
+    async def _followup_reachable(self, names: set[str]) -> bool:
+        """True when every target's remote answers."""
+        for c in self._components:
+            if c.name in names and c.url and not await git_remote_reachable(c.url):
+                self._log.info("followup: %s unreachable, deferring", c.name)
+                return False
+        return True
+
+    def _read_followup(self) -> tuple[str, int]:
+        """The follow-up (base hash, tries so far); empty base when absent or malformed."""
+        try:
+            fields = self._followup_path.read_text().split()
+        except OSError:
+            return "", 0
+        # The hook writes the hash alone; _write_followup appends the try count.
+        if fields and _GIT_SHA_RE.match(fields[0]):
+            if len(fields) == 1:
+                return fields[0], 0
+            if len(fields) == 2 and fields[1].isdigit():
+                return fields[0], int(fields[1])
+        self._clear_followup()
+        return "", 0
+
+    def _write_followup(self, base: str, tries: int) -> bool:
+        """Record a try in the marker; False when it cannot be written."""
+        # Atomic: a power cut mid-write must not leave a truncated, dropped marker.
+        tmp = self._followup_path.with_name(self._followup_path.name + ".tmp")
+        try:
+            tmp.write_text(f"{base}\n{tries}\n")
+            tmp.replace(self._followup_path)
+        except OSError:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
+            self._log.warning("followup: cannot record try, running it once")
+            return False
+        return True
+
+    def _clear_followup(self) -> None:
+        """Remove the follow-up marker."""
+        with contextlib.suppress(OSError):
+            self._followup_path.unlink()
 
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig]
@@ -707,6 +859,12 @@ class UpdateService:
                     new_hashes[c.name],
                     prev[c.name],
                     timeout=HOOK_TIMEOUT,
+                    # Hooks leave these to the verified restart phase.
+                    extra_env={
+                        "BS_UPDATER_PENDING_RESTARTS": " ".join(
+                            sorted({a.service for a in alive if a.service})
+                        )
+                    },
                 ),
                 c.name,
                 3,
@@ -825,7 +983,7 @@ class UpdateService:
         # Shrink the marker before any restart: survivors stand from here on.
         await self._settle_inflight(pending_revert)
         self._log.info(
-            "git batch complete: %d/%d component(s) updated; queueing UI restart(s)",
+            "git batch complete: %d/%d component(s) updated",
             len(alive),
             len(batch),
         )
@@ -1556,8 +1714,15 @@ class UpdateService:
             return
         try:
             new_hash = await git_get_hash(c.path)
+            # A daemon restart can land mid-print; hooks then skip service restarts.
+            printing = "1" if await klipper_printing() else ""
             hook_ok, hook_err = await run_hook(
-                c.name, c.path, new_hash, _GIT_EMPTY_TREE, timeout=HOOK_TIMEOUT
+                c.name,
+                c.path,
+                new_hash,
+                _GIT_EMPTY_TREE,
+                timeout=HOOK_TIMEOUT,
+                extra_env={"BS_UPDATER_PRINTING": printing},
             )
             if not hook_ok:
                 self._log.warning("%s: post-reclone hook failed: %s", c.name, hook_err)
@@ -1830,7 +1995,9 @@ class UpdateService:
             )
         return None
 
-    async def _provision_component(self, component: ComponentConfig) -> bool:
+    async def _provision_component(
+        self, component: ComponentConfig, pending_restarts: str = ""
+    ) -> bool:
         """Clone and set up a missing opted-in component."""
         if not component.url:
             return self._cb_error_done(component.name, "no clone url")
@@ -1866,6 +2033,7 @@ class UpdateService:
                     new_hash,
                     _GIT_EMPTY_TREE,
                     timeout=HOOK_TIMEOUT,
+                    extra_env={"BS_UPDATER_PENDING_RESTARTS": pending_restarts},
                 ),
                 component.name,
                 3,
@@ -2093,6 +2261,7 @@ class UpdateService:
     async def _restart_one(self, service: str, health_url: str | None = None) -> bool:
         """Restart a service and verify it came active (kill-fallback aware)."""
         self._log.info("restarting %s and waiting for active", service)
+        self._restarted_services.add(service)
         ok, err = await restart_service(service)
         if not ok:
             if await service_unit_missing(service):

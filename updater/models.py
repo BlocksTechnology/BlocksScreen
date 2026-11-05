@@ -41,3 +41,15 @@ class ComponentStatus:
     needs_install: bool = False
     branch_mismatch: bool = False
     current_branch: str = ""
+
+    @property
+    def needs_update(self) -> bool:
+        """Dirty for update_all: errored git repos count (update self-heals them), apt errors don't."""
+        return bool(
+            self.commits_behind
+            or self.packages_upgradable > 0
+            or self.has_local_changes
+            or self.needs_install
+            or self.branch_mismatch
+            or (self.error is not None and self.kind != "apt")
+        )

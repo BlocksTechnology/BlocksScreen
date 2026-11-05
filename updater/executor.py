@@ -259,7 +259,9 @@ async def _commits_behind_or_error(
 ) -> tuple[int, ComponentStatus | None]:
     """Resolve commits-behind; return (n, None) or (-1, error ComponentStatus)."""
     if version:
-        return 0, None
+        # Off the pin = one pending update, else a new pin is never applied.
+        pin = await git_ref_hash(path, f"{version}^{{commit}}")
+        return (0 if pin == current_hash else 1), None
     commits_behind = await git_commits_behind(path, remote_ref)
     if commits_behind != -1:
         return commits_behind, None
@@ -309,7 +311,7 @@ async def check_git_status(
         git_remote_url(path),
         git_is_dirty(path),
         git_describe(path),
-        git_describe(path, remote_ref),
+        git_describe(path, version or remote_ref),
     )
     if remote_url == "":
         logger.error("Failed at git_remote_url operation")
@@ -661,6 +663,14 @@ async def git_tree_has_path(path: Path | None, ref: str, repo_path: str) -> bool
     return ok
 
 
+async def git_show_file(path: Path | None, ref: str, repo_path: str) -> str:
+    """Return repo_path's content at ref (git show ref:path), or empty on any error."""
+    if path is None or not _GIT_SHA_RE.match(ref):
+        return ""
+    ok, output = await _run([GIT, "show", f"{ref}:{repo_path}"], cwd=path, timeout=10.0)
+    return output if ok else ""
+
+
 async def git_commits_behind(path: Path, remote_ref: str = "origin/HEAD") -> int:
     """Return how many commits the local branch is behind remote_ref."""
     ok, output = await _run(
@@ -966,6 +976,7 @@ async def run_hook(
     new_hash: str,
     prev_hash: str,
     timeout: float = 60.0,
+    extra_env: dict[str, str] | None = None,
 ) -> tuple[bool, str]:
     """Run the component's update hook if present, refusing paths outside hooks/."""
     hook = (_HOOKS_DIR / f"{name}.sh").resolve()
@@ -977,7 +988,7 @@ async def run_hook(
         return (True, "no hook")
     if not os.access(hook, os.X_OK):
         return (False, "hook not executable")
-    env = _make_clean_env()
+    env = {**(extra_env or {}), **_make_clean_env()}
     env.update(
         {
             "COMPONENT_NAME": name,

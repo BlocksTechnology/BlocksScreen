@@ -478,6 +478,11 @@ class UpdaterWorker(QtCore.QObject):
             _log.warning(
                 "shutdown: loop already closed (crashed during restart window)"
             )
+        # Bounded: a callback still running at interpreter exit can emit into destroyed widgets.
+        if self._thread.is_alive() and self._thread is not threading.current_thread():
+            self._thread.join(timeout=2.0)
+            if self._thread.is_alive():
+                _log.warning("shutdown: UpdaterAsyncLoop still alive after 2 s")
 
     def _submit(self, coro: Coroutine[Any, Any, None]) -> None:
         """Submit a coroutine to the asyncio loop, emit daemon_unavailable if loop is closed."""

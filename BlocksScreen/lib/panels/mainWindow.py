@@ -181,7 +181,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
-        self.printPanel = PrintTab(self.printTab, self.file_data, self.ws, self.printer)
+        self.printPanel = PrintTab(
+            self.printTab, self.file_data, self.ws, self.printer, self.amu_manager
+        )
+        self.printPanel.notify.connect(self.notiPage.new_notication)
         self.usb_manager.usb_mounted.connect(
             self.printPanel.filesPage_widget.on_usb_added
         )
@@ -213,6 +216,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
         self.in_case_error.connect(self.printPanel.in_case_error)
         self.in_case_error.connect(self.filamentPanel.in_case_error)
+        self.conn_window.page_shown.connect(self.filamentPanel.hide_load_popup)
 
         self.show_notifications.connect(self.notiPage.new_notication)
 
@@ -358,10 +362,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cancelpage.on_print_stats_update
         )
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
-        # Reprint routes through on_print_start for the same full reset as a fresh print.
-        self.cancelpage.reprint_start.connect(
-            self.printPanel.jobStatusPage_widget.on_print_start
-        )
+        # Reprint takes the fresh-print path: same unloaded check and full reset.
+        self.cancelpage.reprint_start.connect(self.printPanel.start_print)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
         self.printer.display_update.connect(self._handle_display_status)
 
@@ -1573,7 +1575,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return tab
 
     def _setup_header(self) -> None:
-        self.main_header_layout = QtWidgets.QGroupBox(parent=self.main_widget)
+        self.main_header_layout = QtWidgets.QFrame(parent=self.main_widget)
         self.main_header_layout.setObjectName("main_header_layout")
         self.main_header_layout.setGeometry(QtCore.QRect(0, 0, 800, 60))
         self.main_header_layout.setMinimumSize(QtCore.QSize(800, 60))
@@ -1594,7 +1596,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "    selection-color:rgb(60,60,60);\n"
             "}\n"
             "\n"
-            "QGroupBox{\n"
+            "#main_header_layout{\n"
             "    background-color: rgb(50,50,50);\n"
             "    border: none; \n"
             "    border-color : rgb(60,60,60);\n"

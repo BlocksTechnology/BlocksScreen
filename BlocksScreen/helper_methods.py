@@ -8,10 +8,12 @@
 
 import ctypes
 import enum
+import json
 import logging
 import math
 import os
 import pathlib
+import re
 import shutil
 import struct
 import tempfile
@@ -316,6 +318,28 @@ def format_duration(seconds: int) -> str:
 def format_weight(grams: float) -> str:
     """Grams as "g", or "kg" past 499g."""
     return f"{grams / 1000:.2f}kg" if grams > 499 else f"{grams:.2f}g"
+
+
+def parse_materials(filament_type: object) -> list[str]:
+    """filament_type (str, list, JSON, CSV or ;-list) as unique names, [] if unknown."""
+    if isinstance(filament_type, str):
+        text = filament_type.strip()
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                types = json.loads(text)
+            except json.JSONDecodeError:
+                types = [text]
+        else:
+            # PrusaSlicer, SuperSlicer and OrcaSlicer separate tools with ";".
+            types = re.split(r"[,;]", text)
+    elif isinstance(filament_type, list):
+        types = filament_type
+    else:
+        types = [filament_type] if filament_type else []
+    names = list(
+        dict.fromkeys(name for t in types if t is not None and (name := str(t).strip()))
+    )
+    return [] if names == ["Unknown"] else names
 
 
 def normalize(
