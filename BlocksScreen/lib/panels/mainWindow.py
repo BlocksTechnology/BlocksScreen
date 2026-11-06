@@ -14,6 +14,7 @@ from lib.klipper_message_filter import (
     Severity,
     match_message,
 )
+from lib.klippy_status import KlippyStatus
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
@@ -170,6 +171,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 "true_zero_probe", default=False
             )
         self.conn_window = ConnectionPage(self, self.ws)
+        self.klippy_status = KlippyStatus(self.ws, self)
+        self.klippy_status.changed.connect(self.conn_window.render)
+        self.printer.webhooks_update.connect(self.klippy_status.on_webhooks)
         self.update_page = UpdatePage()
         self.printer.print_stats_update[str, str].connect(
             self.update_page.set_printing_state
@@ -180,7 +184,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._bless_armed = False
         self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
-        self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.printTab, self.file_data, self.ws, self.printer, self.amu_manager
         )
@@ -202,16 +205,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.networkPanel = NetworkControlWindow(self)
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
-        self.ws.connecting_signal.connect(self.conn_window.on_websocket_connecting)
-        self.ws.connected_signal.connect(
-            self.conn_window.on_websocket_connection_achieved
-        )
         self.ws.connected_signal.connect(self._arm_health_bless)
         self.ws.connected_signal.connect(self._try_device_config_restart)
-        self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
-        self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
-        self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
         self.in_case_error.connect(self.printPanel.in_case_error)
@@ -1085,8 +1081,6 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_printer_message(self, method, data, metadata) -> None:
         """Handle Printer messages"""
-        if "info" in method and isinstance(data, dict):
-            self.conn_window.on_printer_info(data)
         if "print" in method:
             if "start" in method and "ok" in data:
                 self.printer_state_signal.emit("printing")
@@ -1120,6 +1114,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Notify_klippy_ %s Received from object subscription.",
                 str(_state_call),
             )
+            self.klippy_status.on_klippy_notify(status_type)
             if hasattr(events, f"Klippy{_state_call}"):
                 _klippy_event_callback = getattr(
                     events,
