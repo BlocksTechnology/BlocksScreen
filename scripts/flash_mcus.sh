@@ -6,12 +6,17 @@
 #   ./flash_mcus.sh --list-json           discover MCUs, emit JSON, exit
 #   ./flash_mcus.sh --flash <name...>     flash named MCUs
 #   ./flash_mcus.sh --flash-all           flash all outdated MCUs (no interaction)
+#   ./flash_mcus.sh --versions            report MCU vs host versions (read-only)
 #   --force                               bypass version check (any mode)
+#
+# Versions file: $MCU_VERSIONS_FILE (default ~/printer_data/logs/mcu_versions.json).
+# Per MCU: running version, needs_flash, last flash result.
 #
 # Config files in mcu_config/<name>.config - leading comment lines declare interface:
 #   # mcu_type: rp2040              -> CAN flash (matched by chip type)
 #   # klipper_section: mcu MyBoard  -> printer.cfg section (UUID auto-discovery + version query)
-#   # serial: usb-Katapult_*        -> USB Katapult flash (glob, no /dev/serial/by-id/ prefix)
+#   # serial: usb-Katapult_*        -> USB Katapult flash (glob under /dev/serial/by-id/)
+#   # linux: klipper-mcu            -> Linux host MCU (systemd service name)
 #   # bootsel: 2e8a:0003            -> BOOTSEL/picoboot flash (VID:PID)
 #   # dfu: 0483:df11                -> STM32 DFU flash (dfu-util)
 #   # dfu_mem: 8*128Kg              -> memory-name filter to disambiguate multiple DFU devices
@@ -30,12 +35,23 @@ CAN_SPEED=1000000
 KLIPPER_DIR="$HOME/klipper"
 PRINTER_CFG="${HOME}/printer_data/config/printer.cfg"
 KATAPULT_DIR="$HOME/katapult"
-KATAPULT_SCRIPT="$KATAPULT_DIR/scripts/flash_can.py"
+# flashtool.py superseded flash_can.py; fall back for older Katapult checkouts.
+KATAPULT_SCRIPT="$KATAPULT_DIR/scripts/flashtool.py"
+[ -f "$KATAPULT_SCRIPT" ] || [ ! -f "$KATAPULT_DIR/scripts/flash_can.py" ] ||
+    KATAPULT_SCRIPT="$KATAPULT_DIR/scripts/flash_can.py"
 KATAPULT_REPO="https://github.com/Arksine/katapult"
-SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 MCU_CONFIG_DIR="$SCRIPT_DIR/mcu_config"
 UUID_CACHE="$MCU_CONFIG_DIR/.uuid_cache"
-MOONRAKER_URL="http://localhost:7125"
+MOONRAKER_URL="${MOONRAKER_URL:-http://localhost:7125}"
+VERSIONS_PY="$SCRIPT_DIR/mcu_versions.py"
+MCU_VERSIONS_FILE="${MCU_VERSIONS_FILE:-$HOME/printer_data/logs/mcu_versions.json}"
+# Out-of-tree builds; ~/klipper/.config and ~/klipper/out are never modified.
+FW_BUILD_ROOT="${FW_BUILD_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/blocks-flash}"
+FW_OUT=""            # out/ dir of the last build_firmware, trailing slash (Klipper OUT=)
+FW_BIN=""            # klipper.bin of the last build_firmware
+declare -a FW_MAKE_ARGS=() # KCONFIG_CONFIG/OUT of the last build, reused by `make flash`
+KLIPPER_HOLD_DROPIN="/run/systemd/system/klipper.service.d/50-flash-mcus-hold.conf"
 
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -163,7 +179,7 @@ load_uuids_from_printer_cfg() {
     [ -f "$PRINTER_CFG" ] || return 0
     shopt -s nullglob
     for cfg in "$MCU_CONFIG_DIR"/*.config; do
-        [[ "$(basename "$cfg")" == .* ]] && continue
+        [[ "$(basename "$cfg")" == .* || "$cfg" == *.katapult.config ]] && continue
         local mcu_type="" klipper_section=""
         while IFS='=' read -r key val; do
             case "$key" in
@@ -230,8 +246,7 @@ ensure_klipper_running() {
     ip link show can0 up >/dev/null 2>&1 || max_wait=5
     local waited=0 state=""
     while [ "$waited" -lt "$max_wait" ]; do
-        state=$(curl -sf --max-time 2 "$MOONRAKER_URL/printer/info" 2>/dev/null |
-            jq -r '.result.state // empty' 2>/dev/null) || true
+        state=$(python3 "$VERSIONS_PY" state --url "$MOONRAKER_URL" 2>/dev/null) || true
         case "$state" in
         ready)
             ok "Klipper is ready (all MCUs connected)"
@@ -255,81 +270,83 @@ ensure_klipper_running() {
     return 1
 }
 
-# Query live MCU firmware versions from Moonraker.
-# Populates MOONRAKER_VERSIONS["<klipper_section>"] = "<version string>"
-# e.g. MOONRAKER_VERSIONS["mcu"] = "v0.13.0-563-gf1fb5756"
-#      MOONRAKER_VERSIONS["mcu Toolhead"] = "v0.13.0-563-gf1fb5756"
-# Builds the query URL from klipper_section headers in all config files.
-# No-ops silently if Moonraker is unreachable.
+# Keep Klipper stopped while flashing, since front-ends may restart it on disconnect.
+# A runtime drop-in with an unmet condition skips every start (systemd.unit(5));
+# `mask --runtime` cannot override a unit in /etc. /run is cleared on reboot.
+hold_klipper() {
+    sudo mkdir -p "${KLIPPER_HOLD_DROPIN%/*}" || return 1
+    sudo tee "$KLIPPER_HOLD_DROPIN" >/dev/null <<EOF || return 1
+# Written by flash_mcus.sh; Klipper start is blocked until flashing ends.
+[Unit]
+ConditionPathExists=${KLIPPER_HOLD_DROPIN}.unblock
+EOF
+    sudo systemctl daemon-reload
+}
+
+release_klipper() {
+    [ -f "$KLIPPER_HOLD_DROPIN" ] || return 0
+    sudo rm -f "$KLIPPER_HOLD_DROPIN"
+    sudo systemctl daemon-reload
+}
+
+# Wait for "ready"; FIRMWARE_RESTART up to twice if an MCU is left in shutdown or error.
+verify_klipper_ready() {
+    local attempt
+    for attempt in 1 2; do
+        ensure_klipper_running && return 0
+        info "Sending FIRMWARE_RESTART (attempt $attempt/2)..."
+        curl -sf -X POST --max-time 5 "$MOONRAKER_URL/printer/firmware_restart" >/dev/null 2>&1 || true
+        sleep 3
+    done
+    ensure_klipper_running
+}
+
+# Fill MOONRAKER_VERSIONS[<klipper_section>] from Moonraker (python3, no jq dependency).
 query_moonraker_versions() {
     MOONRAKER_VERSIONS=()
     [ "$CONTEXT" = "laptop" ] && return 0
 
-    local sections=()
-    shopt -s nullglob
-    for cfg in "$MCU_CONFIG_DIR"/*.config; do
-        [[ "$(basename "$cfg")" == .* ]] && continue
-        local klipper_section=""
-        while IFS='=' read -r key val; do
-            [ "$key" = "klipper_section" ] && klipper_section="$val"
-        done < <(parse_config_metadata "$cfg")
-        [ -n "$klipper_section" ] && sections+=("$klipper_section")
-    done
-    shopt -u nullglob
-
-    [ ${#sections[@]} -eq 0 ] && return 0
-
-    local query_url="$MOONRAKER_URL/printer/objects/query"
-    local first=true
-    for sec in "${sections[@]}"; do
-        local encoded="${sec// /%20}"
-        if $first; then
-            query_url+="?${encoded}"
-            first=false
-        else
-            query_url+="&${encoded}"
-        fi
-    done
-
-    local response
-    response=$(curl -sf --max-time 5 "$query_url" 2>/dev/null) || {
+    local lines sec_name ver
+    lines=$(python3 "$VERSIONS_PY" query --url "$MOONRAKER_URL" 2>/dev/null) || {
         warn "Could not query Moonraker for MCU versions"
         return 1
     }
-
-    local line sec_name ver
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        sec_name="${line%%=*}"
-        ver="${line#*=}"
-        [ "$ver" = "null" ] && continue
+    while IFS=$'\t' read -r sec_name ver; do
+        [ -z "$sec_name" ] || [ -z "$ver" ] && continue
         MOONRAKER_VERSIONS["$sec_name"]="$ver"
-    done < <(jq -r '
-        .result.status // {} | to_entries[] |
-        "\(.key)=\(.value.mcu_version // "null")"
-    ' 2>/dev/null <<<"$response")
-
-    if [ ${#MOONRAKER_VERSIONS[@]} -gt 0 ]; then
-        for sec in "${!MOONRAKER_VERSIONS[@]}"; do
-            info "[$sec] firmware: ${MOONRAKER_VERSIONS[$sec]}"
-        done
-    fi
+        info "[$sec_name] firmware: $ver"
+    done <<<"$lines"
 }
 
-# Extract short git hash from version strings like v0.13.0-184-g27ed6cf7
-extract_git_hash() { [[ "$1" =~ (g[0-9a-f]{6,10}) ]] && echo "${BASH_REMATCH[1]}" || echo ""; }
+# Refresh the versions file; non-fatal.
+write_versions_file() {
+    python3 "$VERSIONS_PY" report --url "$MOONRAKER_URL" --source "$SRC_VERSION" \
+        --state-file "$MCU_VERSIONS_FILE" "$@" || true
+}
 
+# Append a flash result to the versions file, keyed by klipper_section.
+record_flash() {
+    local cfg="$1" iface="$2" result="$3" section=""
+    while IFS='=' read -r key val; do
+        [ "$key" = "klipper_section" ] && section="$val"
+    done < <(parse_config_metadata "$cfg")
+    [ -z "$section" ] && return 0
+    python3 "$VERSIONS_PY" record --state-file "$MCU_VERSIONS_FILE" --section "$section" \
+        --version "$SRC_VERSION" --interface "$iface" --result "$result" 2>/dev/null || true
+}
+
+# Git hash of a version string, display only.
+extract_git_hash() { [[ "$1" =~ -(g[0-9a-f]{7,40}) ]] && echo "${BASH_REMATCH[1]}" || echo ""; }
+
+# Same format Klipper embeds in firmware (scripts/buildcommands.py).
 get_source_version() {
-    git -C "$KLIPPER_DIR" describe --always --tags 2>/dev/null | tr -d '\n'
+    git -C "$KLIPPER_DIR" describe --always --tags --long --dirty 2>/dev/null | tr -d '\n'
 }
 
+# Prefix match: git abbreviates hashes to varying lengths.
 versions_match() {
-    local mcu_ver="$1" src_ver="$2"
-    [ -z "$mcu_ver" ] && return 1
-    local mcu_hash src_hash
-    mcu_hash=$(extract_git_hash "$mcu_ver")
-    src_hash=$(extract_git_hash "$src_ver")
-    [ -n "$mcu_hash" ] && [ -n "$src_hash" ] && [ "$mcu_hash" = "$src_hash" ]
+    [ -z "$1" ] && return 1
+    python3 "$VERSIONS_PY" match "$1" "$2" 2>/dev/null
 }
 
 ensure_can_up() {
@@ -379,75 +396,36 @@ klipper_can_query() {
         }'
 }
 
-# Probe MCU type and firmware version from a CAN bootloader UUID.
-# Sends a 1-byte dummy file - Katapult aborts safely without writing anything.
-# Output: "mcu_type|fw_version"
+# Chip type of a CAN node in Katapult; `-s` is read-only. Output: "mcu_type|".
 probe_can_mcu() {
-    local uuid="$1"
-    local tmpbin
-    tmpbin=$(mktemp --suffix=.bin)
-    printf '\x00' >"$tmpbin"
     local output
     output=$(timeout 10 python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" \
-        -u "$uuid" -f "$tmpbin" 2>&1 | tr -d '\0' || true)
-    rm -f "$tmpbin"
-    local mcu_type fw_version
-    IFS='|' read -r mcu_type fw_version < <(
-        awk 'BEGIN{IGNORECASE=1}
-             /MCU type:/                        {mcu=tolower($NF)}
-             /Detected Klipper binary version/  {fw=$NF; gsub(/,/,"",fw)}
-             END{print mcu "|" fw}' <<<"$output"
-    )
-    echo "${mcu_type}|${fw_version}"
+        -u "$1" -s 2>&1 | tr -d '\0' || true)
+    awk 'BEGIN{IGNORECASE=1} /MCU type:/ {mcu=tolower($NF)} END{print mcu "|"}' <<<"$output"
 }
 
 trigger_can_bootloader() {
     python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" -u "$1" -r 2>&1 | _indent4
 }
 
+# First match of a glob; relative patterns resolve under /dev/serial/by-id/.
 resolve_serial() {
+    local pattern="$1"
+    [[ "$pattern" == /* ]] || pattern="/dev/serial/by-id/$pattern"
     local -a matches
     shopt -s nullglob
     # shellcheck disable=SC2206
-    matches=($1)
+    matches=($pattern)
     shopt -u nullglob
     [ "${#matches[@]}" -gt 0 ] && echo "${matches[0]}"
 }
 
-# Find USB serial device matching pattern.
-# If not found, attempts to trigger Klipper into Katapult bootloader first.
-resolve_and_prepare_usb() {
-    local pattern="$1"
-    local resolved
-    resolved=$(resolve_serial "$pattern")
-    [ -n "$resolved" ] && echo "$resolved" && return 0
-
-    local chip=""
-    [[ "$pattern" =~ usb-Katapult_([[:alnum:]_]+) ]] && chip="${BASH_REMATCH[1]}"
-    if [ -n "$chip" ] && $KATAPULT_OK; then
-        local klipper_dev
-        klipper_dev=$(resolve_serial "/dev/serial/by-id/usb-Klipper_${chip}*")
-        if [ -n "$klipper_dev" ]; then
-            info "Triggering USB bootloader on $klipper_dev..."
-            python3 "$KATAPULT_SCRIPT" -d "$klipper_dev" -r 2>&1 | _indent4 || true
-            sleep 2
-            resolved=$(resolve_serial "$pattern")
-            [ -n "$resolved" ] && echo "$resolved" && return 0
-        fi
-    fi
-    return 1
-}
-
-# Probe firmware version from a USB device in Katapult bootloader mode.
-probe_usb_version() {
-    local serial="$1"
-    local tmpbin
-    tmpbin=$(mktemp --suffix=.bin)
-    printf '\x00' >"$tmpbin"
-    local output
-    output=$(timeout 8 python3 "$KATAPULT_SCRIPT" -d "$serial" -f "$tmpbin" 2>&1 || true)
-    rm -f "$tmpbin"
-    awk 'BEGIN{IGNORECASE=1} /Detected Klipper binary version/{fw=$NF; gsub(/,/,"",fw); print fw; exit}' <<<"$output"
+# Katapult device, else its running-Klipper counterpart; never opens the port.
+find_usb_device() {
+    local pattern="$1" dev
+    dev=$(resolve_serial "$pattern") && { echo "$dev"; return 0; }
+    [[ "$pattern" == *Katapult_* ]] || return 1
+    resolve_serial "${pattern/Katapult_/Klipper_}"
 }
 
 # Cached lsusb output - refreshed at the start of each scan_dfu_devices() call.
@@ -480,12 +458,11 @@ _install_dfu_udev_rule() {
 flash_bootsel() {
     local name="$1" vid_pid="$2"
     info "Flashing [$name] via BOOTSEL (FLASH_DEVICE=$vid_pid)..."
-    cd "$KLIPPER_DIR" || return 1
     # Use a temp file - rp2040_flash may emit null bytes that corrupt bash
     # variables ($() truncates at \0), making grep on the variable unreliable.
     local _tmp
     _tmp=$(mktemp)
-    make flash FLASH_DEVICE="$vid_pid" >"$_tmp" 2>&1
+    make -C "$KLIPPER_DIR" "${FW_MAKE_ARGS[@]}" flash FLASH_DEVICE="$vid_pid" >"$_tmp" 2>&1
     local make_rc=$?
     cat "$_tmp" | _indent
     # rp2040_flash exits 0 even when no device is found; detect via output.
@@ -595,7 +572,7 @@ flash_dfu() {
     info "Flashing [$name] via DFU (serial: $serial, addr: $addr)..."
     local output rc=0
     output=$(sudo dfu-util -d "$vidpid" -S "$serial" -a "$alt" \
-        -s "${addr}:leave" -D "$KLIPPER_DIR/out/klipper.bin" 2>&1) || rc=$?
+        -s "${addr}:leave" -D "$FW_BIN" 2>&1) || rc=$?
     echo "$output" | _indent >&2
     # "Error during download get_status" after :leave is benign - MCU already rebooted
     if echo "$output" | grep -q "Download done"; then
@@ -624,7 +601,7 @@ parse_config_metadata() {
         [[ "$line" =~ ^#[[:space:]]*([a-z_]+):[[:space:]]*(.+) ]] || continue
         local key="${BASH_REMATCH[1]}" val="${BASH_REMATCH[2]}"
         case "$key" in
-        serial | dfu_mem | katapult_dfu_mem | klipper_section)
+        serial | dfu_mem | katapult_dfu_mem | klipper_section | linux)
             val="${val%"${val##*[![:space:]]}"}"
             ;;
         mcu_type | bootsel | dfu | dfu_addr | dfu_alt | katapult_bootsel | katapult_dfu)
@@ -636,36 +613,45 @@ parse_config_metadata() {
     done <"$cfg"
 }
 
-# CAN, USB, and BOOTSEL all flash the same klipper.bin; only the transport differs.
+# Build <src> with <cfg> into $FW_BUILD_ROOT/<tag>; sets FW_OUT and FW_MAKE_ARGS.
 _make_build() {
-    local dir="$1" err_msg="$2"
-    cd "$dir" || return 1
-    make clean -s 2>&1 | _indent
-    make -j"$(nproc)" -s 2>&1 | _indent
+    local src="$1" cfg="$2" tag="$3" err_msg="$4"
+    local dir="$FW_BUILD_ROOT/$tag"
+    mkdir -p "$dir" || return 1
+    cp "$cfg" "$dir/.config" || return 1
+    [[ "$dir" == "$FW_BUILD_ROOT"/?* ]] && rm -rf "${dir:?}/out"
+    FW_OUT="$dir/out/"
+    FW_MAKE_ARGS=("KCONFIG_CONFIG=$dir/.config" "OUT=$FW_OUT")
+    make -C "$src" "${FW_MAKE_ARGS[@]}" -s olddefconfig 2>&1 | _indent
+    make -C "$src" "${FW_MAKE_ARGS[@]}" -j"$(nproc)" -s 2>&1 | _indent
     if [ "${PIPESTATUS[0]}" -ne 0 ]; then
         err "$err_msg"
         return 1
     fi
 }
 
+is_linux_config() { grep -q '^CONFIG_MACH_LINUX=y' "$1"; }
+
 build_firmware() {
     local cfg="$1" name="$2" iface="$3"
     info "Building firmware for [$name] ($iface)..."
-    cp "$cfg" "$KLIPPER_DIR/.config"
-    _make_build "$KLIPPER_DIR" "Build failed for [$name]" || return 1
-    if [ ! -f "$KLIPPER_DIR/out/klipper.bin" ]; then
-        err "Build completed but klipper.bin not found in $KLIPPER_DIR/out/"
-        warn "Files in out/: $(ls "$KLIPPER_DIR/out/" 2>/dev/null || echo '(empty)')"
+    _make_build "$KLIPPER_DIR" "$cfg" "$name" "Build failed for [$name]" || return 1
+    FW_BIN="${FW_OUT}klipper.bin"
+    is_linux_config "$cfg" && FW_BIN="${FW_OUT}klipper.elf"
+    if [ ! -f "$FW_BIN" ]; then
+        err "Build completed but $(basename "$FW_BIN") not found in $FW_OUT"
+        warn "Files in out/: $(ls "$FW_OUT" 2>/dev/null || echo '(empty)')"
         return 1
     fi
-    ok "Firmware built"
+    ok "Firmware built ($FW_OUT)"
 }
 
+# Sets FW_OUT/FW_MAKE_ARGS to the Katapult build.
 build_katapult_firmware() {
     local name="$1" katapult_cfg="$2"
     info "Building Katapult for [$name]..."
-    cp "$katapult_cfg" "$KATAPULT_DIR/.config"
-    _make_build "$KATAPULT_DIR" "Katapult build failed for [$name]" || return 1
+    _make_build "$KATAPULT_DIR" "$katapult_cfg" "$name.katapult" \
+        "Katapult build failed for [$name]" || return 1
     ok "Katapult built"
 }
 
@@ -723,10 +709,10 @@ bootstrap_katapult() {
         fi
         build_katapult_firmware "$name" "$katapult_cfg" || return 1
         info "Flashing Katapult on [$name] via BOOTSEL..."
-        cd "$KATAPULT_DIR" || return 1
         local _kat_tmp _kat_rc
         _kat_tmp=$(mktemp)
-        make flash FLASH_DEVICE="$katapult_bootsel" >"$_kat_tmp" 2>&1
+        make -C "$KATAPULT_DIR" "${FW_MAKE_ARGS[@]}" flash FLASH_DEVICE="$katapult_bootsel" \
+            >"$_kat_tmp" 2>&1
         _kat_rc=$?
         cat "$_kat_tmp" | _indent
         # rp2040_flash exits 0 even when no device is found - check output too.
@@ -762,7 +748,7 @@ bootstrap_katapult() {
         local _output
         _output=$(sudo dfu-util -d "$katapult_dfu" -S "$dfu_serial" -a 0 \
             -s "0x08000000:mass-erase:force:leave" \
-            -D "$KATAPULT_DIR/out/katapult.bin" 2>&1) || true
+            -D "${FW_OUT}katapult.bin" 2>&1) || true
         echo "$_output" | _indent >&2
         if echo "$_output" | grep -q "Download done"; then
             ok "Katapult installed on [$name]"
@@ -779,7 +765,7 @@ flash_can() {
     info "Flashing [$name] via CAN (UUID: $uuid)..."
     local _output _rc=0
     _output=$(python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" -u "$uuid" \
-        -f "$KLIPPER_DIR/out/klipper.bin" 2>&1 | tr -d '\0')
+        -f "$FW_BIN" 2>&1 | tr -d '\0')
     _rc=${PIPESTATUS[0]}
     echo "$_output" | _indent >&2
     if [ "$_rc" -eq 0 ]; then
@@ -797,7 +783,7 @@ flash_usb() {
     if $KATAPULT_OK; then
         info "Flashing [$name] via USB ($serial)..."
         python3 "$KATAPULT_SCRIPT" -d "$serial" \
-            -f "$KLIPPER_DIR/out/klipper.bin" 2>&1 | _indent
+            -f "$FW_BIN" 2>&1 | _indent
         if [ "${PIPESTATUS[0]}" -eq 0 ]; then
             ok "[$name] flashed via USB"
             return 0
@@ -805,8 +791,7 @@ flash_usb() {
         warn "Katapult USB failed - falling back to klipper make flash"
     fi
     info "Flashing [$name] via klipper make flash ($serial)..."
-    cd "$KLIPPER_DIR" || return 1
-    make flash FLASH_DEVICE="$serial" 2>&1 | _indent
+    make -C "$KLIPPER_DIR" "${FW_MAKE_ARGS[@]}" flash FLASH_DEVICE="$serial" 2>&1 | _indent
     if [ "${PIPESTATUS[0]}" -eq 0 ]; then
         ok "[$name] flashed via klipper make flash"
         return 0
@@ -815,13 +800,26 @@ flash_usb() {
     return 1
 }
 
+# Install the Linux host MCU via Klipper's flash-linux.sh (restarts the service).
+flash_linux() {
+    local name="$1" svc="$2"
+    info "Installing [$name] Linux MCU ($svc)..."
+    make -C "$KLIPPER_DIR" "${FW_MAKE_ARGS[@]}" flash 2>&1 | _indent
+    if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+        ok "[$name] installed, $svc restarted"
+        return 0
+    fi
+    err "[$name] Linux MCU install failed"
+    return 1
+}
+
 # Scans CAN bus (Pi context only), DFU devices, USB/BOOTSEL, then matches each
 # mcu_config/*.config to a detected device.
 #
 # Populates global DISCOVERED[] - one entry per config file.
 # Entry format: "name|iface|id|cfg|fw_ver|detected"
-#   iface:    can | usb | bootsel | none  (declared interface type)
-#   id:       UUID (CAN), serial path (USB), VID:PID (BOOTSEL), or empty
+#   iface:    can | usb | dfu | bootsel | linux | none  (declared interface type)
+#   id:       UUID (CAN), serial path (USB), VID:PID (BOOTSEL), service (linux), or empty
 #   fw_ver:   running firmware version string, or empty if unknown/not detected
 #   detected: true | false
 declare -a DISCOVERED=()
@@ -843,8 +841,14 @@ discover() {
     if [ "$CONTEXT" = "pi" ]; then
         header "Querying MCU firmware versions..."
         ensure_klipper_running
-        query_moonraker_versions
+        query_moonraker_versions && write_versions_file --quiet
     fi
+
+    # Reverse UUID cache, used by CAN step 2.
+    local -A _uuid_cache_rev=() _mcu_type_to_uuid=()
+    for _ct in "${!UUID_CACHE_MAP[@]}"; do
+        _uuid_cache_rev["${UUID_CACHE_MAP[$_ct]}"]="$_ct"
+    done
 
     header "Scanning DFU devices..."
     scan_dfu_devices
@@ -857,7 +861,7 @@ discover() {
             # Build set of bridge mcu_types - triggering them drops can0, so skip.
             local -A bridge_types=()
             for cfg_b in "$MCU_CONFIG_DIR"/*.config; do
-                [[ "$(basename "$cfg_b")" == .* ]] && continue
+                [[ "$(basename "$cfg_b")" == .* || "$cfg_b" == *.katapult.config ]] && continue
                 is_canbus_bridge "$cfg_b" || continue
                 while IFS='=' read -r key val; do
                     [ "$key" = "mcu_type" ] && bridge_types["$val"]=1
@@ -878,9 +882,8 @@ discover() {
                         uuid_to_mcu["$uuid"]="$mcu_type"
                         uuid_to_version["$uuid"]="$fw_version"
                         UUID_CACHE_MAP["$mcu_type"]="$uuid"
-                        local fw_hash
-                        fw_hash=$(extract_git_hash "$fw_version")
-                        ok "UUID $uuid -> $mcu_type  fw: ${fw_version:-unknown}  (hash: ${fw_hash:-?})"
+                        _uuid_cache_rev["$uuid"]="$mcu_type"
+                        ok "UUID $uuid -> $mcu_type  (in Katapult)"
                     fi
                 done
             fi
@@ -938,11 +941,6 @@ discover() {
         fi # ensure_can_up
     fi
 
-    # Build reverse maps for O(1) lookups in the config-matching loop below.
-    local -A _uuid_cache_rev=() _mcu_type_to_uuid=()
-    for _ct in "${!UUID_CACHE_MAP[@]}"; do
-        _uuid_cache_rev["${UUID_CACHE_MAP[$_ct]}"]="$_ct"
-    done
     for _u in "${!uuid_to_mcu[@]}"; do
         _mcu_type_to_uuid["${uuid_to_mcu[$_u]}"]="$_u"
     done
@@ -951,13 +949,13 @@ discover() {
     local -a _katapult_deferred=()
     shopt -s nullglob
     for cfg in "$MCU_CONFIG_DIR"/*.config; do
-        [[ "$(basename "$cfg")" == .* ]] && continue
+        [[ "$(basename "$cfg")" == .* || "$cfg" == *.katapult.config ]] && continue
         local name
         name=$(basename "$cfg" .config)
 
         local can_mcu_type="" usb_serial_pattern="" bootsel_id=""
         local dfu_vidpid="" dfu_mem="" dfu_addr="0x08000000" dfu_alt="0"
-        local katapult_dfu="" katapult_dfu_mem="" klipper_section=""
+        local katapult_dfu="" katapult_dfu_mem="" klipper_section="" linux_svc=""
         while IFS='=' read -r key val; do
             case "$key" in
             mcu_type) can_mcu_type="$val" ;;
@@ -970,6 +968,7 @@ discover() {
             katapult_dfu) katapult_dfu="$val" ;;
             katapult_dfu_mem) katapult_dfu_mem="$val" ;;
             klipper_section) klipper_section="$val" ;;
+            linux) linux_svc="$val" ;;
             esac
         done < <(parse_config_metadata "$cfg")
 
@@ -1005,11 +1004,10 @@ discover() {
 
         if [ -n "$usb_serial_pattern" ]; then
             local resolved
-            resolved=$(resolve_and_prepare_usb "$usb_serial_pattern") || true
+            # flashtool on a usb-Klipper port reboots it into the bootloader.
+            resolved=$(find_usb_device "$usb_serial_pattern") || true
             if [ -n "$resolved" ]; then
-                local fw_ver
-                fw_ver=$(probe_usb_version "$resolved")
-                DISCOVERED+=("$name|usb|$resolved|$cfg|$fw_ver|true")
+                DISCOVERED+=("$name|usb|$resolved|$cfg|$moonraker_ver|true")
                 ok "[$name] matched USB  serial=$resolved"
                 added=true
             fi
@@ -1024,6 +1022,13 @@ discover() {
                 ok "[$name] matched CAN  mcu_type=$can_mcu_type  uuid=$matched_uuid"
                 added=true
             fi
+        fi
+
+        if [ -n "$linux_svc" ] && ! $added && [ "$CONTEXT" = "pi" ] &&
+            { systemctl cat "$linux_svc" >/dev/null 2>&1 || [ -x /usr/local/bin/klipper_mcu ]; }; then
+            DISCOVERED+=("$name|linux|$linux_svc|$cfg|$moonraker_ver|true")
+            ok "[$name] matched Linux MCU  service=$linux_svc"
+            added=true
         fi
 
         # DFU triggerable - no physical DFU device present yet, but UUID is cached
@@ -1053,6 +1058,7 @@ discover() {
         # Report the highest-priority declared interface (CAN > DFU > USB > BOOTSEL).
         if ! $added && ! $_deferred; then
             local iface="none"
+            [ -n "$linux_svc" ] && iface="linux"
             [ -n "$bootsel_id" ] && iface="bootsel"
             [ -n "$usb_serial_pattern" ] && iface="usb"
             [ -n "$dfu_vidpid" ] && iface="dfu"
@@ -1127,11 +1133,14 @@ cmd_list_json() {
             fi
         fi
 
-        local iface_json
+        local iface_json section=""
         [ "$iface" = "none" ] && iface_json="null" || iface_json=$(json_str "$iface")
+        while IFS='=' read -r key val; do
+            [ "$key" = "klipper_section" ] && section="$val"
+        done < <(parse_config_metadata "$cfg")
 
         [ "$first" = "true" ] && first=false || mcu_array+=","
-        mcu_array+=$(printf '\n    {"name":%s,"config":%s,"interface":%s,"detected":%s,"id":%s,"current_version":%s,"source_version":%s,"needs_update":%s}' \
+        mcu_array+=$(printf '\n    {"name":%s,"config":%s,"interface":%s,"detected":%s,"id":%s,"current_version":%s,"source_version":%s,"needs_update":%s,"klipper_section":%s}' \
             "$(json_str "$name")" \
             "$(json_str "$cfg")" \
             "$iface_json" \
@@ -1139,12 +1148,14 @@ cmd_list_json() {
             "$(json_null_or_str "$id")" \
             "$(json_null_or_str "$fw_ver")" \
             "$(json_str "$SRC_VERSION")" \
-            "$needs_update")
+            "$needs_update" \
+            "$(json_null_or_str "$section")")
     done
 
-    printf '{"context":%s,"source_version":%s,"mcus":[%s\n]}\n' \
+    printf '{"context":%s,"source_version":%s,"versions_file":%s,"mcus":[%s\n]}\n' \
         "$(json_str "$CONTEXT")" \
         "$(json_str "$SRC_VERSION")" \
+        "$(json_str "$MCU_VERSIONS_FILE")" \
         "$mcu_array"
 }
 
@@ -1245,19 +1256,37 @@ cmd_flash() {
         to_flash=("${normal_mcus[@]}" "${bridge_mcus[@]}")
     fi
 
+    if [ "$CONTEXT" = "pi" ]; then
+        local print_state
+        print_state=$(python3 "$VERSIONS_PY" print-state --url "$MOONRAKER_URL" 2>/dev/null) || true
+        if [[ "$print_state" == "printing" || "$print_state" == "paused" ]]; then
+            err "A print is $print_state - flashing would stop Klipper mid-print. Aborting."
+            return 1
+        fi
+    fi
+
+    # Interrupts (incl. SSH hangup) finish the current step, then Klipper is restarted.
+    local _flash_aborted=false
+    trap 'warn "Signal caught - finishing current flash step before stopping..."; _flash_aborted=true' INT TERM HUP
+    trap '' TSTP # block Ctrl-Z completely
+
     header "Stopping Klipper..."
+    if [ "$CONTEXT" = "pi" ]; then
+        hold_klipper || warn "Could not block Klipper restarts - a UI may restart it mid-flash"
+        trap release_klipper EXIT
+    fi
     sudo systemctl stop klipper 2>/dev/null || true
     sleep 2
     [ "$CONTEXT" = "pi" ] && ensure_can_up
 
-    # Block Ctrl-C and Ctrl-Z during flashing
-    local _flash_aborted=false
-    trap 'warn "Signal caught - finishing current flash step before stopping..."; _flash_aborted=true' INT TERM
-    trap '' TSTP # block Ctrl-Z completely
-
     local _flash_idx=0 _flash_total=${#to_flash[@]}
+    local _bridge_flashed=false
     for entry in "${to_flash[@]}"; do
         IFS='|' read -r name iface id cfg fw_ver detected <<<"$entry"
+        if $_flash_aborted; then
+            failed+=("$name ($iface) - interrupted")
+            continue
+        fi
         ((_flash_idx++))
         header "[$name] ($iface) - ${_flash_idx}/${_flash_total}"
         local ok_flag=0
@@ -1290,6 +1319,7 @@ cmd_flash() {
                 ;;
             usb) flash_usb "$name" "$id" && ok_flag=1 ;;
             bootsel) flash_bootsel "$name" "$id" && ok_flag=1 ;;
+            linux) flash_linux "$name" "$id" && ok_flag=1 ;;
             dfu)
                 local dfu_vidpid="" dfu_mem="" dfu_addr="0x08000000" dfu_alt="0" dfu_mcu_type=""
                 local katapult_dfu_vid="" katapult_dfu_mem_f=""
@@ -1345,19 +1375,42 @@ cmd_flash() {
                 ;;
             esac
         fi
-        [ "$ok_flag" -eq 1 ] && flashed+=("$name ($iface)") || failed+=("$name ($iface)")
-        $_flash_aborted && break
+        is_canbus_bridge "$cfg" && _bridge_flashed=true
+        if [ "$ok_flag" -eq 1 ]; then
+            flashed+=("$name ($iface)")
+            record_flash "$cfg" "$iface" ok
+        else
+            failed+=("$name ($iface)")
+            record_flash "$cfg" "$iface" failed
+        fi
     done
 
-    trap - INT TERM TSTP # restore signals
+    trap - INT TERM HUP TSTP # restore signals
 
     save_uuid_cache
 
     header "Starting Klipper..."
+    release_klipper
+    trap - EXIT
+    if $_bridge_flashed; then
+        # The bridge re-enumerates after flashing; Klipper cannot connect until can0 is back.
+        local _w
+        for ((_w = 0; _w < 10; _w++)); do
+            ip link show "$CAN_INTERFACE" up >/dev/null 2>&1 && break
+            sleep 1
+        done
+        ensure_can_up >/dev/null 2>&1 || true
+    fi
     sudo systemctl start klipper 2>/dev/null || true
     $_flash_aborted && warn "Flash was interrupted - Klipper has been restarted"
 
     _summary_box "Flash Summary"
+
+    if [ "$CONTEXT" = "pi" ]; then
+        header "Verifying running versions..."
+        verify_klipper_ready
+        write_versions_file >&2
+    fi
 
     [ ${#failed[@]} -gt 0 ] && return 1 || return 0
 }
@@ -1639,6 +1692,7 @@ main() {
             parse_flash_names=true
             ;;
         --flash-all) mode="flash" ;;
+        --versions) mode="versions" ;;
         --force) FORCE=true ;;
         --help | -h)
             cat >&2 <<'EOF'
@@ -1649,6 +1703,7 @@ USAGE:
   flash_mcus.sh --list-json            Discover MCUs, emit JSON on stdout, exit 0
   flash_mcus.sh --flash <name...>      Flash named MCUs (e.g. octopus eddy_duo)
   flash_mcus.sh --flash-all            Flash all outdated MCUs non-interactively
+  flash_mcus.sh --versions             Report MCU vs host versions, update the versions file
   flash_mcus.sh --help                 Show this help
 
 OPTIONS:
@@ -1663,10 +1718,17 @@ CONFIG FILES:
     # dfu: 0483:df11           -> STM32 DFU flash
     # dfu_mem: 8*128Kg         -> DFU memory filter (disambiguates devices)
     # dfu_addr: 0x08000000     -> DFU flash address (default 0x08000000)
+    # linux: klipper-mcu       -> Linux host MCU (installs klipper_mcu)
+
+ENVIRONMENT:
+  MOONRAKER_URL      default http://localhost:7125 (--versions works against a remote host)
+  MCU_VERSIONS_FILE  default ~/printer_data/logs/mcu_versions.json
+  FW_BUILD_ROOT      out-of-tree build dir, default ~/.cache/blocks-flash
 
 EXIT CODES:
-  0   Success (or nothing to flash)
-  1   One or more MCUs failed to flash
+  0   Success (or nothing to flash); --versions: all Klipper MCUs current
+  1   One or more MCUs failed to flash; --versions: Moonraker unreachable
+  2   --versions: one or more MCUs need a flash
 
 NOTE: Ctrl-C and Ctrl-Z are blocked during active flash operations to
       prevent firmware corruption. The script finishes the current step
@@ -1679,6 +1741,12 @@ EOF
     done
 
     [ "$mode" = "tui" ] && [ ! -t 0 ] && mode="flash"
+
+    # Read-only, compared against the running host (Klipper's own mismatch rule).
+    if [ "$mode" = "versions" ]; then
+        python3 "$VERSIONS_PY" report --url "$MOONRAKER_URL" --state-file "$MCU_VERSIONS_FILE"
+        exit $?
+    fi
 
     [ ! -d "$MCU_CONFIG_DIR" ] && {
         echo "ERROR: $MCU_CONFIG_DIR not found"
@@ -1720,4 +1788,7 @@ EOF
     esac
 }
 
-main "$@"
+# Allow sourcing for tests.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
