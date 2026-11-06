@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from events import KlippyDisconnected, KlippyReady
+from BlocksScreen.lib.klippy_status import KlippyStatus
 from BlocksScreen.lib.panels.widgets.MainWindow.connectionPage import (
     ConnectionState,
     ConnectionPage,
@@ -29,6 +29,38 @@ def shown_page(qtbot, mock_ws):
     return widget
 
 
+class _Feed:
+    """Drives ConnectionPage through KlippyStatus, the way mainWindow wires it."""
+
+    def __init__(self, page: ConnectionPage) -> None:
+        self.page = page
+        self.ws = MagicMock()
+        self.ws.send_request.return_value = True
+        self.status = KlippyStatus(self.ws)
+        self.status.changed.connect(page.render)
+        self.status.on_connected()
+
+    def webhooks(self, state: str, message: str) -> None:
+        self.status.on_webhooks(state, message)
+
+    def server_info(self, state: str) -> None:
+        self.status.on_klippy_state(state)
+        self.status.on_server_info_tick(state != "disconnected")
+
+    def notify(self, state: str) -> None:
+        self.status.on_klippy_notify(state)
+
+    def printer_info(self, state: str, message: str) -> None:
+        self.status._poll()
+        callback = self.ws.send_request.call_args.kwargs["callback"]
+        callback({"state": state, "state_message": message})
+
+
+@pytest.fixture
+def feed(page):
+    return _Feed(page)
+
+
 class TestSetState:
     def test_disconnected(self, page):
         page._set_state(ConnectionState.DISCONNECTED)
@@ -36,7 +68,7 @@ class TestSetState:
         assert "offline" in page.status_label.text()
 
     def test_connecting(self, page):
-        page.on_websocket_connecting()
+        page.render("connecting", "", "")
         assert page._state == ConnectionState.CONNECTING
         assert page.status_label.text().endswith("Attempting to reconnect.")
 
@@ -75,21 +107,22 @@ class TestSetState:
         assert page._state == ConnectionState.KLIPPER_SHUTDOWN
         assert "heater fault" in page.status_label.text()
 
-    def test_real_shutdown_blocks_subsequent_fallback(self, page):
-        page.webhook_update("shutdown", "heater fault")
-        page.on_klippy_state("shutdown")  # no-context path — should be rejected
-        assert "Heater fault" in page.status_label.text()
+    def test_real_shutdown_survives_bare_server_info(self, feed):
+        feed.webhooks("shutdown", "heater fault")
+        feed.server_info("shutdown")
+        assert "Heater fault" in feed.page.status_label.text()
 
-    def test_shutdown_confirmed_resets_on_state_change(self, page):
-        page.webhook_update("shutdown", "heater fault")
-        assert page._shutdown_confirmed is True
-        page._set_state(ConnectionState.KLIPPER_READY)
-        assert page._shutdown_confirmed is False
+    def test_reason_cleared_after_recovery(self, feed):
+        feed.webhooks("shutdown", "heater fault")
+        feed.server_info("ready")
+        feed.server_info("shutdown")
+        assert "Heater fault" not in feed.page.status_label.text()
+        assert feed.page._FALLBACK_REASON in feed.page.status_label.text()
 
-    def test_real_shutdown_reason_can_be_overwritten_by_another_real_reason(self, page):
-        page.webhook_update("shutdown", "heater fault")
-        page.webhook_update("shutdown", "thermistor short")
-        assert "Thermistor short" in page.status_label.text()
+    def test_real_shutdown_reason_can_be_overwritten_by_another_real_reason(self, feed):
+        feed.webhooks("shutdown", "heater fault")
+        feed.webhooks("shutdown", "thermistor short")
+        assert "Thermistor short" in feed.page.status_label.text()
 
 
 class TestDotTimer:
@@ -116,9 +149,9 @@ class TestDotTimer:
 
     def test_repeat_attempts_keep_dot_beat(self, page):
         # Attempts come every 3s from the retry thread, off the 1s dot beat
-        page.on_websocket_connecting()
+        page.render("connecting", "", "")
         page._add_dot()
-        page.on_websocket_connecting()
+        page.render("connecting", "", "")
         assert page.status_label.text().endswith("reconnect..")
         assert page.dot_count == 2
 
@@ -128,7 +161,6 @@ class TestVisibility:
         for state in ConnectionState:
             if state == ConnectionState.KLIPPER_READY:
                 continue
-            shown_page._shutdown_confirmed = False
             shown_page._firmware_restarting_pending = False
             shown_page._state = ConnectionState.DISCONNECTED
             shown_page.hide()
@@ -213,14 +245,21 @@ class TestSignalWiring:
         assert blocker.args == [True]
 
 
-class TestEventFilter:
-    def test_klippy_disconnected_event(self, page):
-        page.eventFilter(page, KlippyDisconnected(None))
-        assert page._state == ConnectionState.KLIPPER_DISCONNECTED
+class TestKlippyNotify:
+    def test_klippy_disconnected_notify(self, feed):
+        feed.notify("disconnected")
+        assert feed.page._state == ConnectionState.KLIPPER_DISCONNECTED
 
-    def test_klippy_ready_event(self, page):
-        page.eventFilter(page, KlippyReady(None))
-        assert page._state == ConnectionState.KLIPPER_READY
+    def test_klippy_ready_notify(self, feed):
+        feed.notify("ready")
+        assert feed.page._state == ConnectionState.KLIPPER_READY
+
+    def test_disconnected_after_shutdown_keeps_reason(self, feed):
+        # Regression test for #220
+        feed.webhooks("shutdown", "heater fault")
+        feed.notify("disconnected")
+        assert feed.page._state == ConnectionState.KLIPPER_SHUTDOWN
+        assert "Heater fault" in feed.page.status_label.text()
 
 
 class TestBugRegressions:
@@ -243,15 +282,16 @@ class TestBugRegressions:
         page._set_state(ConnectionState.WEBSOCKET_LOST)
         assert not page.isVisible()
 
-    def test_estop_shutdown_arms_watchdog_without_self_cancel(self, page):
-        page.webhook_update("shutdown", "Printers Emergency Button Pressed.")
-        assert page._firmware_restarting_pending is True
-        assert page._restart_10s_timer.isActive()
-        assert page._restart_30s_timer.isActive()
-        assert page._state == ConnectionState.KLIPPER_SHUTDOWN
-
-    def test_estop_context_matches_auto_recover_key(self, page):
-        assert page._is_auto_recovering_context("Printers Emergency Button Pressed.")
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "Shutdown due to M112 command",
+            "Printers Emergency Button Pressed.",
+            "Printer Emergency Button Pressed.",
+        ],
+    )
+    def test_estop_reasons_share_one_text(self, page, raw):
+        assert ConnectionPage._build_reason(raw) == ConnectionPage._ESTOP_TEXT
 
     def test_unmapped_shutdown_reason_strips_prefix(self, page):
         result = ConnectionPage._clean_shutdown_context(
@@ -270,10 +310,10 @@ class TestErrorMessages:
         "Error configuring printer\n"
     )
 
-    def test_mcu_still_shutdown_after_reboot(self, page):
-        page.webhook_update("error", self.MCU_STILL_SHUTDOWN)
-        text = page.status_label.text()
-        assert page._state == ConnectionState.KLIPPER_ERROR
+    def test_mcu_still_shutdown_after_reboot(self, feed):
+        feed.webhooks("error", self.MCU_STILL_SHUTDOWN)
+        text = feed.page.status_label.text()
+        assert feed.page._state == ConnectionState.KLIPPER_ERROR
         assert "emergency button" in text
         assert "Error configuring printer" not in text
 
@@ -285,75 +325,131 @@ class TestErrorMessages:
             ("MCU Protocol error\n\nThis is frequently caused", "out of date"),
         ],
     )
-    def test_known_error_reasons(self, page, raw, expected):
-        page.webhook_update("error", raw)
-        assert expected in page.status_label.text()
+    def test_known_error_reasons(self, feed, raw, expected):
+        feed.webhooks("error", raw)
+        assert expected in feed.page.status_label.text()
 
-    def test_previous_mcu_shutdown_after_reboot(self, page):
+    def test_previous_mcu_shutdown_after_reboot(self, feed):
         # Real order: server.info's bare "shutdown", then the printer.info reply; no subscription
-        page.on_klippy_state("shutdown")
-        page.on_printer_info(
-            {
-                "state": "shutdown",
-                "state_message": "Previous MCU 'mcu' shutdown: Command request\n"
-                "Once the underlying issue is corrected, use the\n"
-                '"FIRMWARE_RESTART" command to reset the firmware',
-            }
+        feed.server_info("shutdown")
+        feed.printer_info(
+            "shutdown",
+            "Previous MCU 'mcu' shutdown: Command request\n"
+            "Once the underlying issue is corrected, use the\n"
+            '"FIRMWARE_RESTART" command to reset the firmware',
         )
-        assert page._state == ConnectionState.KLIPPER_SHUTDOWN
-        assert "emergency button" in page.status_label.text()
-        assert page._firmware_restarting_pending is False
+        assert feed.page._state == ConnectionState.KLIPPER_SHUTDOWN
+        assert "emergency button" in feed.page.status_label.text()
+        assert feed.page._firmware_restarting_pending is False
 
-    def test_error_during_config_after_reboot(self, page):
+    def test_error_during_config_after_reboot(self, feed):
         # mcu.py _send_get_config: the other message an E-stop + reboot can produce
-        page.webhook_update("error", "MCU 'mcu' error during config: Command request")
-        assert "emergency button" in page.status_label.text()
+        feed.webhooks("error", "MCU 'mcu' error during config: Command request")
+        assert "emergency button" in feed.page.status_label.text()
 
-    def test_live_command_request_is_not_previous_stop(self, page):
-        page.webhook_update("shutdown", "MCU 'mcu' shutdown: Command request")
-        text = page.status_label.text()
+    def test_live_command_request_is_not_previous_stop(self, feed):
+        feed.webhooks("shutdown", "MCU 'mcu' shutdown: Command request")
+        text = feed.page.status_label.text()
         assert "Emergency stop activated." in text
         assert "previous stop" not in text
 
-    def test_unknown_error_keeps_name_case(self, page):
-        page.webhook_update("error", "pin PA1 used multiple times in config")
-        assert "Pin PA1 used multiple times in config" in page.status_label.text()
+    def test_unknown_error_keeps_name_case(self, feed):
+        feed.webhooks("error", "pin PA1 used multiple times in config")
+        assert "Pin PA1 used multiple times in config" in feed.page.status_label.text()
 
-    def test_unknown_error_shows_klipper_line(self, page):
-        page.webhook_update(
+    def test_unknown_error_shows_klipper_line(self, feed):
+        feed.webhooks(
             "error", "Option 'step_pin' in section 'stepper_x' must be specified"
         )
-        text = page.status_label.text()
+        text = feed.page.status_label.text()
         assert "step_pin" in text
         assert "Firmware Restart" in text
 
-    def test_empty_error_keeps_generic_text(self, page):
-        page.webhook_update("error", "")
-        assert page.status_label.text() == (
+    def test_empty_error_keeps_generic_text(self, feed):
+        feed.webhooks("error", "")
+        assert feed.page.status_label.text() == (
             "A printer error has occurred.\nPress 'Firmware Restart' to recover."
         )
 
-    def test_info_ready_and_startup_are_ignored(self, page):
-        page._set_state(ConnectionState.KLIPPER_ERROR)
-        page.webhook_update("ready", "Printer is ready")
-        page.webhook_update("startup", "Printer is starting")
-        assert page._state == ConnectionState.KLIPPER_ERROR
+    def test_ready_after_error_hides_page(self, feed):
+        # Last write wins
+        feed.webhooks("error", "boom")
+        feed.webhooks("ready", "Printer is ready")
+        assert feed.page._state == ConnectionState.KLIPPER_READY
 
-    def test_printer_info_error_shows_reason(self, page):
-        page.on_printer_info(
-            {"state": "error", "state_message": self.MCU_STILL_SHUTDOWN}
-        )
-        assert "emergency button" in page.status_label.text()
+    def test_printer_info_error_shows_reason(self, feed):
+        feed.server_info("error")
+        feed.printer_info("error", self.MCU_STILL_SHUTDOWN)
+        assert "emergency button" in feed.page.status_label.text()
 
-    def test_printer_info_shutdown_keeps_estop_watchdog(self, page):
-        # The info reply to the shutdown transition repeats what the subscription sent
-        estop = "Shutdown due to Printers Emergency Button Pressed."
-        page.webhook_update("shutdown", estop)
-        page.on_printer_info({"state": "shutdown", "state_message": estop})
-        assert page._firmware_restarting_pending is True
-        assert page._restart_30s_timer.isActive()
+    def test_printer_info_new_error_reason_replaces_old(self, feed):
+        # Failed FIRMWARE_RESTART: same state, new message
+        feed.webhooks("error", "mcu 'mcu': Unable to connect")
+        feed.printer_info("error", "Failed automated reset of MCU 'mcu'")
+        assert "did not reset" in feed.page.status_label.text()
 
-    @pytest.mark.parametrize("state", ["ready", "startup"])
-    def test_printer_info_non_fault_is_ignored(self, page, state):
-        page.on_printer_info({"state": state, "state_message": "anything"})
-        assert page._state == ConnectionState.DISCONNECTED
+    def test_printer_info_startup_is_applied(self, feed):
+        feed.server_info("disconnected")
+        feed.printer_info("startup", "Printer is starting")
+        assert feed.page._state == ConnectionState.KLIPPER_STARTUP
+
+
+class TestRestartOverlay:
+    def _start_restart(self, feed):
+        feed.webhooks("shutdown", "Timer too close")
+        feed.page._on_restart_clicked()
+        assert feed.page.manual_restart_pending
+
+    def test_closes_on_ready(self, feed):
+        self._start_restart(feed)
+        feed.notify("disconnected")
+        feed.server_info("startup")
+        assert feed.page.manual_restart_pending
+        feed.server_info("ready")
+        assert not feed.page.manual_restart_pending
+
+    def test_closes_on_link_loss(self, feed):
+        self._start_restart(feed)
+        feed.status.on_connection_lost("gone")
+        assert not feed.page.manual_restart_pending
+
+    def test_closes_on_new_failure(self, feed):
+        self._start_restart(feed)
+        feed.notify("disconnected")
+        assert feed.page.manual_restart_pending
+        feed.server_info("error")
+        assert not feed.page.manual_restart_pending
+
+    def test_reason_update_keeps_overlay(self, feed):
+        self._start_restart(feed)
+        feed.printer_info("shutdown", "Lost communication with MCU 'mcu'")
+        assert feed.page.manual_restart_pending
+
+
+class TestKlippyStateRegressions:
+    TIMER_TOO_CLOSE = "MCU 'mcu' shutdown: Timer too close"
+    ESTOP = "Shutdown due to Printers Emergency Button Pressed."
+
+    @pytest.mark.parametrize("state", ["shutdown", "error"])
+    def test_r1_bare_server_info_keeps_reason(self, feed, state):
+        feed.webhooks(state, self.TIMER_TOO_CLOSE)
+        feed.server_info(state)
+        assert "MCU overload" in feed.page.status_label.text()
+
+    def test_r2_repeated_shutdown_keeps_restart_overlay(self, feed, qtbot):
+        feed.webhooks("shutdown", self.TIMER_TOO_CLOSE)
+        feed.page._on_restart_clicked()
+        with qtbot.assertNotEmitted(feed.page.call_load_panel):
+            feed.webhooks("shutdown", self.TIMER_TOO_CLOSE)
+            feed.printer_info("shutdown", self.TIMER_TOO_CLOSE)
+        assert feed.page.manual_restart_pending
+        assert feed.page._restart_30s_timer.isActive()
+
+    def test_r3_estop_arms_nothing(self, feed):
+        feed.webhooks("shutdown", self.ESTOP)
+        page = feed.page
+        assert not page.manual_restart_pending
+        assert not page._restart_10s_timer.isActive()
+        assert not page._restart_30s_timer.isActive()
+        assert "Release the emergency button" in page.status_label.text()
+        assert page.restart_klipper_button.text() == "Firmware Restart"

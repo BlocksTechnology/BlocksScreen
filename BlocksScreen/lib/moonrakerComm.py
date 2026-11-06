@@ -86,7 +86,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             self.QUERY_KLIPPY_TIMEOUT, self.query_server_info_signal.emit
         )
 
-        self.klippy_state_signal.connect(self.api.request_printer_info)
         self.request_reply_signal.connect(self._run_callback)
         logger.info("Websocket object initialized")
 
@@ -317,15 +316,16 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                     self.query_klippy_status_timer.stopTimer()
                 else:
                     self.query_klippy_status_timer.startTimer()
-                self.klippy_connected_signal.emit(
-                    _result.get("klippy_connected", False)
-                )
                 if _klippy_state != self._klippy_state:
                     # Poll repeats the state; consumers act on transitions only
                     self._klippy_state = _klippy_state
                     if _klippy_state == "ready":
                         self.api.update_status()  # Request update status immediately after klippy ready DEVDEBT
                     self.klippy_state_signal.emit(_klippy_state)
+                # After klippy_state_signal so listeners already hold the new state
+                self.klippy_connected_signal.emit(
+                    _result.get("klippy_connected", False)
+                )
                 return
             else:
                 _callback = _entry[2] if len(_entry) > 2 else None
