@@ -19,15 +19,15 @@ assert _spec and _spec.loader
 mv = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(mv)
 
-SRC = "v0.13.0-bl.1-225-g14edee70-dirty"
+SRC = "v0.13.0-225-g1a2b3c4d-dirty"
 
 
 @pytest.mark.parametrize(
     ("running", "source", "expected"),
     [
-        ("v0.13.0-bl.1-225-g14edee706", SRC, True),  # 9 vs 8 char abbreviation
-        ("v0.13.0-bl.1-225-g14edee70", "v0.13.0-bl.1-225-g14edee70", True),
-        ("v0.13.0-184-g27ed6cf7", SRC, False),
+        ("v0.13.0-225-g1a2b3c4d5", SRC, True),  # 9 vs 8 char abbreviation
+        ("v0.13.0-225-g1a2b3c4d", "v0.13.0-225-g1a2b3c4d", True),
+        ("v0.13.0-184-g5e6f7a8b", SRC, False),
         ("", SRC, False),
         ("Beacon 2.1.0", SRC, False),
         ("v0.13.0", "v0.13.0-dirty", True),  # tag-only build, no hash
@@ -44,7 +44,7 @@ def test_merge_keeps_history_and_marks_gone_mcus() -> None:
         "host_version": SRC,
         "klippy_state": "ready",
         "mcus": {
-            "mcu": {"version": "v0.13.0-184-g27ed6cf7", "chip": "stm32h723xx"},
+            "mcu": {"version": "v0.13.0-184-g5e6f7a8b", "chip": "stm32h723xx"},
             "beacon": {"version": "Beacon 2.1.0", "chip": "rp2040"},
         },
     }
@@ -61,8 +61,8 @@ _ROUTES = {
     "/printer/objects/list": {"objects": ["mcu", "mcu pi", "toolhead"]},
 }
 _STATUS = {
-    "mcu": {"mcu_version": "v0.13.0-bl.1-225-g14edee706"},
-    "mcu pi": {"mcu_version": "v0.13.0-bl.1-224-gd61bf239"},
+    "mcu": {"mcu_version": "v0.13.0-225-g1a2b3c4d5"},
+    "mcu pi": {"mcu_version": "v0.13.0-224-g9c8d7e6f"},
     "print_stats": {"state": "printing"},
 }
 
@@ -111,7 +111,7 @@ def test_print_state_reports_active_print(moonraker_url: str) -> None:
 def test_shell_helpers(tmp_path: Path) -> None:
     script = (
         f'. "{_SCRIPTS / "flash_mcus.sh"}"; '
-        f"versions_match v0.13.0-1-g14edee706 {SRC} && echo match; "
+        f"versions_match v0.13.0-1-g1a2b3c4d5 {SRC} && echo match; "
         f'versions_match "" {SRC} || echo empty; '
         f'resolve_serial "{tmp_path}/usb-Klipper_rp2040_*"'
     )
