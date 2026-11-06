@@ -29,7 +29,8 @@ class MachineControl(QtCore.QObject):
 
     @QtCore.pyqtSlot(name="restart_klipper_service")
     def restart_klipper_service(self):
-        """Restart klipper service"""
+        """Start klipper-mcu, then restart klipper service"""
+        self.restart_klipper_mcu_service()
         return self._run_command(
             ["sudo", "systemctl", "restart", "klipper.service", "--no-block"]
         )
@@ -59,16 +60,9 @@ class MachineControl(QtCore.QObject):
             return None
         return self._run_command(["systemctl", "is-active", service_name])
 
-    def _run_command(self, command: list[str]):
-        """Runs a shell command.
-
-        Args:
-            command (type: list[string]): The command to be executed .
-
-        Returns:
-            type: The complete output that resulted from the command.
-
-        """
+    def _run_command(self, command: list[str]) -> str | None:
+        """Run a shell command and return its output, or None on failure."""
+        # Callers are Qt slots: an escaping exception aborts the app
         try:
             p = subprocess.run(  # nosec: B603
                 command, check=True, capture_output=True, text=True, timeout=5
@@ -81,10 +75,11 @@ class MachineControl(QtCore.QObject):
                 command,
                 e.stderr.strip(),
             )
-            raise
+            return None
         except (
             subprocess.SubprocessError,
             subprocess.TimeoutExpired,
             FileNotFoundError,
         ):
             logger.error("Caught exception failed to run command %s", command)
+            return None
