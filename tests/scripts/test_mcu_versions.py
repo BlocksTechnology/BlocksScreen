@@ -29,7 +29,7 @@ SRC = "v0.13.0-225-g1a2b3c4d-dirty"
         ("v0.13.0-225-g1a2b3c4d", "v0.13.0-225-g1a2b3c4d", True),
         ("v0.13.0-184-g5e6f7a8b", SRC, False),
         ("", SRC, False),
-        ("Beacon 2.1.0", SRC, False),
+        ("Probe 2.1.0", SRC, False),
         ("v0.13.0", "v0.13.0-dirty", True),  # tag-only build, no hash
     ],
 )
@@ -44,15 +44,15 @@ def test_merge_keeps_history_and_marks_gone_mcus() -> None:
         "host_version": SRC,
         "klippy_state": "ready",
         "mcus": {
-            "mcu": {"version": "v0.13.0-184-g5e6f7a8b", "chip": "stm32h723xx"},
-            "beacon": {"version": "Beacon 2.1.0", "chip": "rp2040"},
+            "mcu": {"version": "v0.13.0-184-g5e6f7a8b", "chip": "stm32"},
+            "probe": {"version": "Probe 2.1.0", "chip": "probe"},
         },
     }
     state = mv.merge_report(state, live, "")
     assert state["source_version"] == SRC  # falls back to the host version
     assert state["mcus"]["mcu"]["needs_flash"] is True
     assert state["mcus"]["mcu"]["last_flash"]["result"] == "ok"
-    assert state["mcus"]["beacon"]["needs_flash"] is None
+    assert state["mcus"]["probe"]["needs_flash"] is None
     assert state["mcus"]["mcu old"]["connected"] is False
 
 
@@ -113,9 +113,9 @@ def test_shell_helpers(tmp_path: Path) -> None:
         f'. "{_SCRIPTS / "flash_mcus.sh"}"; '
         f"versions_match v0.13.0-1-g1a2b3c4d5 {SRC} && echo match; "
         f'versions_match "" {SRC} || echo empty; '
-        f'resolve_serial "{tmp_path}/usb-Klipper_rp2040_*"'
+        f'resolve_serial "{tmp_path}/usb-Klipper_mcu_*"'
     )
-    (tmp_path / "usb-Klipper_rp2040_ABC").touch()
+    (tmp_path / "usb-Klipper_mcu_ABC").touch()
     out = subprocess.run(
         ["bash", "-c", script],
         check=True,
@@ -123,4 +123,4 @@ def test_shell_helpers(tmp_path: Path) -> None:
         text=True,
         timeout=20,
     ).stdout.split()
-    assert out == ["match", "empty", f"{tmp_path}/usb-Klipper_rp2040_ABC"]
+    assert out == ["match", "empty", f"{tmp_path}/usb-Klipper_mcu_ABC"]

@@ -32,7 +32,7 @@ def git_hash(version: str) -> str:
 
 
 def is_klipper_version(version: str) -> bool:
-    """True for Klipper firmware versions (Beacon and other probes report their own)."""
+    """True for Klipper firmware versions; other devices report their own format."""
     return bool(git_hash(version)) or (version or "").startswith("v")
 
 
