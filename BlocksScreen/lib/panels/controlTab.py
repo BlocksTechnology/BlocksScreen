@@ -27,7 +27,8 @@ _logger = logging.getLogger(__name__)
 _ZTILT_PROGRESS = re.compile(
     r"Retries:\s*\d+/\d+.*?range:\s*([\d.]+)\s*tolerance:\s*([\d.]+)"
 )
-# The homing override before RF50-Klipper#7 runs M84, which disables every motor
+# The homing override before RF50-Klipper#7 runs M84, which disables every motor.
+# TODO: drop with _home_keeps_tilt once #7 is on every box; misses M84 in called macros.
 _LEGACY_HOME_M84 = re.compile(r"^\s*M84\b", re.MULTILINE | re.IGNORECASE)
 
 
@@ -415,6 +416,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     def on_klippy_status(self, state: str):
         """Handles incoming klippy status changes"""
         if state.lower() == "ready":
+            self._ztilt.forget_replies()
             self.printcores_page.hide()
             self.disable_popups.emit(False)
             return

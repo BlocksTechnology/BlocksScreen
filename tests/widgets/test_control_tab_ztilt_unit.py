@@ -195,3 +195,31 @@ def test_legacy_override_skips_final_home(qtbot):
     t.ztilt_result_screen.set_message.assert_called_once_with(
         "Z-Tilt calibration complete."
     )
+
+
+def test_klippy_ready_forgets_replies_a_restart_lost(tab):
+    t, _loads, callbacks = tab
+    _home(callbacks)
+    t._ztilt.stop()
+    assert t._ztilt.busy
+    t.printcores_page, t.disable_popups = MagicMock(), MagicMock()
+    ControlTab.on_klippy_status(t, "ready")
+    assert not t._ztilt.busy
+
+
+def test_forgotten_reply_does_not_clear_a_newer_send(qtbot):
+    sent: dict[str, object] = {}
+
+    def runner(script, callback=None):
+        sent[script] = callback
+        return True
+
+    run = GcodeRun(1000)
+    run.runner = runner
+    run.send("A", lambda _r: None)
+    run.forget_replies()
+    run.send("B", lambda _r: None)
+    sent["A"]("ok")
+    assert run.busy
+    sent["B"]("ok")
+    assert not run.busy

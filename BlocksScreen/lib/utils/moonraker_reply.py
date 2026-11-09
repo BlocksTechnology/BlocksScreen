@@ -32,7 +32,9 @@ class GcodeRun(QtCore.QObject):
         self.runner: Callable[..., bool] | None = None
         self._id = 0
         self._active = False
-        self._in_flight = 0
+        self._pending: set[object] = (
+            set()
+        )  # one token per sent script awaiting its reply
         self._watchdog = QtCore.QTimer(self)
         self._watchdog.setSingleShot(True)
         self._watchdog.setInterval(timeout_ms)
@@ -46,7 +48,7 @@ class GcodeRun(QtCore.QObject):
     @property
     def busy(self) -> bool:
         """True while active or while Klipper still owes a reply to a sent script."""
-        return self._active or self._in_flight > 0
+        return self._active or bool(self._pending)
 
     def start(self) -> None:
         """Begin a run and arm the watchdog."""
@@ -64,25 +66,29 @@ class GcodeRun(QtCore.QObject):
         if self._watchdog.isActive():
             self._watchdog.start()
 
+    def forget_replies(self) -> None:
+        """Drop pending replies on a Klippy (re)start: a new Klippy owes none."""
+        self._pending.clear()
+
     def pause(self) -> None:
         """Disarm the watchdog for a step that always replies, such as SAVE_CONFIG."""
         self._watchdog.stop()
 
     def send(self, script: str, handler: Callable[[object], None]) -> bool:
         """Run ``script``; ``handler`` gets the reply while this run lasts."""
-        run_id = self._id
+        run_id, token = self._id, object()
 
         def on_reply(reply: object) -> None:
-            self._in_flight -= 1
+            self._pending.discard(token)
             if run_id == self._id:
                 self.feed()
                 handler(reply)
 
         # Counted first, so a runner that replies synchronously stays balanced
-        self._in_flight += 1
+        self._pending.add(token)
         if self.runner is not None and self.runner(script, callback=on_reply):
             return True
-        self._in_flight -= 1
+        self._pending.discard(token)
         return False
 
     def _on_timeout(self) -> None:

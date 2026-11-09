@@ -221,6 +221,8 @@ class InputShaperPage(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, name="on-klippy-state")
     def on_klippy_state(self, state: str) -> None:
         """Close the save overlay once Klipper is back from the SAVE_CONFIG restart."""
+        if state == "ready":
+            self._run.forget_replies()
         if self._restarting and state in ("ready", "error", "shutdown"):
             self._restarting = False
             # Forced: MainWindow drops unforced hides while its restart guards are set
