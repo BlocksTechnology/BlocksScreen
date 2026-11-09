@@ -412,7 +412,7 @@ class ConfigManager:
         name = None
         block = []
         for line in lines:
-            m = re.match("^\[\s*(.+?)\s*\]\s*$", line)
+            m = re.match(r"^\[\s*(.+?)\s*\]\s*$", line)
             if m:
                 if block:
                     blocks.append((name, block))
@@ -499,7 +499,7 @@ class ConfigManager:
         target_file: pathlib.Path,
         marker="",
     ) -> bool:
-        """Merges two configuration files together"""
+        """Merge the repo cfg into the local one; SAVE_CONFIG-owned keys stay local."""
         try:
             _sfl = src_file.read_text(encoding="utf-8")
             _tfl = target_file.read_text(encoding="utf-8")
@@ -589,7 +589,7 @@ class ConfigManager:
                             if name is not None and name not in tgt_sc_map:
                                 merged_save_lines.extend(block)
 
-                        # Header comes from the repo: re-comment SAVE_CONFIG keys or repo wins
+                        # Autosave wins as in Klipper: changing an owned key needs a migration
                         merged_header_lines = self._strip_duplicates(
                             merged_header_lines,
                             self._save_config_fields(merged_save_lines),

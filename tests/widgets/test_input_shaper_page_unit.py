@@ -54,10 +54,18 @@ def test_auto_run_saves_after_sweep(page):
     assert "G28" not in sent
     assert loads[-1][1].startswith("Saving input shaper settings")
     sent["SAVE_CONFIG"]("ok")
-    assert loads[-1][0] is True  # Klipper restarts; ConnectionPage takes over
-    assert not p._running and not p._saving
-    assert not p._is_watchdog.isActive()
+    assert loads[-1][0] is True  # Klipper restarts: the overlay waits for it
+    assert not p._run.busy and not p._saving
+    assert not p._run._watchdog.isActive()
     assert fails == []
+
+    p.on_klippy_state("startup")
+    assert loads[-1][0] is True
+    p.on_klippy_state("ready")
+    assert loads[-1][0] is False
+    count = len(loads)
+    p.on_klippy_state("ready")
+    assert len(loads) == count  # Only the restart after its own save closes it
 
 
 def test_failed_first_home_skips_sweep(page):
@@ -67,7 +75,7 @@ def test_failed_first_home_skips_sweep(page):
     assert list(sent) == [_HOME]
     assert loads[-1][0] is False
     assert fails == ["Homing failed.\nCheck the printer and try again."]
-    assert not p._running
+    assert not p._run.busy
 
 
 def test_failed_save_reports_and_closes_overlay(page):
@@ -76,10 +84,10 @@ def test_failed_save_reports_and_closes_overlay(page):
     _sweep_both_axes(p)
     sent["SHAPER_CALIBRATE"]("ok")
     # The save must not be timed out while Klipper restarts
-    assert p._saving and not p._is_watchdog.isActive()
+    assert p._saving and not p._run._watchdog.isActive()
     sent["SAVE_CONFIG"]({"error": {"code": 400, "message": "conflicts"}})
     assert loads[-1][0] is False
-    assert not p._running
+    assert not p._run.busy
     assert fails == [
         "Saving the input shaper result failed.\nCheck the printer config."
     ]
@@ -112,7 +120,7 @@ def test_klippy_disconnect_closes_quietly(page):
     _sweep_both_axes(p)
     sent["SHAPER_CALIBRATE"](_GONE)
     assert loads[-1][0] is False
-    assert not p._running
+    assert not p._run.busy
     assert "SAVE_CONFIG" not in sent
     assert fails == []
 
@@ -129,34 +137,37 @@ def test_second_start_ignored_while_running(page):
 
 def test_unsent_request_closes_overlay(page):
     p, loads, _, _ = page
-    p.gcode_runner = lambda _gcode, _callback=None: False
+    p.gcode_runner = lambda _gcode, callback=None: False
     p.handle_is("SHAPER_CALIBRATE")
     assert loads[-1][0] is False
-    assert not p._running and not p._is_watchdog.isActive()
+    assert not p._run.busy and not p._run._watchdog.isActive()
 
 
-def test_timeout_reports_and_drops_late_replies(page, qtbot):
+def test_timeout_blocks_new_run_until_klipper_answers(page, qtbot):
     p, loads, sent, fails = page
-    p._is_watchdog.setInterval(50)
+    p._run._watchdog.setInterval(50)
     _start(p, sent)
     old = dict(sent)
     qtbot.waitUntil(lambda: loads[-1][0] is False, timeout=2000)
-    assert not p._running and not p.aut
+    assert not p._run.active and not p.aut
     assert fails == [
         "Input shaper calibration timed out.\nCheck the printer and try again."
     ]
 
-    # A new run must not be finished by the timed-out run's replies
-    p._is_watchdog.setInterval(120_000)
+    # Klipper still runs the old sweep: a re-tap must not queue a second one
+    p._run._watchdog.setInterval(120_000)
     sent.clear()
-    _start(p, sent)
+    p.handle_is("SHAPER_CALIBRATE")
+    assert sent == {}
+    assert "still running" in fails[-1]
+
+    # Its late reply neither saves nor reopens the overlay, and frees the page
     _sweep_both_axes(p)
     old["SHAPER_CALIBRATE"]("ok")
     assert "SAVE_CONFIG" not in sent
-    assert p._running
-
-    sent["SHAPER_CALIBRATE"]("ok")
-    assert "SAVE_CONFIG" in sent
+    assert loads[-1][0] is False
+    _start(p, sent)
+    assert p._run.active
 
 
 def test_single_axis_closes_on_final_home(page):
@@ -176,7 +187,7 @@ def test_single_axis_failed_sweep_reported_after_final_home(page):
     sent["SHAPER_CALIBRATE AXIS=X"](_FAIL)
     assert loads[-1] == (
         True,
-        "Input shaper calibration failed\nHoming the printer, please wait",
+        "Input shaper calibration failed\nHoming the printer",
     )
     # A "!!" from the final home does not end the run early
     p.handle_gcode_response(["!! Probe triggered prior to movement"])
@@ -202,7 +213,7 @@ def test_single_axis_final_home_failure_is_reported(page):
 
 def test_progress_lines_restart_the_watchdog(page, qtbot):
     p, loads, sent, _ = page
-    p._is_watchdog.setInterval(300)
+    p._run._watchdog.setInterval(300)
     _start(p, sent)
     for _ in range(5):
         qtbot.wait(100)
@@ -214,13 +225,13 @@ def test_progress_lines_restart_the_watchdog(page, qtbot):
 
 def test_unrelated_output_does_not_feed_the_watchdog(page, qtbot):
     p, loads, sent, _ = page
-    p._is_watchdog.setInterval(300)
+    p._run._watchdog.setInterval(300)
     _start(p, sent)
     for _ in range(5):
         qtbot.wait(100)
         p.handle_gcode_response(["// MMU: gate 0 idle"])
     assert loads[-1][0] is False
-    assert not p._running
+    assert not p._run.active
 
 
 def test_sweep_progress_reaches_overlay(page):
