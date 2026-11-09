@@ -34,7 +34,6 @@ from BlocksScreen.tools.configuration_manager.configurator import (  # noqa: E40
     ensure_dir,
     get_file_checksum,
     is_git_repo,
-    resolve_symlink,
 )
 
 
@@ -180,30 +179,6 @@ class TestCheckBrokenSymlinks:
 
     def test_not_exist(self, tmp_path):
         assert check_broken_symlinks(tmp_path / "ghost") == []
-
-
-class TestResolveSymlink:
-    def test_symlink_found(self, tmp_path):
-        real = _write(tmp_path / "source.cfg", "x")
-        link = tmp_path / "configs" / "source.cfg"
-        link.parent.mkdir()
-        link.symlink_to(real)
-        assert resolve_symlink(real, {link.resolve().as_posix()}) is True
-
-    def test_symlink_not_found(self, tmp_path):
-        real = _write(tmp_path / "source.cfg", "x")
-        other = _write(tmp_path / "other.cfg", "x")
-        assert resolve_symlink(real, {other.resolve().as_posix()}) is False
-
-    def test_empty_set(self, tmp_path):
-        assert resolve_symlink(_write(tmp_path / "a.cfg", "x"), set()) is False
-
-    def test_symlinked_file_resolves_to_its_target(self, tmp_path):
-        real = _write(tmp_path / "original.cfg", "content")
-        deep = tmp_path / "sub" / "original.cfg"
-        deep.parent.mkdir()
-        deep.symlink_to(real)
-        assert resolve_symlink(deep, {real.resolve().as_posix()}) is True
 
 
 class TestGetFileChecksum:
@@ -535,6 +510,21 @@ class TestSymlinkConfig:
         assert old.read_text() == "old"
         (backup,) = mgr.backup_dir.glob("a.cfg.*")
         assert backup.is_symlink() and backup.readlink() == old
+
+    @pytest.mark.parametrize("as_link", [False, True])
+    def test_identical_content_relinked_silently(self, tmp_path, mock_home, as_link):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src = _write(mock_home / "repo" / "a.cfg", "repo")
+        if as_link:
+            old = _write(tmp_path / "old-clone" / "a.cfg", "repo")
+            (mgr.config_dir / "a.cfg").symlink_to(old)
+        else:
+            _write(mgr.config_dir / "a.cfg", "repo")
+        assert mgr._symlink_config([src]) == []
+        assert (mgr.config_dir / "a.cfg").resolve() == src.resolve()
+        assert not mgr.backup_dir.exists() or not any(mgr.backup_dir.iterdir())
 
     def test_folder_link_outside_repo_skipped(self, tmp_path, mock_home):
         mgr = _make_manager(tmp_path, repo=mock_home / "repo")

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import ast
 import configparser
+import filecmp
 import hashlib
 import logging
 import os
@@ -125,11 +126,6 @@ def _atomic_symlink(src: pathlib.Path, target: pathlib.Path) -> None:
     except OSError:
         tmp.unlink(missing_ok=True)
         raise
-
-
-def resolve_symlink(file: pathlib.Path, resolved: set[str]) -> bool:
-    """Whether `file` resolves to one of the `resolved` symlink targets"""
-    return file.resolve().as_posix() in resolved
 
 
 def get_file_checksum(file: pathlib.Path | str) -> str:
@@ -397,7 +393,7 @@ class ConfigManager:
     def _link_repo_file(
         self, src: pathlib.Path, repo_real: pathlib.Path, config_real: pathlib.Path
     ) -> bool:
-        """Link the config copy of repo file `src` to it; True if a local file was replaced."""
+        """Link the config copy of repo file `src` to it; True if differing content was replaced."""
         src_rel = src.relative_to(self.repo)
         target = self.config_dir / src_rel
         parent_real = target.parent.resolve()
@@ -408,9 +404,12 @@ class ConfigManager:
             _logger.warning("Skipping %s: its folder links to %s", target, parent_real)
             return False
         replacing = target.is_symlink() or target.is_file()
+        if replacing and target.resolve() == src.resolve():
+            return False
+        # Same bytes (an older clone or a plain copy): nothing Klipper runs changes.
+        if replacing and target.is_file() and filecmp.cmp(target, src, shallow=False):
+            replacing = False
         if replacing:
-            if target.resolve() == src.resolve():
-                return False
             backup = self._backup_file(target, src_rel)
             _logger.warning("Replacing local %s, original kept at %s", target, backup)
         ensure_dir(target.parent)

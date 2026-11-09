@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from configfile import get_configparser
-from lib.klipper_message_filter import Severity
+from lib.klipper_message_filter import Severity  # noqa: E402
 from lib.panels.mainWindow import MainWindow  # noqa: E402
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
 from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
@@ -347,8 +347,8 @@ if __name__ == "__main__":
 
     if conf_man is not None:
         if conf_man.boot_changed:
-            # Klipper may have started before the boot sync rewrote
-            # printer.cfg; restarted once Moonraker is up and no job runs.
+            # Klipper may have started before the boot sync rewrote its
+            # config; restarted once Moonraker is up and no job runs.
             main_window.request_klipper_restart()
         _seed_variables(main_window, conf_man)
         if notice := conf_man.replaced_notice():
