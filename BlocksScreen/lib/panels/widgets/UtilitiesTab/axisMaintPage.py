@@ -1,4 +1,3 @@
-import logging
 import typing
 from collections.abc import Callable
 
@@ -8,8 +7,6 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-_logger = logging.getLogger(__name__)
 
 
 class AxisMaintPage(QtWidgets.QWidget):
@@ -56,7 +53,7 @@ class AxisMaintPage(QtWidgets.QWidget):
 
     def _send(self, script: str, on_done: Callable[[object], None]) -> None:
         """Run ``script``; ``on_done`` gets the reply, or an error if unsent."""
-        # Moonraker replies to gcode.script only after Klipper ran the whole script
+        # Moonraker replies to gcode.script only after Klipper has run the whole script.
         run = self.gcode_runner
         if not (run and run(script, callback=on_done)):
             on_done({"error": {"code": -1, "message": "not connected"}})
@@ -64,16 +61,13 @@ class AxisMaintPage(QtWidgets.QWidget):
     def _on_homed(self, result: object) -> None:
         """Drop the loading screen and show the oil prompt once homing succeeded."""
         self.call_load_panel.emit(False, "", False)
-        if isinstance(result, dict) and "error" in result:
-            _logger.warning("Axis maintenance homing failed: %s", result["error"])
-            return
-        self.answerPage.show()
+        # Failures need no popup here: Klipper broadcasts the "!!" reason to the UI.
+        if not (isinstance(result, dict) and "error" in result):
+            self.answerPage.show()
 
-    def _on_cycle_done(self, result: object) -> None:
+    def _on_cycle_done(self, _result: object) -> None:
         """Drop the loading screen when the maintenance cycle ends."""
         self.call_load_panel.emit(False, "", False)
-        if isinstance(result, dict) and "error" in result:
-            _logger.warning("Axis maintenance cycle failed: %s", result["error"])
 
     def _setup_ui(self) -> None:
         self.setObjectName("axes_page")
