@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from updater.models import ComponentStatus
+from updater.models import PRINTER_BUSY, ComponentStatus
 
 
 @pytest.fixture
@@ -480,6 +480,15 @@ class TestDaemonUnavailable:
         page.handle_daemon_unavailable()
         assert page._busy is False
 
+    def test_later_idle_signal_restores_page(self, page):
+        page.show_loading = MagicMock()
+        page._show_toast = MagicMock()
+        page._request_status_debounced = MagicMock()
+        page.handle_daemon_unavailable()
+        page.handle_busy_changed(False)
+        page.update_all_btn.setEnabled.assert_called_with(True)
+        page._request_status_debounced.assert_called_once()
+
 
 class TestProgressLabelDisplay:
     def test_progress_label_shown_when_busy(self, page):
@@ -513,6 +522,14 @@ class TestErrorMessageActionability:
         page.handle_error_occurred("firmware", "checksum mismatch")
         msg = page._show_toast.call_args[0][0]
         assert "failed" in msg.lower()
+
+
+class TestPrinterBusyRefusal:
+    def test_busy_reason_gets_its_own_message(self, page):
+        page._show_toast = MagicMock()
+        page.handle_error_occurred("updater", PRINTER_BUSY)
+        msg = page._show_toast.call_args[0][0]
+        assert "print" in msg.lower() and "updater" not in msg.lower()
 
 
 class TestBadStatusPayload:
