@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""ExecStop - write splash to fb0 before the Qt process is fully dead.
-
-X.Org stays alive (BlocksScreen-xorg.service is independent), so no VT switch
-is needed.  Writing the splash to fb0 is a best-effort hint; in KMS mode the
-vc4 driver may or may not honour fb0 writes while X holds DRM master.
-ExecStopPost (feh --bg-fill) repaints the splash after the process is fully gone.
-"""
+"""ExecStop: best-effort fb0 splash; vc4 may ignore it while X holds DRM master."""
 
 import os
 import sys

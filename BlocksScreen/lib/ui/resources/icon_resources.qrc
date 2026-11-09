@@ -84,6 +84,7 @@
     <file>media/btn_icons/info.svg</file>
     <file>media/btn_icons/LCD_settings.svg</file>
     <file>media/btn_icons/LEDs.svg</file>
+    <file>media/btn_icons/LEDs_off.svg</file>
     <file>media/btn_icons/pause.svg</file>
     <file>media/btn_icons/play.svg</file>
     <file>media/btn_icons/print.svg</file>
@@ -127,5 +128,7 @@
     <file>media/btn_icons/right_arrow.svg</file>
     <file>media/btn_icons/down_arrow.svg</file>
     <file>media/btn_icons/up_arrow.svg</file>
+    <file>media/btn_icons/sort_desc.svg</file>
+    <file>media/btn_icons/sort_asc.svg</file>
   </qresource>
 </RCC>

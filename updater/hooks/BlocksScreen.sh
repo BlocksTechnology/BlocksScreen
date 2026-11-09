@@ -20,7 +20,6 @@ _set_deploy_flag() {
     echo "[hook:BlocksScreen] deploy flag set - BlocksScreen-deploy.path will run install-updater.sh"
 }
 
-# --- BlocksScreen.service changed ---
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- scripts/BlocksScreen.service 2>/dev/null; then
 
@@ -55,7 +54,6 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     echo "[hook:BlocksScreen] daemon-reload done"
 fi
 
-# --- BlocksScreen-xorg.service changed ---
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- scripts/BlocksScreen-xorg.service 2>/dev/null; then
 
@@ -75,11 +73,33 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     echo "[hook:BlocksScreen] daemon-reload done (xorg service)"
 fi
 
-# --- install files changed (checked independently) ---
+# Same set as post-merge: only install-updater.sh deploys these, so any change must re-run it.
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
-        -- scripts/install-updater.sh scripts/bs-apt-helper.sh 2>/dev/null; then
+        -- scripts/install-updater.sh scripts/bs-apt-helper.sh \
+        scripts/BlocksScreen-updater.service scripts/BlocksScreen-bootstrap.service \
+        scripts/com.blockscreen.Updater.conf scripts/com.blockscreen.Updater.service \
+        scripts/requirements-pip.txt \
+        2>/dev/null; then
     echo "[hook:BlocksScreen] install files changed - setting deploy flag"
     _set_deploy_flag
 fi
 
-# NOTE: no daemon restart here on updater/ changes: mid-batch restart cancels+reverts (see 2026-06-19 self-update-ordering spec).
+# updater/ changed: defer a daemon self-restart to post-batch (mid-batch it would revert the batch).
+if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" -- updater/ 2>/dev/null; then
+    if [ -n "${BS_UPDATER_SELF_UPDATE:-}" ] && [ -n "${BS_UPDATER_RESTART_SENTINEL:-}" ]; then
+        mkdir -p "$(dirname "$BS_UPDATER_RESTART_SENTINEL")" 2>/dev/null || true
+        echo "code" >>"$BS_UPDATER_RESTART_SENTINEL"
+        echo "[hook:BlocksScreen] updater code changed - deferring daemon restart to post-batch"
+    fi
+fi
+
+# Manifest changed: the restarted daemon applies the changed entries in the same Update.
+if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
+        -- updater/components.yaml 2>/dev/null; then
+    _followup="${HOME}/.cache/blockscreen/updater_followup"
+    # Oldest base wins across chained updates; the try count resets.
+    _base=$(head -n1 "$_followup" 2>/dev/null || true)
+    mkdir -p "$(dirname "$_followup")"
+    printf '%s\n' "${_base:-$PREV_HASH}" >"$_followup.tmp" && mv -f "$_followup.tmp" "$_followup"
+    echo "[hook:BlocksScreen] components.yaml changed - follow-up queued"
+fi
