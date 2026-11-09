@@ -480,6 +480,15 @@ class TestDaemonUnavailable:
         page.handle_daemon_unavailable()
         assert page._busy is False
 
+    def test_later_idle_signal_restores_page(self, page):
+        page.show_loading = MagicMock()
+        page._show_toast = MagicMock()
+        page._request_status_debounced = MagicMock()
+        page.handle_daemon_unavailable()
+        page.handle_busy_changed(False)
+        page.update_all_btn.setEnabled.assert_called_with(True)
+        page._request_status_debounced.assert_called_once()
+
 
 class TestProgressLabelDisplay:
     def test_progress_label_shown_when_busy(self, page):

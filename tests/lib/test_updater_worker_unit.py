@@ -261,6 +261,26 @@ class TestWatchdog:
         # The daemon answers, so reconnecting would only re-arm the same stuck state.
         worker._schedule_reconnect.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_idle_signal_after_giving_up_clears_busy(self, worker, qtbot):
+        """The listener survives the give-up, so the daemon's eventual idle still lands."""
+        busy = []
+        worker.busy_changed.connect(busy.append)
+        worker._busy_false_event.clear()
+        worker._last_busy = True
+        worker._proxy.get_busy = AsyncMock(return_value=True)
+        worker._schedule_reconnect = MagicMock()
+        worker._last_activity = worker._loop.time() - _limit("_BUSY_SILENT_MAX")
+        await worker._busy_watchdog()
+
+        async def _gen():
+            yield False
+
+        worker._proxy.busy_changed = _gen()
+        await worker._listen_busy_changed()
+        assert busy == [False] and worker._last_busy is False
+        assert worker._busy_false_event.is_set()
+
 
 class _Msg:
     """NameOwnerChanged message; a callable payload runs on read (stop or fail)."""

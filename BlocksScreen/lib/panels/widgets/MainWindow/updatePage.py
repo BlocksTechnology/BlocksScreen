@@ -524,7 +524,7 @@ class UpdatePage(QtWidgets.QWidget):
     def handle_error_occurred(self, name: str, reason: str) -> None:
         """Show a toast with the error reason and prompt the user to refresh."""
         if reason == PRINTER_BUSY:
-            self._show_toast("Printer is busy. Try again once the print has finished.")
+            self._show_toast("Printer is busy or not responding. Try again later.")
             return
         self._show_toast(f"{name} update failed: {reason}. Tap refresh to retry.")
 
