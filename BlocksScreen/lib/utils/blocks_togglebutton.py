@@ -8,7 +8,7 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
     clicked = QtCore.pyqtSignal()
 
     def __init__(self, parent):
-        super(NetworkWidgetbuttons, self).__init__(parent)
+        super().__init__(parent)
 
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self._icon_label = None
@@ -18,7 +18,7 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
             Icon.FILAMENT_SENSOR_TURN_ON
         )
 
-        self._setupUI()
+        self._setup_ui()
         self.tb = self.toggle_button
 
     def text(self) -> str:
@@ -85,7 +85,7 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         self.toggle_button.repaint()
         return super().setDisabled(a0)
 
-    def _setupUI(self):
+    def _setup_ui(self):
         _policy = QtWidgets.QSizePolicy.Policy.MinimumExpanding
         size_policy = QtWidgets.QSizePolicy(_policy, _policy)
         size_policy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())

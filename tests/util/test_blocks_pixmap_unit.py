@@ -1,6 +1,7 @@
-"""Unit tests for the BlocksPixmap registry and the Icon key enum."""
+"""Unit tests for BlocksPixmap; Qt turns an unknown key into a silent null pixmap."""
 
 import importlib
+from pathlib import Path
 
 import pytest
 from PyQt6 import QtCore, QtGui
@@ -13,21 +14,14 @@ from BlocksScreen.lib.utils.blocks_pixmap import (
 )
 
 _RC_PACKAGE = "BlocksScreen.lib.ui.resources"
-_RC_MODULES = (
-    "background_resources_rc",
-    "font_rc",
-    "graphic_resources_rc",
-    "icon_resources_rc",
-    "main_menu_resources_rc",
-    "top_bar_resources_rc",
-)
+_RESOURCES = Path(__file__).resolve().parents[2] / "BlocksScreen/lib/ui/resources"
 
 
 @pytest.fixture(autouse=True)
 def _resources(qapp):
     """Register the compiled blobs, then leave the caches empty for the next test."""
-    for module in _RC_MODULES:
-        importlib.import_module(f"{_RC_PACKAGE}.{module}")
+    for blob in sorted(_RESOURCES.glob("*_rc.py")):
+        importlib.import_module(f"{_RC_PACKAGE}.{blob.stem}")
     BlocksPixmap.clear()
     yield
     BlocksPixmap.clear()
@@ -86,6 +80,12 @@ def test_get_resamples_a_surface_once():
     )
 
 
+def test_get_passes_a_null_surface_through_uncached():
+    """An unset widget pixmap is null, and scaling it per resize only fills the cache."""
+    assert BlocksPixmap.get(QtGui.QPixmap(), QtCore.QSize(40, 40)).isNull()
+    assert not BlocksPixmap._scaled
+
+
 def test_get_keys_on_the_aspect_mode():
     """Distort-to-fill and fit-inside must not collide on one key."""
     source = BlocksPixmap.get(Icon.BACK)
@@ -112,6 +112,15 @@ def test_eviction_drops_the_least_recently_used():
     cache.put("c", BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32)))
     assert cache.get("a") is not None
     assert cache.get("b") is None
+
+
+def test_overwriting_a_key_does_not_double_count_its_bytes():
+    """A leaked cost shrinks the live budget until the cache holds one entry."""
+    pixmap = BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32))
+    cache = _PixmapCache(10 * _cost(pixmap))
+    for _ in range(3):
+        cache.put("a", pixmap)
+    assert cache._bytes == _cost(pixmap)
 
 
 @pytest.mark.parametrize(
