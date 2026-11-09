@@ -4,7 +4,7 @@ import pathlib
 from PyQt6 import QtCore
 
 from .udisks2 import UDisksDBusAsync
-from lib.panels.widgets.bannerPopup import BannerPopup
+from lib.panels.widgets.Common.bannerPopup import BannerPopup
 
 ResType: typing.TypeAlias = typing.Literal["always", "none"]
 
@@ -53,6 +53,7 @@ class USBManager(QtCore.QObject):
         )
         self.banner = BannerPopup()
         self._restart_type: ResType = "always"
+        self._closing: bool = False
         self.udisks.start(self.udisks.Priority.InheritPriority)
         self.udisks.hardware_detected.connect(self.handle_new_hardware)
         self.udisks.hardware_detected.connect(self.usb_hardware_detected)
@@ -75,6 +76,8 @@ class USBManager(QtCore.QObject):
 
     def restart(self) -> None:
         """Restart usb monitoring tool"""
+        if self._closing:
+            return
         if not self.udisks.active:
             self.udisks.start(self.udisks.Priority.InheritPriority)
             return
@@ -83,11 +86,13 @@ class USBManager(QtCore.QObject):
 
     def close(self) -> None:
         """Close usb monitoring tool"""
+        # A queued `finished` must not restart the thread deleteLater destroys (qFatal).
+        self._closing = True
         self.udisks.close()
         self.deleteLater()
 
     def _handle_full_restart(self) -> None:
-        if self.need_restart:
+        if self.need_restart and not self._closing:
             self.udisks.start(self.udisks.Priority.InheritPriority)
             self.need_restart = False
 
