@@ -1,9 +1,10 @@
+"""Full-screen page shown while the printer is offline, starting or halted."""
+
 import enum
 import logging
 import re
 import typing
 
-from events import KlippyDisconnected, KlippyReady
 from lib.moonrakerComm import MoonWebSocket
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
@@ -13,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionState(enum.StrEnum):
+    """Screen shown by ConnectionPage."""
+
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     WEBSOCKET_LOST = "websocket_lost"
@@ -25,9 +28,9 @@ class ConnectionState(enum.StrEnum):
 
 
 class ConnectionPage(QtWidgets.QFrame):
-    _SHUTDOWN_FALLBACK_CONTEXT: typing.Final[str] = (
-        "Press 'Firmware Restart' to recover."
-    )
+    """Connection and Klipper status screen with restart controls."""
+
+    _FALLBACK_REASON: typing.Final[str] = "Press 'Firmware Restart' to recover."
 
     _MESSAGES: typing.ClassVar[dict[ConnectionState, str]] = {
         ConnectionState.DISCONNECTED: "The printer is offline.\nReconnecting automatically…",
@@ -41,14 +44,6 @@ class ConnectionPage(QtWidgets.QFrame):
         ConnectionState.KLIPPER_SHUTDOWN: "The printer has shut down.\n{message}",
     }
 
-    _AUTO_RECOVER_CONTEXTS: typing.ClassVar[frozenset[str]] = frozenset(
-        {
-            "m112 command",
-            "printers emergency button pressed",
-            "printer emergency button pressed",
-        }
-    )
-
     # Any stop before a host reboot (E button, M112, fault) leaves the MCU halted, not only the button
     _STILL_HALTED: typing.Final[str] = (
         "Controller board still halted\nfrom a previous stop.\n"
@@ -56,10 +51,15 @@ class ConnectionPage(QtWidgets.QFrame):
         "then press 'Firmware Restart' to recover."
     )
 
-    _SHUTDOWN_REASON_MAP: typing.ClassVar[dict[str, str]] = {
-        "m112 command": "Emergency stop activated.\nRelease the emergency button, then\npress 'Firmware Restart' to recover.",
-        "printers emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then\npress 'Firmware Restart' to recover.",
-        "printer emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then\npress 'Firmware Restart' to recover.",
+    _ESTOP_TEXT: typing.Final[str] = (
+        "Emergency stop activated.\nRelease the emergency button, then\n"
+        "press 'Firmware Restart' to recover."
+    )
+
+    _REASON_MAP: typing.ClassVar[dict[str, str]] = {
+        "m112 command": _ESTOP_TEXT,
+        "printers emergency button pressed": _ESTOP_TEXT,
+        "printer emergency button pressed": _ESTOP_TEXT,
         "webhooks request": "Emergency stop activated.",
         "lost communication with mcu": "Lost communication with the MCU.",
         "timer too close": "MCU overload\nCommunication timing failure.\nPress 'Firmware Restart' to recover.",
@@ -103,6 +103,11 @@ class ConnectionPage(QtWidgets.QFrame):
         "ready": ConnectionState.KLIPPER_READY,
     }
 
+    _LINK_STATE_MAP: typing.ClassVar[dict[str, ConnectionState]] = {
+        "connecting": ConnectionState.CONNECTING,
+        "lost": ConnectionState.WEBSOCKET_LOST,
+    }
+
     wifi_button_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="call_network_page"
     )
@@ -140,10 +145,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.base_text: str = ""
         self.dot_count: int = 0
         self.conn_toggle: bool = True
-        self._shutdown_confirmed: bool = (
-            False  # prevents fallback from overwriting shutdown reason
-        )
-        self._last_shutdown_context: str = ""
+        self._klippy_state: str = ""
         self._firmware_restarting_pending: bool = False
         self._last_restart_was_firmware: bool = False
         self._escalated_to_klipper_restart: bool = False
@@ -173,47 +175,10 @@ class ConnectionPage(QtWidgets.QFrame):
         """True while a user-initiated restart (firmware or printer) is in flight."""
         return self._firmware_restarting_pending
 
-    def _apply_shutdown_guard(self, state: ConnectionState, context: str) -> bool:
-        if (
-            self._state == ConnectionState.KLIPPER_SHUTDOWN
-            and state != ConnectionState.KLIPPER_SHUTDOWN
-        ):
-            self._shutdown_confirmed = False
-        elif state == ConnectionState.KLIPPER_SHUTDOWN:
-            _is_real = context and context != ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
-            if _is_real:
-                self._shutdown_confirmed = True
-                self._last_shutdown_context = context
-            elif self._shutdown_confirmed or (
-                self._state == ConnectionState.KLIPPER_SHUTDOWN and not context
-            ):
-                return False
-        return True
-
-    def _handle_pending_restart(self, state: ConnectionState) -> bool:
-        if self._firmware_restarting_pending and state in (
-            ConnectionState.KLIPPER_SHUTDOWN,
-            ConnectionState.KLIPPER_ERROR,
-            ConnectionState.WEBSOCKET_LOST,
-        ):
-            self._stop_restart_overlay()
-        return state == ConnectionState.KLIPPER_DISCONNECTED and (
-            self._firmware_restarting_pending
-            or self._state == ConnectionState.KLIPPER_SHUTDOWN
-        )
-
     def _set_state(self, state: ConnectionState, context: str = "") -> None:
         """Update connection state and refresh the UI accordingly."""
-        if state == ConnectionState.KLIPPER_SHUTDOWN and not context:
-            context = (
-                self._last_shutdown_context or ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
-            )
-        elif state == ConnectionState.KLIPPER_ERROR and not context:
-            context = ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
-        if not self._apply_shutdown_guard(state, context):
-            return
-        if self._handle_pending_restart(state):
-            return
+        if state in self._FIRMWARE_RESTART_STATES and not context:
+            context = ConnectionPage._FALLBACK_REASON
         message = self._MESSAGES[state].format(message=context)
         if state == ConnectionState.CONNECTING:
             # Attempts land every 3s off the 1s beat, restarting would desync the dots
@@ -228,7 +193,6 @@ class ConnectionPage(QtWidgets.QFrame):
         self._state = state
         if state == ConnectionState.KLIPPER_READY:
             self._stop_restart_overlay()
-            self._last_shutdown_context = ""
             self.hide()
             return
         if not self.isVisible() and self.conn_toggle:
@@ -286,27 +250,20 @@ class ConnectionPage(QtWidgets.QFrame):
             ConnectionPage._is_halted_before_start(raw)
         ):
             return ConnectionPage._STILL_HALTED
-        for key, display in ConnectionPage._SHUTDOWN_REASON_MAP.items():
+        for key, display in ConnectionPage._REASON_MAP.items():
             if lower.startswith(key):
                 return display
         # capitalize() would lowercase pin and MCU names
         return line[:1].upper() + line[1:]
 
     @staticmethod
-    def _build_shutdown_context(raw: str) -> str:
+    def _build_reason(raw: str) -> str:
         reason = ConnectionPage._clean_shutdown_context(raw)
         if not reason:
-            return ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
+            return ConnectionPage._FALLBACK_REASON
         if "\n" in reason:
             return reason
         return f"{reason}\nPress 'Firmware Restart' to recover."
-
-    @staticmethod
-    def _is_auto_recovering_context(raw: str) -> bool:
-        lower = ConnectionPage._normalize_shutdown_lines(raw)
-        return any(
-            lower.startswith(key) for key in ConnectionPage._AUTO_RECOVER_CONTEXTS
-        )
 
     def _on_restart_clicked(self) -> None:
         is_firmware = self._state in self._FIRMWARE_RESTART_STATES
@@ -345,62 +302,33 @@ class ConnectionPage(QtWidgets.QFrame):
         """Enable or disable auto-show behaviour."""
         self.conn_toggle = toggle
 
-    @QtCore.pyqtSlot(str, name="on_klippy_state")
-    def on_klippy_state(self, state: str) -> None:
-        """Handle Klipper state string changes."""
-        if (mapped := self._KLIPPY_STATE_MAP.get(state)) is not None:
-            self._set_state(mapped)
-        else:
+    @QtCore.pyqtSlot(str, str, str, name="render")
+    def render(self, link: str, state: str, message: str) -> None:
+        """Show the KlippyStatus triple; the only Klipper/link input of this page."""
+        prev, self._klippy_state = self._klippy_state, state
+        if link != "connected":
+            if link == "lost" and self._firmware_restarting_pending:
+                self._stop_restart_overlay()
+            self._set_state(
+                self._LINK_STATE_MAP.get(link, ConnectionState.DISCONNECTED)
+            )
+            return
+        mapped = self._KLIPPY_STATE_MAP.get(state, ConnectionState.MOONRAKER_CONNECTED)
+        if state and state not in self._KLIPPY_STATE_MAP:
             logger.warning("Unknown Klipper state: %s", state)
-
-    @QtCore.pyqtSlot(name="on_websocket_connecting")
-    def on_websocket_connecting(self) -> None:
-        """Handle websocket reconnection attempts."""
-        self._set_state(ConnectionState.CONNECTING)
-
-    @QtCore.pyqtSlot(name="on_websocket_connection_achieved")
-    def on_websocket_connection_achieved(self) -> None:
-        """Handle websocket connection established."""
-        self._set_state(ConnectionState.MOONRAKER_CONNECTED)
-
-    @QtCore.pyqtSlot(name="on_websocket_connection_lost")
-    def on_websocket_connection_lost(self) -> None:
-        """Handle websocket connection lost."""
-        self._set_state(ConnectionState.WEBSOCKET_LOST)
-
-    @QtCore.pyqtSlot(str, str, name="webhooks_update")
-    def webhook_update(self, state: str, message: str) -> None:
-        """Handle Moonraker websocket state updates."""
-        if state == "shutdown":
-            should_auto_recover = (
-                self._state != ConnectionState.KLIPPER_SHUTDOWN
-                and not self._firmware_restarting_pending
-                and self._is_auto_recovering_context(message)
-            )
-            self._set_state(
-                ConnectionState.KLIPPER_SHUTDOWN,
-                context=self._build_shutdown_context(message),
-            )
-            if should_auto_recover:
-                self._last_restart_was_firmware = True
-                self._escalated_to_klipper_restart = False
-                self._firmware_restarting_pending = True
-                self._restart_10s_timer.start()
-                self._restart_30s_timer.start()
-        elif state == "error":
-            self._set_state(
-                ConnectionState.KLIPPER_ERROR,
-                context=self._build_shutdown_context(message),
-            )
-
-    def on_printer_info(self, info: dict) -> None:
-        """Show the reason from a printer.info reply when Klipper is in error or shutdown."""
-        state = info.get("state")
-        # A shutdown the subscription already reported would cancel the E-stop watchdog
-        if state == "error" or (state == "shutdown" and not self._shutdown_confirmed):
-            self.webhook_update(state, info.get("state_message", ""))
+        failed = mapped in self._FIRMWARE_RESTART_STATES
+        # Only a new failure ends a restart
+        if self._firmware_restarting_pending and failed and state != prev:
+            self._stop_restart_overlay()
+        if mapped == ConnectionState.KLIPPER_DISCONNECTED and (
+            self._firmware_restarting_pending
+            or self._state == ConnectionState.KLIPPER_SHUTDOWN
+        ):
+            return  # Keep the shutdown screen through a restart (#220)
+        self._set_state(mapped, self._build_reason(message) if failed else "")
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
+        """Refresh update status, close overlays and announce the page."""
         if self.conn_toggle:
             self.ws.api.refresh_update_status()
             self.call_load_panel.emit(False, "", False)
@@ -408,17 +336,6 @@ class ConnectionPage(QtWidgets.QFrame):
         # Top-level popups (e.g. filament load) would stay above this child frame.
         self.page_shown.emit()
         super().showEvent(a0)
-
-    def eventFilter(self, a0: QtCore.QObject | None, a1: QtCore.QEvent | None) -> bool:
-        """Route Klipper custom events to _set_state"""
-        if a1 is None:
-            return super().eventFilter(a0, a1)
-        if a1.type() == KlippyDisconnected.type():
-            if not self._firmware_restarting_pending:
-                self._set_state(ConnectionState.KLIPPER_DISCONNECTED)
-        elif a1.type() == KlippyReady.type():
-            self._set_state(ConnectionState.KLIPPER_READY)
-        return super().eventFilter(a0, a1)
 
     def _setup_ui(self) -> None:
         self.setMinimumSize(QtCore.QSize(800, 480))

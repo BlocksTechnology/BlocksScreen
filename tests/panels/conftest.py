@@ -33,6 +33,7 @@ _STUB_MODULES = (
     "lib",
     "lib.files",
     "lib.klipper_message_filter",
+    "lib.klippy_status",
     "lib.machine",
     "lib.moonrakerComm",
     "lib.network",
@@ -85,6 +86,7 @@ sys.modules["lib.files"].Files = MagicMock
 sys.modules["lib.klipper_message_filter"].MessageSource = MagicMock()
 sys.modules["lib.klipper_message_filter"].Severity = MagicMock()
 sys.modules["lib.klipper_message_filter"].match_message = MagicMock()
+sys.modules["lib.klippy_status"].KlippyStatus = MagicMock
 sys.modules["lib.machine"].MachineControl = MagicMock
 sys.modules["lib.moonrakerComm"].MoonWebSocket = MagicMock
 sys.modules["lib.network"].WifiIconKey = MagicMock()
