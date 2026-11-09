@@ -1071,8 +1071,13 @@ def _http_probe(url: str) -> bool:
         conn.close()
 
 
-async def klipper_printing(sock: Path = KLIPPY_SOCK, timeout: float = 2.0) -> bool:
-    """True while Klipper reports a printing or paused job; unreachable means idle."""
+async def klipper_printing(
+    sock: Path = KLIPPY_SOCK, timeout: float = 2.0, *, unanswered: bool = False
+) -> bool:
+    """True while Klipper reports a printing or paused job; unreachable means idle.
+
+    A socket that accepts but stays silent past `timeout` returns `unanswered`.
+    """
     req = {
         "id": 1,
         "method": "objects/query",
@@ -1089,9 +1094,11 @@ async def klipper_printing(sock: Path = KLIPPY_SOCK, timeout: float = 2.0) -> bo
                 writer.close()
                 await writer.wait_closed()
         state = reply["result"]["status"]["print_stats"]["state"]
+    except TimeoutError:
+        logger.debug("klipper print state: no reply in %.1fs", timeout)
+        return unanswered
     except (
         OSError,
-        TimeoutError,
         EOFError,
         ValueError,
         LookupError,
