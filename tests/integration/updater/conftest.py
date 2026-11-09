@@ -474,7 +474,7 @@ async def daemon(harness):
         await d.iface.shutdown()
 
 
-async def wait_for(predicate, timeout: float = 15.0, what: str = "condition") -> None:
+async def _wait_for(predicate, timeout: float = 15.0, what: str = "condition") -> None:
     """Poll predicate until true; fail with `what` on timeout."""
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
@@ -482,3 +482,9 @@ async def wait_for(predicate, timeout: float = 15.0, what: str = "condition") ->
         if loop.time() >= deadline:
             pytest.fail(f"timed out waiting for {what}")
         await asyncio.sleep(0.02)
+
+
+@pytest.fixture
+def wait_for():
+    """Poller as a fixture, since `from conftest import` breaks on multi-path runs."""
+    return _wait_for

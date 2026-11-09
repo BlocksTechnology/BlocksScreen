@@ -1,8 +1,7 @@
 """UpdaterDbusService end to end: busy/overlay contract, boot pass, deploy hold, cancel."""
 
 import asyncio
-
-from conftest import wait_for
+from unittest.mock import AsyncMock
 
 UI_FILES = {
     "updater/dbus_service.py": "# marker\n",
@@ -18,19 +17,19 @@ def _idle(d) -> bool:
     )
 
 
-async def _booted(daemon):
+async def _booted(daemon, wait_for):
     """Start a daemon and wait for its first status emit."""
     d = daemon()
     await wait_for(lambda: d.statuses(), what="boot status")
     return d
 
 
-async def test_update_all_round_trip(harness, daemon):
+async def test_update_all_round_trip(harness, daemon, wait_for):
     origin = harness.remote("klipper")
     harness.install(origin)
     new = origin.commit({"klippy.py": "v2\n"})
     harness.component("klipper", service="klipper.service")
-    d = await _booted(daemon)
+    d = await _booted(daemon, wait_for)
     assert d.statuses()[0]["klipper"]["commits_behind"] == 1
 
     assert await d.iface.update_all() is True
@@ -49,10 +48,10 @@ async def test_update_all_round_trip(harness, daemon):
     assert d.statuses()[-1]["klipper"]["commits_behind"] == 0
 
 
-async def test_nothing_dirty_still_releases_busy(harness, daemon):
+async def test_nothing_dirty_still_releases_busy(harness, daemon, wait_for):
     harness.install(harness.remote("klipper"))
     harness.component("klipper", service="klipper.service")
-    d = await _booted(daemon)
+    d = await _booted(daemon, wait_for)
 
     assert await d.iface.update_all() is True
     await wait_for(lambda: d.busy_trace() == [True, False], what="busy release")
@@ -60,14 +59,35 @@ async def test_nothing_dirty_still_releases_busy(harness, daemon):
     assert d.signals("step_complete") == []
 
 
-async def test_failed_update_releases_busy_and_reports(harness, daemon):
+async def test_print_started_after_confirm_refuses_update(
+    harness, daemon, wait_for, monkeypatch
+):
+    origin = harness.remote("klipper")
+    harness.install(origin)
+    old = harness.head("klipper")
+    origin.commit({"klippy.py": "v2\n"})
+    harness.component("klipper", service="klipper.service")
+    d = await _booted(daemon, wait_for)
+    monkeypatch.setitem(
+        harness.dbus_g, "klipper_printing", AsyncMock(return_value=True)
+    )
+
+    assert await d.iface.update_all() is True
+    await wait_for(lambda: d.busy_trace() == [True, False], what="busy release")
+
+    assert harness.head("klipper") == old
+    assert d.signals("error") == [("updater", harness.dbus_g["PRINTER_BUSY"])]
+    assert d.signals("step_complete") == []
+
+
+async def test_failed_update_releases_busy_and_reports(harness, daemon, wait_for):
     origin = harness.remote("klipper")
     harness.install(origin)
     old = harness.head("klipper")
     origin.commit({"klippy.py": "v2\n"})
     harness.component("klipper", service="klipper.service")
     harness.hook("klipper", "exit 1\n")
-    d = await _booted(daemon)
+    d = await _booted(daemon, wait_for)
 
     assert await d.iface.update_all() is True
     await wait_for(lambda: d.busy_trace() == [True, False], what="busy release")
@@ -78,13 +98,15 @@ async def test_failed_update_releases_busy_and_reports(harness, daemon):
     assert d.signals("component_done") == [("klipper", False)]
 
 
-async def test_install_update_holds_overlay_until_deploy_finishes(harness, daemon):
+async def test_install_update_holds_overlay_until_deploy_finishes(
+    harness, daemon, wait_for
+):
     origin = harness.remote("BlocksScreen", UI_FILES)
     harness.install(origin)
     origin.commit({"scripts/install-updater.sh": "v2\n"})
     harness.component("BlocksScreen", service="BlocksScreen.service")
     harness.real_hook("BlocksScreen")
-    d = await _booted(daemon)
+    d = await _booted(daemon, wait_for)
 
     assert await d.iface.update_all() is True
     await wait_for(harness.deploy_flag.exists, what="deploy flag")
@@ -101,7 +123,7 @@ async def test_install_update_holds_overlay_until_deploy_finishes(harness, daemo
     await wait_for(lambda: d.busy_trace() == [True, False], what="hold release")
 
 
-async def test_deploy_hold_is_capped(harness, daemon):
+async def test_deploy_hold_is_capped(harness, daemon, wait_for):
     harness.mp.setitem(harness.dbus_g, "_DEPLOY_HOLD_CAP_S", 0.3)
     harness.deploy_flag.parent.mkdir(parents=True)
     harness.deploy_flag.touch()  # a hung install-updater never clears it
@@ -122,7 +144,9 @@ async def test_deploy_hold_is_capped(harness, daemon):
     assert d.iface._deploy_hold is None
 
 
-async def test_stale_flag_under_dead_deploy_units_does_not_hold(harness, daemon):
+async def test_stale_flag_under_dead_deploy_units_does_not_hold(
+    harness, daemon, wait_for
+):
     harness.deploy_flag.parent.mkdir(parents=True)
     harness.deploy_flag.touch()
     for unit in ("BlocksScreen-deploy.path", "BlocksScreen-deploy.service"):
@@ -133,7 +157,7 @@ async def test_stale_flag_under_dead_deploy_units_does_not_hold(harness, daemon)
     assert harness.deploy_flag.exists()
 
 
-async def test_restarted_daemon_resumes_hold_silently(harness, daemon):
+async def test_restarted_daemon_resumes_hold_silently(harness, daemon, wait_for):
     harness.deploy_flag.parent.mkdir(parents=True)
     harness.deploy_flag.touch()  # install-updater restarted us mid-run
 
@@ -146,11 +170,11 @@ async def test_restarted_daemon_resumes_hold_silently(harness, daemon):
     await wait_for(lambda: d.busy_trace() == [False], what="hold release")
 
 
-async def test_boot_provisioning_raises_overlay(harness, daemon):
+async def test_boot_provisioning_raises_overlay(harness, daemon, wait_for):
     origin = harness.remote("klipper")
     harness.component("klipper", service="klipper.service", install_if_missing=True)
 
-    d = await _booted(daemon)
+    d = await _booted(daemon, wait_for)
 
     assert [a[0] for a in d.signals("provisioning_changed")] == [True, False]
     assert d.busy_trace() == [True, False]
@@ -159,7 +183,8 @@ async def test_boot_provisioning_raises_overlay(harness, daemon):
     assert d.statuses()[0]["klipper"]["commits_behind"] == 0
 
 
-async def test_boot_reconcile_reverts_power_cut(harness, daemon):
+def _power_cut(harness) -> str:
+    """Leave klipper pulled to a new commit with its in-flight marker; return the old head."""
     origin = harness.remote("klipper")
     harness.install(origin)
     old = harness.head("klipper")
@@ -168,22 +193,46 @@ async def test_boot_reconcile_reverts_power_cut(harness, daemon):
     harness.inflight.parent.mkdir(parents=True, exist_ok=True)
     harness.inflight.write_text(f'{{"klipper": "{old}"}}')
     harness.component("klipper", service="klipper.service")
+    return old
 
-    await _booted(daemon)
+
+async def test_boot_reconcile_reverts_power_cut(harness, daemon, wait_for):
+    old = _power_cut(harness)
+
+    await _booted(daemon, wait_for)
 
     assert harness.head("klipper") == old
     assert "boot_rollback" in harness.events("klipper")
     assert not harness.inflight.exists()
 
 
-async def test_cancel_mid_hook_reverts_and_releases(harness, daemon):
+async def test_boot_revert_restarts_service_on_reverted_code(harness, daemon, wait_for):
+    old = _power_cut(harness)
+
+    await _booted(daemon, wait_for)
+
+    assert harness.head("klipper") == old
+    assert "systemctl --no-block restart klipper.service" in harness.calls()
+
+
+async def test_boot_revert_mid_print_defers_restart(harness, daemon, wait_for):
+    old = _power_cut(harness)
+    harness.printing.return_value = True
+
+    await _booted(daemon, wait_for)
+
+    assert harness.head("klipper") == old
+    assert not any("restart klipper.service" in c for c in harness.calls())
+
+
+async def test_cancel_mid_hook_reverts_and_releases(harness, daemon, wait_for):
     origin = harness.remote("klipper")
     harness.install(origin)
     old = harness.head("klipper")
     origin.commit({"klippy.py": "v2\n"})
     harness.component("klipper", service="klipper.service")
     harness.hook("klipper", "sleep 20\n")
-    d = await _booted(daemon)
+    d = await _booted(daemon, wait_for)
 
     assert await d.iface.update_all() is True
     await wait_for(
