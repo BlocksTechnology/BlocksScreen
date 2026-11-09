@@ -1,14 +1,23 @@
+"""Qt-side facade for the AMU: owns MMU state and issues Happy-Hare gcode."""
+
 from __future__ import annotations
 
-import dataclasses
 import logging
+import math
+import shlex
 import typing
 from pathlib import Path
 
 from PyQt6 import QtCore
 
-from .config_toggler import ConfigToggler
-from .models import MMUState, SpoolmanSupport
+from .config_toggler import ConfigToggler, ToggleResult
+from .models import (
+    FilamentPos,
+    GateInfo,
+    GateStatus,
+    MMUState,
+    SpoolmanSupport,
+)
 
 if typing.TYPE_CHECKING:
     from BlocksScreen.lib.moonrakerComm import MoonWebSocket
@@ -16,20 +25,24 @@ if typing.TYPE_CHECKING:
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-# Spool Weight threshold for heavy-filament speed profile (grams)
-HEAVY_SPOOL_THRESHOLD_G: float = 1000.0
-# Absolute target speed (mm/s) for heavy spools - used to calculate SPEED % for MMU_GATE_MAP
-HEAVY_SPEED_MM_S: float = 100.0
-# Base gear stepper max_velocity (mm/s) - must match mmu_gear max_velocity in printer.cfg
-BASE_GEAR_SPEED_MM_S: float = 300.0
-# Precomputed speed percentage for heavy spools (avoids repeated division at runtime)
-_HEAVY_SPEED_PERCENT: int = max(1, round(HEAVY_SPEED_MM_S / BASE_GEAR_SPEED_MM_S * 100))
-
 CONFIG_PATH: Path = Path("~/printer_data/config/printer.cfg").expanduser()
+
+# HH job detection never ends these (only complete/error); MMU_PRINT_END parks only on complete.
+_STALE_JOB_STATES: tuple[str, ...] = ("cancelled", "standby")
+_STALE_JOB_GRACE_MS: int = 5000
+
+
+def _gcode_value(value: object) -> str:
+    """Quote a value for Klipper's shlex-based extended gcode parser."""
+    if isinstance(value, float):
+        value = round(value)
+    # A raw newline ends the gcode line; '%' crashes save_variables' configparser.
+    text = " ".join(str(value).replace("%", "").split())
+    return shlex.quote(text)
 
 
 class AMUManager(QtCore.QObject):
-    """Main manager of the AMU system"""
+    """Owns the MMU state and turns UI intents into guarded Happy-Hare gcode."""
 
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
@@ -46,12 +59,6 @@ class AMUManager(QtCore.QObject):
     pre_gate_changed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, bool, name="pre-gate-changed"
     )
-    spool_fetched: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        int, dict, name="spool-fetched"
-    )
-    gate_weight_updated: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        int, float, name="gate-weight-updated"
-    )
 
     def __init__(self, ws: MoonWebSocket, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
@@ -59,87 +66,47 @@ class AMUManager(QtCore.QObject):
         self._ws = ws
         self._mmu_state: MMUState | None = None
         self._pre_gate_sensors: dict[int, bool] = {}
-        self.spool_fetched.connect(self._apply_spool_data)
+        self._print_state = ""
+        self._stale_job_timer = QtCore.QTimer(self)
+        self._stale_job_timer.setSingleShot(True)
+        self._stale_job_timer.setInterval(_STALE_JOB_GRACE_MS)
+        self._stale_job_timer.timeout.connect(self._end_stale_mmu_job)
 
-    def _apply_spool_data(self, gate: int, data: dict) -> None:
-        """Apply Spoolman spool data to local gate state and sync to Klipper.
-
-        Extracts material, color, weight from the Spoolman response dict,
-        emits MMU_GATE_MAP gcode to sync Klipper, and updates the local GateInfo weight.
-        """
-        if self._mmu_state is None:
-            return
-        filament = data.get("filament", {})
-        material = filament.get("material", "")
-        color = filament.get("color_hex", "")
-        filament_name = filament.get("name", "")
-        temperature = filament.get("settings_extruder_temp")
-        bed_temp = filament.get("settings_bed_temp")
-        spool_id = data.get("id", -1)
-        weight = data.get("used_weight")
-        remaining_weight = data.get("remaining_weight")
-        self.set_gate_info(
-            gate,
-            material,
-            color,
-            spool_id,
-            filament_name=filament_name,
-            temperature=temperature,
+    def _gate_map(self, gate: int, **params: object) -> bool:
+        """Emit MMU_GATE_MAP for one gate; False when no gate is selected yet."""
+        if gate < 0:
+            logger.warning("Ignoring gate command for unselected gate %d", gate)
+            return False
+        # TEMP=0 keeps the current temp; TEMP=None omits it, resetting to the default.
+        params.setdefault("TEMP", 0)
+        args = "".join(
+            f" {key}={_gcode_value(value)}"
+            for key, value in params.items()
+            if value is not None
         )
-        gates = list(self._mmu_state.gates)
-        if gate >= len(gates):
-            logger.warning("Gate index %d out of range (%d gate)", gate, len(gates))
-            return
-        updates = {}
-        if weight is not None:
-            updates["weight_g"] = float(weight)
-        if remaining_weight is not None:
-            updates["remaining_weight"] = float(remaining_weight)
-            self._emit_speed_gcode(gate, remaining_weight)
-        if filament_name:
-            updates["filament_name"] = filament_name
-        if temperature is not None:
-            updates["temperature"] = float(temperature)
-        if bed_temp is not None:
-            updates["bed_temp"] = int(bed_temp)
-        if updates:
-            gates[gate] = dataclasses.replace(gates[gate], **updates)
-            self._mmu_state = dataclasses.replace(self._mmu_state, gates=tuple(gates))
-            self.mmu_state_changed.emit(self._mmu_state)
-
-    def _emit_speed_gcode(self, gate: int, remaining_weight: float) -> None:
-        """Emit MMU_GATE_MAP SPEED=x for the gate based on the spool weight profile."""
-        if remaining_weight > HEAVY_SPOOL_THRESHOLD_G:
-            self.run_gcode_signal.emit(
-                f"MMU_GATE_MAP gate={gate} SPEED={_HEAVY_SPEED_PERCENT}"
-            )
+        self.run_gcode_signal.emit(f"MMU_GATE_MAP GATE={gate}{args} QUIET=1")
+        return True
 
     def toggle_amu_system(self, activate: bool) -> None:
-        """Enable or disable the AMU system by commenting/uncommenting config includes.
-
-        Emits:
-            amu_toggled (bool): True if the operation succeeded, False otherwise.
-
-        Args:
-            activate (bool): True to enable the AMU, False to disable it.
-
-        """
-        result: bool = self._config_toggler.toggle(activate)
-        self.amu_toggled.emit(result)
-        if result:
-            self.run_gcode_signal.emit("FIRMWARE_RESTART")
+        """Swap the printer.cfg variant, restarting on change; emits amu_toggled."""
+        if self._print_state in ("printing", "paused"):
+            logger.warning(
+                "Ignoring AMU toggle while the print is %s", self._print_state
+            )
+            self.amu_toggled.emit(False)
+            return
+        result = self._config_toggler.toggle(activate)
+        self.amu_toggled.emit(result is not ToggleResult.FAILED)
+        if result is ToggleResult.CHANGED:
+            # FIRMWARE_RESTART as gcode drops the socket and replies a false 503.
+            self._ws.api.firmware_restart()
 
     def get_state(self) -> MMUState | None:
-        """Returns current MMU state, None if not yet received.
-
-        Returns:
-            MMUState: Latest state received from Moonraker
-            None: If no state has been received yet.
-
-        """
+        """Return the latest MMU state, or None before the first status arrives."""
         return self._mmu_state
 
     def get_pre_gate_sensors(self) -> dict[int, bool]:
+        """Return a copy of the per-gate pre-gate switch states, keyed by gate index."""
         return dict(self._pre_gate_sensors)
 
     def is_amu_configured(self) -> bool:
@@ -147,28 +114,9 @@ class AMUManager(QtCore.QObject):
         return self._config_toggler.is_configured()
 
     def is_amu_active(self) -> bool:
-        """Returns whether AMU includes are currently uncommented in printer.cfg"""
-        return self.is_amu_configured() and self._mmu_state is not None
-
-    def fetch_spool(self, gate: int, spool_id: int) -> None:
-        """Request spool data from Moonraker via WebSocket.
-
-        No-op if MMU state not received or spoolman_support is OFF.
-        Emits spool_fetched(gate, data) on success; logs and emits nothing on error.
-        """
-
-        if self._mmu_state is None:
-            return
-        if self._mmu_state.spoolman_support is SpoolmanSupport.OFF:
-            return
-        if spool_id == -1:
-            return
-
-        def _on_result(result: dict | None) -> None:
-            if result is not None:
-                self.spool_fetched.emit(gate, result)
-
-        self._ws.api.get_spool(spool_id, _on_result)
+        """Return True if the AMU is configured, reporting, and not MMU-disabled."""
+        state = self._mmu_state
+        return self.is_amu_configured() and state is not None and state.enabled
 
     def set_gate_info(
         self,
@@ -178,148 +126,209 @@ class AMUManager(QtCore.QObject):
         spool_id: int,
         filament_name: str = "",
         temperature: int | None = None,
-    ) -> None:
-        """Sets all gate attributes for a single MMU_GATE
+    ) -> bool:
+        """Overwrite all gate fields; '' clears one, None temp resets to HH default."""
+        return self._gate_map(
+            gate,
+            NAME=filament_name,
+            MATERIAL=material,
+            COLOR=color.lstrip("#"),
+            SPOOLID=spool_id,
+            TEMP=temperature,
+        )
 
-        Args:
-            gate (int): Gate index (0-based).
-            material (str): Filament material name, e.g. ``"PLA"``.
-            color (str): Filament color as hex string, e.g. ``"ff56e0"``.
-            spool_id (int): Spoolman spool ID, or -1 if not tracked.
-            filament_name (str): Filament display name from Spoolman.
-            temperature (int | None): Extruder temperature, omitted if None.
-        """
-        gcode = f"MMU_GATE_MAP gate={gate} MATERIAL={material} COLOR={color} SPOOLID={spool_id}"
-        if filament_name:
-            gcode = f"MMU_GATE_MAP gate={gate} NAME={filament_name} MATERIAL={material} COLOR={color} SPOOLID={spool_id}"
-        if temperature is not None:
-            gcode += f" TEMP={temperature}"
-        self.run_gcode_signal.emit(gcode)
+    def clear_gate(self, gate: int) -> None:
+        """Blank a gate's map entry the way Happy-Hare resets one."""
+        self._gate_map(gate, NAME="", MATERIAL="", COLOR="", SPOOLID=-1, TEMP=None)
 
     def set_gate_material(self, gate: int, material: str) -> None:
-        """Set the `material` at the gate `gate`
+        """Set the material of *gate*, keeping its temperature."""
+        self._gate_map(gate, MATERIAL=material)
 
-        Args:
-            gate (int): Gate index (0-based).
-            material (str): Filament material name, e.g. ``"PLA"``.
-        """
-        self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} MATERIAL={material}")
-
-    def set_gate_temp(self, gate: int, temp: int):
-        """Set the `temperature` at the gate `gate`
-
-        Args:
-            gate (int): Gate index (0-based).
-            temp (int): Filament temperature, e.g. ``"220"``.
-        """
-        self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} TEMP={temp}")
+    def set_gate_temp(self, gate: int, temp: int) -> None:
+        """Set *gate*'s temp; skips TEMP<=0 since Happy-Hare reads 0 as "keep"."""
+        state = self._mmu_state
+        if state is not None and state.spoolman_support is SpoolmanSupport.PULL:
+            logger.warning("Ignoring gate %d temperature: Spoolman pull owns it", gate)
+            return
+        if not math.isfinite(temp) or round(temp) <= 0:
+            logger.warning("Ignoring gate %d temperature %s: not positive", gate, temp)
+            return
+        self._gate_map(gate, TEMP=temp)
 
     def set_gate_color(self, gate: int, color: str) -> None:
-        """Set the `color` at the gate `gate`
-
-        Args:
-            gate (int): Gate index (0-based).
-            color (str): Filament color, e.g. ``"ff56e0"``.
-        """
-        self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} COLOR={color}")
+        """Set the hex colour of *gate*, with or without a leading #."""
+        self._gate_map(gate, COLOR=color.lstrip("#"))
 
     def set_gate_spool(self, gate: int, spool_id: int) -> None:
-        """Set the `spool_id` at the gate `gate`
+        """Bind *gate* to a Spoolman spool; -1 unbinds."""
+        self._gate_map(gate, SPOOLID=spool_id)
 
-        Args:
-            gate (int): Gate index (0-based).
-            spool_id (int): Spoolman spool ID, or -1 to clear.
-        """
-        self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} SPOOLID={spool_id}")
-        if spool_id != -1:
-            self.fetch_spool(gate, spool_id)
-
-    def update_spool_weight(self, gate: int, used_weight: float) -> None:
-        """Push updated used_weight to Spoolman for the spool at `gate`.
-
-        No-op if MMU state not received, spoolman is off or read-only, gate is
-        out of range, of the gate has no spool assigned.
-        """
-        if self._mmu_state is None:
-            return
-        if self._mmu_state.spoolman_support in (
-            SpoolmanSupport.OFF,
-            SpoolmanSupport.READONLY,
-        ):
-            return
-        if gate >= len(self._mmu_state.gates):
-            logger.warning("update_spool_weight: gate %d out of range", gate)
-            return
-        spool_id = self._mmu_state.gates[gate].spool_id
-        if spool_id == -1:
-            return
-        self._ws.api.update_spool(spool_id, {"used_weight": used_weight})
+    def assign_spool(self, gate: int, spool: dict) -> None:
+        """Map *gate* from a Spoolman spool payload."""
+        filament = spool.get("filament") or {}
+        self.set_gate_info(
+            gate,
+            filament.get("material") or "",
+            filament.get("color_hex") or "",
+            spool.get("id", -1),
+            filament_name=filament.get("name") or "",
+            temperature=filament.get("settings_extruder_temp"),
+        )
 
     def home_mmu(self) -> None:
-        """Home the MMU selector by sending MMU_HOME."""
-        self.run_gcode_signal.emit("MMU_HOME")
+        """Re-select the current tool via MMU_HOME; refused while filament is loaded."""
+        state = self._mmu_state
+        if state is None:
+            logger.warning("Ignoring MMU_HOME: no MMU state yet")
+            return
+        # Bare MMU_HOME defaults to TOOL=0 with no loaded guard.
+        if state.filament_pos not in (FilamentPos.UNLOADED, FilamentPos.UNKNOWN):
+            logger.warning(
+                "Ignoring MMU_HOME while filament is %s", state.filament_pos.name
+            )
+            return
+        tool = state.tool
+        self.run_gcode_signal.emit(f"MMU_HOME TOOL={tool}" if tool >= 0 else "MMU_HOME")
 
     def reset_mmu(self) -> None:
-        """Reset the MMU and clear any pause or error state by sending MMU_RESET."""
-        self.run_gcode_signal.emit("MMU_RESET")
+        """Erase all persisted MMU state (gate map, TTG map, statistics) and re-init."""
+        self.run_gcode_signal.emit("MMU_RESET CONFIRM=1")
 
-    def load_gate(self) -> None:
-        """Load filament from the specified gate by sending MMU_LOAD"""
+    @staticmethod
+    def _busy_refusal(state: MMUState) -> str:
+        """Return why the MMU cannot take a command now, or "" when it is idle."""
+        # No print guard: HH v3 parks and restores the toolhead around these mid-print.
+        if not state.enabled:
+            return "MMU is disabled."
+        if state.is_busy:
+            return f"MMU is busy ({state.action})."
+        return ""
+
+    def check_refusal(self) -> str:
+        """Return why the selected gate cannot be checked, or "" when it can."""
+        state = self._mmu_state
+        if state is None:
+            return "MMU status not received yet."
+        if reason := self._busy_refusal(state):
+            return reason
+        if not state.is_homed:
+            return "MMU is not homed."
+        if state.current_gate_info is None:
+            return "No gate is selected."
+        return ""
+
+    def load_refusal(self) -> str:
+        """Return why the selected gate cannot load, or "" when it is idle-ready."""
+        reason = self.check_refusal()
+        state = self._mmu_state
+        if reason or state is None:
+            return reason
+        if state.filament_pos != FilamentPos.UNLOADED:
+            return "Filament is not fully unloaded."
+        return ""
+
+    def unload_refusal(self) -> str:
+        """Return why the filament cannot be unloaded, or "" when it can."""
+        state = self._mmu_state
+        if state is None:
+            return "MMU status not received yet."
+        if reason := self._busy_refusal(state):
+            return reason
+        if state.filament_pos == FilamentPos.UNLOADED:
+            return "Filament is already unloaded."
+        return ""
+
+    def print_start_refusal(self) -> str:
+        """Return why RF50-Klipper print_start.cfg would refuse to start, or ""."""
+        sensors = self._mmu_state.sensors if self._mmu_state is not None else {}
+        # The macro tests `== False`: a missing or disabled (None) sensor passes.
+        if sensors.get("toolhead") is False:
+            return "No filament at the toolhead. Load filament before printing."
+        if sensors.get("mmu_pre_gate") is False:
+            return "No filament in the selected gate. Load filament before printing."
+        return ""
+
+    def _selected_gate_unloaded(self) -> GateInfo | None:
+        """Return the selected gate when the MMU is idle-ready: enabled, homed, unloaded."""
+        if self._mmu_state is None or self.load_refusal():
+            return None
+        return self._mmu_state.current_gate_info
+
+    def load_gate(self) -> bool:
+        """Load filament from the selected gate by sending MMU_LOAD; True if sent."""
+        if reason := self.load_refusal():
+            logger.warning("Ignoring MMU_LOAD: %s", reason)
+            return False
         self.run_gcode_signal.emit("MMU_LOAD")
+        return True
 
-    def unload(self) -> None:
-        """Unload the currently loaded filament by sending MMU_UNLOAD."""
-        self.run_gcode_signal.emit("MMU_UNLOAD")
+    def unload(self, eject: bool = False) -> bool:
+        """Unload via MMU_UNLOAD, or MMU_EJECT when *eject*; True if sent."""
+        if reason := self.unload_refusal():
+            logger.warning("Ignoring unload: %s", reason)
+            return False
+        self.run_gcode_signal.emit("MMU_EJECT" if eject else "MMU_UNLOAD")
+        return True
 
     def select_gate(self, gate: int) -> None:
-        """select the specified tool by sending MMU_SELECT
-
-        Args:
-            gate (int): gate index to select (0-based)
-        """
+        """Send MMU_SELECT unless invalid, already selected, or filament is loaded."""
+        state = self._mmu_state
+        if (
+            state is None
+            or not (state.enabled and state.is_homed)
+            or state.is_busy
+            or not 0 <= gate < state.num_gates
+            or gate == state.gate
+        ):
+            return
+        if state.filament_pos != FilamentPos.UNLOADED:
+            logger.warning(
+                "Ignoring MMU_SELECT while filament is %s", state.filament_pos.name
+            )
+            return
         self.run_gcode_signal.emit(f"MMU_SELECT GATE={gate}")
 
     def eject_gate(self) -> None:
-        """Fully eject filament from gate, releasing from MMU gear."""
+        """Fully eject filament from the selected gate, the only gate that can eject."""
+        if self._mmu_state is not None and self._mmu_state.is_printing:
+            logger.warning("Ignoring MMU_EJECT: not available while printing")
+            return
+        gate = self._selected_gate_unloaded()
+        if gate is None or gate.status == GateStatus.EMPTY:
+            logger.warning("Ignoring MMU_EJECT: no unloaded, non-empty gate selected")
+            return
         self.run_gcode_signal.emit("MMU_EJECT")
 
     def check_gate(self) -> None:
-        """Check the current gate for filament presence by sending MMU_CHECK_GATE."""
+        """Check the selected gate for filament by sending MMU_CHECK_GATE."""
+        # Happy-Hare v3 unloads first when not UNLOADED and reloads a LOADED tool after.
+        if reason := self.check_refusal():
+            logger.warning("Ignoring MMU_CHECK_GATE: %s", reason)
+            return
         self.run_gcode_signal.emit("MMU_CHECK_GATE")
 
-    def eject_all_gates(self, num_gates: int) -> None:
-        """Fully eject filament from all gates sequentially
-
-        Args:
-           num_gates: Total number of gates(from MMUState.num_gates)
-        """
-        cmd: str = "\n".join(f"MMU_EJECT GATE={i}" for i in range(num_gates))
-        self.run_gcode_signal.emit(cmd)
+    def recover_single_gate(self, loaded: bool) -> None:
+        """Tell Happy-Hare whether the single-gate filament path is loaded."""
+        self.run_gcode_signal.emit(f"MMU_RECOVER GATE=0 LOADED={int(loaded)}")
 
     def change_tool(self, tool: int) -> None:
-        """Select a tool, triggering a filament change if needed.
-
-        Args:
-            tool (int): Tool index to select (0-based).
-        """
+        """Select *tool* with MMU_CHANGE_TOOL, swapping filament if needed."""
         self.run_gcode_signal.emit(f"MMU_CHANGE_TOOL TOOL={tool}")
 
-    def update_mmu_state(self, data: dict, name: str = "") -> None:
-        """Receive an MMU status dict from Moonraker and update internal state.
-
-        Called with either a full status response (on connect) or a diff
-        (from notify_status_update). Builds or updates the MMUState and
-        emits mmu_state_changed.
-
-        Args:
-            data: Raw MMU status or diff dict from Moonraker.
-            name: Moonraker object name suffix (always empty for ``mmu``).
-        """
+    def update_mmu_state(self, data: dict) -> None:
+        """Build state from a full status or apply a diff; emit mmu_state_changed."""
         if self._mmu_state is None:
+            if "num_gates" not in data:
+                return
             self._mmu_state = MMUState.from_status(data)
         else:
-            self._mmu_state = self._mmu_state.apply_diff(data)
+            state = self._mmu_state.apply_diff(data)
+            if state == self._mmu_state:
+                return
+            self._mmu_state = state
         self.mmu_state_changed.emit(self._mmu_state)
+        self._check_stale_mmu_job()
 
     def on_object_updated(
         self, object_type: str, object_name: str, values: dict
@@ -329,10 +338,36 @@ class AMUManager(QtCore.QObject):
             self.update_mmu_state(values)
         elif object_type == "filament_switch_sensor":
             self.on_pre_gate_update(values, object_name)
-        elif object_type == "load_cell":
-            self.on_load_cell_update(values, object_name)
+        elif object_type == "print_stats" and "state" in values:
+            self._print_state = values["state"]
+            self._check_stale_mmu_job()
+
+    def _is_stale_mmu_job(self) -> bool:
+        """Return True while Happy-Hare runs a job print_stats has already left."""
+        state = self._mmu_state
+        return (
+            state is not None
+            and state.is_printing
+            and self._print_state in _STALE_JOB_STATES
+        )
+
+    def _check_stale_mmu_job(self) -> None:
+        """Arm the grace timer on a job desync, disarm it once the states agree."""
+        if not self._is_stale_mmu_job():
+            self._stale_job_timer.stop()
+        elif not self._stale_job_timer.isActive():
+            self._stale_job_timer.start()
+
+    def _end_stale_mmu_job(self) -> None:
+        """End the job HH's deferred MMU_PRINT_START re-opens after a fast cancel."""
+        if self._is_stale_mmu_job():
+            logger.warning(
+                "Ending HH job left open by print_stats %s", self._print_state
+            )
+            self.run_gcode_signal.emit(f"MMU_PRINT_END STATE={self._print_state}")
 
     def on_pre_gate_update(self, values: dict, name: str) -> None:
+        """Track one pre-gate switch; the mmu aggregate hides unselected gates."""
         if not name.startswith("mmu_pre_gate_"):
             return
         try:
@@ -340,35 +375,20 @@ class AMUManager(QtCore.QObject):
         except ValueError:
             logger.error("Failed to parse Pre-Gate: %s", name)
             return
-        detected = bool(values.get("filament_detected", False))
+        # Enabled-only diffs omit it; reading False would invent empty gates.
+        if "filament_detected" not in values:
+            return
+        detected = bool(values["filament_detected"])
         self._pre_gate_sensors[gate] = detected
         self.pre_gate_changed.emit(gate, detected)
 
-    def on_load_cell_update(self, values: dict, name: str) -> None:
-        """Update gate weight from a Klipper load_cell sensor reading"""
-        if self._mmu_state is None or not name.startswith("load_cell_mmu_"):
-            return
-        try:
-            gate = int(name.removeprefix("load_cell_mmu_"))
-        except ValueError:
-            logger.error("Failed parsing %s Load cell", name)
-            return
-
-        weight = float(values.get("force") or 0)
-        if gate >= len(self._mmu_state.gates):
-            logger.warning(
-                "Gate index %d out of range (%d gates)",
-                gate,
-                len(self._mmu_state.gates),
-            )
-            return
-        gates = list(self._mmu_state.gates)
-        gates[gate] = dataclasses.replace(gates[gate], weight_g=weight)
-        self._mmu_state = dataclasses.replace(self._mmu_state, gates=tuple(gates))
-        self.gate_weight_updated.emit(gate, weight)
-
+    @QtCore.pyqtSlot(str)
     def on_klippy_state(self, state: str) -> None:
-        """React to changes in klippy states"""
-        if state.lower() != "ready":
-            self._mmu_state = None
-            self._pre_gate_sensors = {}
+        """Drop cached MMU state when klippy leaves ready and tell the UI it is gone."""
+        if state.lower() == "ready":
+            return
+        self._pre_gate_sensors = {}
+        if self._mmu_state is None:
+            return
+        self._mmu_state = None
+        self.mmu_state_changed.emit(None)

@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # Actions only: pip bumps would break the printers' aarch64 PyQt6 6.7.1 ceiling.
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: monthly
+    # Skip releases younger than a week, the window most hijacked tags are caught in.
+    cooldown:
+      default-days: 7
+    labels: ["dependencies"]
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+      include: scope

@@ -8,13 +8,22 @@
 
 import ctypes
 import enum
+import json
 import logging
 import math
 import os
 import pathlib
+import re
+import shutil
 import struct
+import tempfile
 
 logger = logging.getLogger(__name__)
+
+# Shared by udisks2.add_symlink and the files UI USB checks.
+USB_LABEL_PREFIX = "USB-"
+USB_FALLBACK_NAME = "USB DRIVE"
+USB_LINK_PREFIXES: tuple[str, ...] = (USB_LABEL_PREFIX, USB_FALLBACK_NAME)
 
 try:
     ctypes.cdll.LoadLibrary("libXext.so.6")
@@ -225,7 +234,7 @@ except Exception as e:
     logger.exception(f"Unexpected exception occurred {e}")
 
 
-def convert_bytes_to_mb(size_bytes: int | float) -> float:
+def convert_bytes_to_mb(size_bytes: float) -> float:
     """Converts byte size to megabyte size.
 
     Args:
@@ -262,7 +271,7 @@ def calculate_current_layer(
     layer = math.ceil((z_position - first_layer_height) / layer_height + 1)
     if max_layers > 0 and layer > max_layers:
         return max_layers
-    return layer if layer > 0 else 0
+    return max(0, layer)
 
 
 def calculate_max_layers(
@@ -292,6 +301,45 @@ def estimate_print_time(seconds: int) -> list[int]:
     num_hours, mins = divmod(num_min, 60)
     days, hours = divmod(num_hours, 24)
     return [days, hours, mins, secs]
+
+
+def format_duration(seconds: int) -> str:
+    """Seconds as "1d 2h 3m", or "Ns" under a minute."""
+    if seconds < 60:
+        return f"{seconds}s"
+    days, hours, mins, _ = estimate_print_time(seconds)
+    if days > 0:
+        return f"{days}d {hours}h {mins}m"
+    if hours > 0:
+        return f"{hours}h {mins}m"
+    return f"{mins}m"
+
+
+def format_weight(grams: float) -> str:
+    """Grams as "g", or "kg" past 499g."""
+    return f"{grams / 1000:.2f}kg" if grams > 499 else f"{grams:.2f}g"
+
+
+def parse_materials(filament_type: object) -> list[str]:
+    """filament_type (str, list, JSON, CSV or ;-list) as unique names, [] if unknown."""
+    if isinstance(filament_type, str):
+        text = filament_type.strip()
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                types = json.loads(text)
+            except json.JSONDecodeError:
+                types = [text]
+        else:
+            # PrusaSlicer, SuperSlicer and OrcaSlicer separate tools with ";".
+            types = re.split(r"[,;]", text)
+    elif isinstance(filament_type, list):
+        types = filament_type
+    else:
+        types = [filament_type] if filament_type else []
+    names = list(
+        dict.fromkeys(name for t in types if t is not None and (name := str(t).strip()))
+    )
+    return [] if names == ["Unknown"] else names
 
 
 def normalize(
@@ -335,6 +383,32 @@ def check_file_on_path(
     return (pathlib.Path(path) / filename).exists()
 
 
+def atomic_write_text(path: pathlib.Path, text: str) -> None:
+    """Write via temp file + rename: a power cut never truncates it; symlinks kept."""
+    target = path.resolve()
+    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        if target.exists():
+            shutil.copymode(target, tmp)
+        os.replace(tmp, target)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    # The rename survives a power cut only once the directory entry is on disk.
+    dir_fd = os.open(target.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def get_file_name(filename: str | None) -> str:
     """Extract the basename from a file path (handles ``/`` and ``\\``).
 
@@ -344,3 +418,28 @@ def get_file_name(filename: str | None) -> str:
     if not filename:
         return ""
     return pathlib.PurePosixPath(filename.replace("\\", "/")).name
+
+
+def get_parent_dir(path: str) -> str:
+    """POSIX parent of *path*, "" at the gcodes root."""
+    parent = pathlib.PurePosixPath(path.removeprefix("/")).parent
+    return "" if str(parent) == "." else str(parent)
+
+
+def is_usb_mount(path: str) -> bool:
+    """True for a top-level USB symlink name."""
+    name = path.strip("/")
+    return bool(name) and "/" not in name and name.startswith(USB_LINK_PREFIXES)
+
+
+def is_usb_path(path: str) -> bool:
+    """True for a USB mount or anything under one."""
+    return is_usb_mount(path.strip("/").split("/", 1)[0])
+
+
+def resolve_thumbnail_path(
+    gcode_root: pathlib.Path, requested_path: str, relative_path: str
+) -> pathlib.Path:
+    """Thumbnail path resolved against the gcode's own directory."""
+    parent = pathlib.PurePosixPath(requested_path.removeprefix("/")).parent
+    return gcode_root / parent / relative_path
