@@ -23,7 +23,7 @@ class KlippyStatus(QtCore.QObject):
         self.state: str = ""
         self.message: str = ""
         self._gen: int = 0
-        # True once printer.info answered for the current generation
+        # printer.info answered this generation; later reasons come via webhooks
         self._settled: bool = False
         ws.connecting_signal.connect(self.on_connecting)
         ws.connected_signal.connect(self.on_connected)
