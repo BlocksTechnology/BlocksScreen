@@ -95,6 +95,8 @@ else
 fi
 # Daemon self-restart target; never in components.yaml.
 _emit_svc_rules BlocksScreen-updater.service
+# BlocksScreen MachineControl: host MCU start before a Klipper restart.
+printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl --no-block start klipper-mcu.service\n' >>"$SUDOERS_TMP"
 # Spoolman enable rules: hooks/Spoolman.sh runs enable --now, args must match exactly.
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable Spoolman.service\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now Spoolman.service\n' >>"$SUDOERS_TMP"

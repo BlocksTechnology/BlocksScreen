@@ -15,11 +15,13 @@ from pathlib import Path
 import pytest
 
 import updater.executor as executor
+from BlocksScreen.lib.machine import MachineControl
 from updater.executor import _apt_cmd
 
 _SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 _INSTALLER = _SCRIPTS / "install-updater.sh"
 _HELPER = _SCRIPTS / "bs-apt-helper.sh"
+_COMPONENTS = _SCRIPTS.parent / "updater" / "components.yaml"
 
 _WRAPPER_RULE = "/usr/local/sbin/bs-apt-helper *"
 
@@ -65,6 +67,36 @@ class TestSudoersRules:
         for argv in _daemon_apt_argvs():
             cmd = " ".join(argv[1:])
             assert fnmatch.fnmatch(cmd, _WRAPPER_RULE), f"unmatched argv: {cmd!r}"
+
+
+def _expanded_rules() -> set[str]:
+    """Rules with each per-service template expanded for every components.yaml service."""
+    services = re.findall(r"^\s*service:\s*(\S+)", _COMPONENTS.read_text(), re.M)
+    rules = set()
+    for rule in _sudoers_rules():
+        rules.update(rule % s for s in services) if "%s" in rule else rules.add(rule)
+    return rules
+
+
+def _machine_sudo_argvs() -> list[list[str]]:
+    """The systemctl argvs MachineControl runs through sudo."""
+    argvs: list[list[str]] = []
+
+    def record(argv: list[str]) -> str:
+        argvs.append(argv)
+        return "loaded\n"
+
+    mc = MachineControl(None)
+    mc._run_command = record
+    mc.restart_klipper_service()
+    mc.restart_moonraker_service()
+    return [a for a in argvs if a[0] == "sudo"]
+
+
+@pytest.mark.parametrize("argv", _machine_sudo_argvs(), ids=" ".join)
+def test_machine_control_argv_matches_a_rule(argv):
+    assert argv[:2] == ["sudo", "-n"]
+    assert f"/usr/bin/{' '.join(argv[2:])}" in _expanded_rules()
 
 
 class TestWrapperValidation:

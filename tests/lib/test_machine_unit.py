@@ -32,21 +32,35 @@ def _commands(run):
 )
 def test_failed_command_returns_none(mc, run, error):
     run.side_effect = error
-    assert mc.restart_klipper_mcu_service() is None
+    assert mc.restart_moonraker_service() is None
 
 
-def test_klipper_restart_starts_host_mcu_first(mc, run):
+def _loaded(state: str = "loaded") -> MagicMock:
+    return MagicMock(stdout=f"{state}\n", stderr="")
+
+
+def test_klipper_restart_queues_host_mcu_first_without_blocking(mc, run):
+    run.side_effect = [_loaded(), run.return_value, run.return_value]
     mc.restart_klipper_service()
-    assert _commands(run) == [
-        ["sudo", "systemctl", "start", "klipper-mcu.service"],
-        ["sudo", "systemctl", "restart", "klipper.service", "--no-block"],
+    assert _commands(run)[1:] == [
+        ["sudo", "-n", "systemctl", "--no-block", "start", "klipper-mcu.service"],
+        ["sudo", "-n", "systemctl", "--no-block", "restart", "klipper.service"],
+    ]
+
+
+def test_klipper_restart_skips_missing_host_mcu_unit(mc, run):
+    run.side_effect = [_loaded("not-found"), run.return_value]
+    mc.restart_klipper_service()
+    assert _commands(run)[1:] == [
+        ["sudo", "-n", "systemctl", "--no-block", "restart", "klipper.service"],
     ]
 
 
 def test_klipper_restart_runs_when_host_mcu_start_fails(mc, run):
     run.side_effect = [
+        _loaded(),
         subprocess.CalledProcessError(5, ["sudo"], stderr=""),
         run.return_value,
     ]
     assert mc.restart_klipper_service() == "out\n"
-    assert run.call_count == 2
+    assert run.call_count == 3

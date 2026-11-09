@@ -9,6 +9,10 @@ from PyQt6 import QtCore
 
 logger = logging.getLogger(__name__)
 
+_HOST_MCU_UNIT = "klipper-mcu.service"
+# -n: no tty to prompt on; argvs must match install-updater.sh sudoers rules verbatim.
+_SYSTEMCTL = ("sudo", "-n", "systemctl", "--no-block")
+
 
 class MachineControl(QtCore.QObject):
     service_restart = QtCore.pyqtSignal(str, name="service-restart")
@@ -18,34 +22,40 @@ class MachineControl(QtCore.QObject):
         self.setObjectName("MachineControl")
 
     @QtCore.pyqtSlot(name="machine_restart")
-    def machine_restart(self):
+    def machine_restart(self) -> str | None:
         """Reboot machine"""
-        return self._run_command(["sudo", "reboot", "now"])
+        return self._run_command(["sudo", "-n", "reboot", "now"])
 
     @QtCore.pyqtSlot(name="machine_shutdown")
-    def machine_shutdown(self):
+    def machine_shutdown(self) -> str | None:
         """Shutdown machine"""
-        return self._run_command(["sudo", "shutdown", "now"])
+        return self._run_command(["sudo", "-n", "shutdown", "now"])
 
     @QtCore.pyqtSlot(name="restart_klipper_service")
-    def restart_klipper_service(self):
-        """Start klipper-mcu, then restart klipper service"""
+    def restart_klipper_service(self) -> str | None:
+        """Start the host MCU, then restart Klipper; both are queued, not awaited."""
         self.restart_klipper_mcu_service()
-        return self._run_command(
-            ["sudo", "systemctl", "restart", "klipper.service", "--no-block"]
-        )
+        return self._run_command([*_SYSTEMCTL, "restart", "klipper.service"])
 
     @QtCore.pyqtSlot(name="restart_klipper_mcu_service")
-    def restart_klipper_mcu_service(self):
-        """Start klipper-mcu service if not already running"""
-        return self._run_command(["sudo", "systemctl", "start", "klipper-mcu.service"])
+    def restart_klipper_mcu_service(self) -> str | None:
+        """Start klipper-mcu if installed; a running instance is left untouched."""
+        # Before=klipper.service orders this job ahead of a queued Klipper (re)start.
+        if not self._unit_loaded(_HOST_MCU_UNIT):
+            return None
+        return self._run_command([*_SYSTEMCTL, "start", _HOST_MCU_UNIT])
 
     @QtCore.pyqtSlot(name="restart_moonraker_service")
-    def restart_moonraker_service(self):
+    def restart_moonraker_service(self) -> str | None:
         """Restart moonraker service"""
-        return self._run_command(
-            ["sudo", "systemctl", "restart", "moonraker.service", "--no-block"]
+        return self._run_command([*_SYSTEMCTL, "restart", "moonraker.service"])
+
+    def _unit_loaded(self, unit: str) -> bool:
+        """True if systemd knows ``unit``; printers without a host MCU lack it."""
+        state = self._run_command(
+            ["systemctl", "show", "--property=LoadState", "--value", unit]
         )
+        return bool(state) and state.split()[0] == "loaded"
 
     def check_service_state(self, service_name: str | None):
         """Check service status
