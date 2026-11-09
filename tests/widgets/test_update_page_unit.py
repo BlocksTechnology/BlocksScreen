@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from updater.models import ComponentStatus
+from updater.models import PRINTER_BUSY, ComponentStatus
 
 
 @pytest.fixture
@@ -513,6 +513,14 @@ class TestErrorMessageActionability:
         page.handle_error_occurred("firmware", "checksum mismatch")
         msg = page._show_toast.call_args[0][0]
         assert "failed" in msg.lower()
+
+
+class TestPrinterBusyRefusal:
+    def test_busy_reason_gets_its_own_message(self, page):
+        page._show_toast = MagicMock()
+        page.handle_error_occurred("updater", PRINTER_BUSY)
+        msg = page._show_toast.call_args[0][0]
+        assert "print" in msg.lower() and "updater" not in msg.lower()
 
 
 class TestBadStatusPayload:

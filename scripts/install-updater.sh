@@ -247,9 +247,9 @@ else
 fi
 # Older runs of this script ran pip as root; hand those files back or every pip-as-blocks run fails.
 [ -d "$BSENV" ] && sudo find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
-# Old dists pip failed to remove mid-upgrade (renamed ~ip, ~v...); a live pip still needs its own to roll back.
+# Dirs pip stashed as ~name mid-upgrade and never removed; a live pip still needs its own to roll back.
 if $_venv_locked; then
-    sudo find "$BSENV"/lib/python3*/site-packages -maxdepth 1 -name '~*' -exec rm -rf {} + 2>/dev/null || true
+    sudo find "$BSENV"/lib/python3*/site-packages -maxdepth 1 -type d -name '~?*' -exec rm -rf {} + 2>/dev/null || true
 fi
 # Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
 _as_blocks "$BSENV/bin/pip" install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||

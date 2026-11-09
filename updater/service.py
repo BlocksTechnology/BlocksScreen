@@ -1772,8 +1772,14 @@ class UpdateService:
     async def _reconcile_self_heal_state(self) -> None:
         """Validate self-heal state fields; drop corrupt hashes, clamp counter."""
         async with self._state_lock:
-            state = await asyncio.to_thread(self._read_state)
-            changed = False
+            raw = await asyncio.to_thread(self._read_state_file)
+            state = {k: v for k, v in raw.items() if isinstance(v, dict)}
+            changed = len(state) != len(raw)
+            if changed:
+                self._log.warning(
+                    "reconcile: dropping non-dict entries %s",
+                    sorted(raw.keys() - state.keys()),
+                )
             for name, comp_state in state.items():
                 for field in ("last_good", "golden", "last_failed_remote"):
                     if field in comp_state:
@@ -2590,18 +2596,17 @@ class UpdateService:
             self._cb("on_component_done", component.name, False)
             raise
 
-    def _read_state(self) -> dict:
-        """Return name -> component-state dicts; drops a corrupt file or entry."""
+    def _read_state_file(self) -> dict:
+        """Raw state map; empty on a missing, corrupt or non-object file."""
         try:
             data = json.loads(self._state_path.read_text())
         except (OSError, ValueError):
             return {}
-        if not isinstance(data, dict):
-            return {}
-        # Every caller does comp.get(); the next write persists the cleaned map.
-        if bad := [k for k, v in data.items() if not isinstance(v, dict)]:
-            self._log.warning("state: dropping non-dict entries %s", bad)
-        return {k: v for k, v in data.items() if isinstance(v, dict)}
+        return data if isinstance(data, dict) else {}
+
+    def _read_state(self) -> dict:
+        """Name -> component-state dicts; boot reconcile persists dropping the rest."""
+        return {k: v for k, v in self._read_state_file().items() if isinstance(v, dict)}
 
     def _read_inflight(self) -> dict[str, str]:
         """Return the in-flight batch marker as a name->prev_hash dict."""

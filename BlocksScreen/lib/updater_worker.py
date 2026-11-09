@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 import sdbus
 from PyQt6 import QtCore
+from updater.models import DEPLOY_HOLD_CAP_S
 
 if TYPE_CHECKING:
     from updater.dbus_service import UpdaterInterface
@@ -32,8 +33,8 @@ _RECONNECT_DELAYS = (5.0, 15.0, 30.0, 60.0)
 
 # Max silence from a busy daemon; progress signals refresh the deadline.
 _BUSY_IDLE_LIMIT = 360.0
-# Silence a daemon still answering busy may keep: dbus_service._DEPLOY_HOLD_CAP_S plus the idle limit.
-_BUSY_SILENT_MAX = 900.0 + _BUSY_IDLE_LIMIT
+# Silence a daemon still answering busy may keep: a full deploy hold plus the idle limit.
+_BUSY_SILENT_MAX = DEPLOY_HOLD_CAP_S + _BUSY_IDLE_LIMIT
 
 _DAEMON_BUS_NAME = "com.blockscreen.Updater"
 _UPDATER_UNIT = "BlocksScreen-updater.service"

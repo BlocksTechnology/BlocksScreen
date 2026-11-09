@@ -48,13 +48,11 @@ class TestStateFields:
         state = svc._read_state()
         assert state == {}
 
-    def test_read_state_drops_and_logs_non_dict_entries(self, tmp_path: Path, caplog):
+    def test_read_state_skips_non_dict_entries(self, tmp_path: Path):
         svc = UpdateService()
         svc._state_path = tmp_path / "state.json"
         svc._state_path.write_text('{"ok": {"a": 1}, "bad": 3}')
-        with caplog.at_level("WARNING"):
-            assert svc._read_state() == {"ok": {"a": 1}}
-        assert "bad" in caplog.text
+        assert svc._read_state() == {"ok": {"a": 1}}
 
     def test_write_state_is_atomic_via_temp_file(self, tmp_path: Path):
         svc = UpdateService()
@@ -198,6 +196,15 @@ class TestBlessHealthy:
 
 
 class TestReconcileWithNewFields:
+    def test_reconcile_persists_dropped_non_dict_entries(self, tmp_path: Path, caplog):
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._state_path.write_text('{"ok": {"a": 1}, "bad": 3}')
+        with caplog.at_level("WARNING"):
+            asyncio.run(svc.reconcile())
+        assert svc._read_state_file() == {"ok": {"a": 1}}
+        assert "bad" in caplog.text
+
     def test_reconcile_clamps_fast_attempt_to_0_3(self, tmp_path: Path):
         async def run_test():
             svc = UpdateService()
