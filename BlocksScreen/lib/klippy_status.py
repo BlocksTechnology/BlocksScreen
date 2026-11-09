@@ -1,4 +1,7 @@
-"""Single Klipper state store (KlipperScreen printer.py, Mainsail checkKlippyState)."""
+"""Klipper state store for ConnectionPage (KlipperScreen printer.py, Mainsail checkKlippyState).
+
+MainWindow, Printer and the panels still act on ``MoonWebSocket.klippy_state_signal``.
+"""
 
 from lib.moonrakerComm import MoonWebSocket
 from PyQt6 import QtCore
@@ -20,6 +23,8 @@ class KlippyStatus(QtCore.QObject):
         self.state: str = ""
         self.message: str = ""
         self._gen: int = 0
+        # True once printer.info answered for the current generation
+        self._settled: bool = False
         ws.connecting_signal.connect(self.on_connecting)
         ws.connected_signal.connect(self.on_connected)
         ws.connection_lost.connect(self.on_connection_lost)
@@ -34,9 +39,13 @@ class KlippyStatus(QtCore.QObject):
         self.link, self.state, self.message = link, state, message
         self.changed.emit(link, state, message)
 
-    def _push_state(self, state: str, message: str | None) -> None:
-        # Invalidates in-flight printer.info
+    def _invalidate(self) -> None:
+        """Drop in-flight printer.info and poll again on the next tick."""
         self._gen += 1
+        self._settled = False
+
+    def _push_state(self, state: str, message: str | None) -> None:
+        self._invalidate()
         if self.link != "connected":
             return  # Resent by server.info on reconnect
         if message is None:
@@ -59,22 +68,25 @@ class KlippyStatus(QtCore.QObject):
         state = reply.get("state")
         if not state:
             return
+        self._settled = True
         self._apply(self.link, state, reply.get("state_message") or "")
 
     @QtCore.pyqtSlot(name="on-connecting")
     def on_connecting(self, *_: object) -> None:
         """Mark the websocket as reconnecting."""
+        self._invalidate()
         self._apply("connecting", "", "")
 
     @QtCore.pyqtSlot(name="on-connected")
     def on_connected(self) -> None:
         """Mark the websocket open; Klipper state arrives with the next server.info."""
+        self._invalidate()
         self._apply("connected", "", "")
 
     @QtCore.pyqtSlot(str, name="on-connection-lost")
     def on_connection_lost(self, *_: object) -> None:
         """Forget Klipper state and drop any in-flight printer.info."""
-        self._gen += 1
+        self._invalidate()
         self._apply("lost", "", "")
 
     @QtCore.pyqtSlot(str, name="on-klippy-state")
@@ -84,8 +96,14 @@ class KlippyStatus(QtCore.QObject):
 
     @QtCore.pyqtSlot(bool, name="on-server-info-tick")
     def on_server_info_tick(self, klippy_connected: bool) -> None:
-        """Poll printer.info on each non-ready server.info tick, like Mainsail."""
-        if klippy_connected and self.link == "connected" and self.state != "ready":
+        """Poll printer.info on server.info ticks until it answers for the current state."""
+        # Also recovers a reconnect whose state transition never reached the store
+        if (
+            klippy_connected
+            and self.link == "connected"
+            and self.state != "ready"
+            and not self._settled
+        ):
             self._poll()
 
     @QtCore.pyqtSlot(str, str, name="on-webhooks")
@@ -94,6 +112,7 @@ class KlippyStatus(QtCore.QObject):
         if state:
             self._push_state(state, message)
 
+    @QtCore.pyqtSlot(str, name="on-klippy-notify")
     def on_klippy_notify(self, state: str) -> None:
         """Take a notify_klippy_ready/shutdown/disconnected state."""
         if state in self._NOTIFY_STATES:

@@ -469,11 +469,6 @@ class MoonAPI(QtCore.QObject):
             params={"include_monitors": include_monitors},
         )
 
-    @QtCore.pyqtSlot(name="query_printer_info")
-    def request_printer_info(self):
-        """Requested printer information"""
-        return self._ws.send_request(method="printer.info")
-
     @QtCore.pyqtSlot(name="get_available_objects")
     def get_available_objects(self):
         """Request available printer objects"""

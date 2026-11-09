@@ -261,6 +261,20 @@ class TestKlippyNotify:
         assert feed.page._state == ConnectionState.KLIPPER_SHUTDOWN
         assert "Heater fault" in feed.page.status_label.text()
 
+    def test_save_config_restart_shows_page_then_hides(self, shown_page, qtbot):
+        # SAVE_CONFIG from ready: the page replaces the caller's overlay until ready
+        feed = _Feed(shown_page)
+        feed.server_info("ready")
+        assert not shown_page.isVisible()
+        with qtbot.waitSignal(shown_page.call_load_panel) as blocker:
+            feed.notify("disconnected")
+        assert blocker.args == [False, "", False]
+        assert shown_page._state == ConnectionState.KLIPPER_DISCONNECTED
+        assert shown_page.isVisible()
+        feed.server_info("startup")
+        feed.server_info("ready")
+        assert not shown_page.isVisible()
+
 
 class TestBugRegressions:
     def test_base_text_initialized(self, page):

@@ -103,6 +103,32 @@ class TestPrinterInfo:
         status.on_server_info_tick(True)
         ws.send_request.assert_called_once()
 
+    def test_answered_state_stops_polling_until_next_change(self, status, ws):
+        _server_info(status, "shutdown")
+        _last_callback(ws)({"state": "shutdown", "state_message": "Timer too close"})
+        ws.send_request.reset_mock()
+        status.on_server_info_tick(True)
+        ws.send_request.assert_not_called()
+        _server_info(status, "error")
+        ws.send_request.assert_called_once()
+
+    def test_failed_reply_keeps_polling(self, status, ws):
+        _server_info(status, "shutdown")
+        _last_callback(ws)({"error": {"code": 503, "message": "Klippy Disconnected"}})
+        ws.send_request.reset_mock()
+        status.on_server_info_tick(True)
+        ws.send_request.assert_called_once()
+
+    def test_reconnect_with_unchanged_state_recovers_by_poll(self, status, ws):
+        _server_info(status, "shutdown")
+        _last_callback(ws)({"state": "shutdown", "state_message": "Timer too close"})
+        status.on_connection_lost("gone")
+        status.on_connected()
+        ws.send_request.reset_mock()
+        status.on_server_info_tick(True)  # No klippy_state transition after reconnect
+        _last_callback(ws)({"state": "shutdown", "state_message": "Timer too close"})
+        assert (status.state, status.message) == ("shutdown", "Timer too close")
+
     @pytest.mark.parametrize(
         ("state", "klippy_connected"), [("ready", True), ("error", False)]
     )
