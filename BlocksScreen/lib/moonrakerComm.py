@@ -524,9 +524,9 @@ class MoonAPI(QtCore.QObject):
         return self._ws.send_request(method="printer.print.resume")
 
     @QtCore.pyqtSlot(name="stop_print")
-    def cancel_print(self):
-        """Cancel print job"""
-        return self._ws.send_request(method="printer.print.cancel")
+    def cancel_print(self, callback=None):
+        """Cancel the print job; the reply comes once the CANCEL_PRINT macro has returned."""
+        return self._ws.send_request(method="printer.print.cancel", callback=callback)
 
     def machine_shutdown(self):
         """Request machine shutdown"""

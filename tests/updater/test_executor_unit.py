@@ -1606,3 +1606,8 @@ class TestKlipperPrinting:
         sock = tmp_path / "k.sock"
         async with await asyncio.start_unix_server(handle, sock):
             assert await klipper_printing(sock, timeout=0.05) is False
+            assert await klipper_printing(sock, timeout=0.05, unanswered=True)
+
+    @pytest.mark.asyncio
+    async def test_missing_socket_stays_idle_when_failing_closed(self, tmp_path):
+        assert not await klipper_printing(tmp_path / "absent.sock", unanswered=True)
