@@ -1,3 +1,4 @@
+import logging
 import typing
 from collections.abc import Callable
 
@@ -7,6 +8,12 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+
+_logger = logging.getLogger(__name__)
+
+# Longest macro: G28 + Z_TILT_ADJUST retries, or three full Z sweeps at 20 mm/s.
+_SAFETY_TIMEOUT_MS = 300_000
 
 
 class AxisMaintPage(QtWidgets.QWidget):
@@ -20,6 +27,11 @@ class AxisMaintPage(QtWidgets.QWidget):
         super().__init__(parent)
 
         self.gcode_runner: Callable[..., bool] | None = None
+        self._run_id = 0
+        self._safety = QtCore.QTimer(self)
+        self._safety.setSingleShot(True)
+        self._safety.setInterval(_SAFETY_TIMEOUT_MS)
+        self._safety.timeout.connect(self._on_safety_timeout)
         self.current_object: str | None = None
         self.answerPage = BasePopup(self, False, True)
         self.answerPage.accepted.connect(self._run_AXIS_MAINTENANCE_gcode)
@@ -53,15 +65,33 @@ class AxisMaintPage(QtWidgets.QWidget):
 
     def _send(self, script: str, on_done: Callable[[object], None]) -> None:
         """Run ``script``; ``on_done`` gets the reply, or an error if unsent."""
-        # Moonraker replies to gcode.script only after Klipper has run the whole script.
+        self._run_id += 1
+        run_id = self._run_id
+
+        def on_reply(reply: object) -> None:
+            if run_id == self._run_id:
+                self._safety.stop()
+                on_done(reply)
+
+        # Moonraker replies to gcode.script once Klipper has run the whole script.
+        self._safety.start()
         run = self.gcode_runner
-        if not (run and run(script, callback=on_done)):
-            on_done({"error": {"code": -1, "message": "not connected"}})
+        if not (run and run(script, callback=on_reply)):
+            on_reply({"error": {"code": -1, "message": "not connected"}})
+
+    def _on_safety_timeout(self) -> None:
+        """Close the loading screen when Klipper never replied."""
+        self._run_id += 1  # A late reply must not pop the oil prompt over another page
+        _logger.warning(
+            "Axis maintenance: no reply in %d s, closing the loading screen",
+            _SAFETY_TIMEOUT_MS // 1000,
+        )
+        self.call_load_panel.emit(False, "", False)
 
     def _on_homed(self, result: object) -> None:
         """Drop the loading screen and show the oil prompt once homing succeeded."""
         self.call_load_panel.emit(False, "", False)
-        # Failures need no popup here: Klipper broadcasts the "!!" reason to the UI.
+        # No popup: Klipper broadcasts "!!", MoonAPI logs it, ConnectionPage covers unsent
         if not (isinstance(result, dict) and "error" in result):
             self.answerPage.show()
 

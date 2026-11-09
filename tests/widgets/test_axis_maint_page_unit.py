@@ -60,3 +60,14 @@ def test_no_runner_drops_loading_without_prompt(page, qtbot):
         page.axis_maintenance()
 
     page.answerPage.show.assert_not_called()
+
+
+def test_safety_timeout_drops_loading_and_ignores_late_reply(page, qtbot):
+    page._safety.setInterval(20)
+    page.axis_maintenance()
+    with qtbot.waitSignal(page.call_load_panel, timeout=2000) as blocker:
+        pass
+    assert blocker.args == [False, "", False]
+
+    page.calls[0][1]("ok")
+    page.answerPage.show.assert_not_called()
