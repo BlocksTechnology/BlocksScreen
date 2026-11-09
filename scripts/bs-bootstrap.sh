@@ -15,6 +15,8 @@ _BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 _as_blocks() { runuser -u "$_BSENV_USER" -- "$@"; }
+# Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
+export PIP_DISABLE_PIP_VERSION_CHECK=1
 
 echo "[bs-bootstrap] starting"
 
@@ -25,52 +27,93 @@ command -v feh >/dev/null 2>&1 || _missing="$_missing feh"
 command -v xsetroot >/dev/null 2>&1 || _missing="$_missing x11-xserver-utils"
 if [ -n "$_missing" ]; then
     # shellcheck disable=SC2086
-    apt-get install -y --quiet $_missing 2>/dev/null \
-        || echo "[bs-bootstrap] apt install deferred (offline?):$_missing"
+    apt-get -o DPkg::Lock::Timeout=60 install -y --quiet $_missing 2>/dev/null \
+        || echo "[bs-bootstrap] apt install deferred (offline or dpkg busy):$_missing"
 fi
 
 # 2. Python deps. PyYAML is required by the updater daemon's component loader.
-_as_blocks "$BSENV/bin/python3.11" -c "import yaml" 2>/dev/null \
-    || _as_blocks "$BSENV/bin/pip" install --quiet "PyYAML==6.0.3" || true
-# Emergency repair only - requirements.txt below carries the canonical pin.
-_as_blocks "$BSENV/bin/python3.11" -c "import sdbus" 2>/dev/null \
-    || _as_blocks "$BSENV/bin/pip" install --quiet \
-        --no-binary sdbus,sdbus-networkmanager \
-        "sdbus==0.12.0" "sdbus-networkmanager==2.0.0" || true
-
-# 3. Full pinned requirements when the set changed (also done by post-merge).
-REQS_HASH=$(md5sum "$BS_PATH/scripts/requirements.txt" | cut -d' ' -f1)
+REQS="$BS_PATH/scripts/requirements.txt"
 SENTINEL="$BSENV/.blockscreen-reqs-hash"
 ATTEMPT="$BSENV/.blockscreen-reqs-attempt"
-if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
-    if _as_blocks "$BSENV/bin/pip" install --quiet \
-        --only-binary :all: \
+REINSTALL=""
+# A truncated package (interrupted pip, power cut) still imports and yields only its dunders.
+_probe() { _as_blocks "$BSENV/bin/python3.11" -c 'import sys
+for n in sys.argv[1:]: assert len(dir(__import__(n, fromlist=["_"]))) > 15' "$@" >/dev/null 2>&1; }
+_pin() { grep -im1 "^$1[=><]" "$REQS"; }
+# Truncation is never limited to one package, so make step 3 rewrite the whole pinned set.
+_deps_broken() {
+    echo "[bs-bootstrap] $1 missing or broken - reinstalling venv"
+    REINSTALL="--force-reinstall --no-cache-dir"
+    rm -f "$SENTINEL" "$ATTEMPT" 2>/dev/null || true
+}
+# Every venv writer (also install-updater.sh, post-merge) flocks the venv dir: a probe mid-replace forces a reinstall.
+{ exec 201<"$BSENV" && flock -w 900 201; } || echo "[bs-bootstrap] venv lock not acquired (busy 900s or no venv) - continuing unlocked"
+# Repair the daemon's own dependency up front so an update can still run if the full set below fails.
+if ! _probe yaml; then
+    _deps_broken PyYAML
+    _as_blocks "$BSENV/bin/pip" install --quiet --force-reinstall --no-cache-dir "$(_pin PyYAML)" || true
+fi
+if ! _probe sdbus; then
+    _deps_broken sdbus
+    _as_blocks "$BSENV/bin/pip" install --quiet --force-reinstall --no-cache-dir \
         --no-binary sdbus,sdbus-networkmanager \
-        --upgrade-strategy=only-if-needed \
-        -r "$BS_PATH/scripts/requirements.txt"; then
-        echo "$REQS_HASH" >"$SENTINEL"
-        chown "$_BSENV_USER" "$SENTINEL" 2>/dev/null || true
-        rm -f "$ATTEMPT" 2>/dev/null || true
-    else
-        # pip resolves -r atomically: a single dep without an aarch64 wheel
-        # rejects the whole set, the sentinel never advances, and bootstrap
-        # re-thrashes this install on every boot. Bound the retries - keep
-        # trying for a few boots (covers transient/offline failures), then
-        # accept the partial venv so a deterministically-failing set stops
-        # thrashing the boot path.
-        _prev=$(cut -d' ' -f1 "$ATTEMPT" 2>/dev/null || true)
-        _cnt=$(cut -d' ' -f2 "$ATTEMPT" 2>/dev/null || true)
-        case "$_cnt" in '' | *[!0-9]*) _cnt=0 ;; esac
-        if [ "$_prev" = "$REQS_HASH" ]; then _cnt=$((_cnt + 1)); else _cnt=1; fi
-        echo "$REQS_HASH $_cnt" >"$ATTEMPT"
-        chown "$_BSENV_USER" "$ATTEMPT" 2>/dev/null || true
-        if [ "$_cnt" -ge 3 ]; then
-            echo "[bs-bootstrap] requirements failed ${_cnt}x; giving up to stop boot thrash (venv left as-is)"
+        "$(_pin sdbus)" "$(_pin sdbus-networkmanager)" || true
+fi
+if [ -z "$REINSTALL" ] && ! _probe requests websocket numpy PIL.Image qrcode; then
+    _deps_broken "UI dependency"
+fi
+# A zero-length .so is never legitimate: it means the filesystem lost writes mid-flush.
+if [ -z "$REINSTALL" ] && [ -n "$(find "$BSENV/lib" -name '*.so' -size 0 -print -quit 2>/dev/null)" ]; then
+    _deps_broken "truncated extension module"
+fi
+
+# 3. Full pinned requirements when the set changed (also done by post-merge).
+_install_reqs() {
+    REQS_HASH=$(md5sum "$REQS" | cut -d' ' -f1)
+    if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
+        # shellcheck disable=SC2086
+        if _as_blocks "$BSENV/bin/pip" install --quiet $REINSTALL \
+            --only-binary :all: \
+            --no-binary sdbus,sdbus-networkmanager \
+            --upgrade-strategy=only-if-needed \
+            -r "$BS_PATH/scripts/requirements.txt"; then
             echo "$REQS_HASH" >"$SENTINEL"
             chown "$_BSENV_USER" "$SENTINEL" 2>/dev/null || true
+            rm -f "$ATTEMPT" 2>/dev/null || true
+        else
+            # pip resolves -r atomically: a single dep without an aarch64 wheel
+            # rejects the whole set, the sentinel never advances, and bootstrap
+            # re-thrashes this install on every boot. Bound the retries - keep
+            # trying for a few boots (covers transient/offline failures), then
+            # accept the partial venv so a deterministically-failing set stops
+            # thrashing the boot path.
+            _prev=$(cut -d' ' -f1 "$ATTEMPT" 2>/dev/null || true)
+            _cnt=$(cut -d' ' -f2 "$ATTEMPT" 2>/dev/null || true)
+            case "$_cnt" in '' | *[!0-9]*) _cnt=0 ;; esac
+            if [ "$_prev" = "$REQS_HASH" ]; then _cnt=$((_cnt + 1)); else _cnt=1; fi
+            echo "$REQS_HASH $_cnt" >"$ATTEMPT"
+            chown "$_BSENV_USER" "$ATTEMPT" 2>/dev/null || true
+            if [ "$_cnt" -ge 3 ]; then
+                echo "[bs-bootstrap] requirements failed ${_cnt}x; giving up to stop boot thrash (venv left as-is)"
+                echo "$REQS_HASH" >"$SENTINEL"
+                chown "$_BSENV_USER" "$SENTINEL" 2>/dev/null || true
+            fi
         fi
     fi
+}
+_install_reqs
+# post-merge skips pip while we hold the venv lock: install what it merged meanwhile.
+if [ "$(md5sum "$REQS" | cut -d' ' -f1)" != "$REQS_HASH" ]; then
+    echo "[bs-bootstrap] requirements changed during install - installing again"
+    REINSTALL=""
+    _install_reqs
 fi
+# pip -r never removes a dropped pin; the glob keeps this free on every start once the stale backport is gone.
+if compgen -G "$BSENV/lib/python3*/site-packages/typing-*-info" >/dev/null; then
+    _as_blocks "$BSENV/bin/pip" uninstall --quiet --yes typing || true
+fi
+# Released before step 4: install-updater.sh takes the venv lock itself and would wait on ours.
+exec 201<&-
 
 # 4. Updater stack (local files only - works offline).
 # Verify each critical artifact: an old-installer box can have the service but no apt helper.

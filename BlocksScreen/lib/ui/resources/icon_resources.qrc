@@ -83,6 +83,7 @@
     <file>media/btn_icons/ui/error.svg</file>
     <file>media/btn_icons/ui/info.svg</file>
     <file>media/btn_icons/ui/leds.svg</file>
+    <file>media/btn_icons/ui/leds_off.svg</file>
     <file>media/btn_icons/ui/pause.svg</file>
     <file>media/btn_icons/ui/play.svg</file>
     <file>media/btn_icons/ui/print.svg</file>
@@ -124,5 +125,7 @@
     <file>media/btn_icons/arrow_icons/right_arrow.svg</file>
     <file>media/btn_icons/arrow_icons/down_arrow.svg</file>
     <file>media/btn_icons/arrow_icons/up_arrow.svg</file>
+    <file>media/btn_icons/arrow_icons/sort_desc.svg</file>
+    <file>media/btn_icons/arrow_icons/sort_asc.svg</file>
   </qresource>
 </RCC>
