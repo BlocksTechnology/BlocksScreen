@@ -349,7 +349,12 @@ class CrashHandler:
         """Install exception hooks."""
         # Setup faulthandler for C-level crashes (segfaults, etc.)
         try:
-            self._fault_file = open(self._fault_log_path, "w")
+            # Append: the systemd restart right after a SEGV would otherwise wipe its trace
+            self._fault_file = open(self._fault_log_path, "a")
+            self._fault_file.write(
+                f"--- run started {datetime.now().isoformat()} pid {os.getpid()} ---\n"
+            )
+            self._fault_file.flush()
             faulthandler.enable(file=self._fault_file, all_threads=True)
 
             # Also dump traceback on SIGUSR1 (useful for debugging hangs)
@@ -558,11 +563,7 @@ class CrashHandler:
         if self._original_threading_excepthook and hasattr(threading, "excepthook"):
             threading.excepthook = self._original_threading_excepthook
 
-        if self._fault_file:
-            try:
-                self._fault_file.close()
-            except OSError:
-                pass  # File already closed; nothing to recover
+        # Kept open: faulthandler writes teardown SEGVs here; a closed fd gets reused.
 
         CrashHandler._installed = False
         CrashHandler._instance = None

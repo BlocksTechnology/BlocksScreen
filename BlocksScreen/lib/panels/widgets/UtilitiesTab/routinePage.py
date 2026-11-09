@@ -23,11 +23,6 @@ class RoutineCheckPage(QtWidgets.QWidget):
     request_tb_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request-tb-page"
     )
-    subscribe_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        [list, "PyQt_PyObject"],
-        [str, "PyQt_PyObject"],
-        name="on-subscribe-config",
-    )
 
     HOMED_AXES = frozenset("xyz")
 
@@ -99,20 +94,9 @@ class RoutineCheckPage(QtWidgets.QWidget):
             if base_name == "fan_generic" or base_name == "fan":
                 self.fans.append(obj.removeprefix(base_name + " "))
 
-    @QtCore.pyqtSlot(dict, name="on_object_config")
-    @QtCore.pyqtSlot(list, name="on_object_config")
-    def on_object_config(self, config: dict | list) -> None:
-        """Handle receiving printer object configurations"""
-        if not config:
-            return
-        self.axis_limits.update(self.parse_axis_limits(config))
-
     def on_printer_config_received(self, config: dict) -> None:
-        """Handle printer configuration"""
-        for axis in ("x", "y", "z"):
-            self.subscribe_config[str, "PyQt_PyObject"].emit(
-                f"stepper_{axis}", self.on_object_config
-            )
+        """Read the stepper travel ranges from the printer configuration."""
+        self.axis_limits = self.parse_axis_limits(config)
 
     @QtCore.pyqtSlot(str, str, name="on_toolhead_update")
     def on_toolhead_update(self, field: str, value: str) -> None:
@@ -288,7 +272,7 @@ class RoutineCheckPage(QtWidgets.QWidget):
                 if pos_min is None and pos_max is None:
                     continue
 
-                low = float(pos_min) if pos_min is not None else -math.inf
+                low = float(pos_min) if pos_min is not None else 0.0
                 high = float(pos_max) if pos_max is not None else math.inf
 
                 endstop_raw = value.get("position_endstop")

@@ -2,6 +2,7 @@
 
 import asyncio
 import sys
+import threading
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,6 +11,13 @@ from PyQt6.QtCore import QObject
 
 _BUS = "com.blockscreen.Updater"
 _UNIT = "BlocksScreen-updater.service"
+
+
+def _limit(name: str) -> float:
+    """Read a watchdog constant lazily, like _make_worker's import."""
+    import BlocksScreen.lib.updater_worker as uw
+
+    return getattr(uw, name)
 
 
 def _make_worker():
@@ -30,36 +38,16 @@ def _make_worker():
     w._last_activity = 0.0
     w._proxy = MagicMock()
     w._shutting_down = False
+    w._last_busy = False
+    w._last_provisioning = False
+    w._provisioning_signals = 0
     w._daemon_owner = ""
     w._owner_task = None
     w._escalated = False
     w._init_lock = asyncio.Lock()
     w._system_bus = MagicMock()
+    w._thread = threading.Thread(target=lambda: None)
     return w
-
-
-class _FakeDbus:
-    """Stand-in for FreedesktopDbus yielding a scripted NameOwnerChanged stream."""
-
-    def __init__(self, owner="", events=(), stop=None):
-        self._owner = owner
-        self._events = list(events)
-        self._stop = stop
-
-    async def get_name_owner(self, service_name):
-        return self._owner
-
-    @property
-    def name_owner_changed(self):
-        events, stop = self._events, self._stop
-
-        async def _gen():
-            for event in events:
-                yield event
-            if stop is not None:
-                stop()
-
-        return _gen()
 
 
 def _dbus_module(fake):
@@ -219,95 +207,212 @@ class TestWatchdog:
         await worker._busy_watchdog()  # must not raise or emit
 
     @pytest.mark.asyncio
-    async def test_watchdog_emits_after_idle_limit(self, worker, qtbot):
+    async def test_watchdog_unanswered_daemon_is_unavailable(self, worker, qtbot):
         received = []
         worker.daemon_unavailable.connect(lambda: received.append(True))
         worker._busy_false_event.clear()
-        # Last activity far in the past → idle exceeds the limit → emit at once.
-        worker._last_activity = worker._loop.time() - 100_000
+        worker._proxy.get_busy = AsyncMock(side_effect=TimeoutError)
+        worker._schedule_reconnect = MagicMock()
+        worker._last_activity = worker._loop.time() - _limit("_BUSY_IDLE_LIMIT")
         await worker._busy_watchdog()
         assert received == [True]
+        worker._schedule_reconnect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_watchdog_idle_answer_clears_busy(self, worker, qtbot):
+        """A lost busy_changed(False) must not read as a dead daemon."""
+        unavailable, busy = [], []
+        worker.daemon_unavailable.connect(lambda: unavailable.append(True))
+        worker.busy_changed.connect(busy.append)
+        worker._busy_false_event.clear()
+        worker._last_busy = True
+        worker._proxy.get_busy = AsyncMock(return_value=False)
+        worker._last_activity = worker._loop.time() - _limit("_BUSY_IDLE_LIMIT")
+        await worker._busy_watchdog()
+        assert unavailable == [] and busy == [False]
+        assert worker._last_busy is False and worker._busy_false_event.is_set()
+
+    @pytest.mark.asyncio
+    async def test_watchdog_busy_answer_waits_without_refreshing(self, worker, qtbot):
+        """A deploy hold sends no progress; a busy answer keeps waiting but not forever."""
+        received = []
+        worker.daemon_unavailable.connect(lambda: received.append(True))
+        worker._busy_false_event.clear()
+        worker._last_activity = stale = worker._loop.time() - _limit("_BUSY_IDLE_LIMIT")
+
+        async def busy():
+            asyncio.get_running_loop().call_soon(worker._busy_false_event.set)
+            return True
+
+        worker._proxy.get_busy = AsyncMock(side_effect=busy)
+        await worker._busy_watchdog()
+        assert received == [] and worker._last_activity == stale
+
+    @pytest.mark.asyncio
+    async def test_watchdog_stuck_busy_daemon_gives_up(self, worker, qtbot):
+        received = []
+        worker.daemon_unavailable.connect(lambda: received.append(True))
+        worker._busy_false_event.clear()
+        worker._proxy.get_busy = AsyncMock(return_value=True)
+        worker._schedule_reconnect = MagicMock()
+        worker._last_activity = worker._loop.time() - _limit("_BUSY_SILENT_MAX")
+        await worker._busy_watchdog()
+        assert received == [True]
+        # The daemon answers, so reconnecting would only re-arm the same stuck state.
+        worker._schedule_reconnect.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_idle_signal_after_giving_up_clears_busy(self, worker, qtbot):
+        """The listener survives the give-up, so the daemon's eventual idle still lands."""
+        busy = []
+        worker.busy_changed.connect(busy.append)
+        worker._busy_false_event.clear()
+        worker._last_busy = True
+        worker._proxy.get_busy = AsyncMock(return_value=True)
+        worker._schedule_reconnect = MagicMock()
+        worker._last_activity = worker._loop.time() - _limit("_BUSY_SILENT_MAX")
+        await worker._busy_watchdog()
+
+        async def _gen():
+            yield False
+
+        worker._proxy.busy_changed = _gen()
+        await worker._listen_busy_changed()
+        assert busy == [False] and worker._last_busy is False
+        assert worker._busy_false_event.is_set()
+
+
+class _Msg:
+    """NameOwnerChanged message; a callable payload runs on read (stop or fail)."""
+
+    def __init__(self, contents):
+        self._contents = contents
+
+    def get_contents(self):
+        return self._contents() if callable(self._contents) else self._contents
 
 
 class TestDaemonOwnerWatch:
     """Crash recovery: NameOwnerChanged resync instead of the 6-minute busy watchdog."""
 
     @staticmethod
-    def _patch_dbus(worker, owner="", events=()):
-        def _stop():
-            worker._shutting_down = True
+    def _subscribe(worker, *batches, owner=""):
+        """Each subscribe delivers the next batch before the seed; returns the slots."""
+        slots = []
+        pending = iter(batches)
 
-        return _dbus_module(_FakeDbus(owner=owner, events=events, stop=_stop))
+        async def _match(*args):
+            for event in next(pending):
+                args[4](_Msg(event))
+            slots.append(MagicMock())
+            return slots[-1]
+
+        worker._system_bus.match_signal_async = _match
+        return slots, _dbus_module(
+            MagicMock(get_name_owner=AsyncMock(return_value=owner))
+        )
+
+    @staticmethod
+    def _stop(worker):
+        def _read():
+            worker._shutting_down = True
+            return ("org.other.Thing", "", "")
+
+        return _read
 
     @pytest.mark.asyncio
     async def test_new_owner_triggers_resync(self, worker):
         worker._async_initialize = AsyncMock()
-        with self._patch_dbus(worker, "", [(_BUS, "", ":1.5")]):
+        _, dbus = self._subscribe(worker, [(_BUS, "", ":1.5"), self._stop(worker)])
+        with dbus:
             await worker._watch_daemon_owner()
         # Owner passed through, not stored here: _async_initialize owns that field.
         worker._async_initialize.assert_awaited_once_with(":1.5")
 
     @pytest.mark.asyncio
-    async def test_owner_lost_emits_unavailable_without_resync(self, worker, qtbot):
+    async def test_owner_lost_emits_unavailable_and_schedules_reconnect(
+        self, worker, qtbot
+    ):
+        """A stopped unit is bus-activated again by the retry, so the worker retries."""
         received = []
         worker.daemon_unavailable.connect(lambda: received.append(True))
         worker._async_initialize = AsyncMock()
-        with self._patch_dbus(worker, ":1.5", [(_BUS, ":1.5", "")]):
+        worker._schedule_reconnect = MagicMock()
+        _, dbus = self._subscribe(
+            worker, [(_BUS, ":1.5", ""), self._stop(worker)], owner=":1.5"
+        )
+        with dbus:
             await worker._watch_daemon_owner()
         assert received == [True]
         worker._async_initialize.assert_not_awaited()
+        worker._schedule_reconnect.assert_called_once_with()
+
+    @pytest.mark.asyncio
+    async def test_owner_lost_while_busy_emits_restarting(self, worker):
+        """install-updater restarts a busy daemon: the overlay must stay, not drop."""
+        restarting, unavailable = [], []
+        worker.daemon_restarting.connect(lambda: restarting.append(True))
+        worker.daemon_unavailable.connect(lambda: unavailable.append(True))
+        worker._last_busy = True
+        worker._async_initialize = AsyncMock()
+        worker._schedule_reconnect = MagicMock()
+        _, dbus = self._subscribe(
+            worker, [(_BUS, ":1.5", ""), self._stop(worker)], owner=":1.5"
+        )
+        with dbus:
+            await worker._watch_daemon_owner()
+        assert restarting == [True]
+        assert unavailable == []
+        worker._schedule_reconnect.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_other_names_and_repeat_owner_ignored(self, worker):
         worker._async_initialize = AsyncMock()
         events = [("org.other.Thing", "", ":1.9"), (_BUS, ":1.5", ":1.5")]
-        with self._patch_dbus(worker, ":1.5", events):
+        _, dbus = self._subscribe(worker, [*events, self._stop(worker)], owner=":1.5")
+        with dbus:
             await worker._watch_daemon_owner()
         worker._async_initialize.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_watch_survives_stream_failure(self, worker):
+    async def test_subscribes_before_seeding(self, worker):
+        """Seeding first would miss a restart landing between seed and subscribe."""
+        slots, _ = self._subscribe(worker, [self._stop(worker)])
+        seen = []
+
+        async def _owner(_name):
+            seen.append(len(slots))
+            return ""
+
+        with _dbus_module(MagicMock(get_name_owner=_owner)):
+            await worker._watch_daemon_owner()
+        assert seen == [1]
+
+    @pytest.mark.asyncio
+    async def test_watch_survives_subscribe_failure(self, worker):
         """Losing the watch must retry, not kill the fast recovery path."""
-        worker._async_initialize = AsyncMock()
-
-        class _Broken(_FakeDbus):
-            @property
-            def name_owner_changed(self):
-                raise RuntimeError("bus dropped")
-
-        fake = _Broken()
+        worker._system_bus.match_signal_async = AsyncMock(
+            side_effect=RuntimeError("bus dropped")
+        )
 
         async def _sleep(_delay):
             worker._shutting_down = True
 
-        with _dbus_module(fake), patch("asyncio.sleep", _sleep):
+        with patch("asyncio.sleep", _sleep):
             await worker._watch_daemon_owner()  # must return, not raise
 
     @pytest.mark.asyncio
-    async def test_stream_closed_when_body_raises(self, worker):
-        """Abandoning the generator without aclose leaks its match slot until GC."""
-        closed = []
-
-        async def _gen():
-            try:
-                yield (_BUS, "", ":1.9")
-                yield (_BUS, "", ":1.10")
-            finally:
-                closed.append(True)
-
-        class _Leaky(_FakeDbus):
-            @property
-            def name_owner_changed(self):
-                return _gen()
-
+    async def test_slot_closed_when_body_raises(self, worker):
+        """An unclosed match slot keeps queueing signals until GC."""
         worker._async_initialize = AsyncMock(side_effect=RuntimeError("boom"))
+        slots, dbus = self._subscribe(worker, [(_BUS, "", ":1.9"), (_BUS, "", ":1.10")])
 
         async def _sleep(_delay):
             worker._shutting_down = True
 
-        with _dbus_module(_Leaky()), patch("asyncio.sleep", _sleep):
+        with dbus, patch("asyncio.sleep", _sleep):
             await worker._watch_daemon_owner()
-        assert closed == [True]
+        slots[0].close.assert_called_once_with()
         worker._async_initialize.assert_awaited_once_with(":1.9")
 
     @pytest.mark.asyncio
@@ -315,15 +420,17 @@ class TestDaemonOwnerWatch:
     async def test_reseed_after_gap_resyncs_new_owner(self, worker, reseed, resyncs):
         """A restart while the watch was down emits no signal: the re-seed must catch it."""
         worker._async_initialize = AsyncMock()
-        fake = _FakeDbus()
-        fake.get_name_owner = AsyncMock(side_effect=[":1.5", reseed])
-        sleeps = []
 
-        async def _sleep(delay):
-            sleeps.append(delay)
-            worker._shutting_down = len(sleeps) >= 2
+        def _drop():
+            raise RuntimeError("bus dropped")
 
-        with _dbus_module(fake), patch("asyncio.sleep", _sleep):
+        _, dbus = self._subscribe(worker, [_drop], [self._stop(worker)])
+        fake = MagicMock(get_name_owner=AsyncMock(side_effect=[":1.5", reseed]))
+
+        async def _sleep(_delay):
+            pass
+
+        with dbus, _dbus_module(fake), patch("asyncio.sleep", _sleep):
             await worker._watch_daemon_owner()
         if resyncs:
             worker._async_initialize.assert_awaited_once_with(reseed)
@@ -510,3 +617,71 @@ class TestShutdown:
         worker.shutdown()
         owner_task.cancel.assert_called_once()
         listener.cancel.assert_called_once()
+
+    def test_shutdown_joins_loop_thread(self, worker):
+        worker._thread = threading.Thread(target=worker._loop.run_forever, daemon=True)
+        worker._thread.start()
+        worker.shutdown()
+        assert not worker._thread.is_alive()
+
+
+class TestReplayBusy:
+    def test_replays_true_only(self, worker, qtbot):
+        received: list[bool] = []
+        worker.busy_changed.connect(received.append)
+        worker.replay_busy()
+        assert received == []
+        worker._last_busy = True
+        worker.replay_busy()
+        assert received == [True]
+
+    def test_replays_provisioning_before_busy(self, worker, qtbot):
+        order: list[str] = []
+        worker.provisioning_changed.connect(lambda v: order.append(f"prov={v}"))
+        worker.busy_changed.connect(lambda v: order.append(f"busy={v}"))
+        worker._last_busy = worker._last_provisioning = True
+        worker.replay_busy()
+        assert order == ["prov=True", "busy=True"]
+
+
+class TestGetProvisioning:
+    @pytest.mark.asyncio
+    async def test_old_daemon_without_method_is_not_provisioning(self, worker):
+        import sdbus
+
+        worker._proxy.get_provisioning = AsyncMock(
+            side_effect=sdbus.SdBusBaseError("unknown method")
+        )
+        assert await worker._get_provisioning() is False
+
+    @pytest.mark.asyncio
+    async def test_returns_daemon_answer(self, worker):
+        worker._proxy.get_provisioning = AsyncMock(return_value=True)
+        assert await worker._get_provisioning() is True
+
+
+class TestPollProvisioning:
+    @pytest.mark.asyncio
+    async def test_poll_seeds_the_value(self, worker):
+        worker._proxy.get_provisioning = AsyncMock(return_value=True)
+        await worker._poll_provisioning(True)
+        assert worker._last_provisioning is True
+
+    @pytest.mark.asyncio
+    async def test_not_busy_skips_the_poll(self, worker):
+        worker._proxy.get_provisioning = AsyncMock(return_value=True)
+        await worker._poll_provisioning(False)
+        assert worker._last_provisioning is False
+        worker._proxy.get_provisioning.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_signal_during_poll_wins(self, worker):
+        async def slow_poll():
+            # The listener delivers the real transition while the poll is in flight.
+            worker._last_provisioning = False
+            worker._provisioning_signals += 1
+            return True
+
+        worker._proxy.get_provisioning = slow_poll
+        await worker._poll_provisioning(True)
+        assert worker._last_provisioning is False

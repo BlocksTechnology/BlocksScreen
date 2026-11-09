@@ -8,11 +8,15 @@
 
 import ctypes
 import enum
+import json
 import logging
 import math
 import os
 import pathlib
+import re
+import shutil
 import struct
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -316,6 +320,28 @@ def format_weight(grams: float) -> str:
     return f"{grams / 1000:.2f}kg" if grams > 499 else f"{grams:.2f}g"
 
 
+def parse_materials(filament_type: object) -> list[str]:
+    """filament_type (str, list, JSON, CSV or ;-list) as unique names, [] if unknown."""
+    if isinstance(filament_type, str):
+        text = filament_type.strip()
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                types = json.loads(text)
+            except json.JSONDecodeError:
+                types = [text]
+        else:
+            # PrusaSlicer, SuperSlicer and OrcaSlicer separate tools with ";".
+            types = re.split(r"[,;]", text)
+    elif isinstance(filament_type, list):
+        types = filament_type
+    else:
+        types = [filament_type] if filament_type else []
+    names = list(
+        dict.fromkeys(name for t in types if t is not None and (name := str(t).strip()))
+    )
+    return [] if names == ["Unknown"] else names
+
+
 def normalize(
     value: float,
     r_min: float = 0.0,
@@ -355,6 +381,32 @@ def check_file_on_path(
 ) -> bool:
     """Return ``True`` if *filename* exists under *path*."""
     return (pathlib.Path(path) / filename).exists()
+
+
+def atomic_write_text(path: pathlib.Path, text: str) -> None:
+    """Write via temp file + rename: a power cut never truncates it; symlinks kept."""
+    target = path.resolve()
+    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        if target.exists():
+            shutil.copymode(target, tmp)
+        os.replace(tmp, target)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    # The rename survives a power cut only once the directory entry is on disk.
+    dir_fd = os.open(target.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
 
 
 def get_file_name(filename: str | None) -> str:

@@ -4,10 +4,12 @@ set -euo pipefail
 Red='\033[0;31m'
 Green='\033[0;32m'
 Blue='\033[0;34m'
+Yellow='\033[0;33m'
 Normal='\033[0m'
 
 echo_info() { printf "${Blue}%s${Normal}\n" "$1"; }
 echo_ok() { printf "${Green}%s${Normal}\n" "$1"; }
+echo_warn() { printf "${Yellow}%s${Normal}\n" "$1"; }
 echo_error() { printf "${Red}%s${Normal}\n" "$1"; }
 
 # Root and blocks both run this: O_CREAT on the other's file in sticky /tmp is denied, a read-only open is not.
@@ -25,8 +27,7 @@ BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 
 # Venv-mutating commands run as blocks: root-owned dists break later pip-as-blocks runs.
 _as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
-# Atomic root install: a power cut must never leave a truncated-but-present file
-# (the [ -f ] self-heal guards would then never rewrite it).
+# Atomic root install: a truncated file would defeat the [ -f ] self-heal guards.
 _install_atomic() {
     local mode="$1" src="$2" dst="$3"
     sudo install -m "$mode" "$src" "${dst}.new" && sudo mv -Tf "${dst}.new" "$dst"
@@ -56,8 +57,7 @@ echo "$SERVICE" | sudo tee /etc/systemd/system/.BlocksScreen-updater.service.new
 sudo mv -Tf /etc/systemd/system/.BlocksScreen-updater.service.new /etc/systemd/system/BlocksScreen-updater.service
 sudo systemctl daemon-reload
 sudo systemctl enable BlocksScreen-updater.service
-sudo systemctl restart BlocksScreen-updater.service || true
-echo_ok "BlocksScreen-updater service installed and started"
+echo_ok "BlocksScreen-updater service installed (restarted at the end)"
 
 echo_info "Installing Spoolman service unit (inactive until the updater provisions it) ..."
 SPOOLMAN_SVC=$(cat "$SCRIPT_PATH/Spoolman.service")
@@ -95,10 +95,10 @@ else
 fi
 # Daemon self-restart target; never in components.yaml.
 _emit_svc_rules BlocksScreen-updater.service
-# Spoolman is provisioned on demand; enable rules needed for its first clean start
-# (hooks/Spoolman.sh uses `enable --now`; sudoers args must match exactly).
+# Spoolman enable rules: hooks/Spoolman.sh runs enable --now, args must match exactly.
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable Spoolman.service\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now Spoolman.service\n' >>"$SUDOERS_TMP"
+printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl disable --now Spoolman.service\n' >>"$SUDOERS_TMP"
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
     echo_ok "Sudoers rules installed"
@@ -125,7 +125,7 @@ _BS_SVC_SRC="$BS_PATH/scripts/BlocksScreen.service"
 _BS_SVC_DEST="/etc/systemd/system/BlocksScreen.service"
 if [[ ! -f "$_BS_SVC_SRC" ]]; then
     # Never remove the running unit without a replacement; the device has no SSH recovery.
-    echo_info "WARN: $_BS_SVC_SRC missing, leaving existing BlocksScreen.service intact"
+    echo_warn "$_BS_SVC_SRC missing, leaving existing BlocksScreen.service intact"
 elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC_SRC")" ]]; then
     # Atomic replace via temp symlink + rename: the unit is never absent.
     sudo ln -sfn "$_BS_SVC_SRC" "${_BS_SVC_DEST}.new"
@@ -133,6 +133,8 @@ elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC
     sudo systemctl unmask BlocksScreen.service 2>/dev/null || true
 fi
 sudo systemctl daemon-reload
+# Every run on purpose: a linked-but-disabled UI unit is a blank screen with no SSH recovery.
+sudo systemctl enable BlocksScreen.service 2>/dev/null || echo_warn "could not enable BlocksScreen.service"
 echo_ok "BlocksScreen.service is a symlink - hook no longer needs sudo cp"
 
 echo_info "Setting up apt cache directory for blocks user ..."
@@ -152,11 +154,18 @@ echo_info "Adding blocks to video group (required for framebuffer splash) ..."
 sudo usermod -aG video blocks 2>/dev/null || true
 echo_ok "blocks added to video group"
 
-echo_info "Enabling persistent journald (retain logs across reboots for field debugging) ..."
-sudo mkdir -p /var/log/journal
-sudo systemd-tmpfiles --create --prefix /var/log/journal 2>/dev/null || true
-sudo systemctl restart systemd-journald 2>/dev/null || true
-echo_ok "Persistent journald enabled"
+echo_info "Keeping journald volatile (persistent logs wear the microSD) ..."
+# A drop-in outranks journald.conf; a /var/log/journal left by older runs flips Storage=auto to persistent.
+_JD_DROPIN=/etc/systemd/journald.conf.d/50-blocksscreen-volatile.conf
+if ! grep -qsx 'Storage=volatile' "$_JD_DROPIN"; then
+    _jd_tmp=$(mktemp)
+    printf '[Journal]\nStorage=volatile\n' >"$_jd_tmp"
+    sudo mkdir -p "${_JD_DROPIN%/*}" && _install_atomic 0644 "$_jd_tmp" "$_JD_DROPIN"
+    rm -f "$_jd_tmp"
+    sudo systemctl restart systemd-journald 2>/dev/null || true
+fi
+# /var/log/journal is kept: journalctl still reads its history, and a later drop-in may re-enable it.
+echo_ok "journald volatile"
 
 echo_info "Scoping git safe.directory to component repos ..."
 # Scope root git trust to component paths instead of '*'.
@@ -226,26 +235,94 @@ echo_ok "post-merge hook installed"
 echo_info "Installing Python requirements ..."
 # Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
 export PIP_DISABLE_PIP_VERSION_CHECK=1
+# Shared with bs-bootstrap and post-merge: a concurrent pip crashes when the pip pin below replaces pip under it.
+_venv_locked=false
+if { exec 201<"$BSENV" && flock -w 300 201; }; then
+    _venv_locked=true
+else
+    echo_warn "Venv lock not acquired (busy 300s or no venv); installing unlocked"
+fi
 # Older runs of this script ran pip as root; hand those files back or every pip-as-blocks run fails.
 [ -d "$BSENV" ] && sudo find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
-# Best-effort pip self-update; must not block the requirements install below.
-_as_blocks "$BSENV/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
+# Dirs pip stashed as ~name mid-upgrade and never removed; a live pip still needs its own to roll back.
+if $_venv_locked; then
+    sudo find "$BSENV"/lib/python3*/site-packages -maxdepth 1 -type d -name '~?*' -exec rm -rf {} + 2>/dev/null || true
+fi
+# Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
+_as_blocks "$BSENV/bin/pip" install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||
+    echo_warn "Pinned pip install FAILED; continuing with the venv's current pip"
 sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
 # xsetroot is used as belt-and-suspenders cursor hiding alongside the Xorg -nocursor server flag.
 sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet x11-xserver-utils 2>/dev/null || true
 # sdbus pinned; --no-binary needs libsystemd-dev; only-if-needed skips satisfied.
-_as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
+# A failure must not abort setup, but it must be visible: a silent one hid the typing==3.7.4.3 break.
+if _as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \
-    -r "$BS_PATH/scripts/requirements.txt" || true
-echo_ok "Python requirements installed"
+    -r "$BS_PATH/scripts/requirements.txt"; then
+    echo_ok "Python requirements installed"
+else
+    echo_warn "Python requirements install FAILED; bs-bootstrap retries it on the next boot"
+fi
 
 # uv: Spoolman's dependency installer (run-from-source); provide it for the hook.
 echo_info "Ensuring uv is available for Spoolman provisioning ..."
-_as_blocks "$BSENV/bin/pip" install --quiet --upgrade uv 2>/dev/null || true
-echo_ok "uv ready"
+# Pinned: Spoolman tracks master, so the uv version is the one lever we hold over how it resolves.
+if _as_blocks "$BSENV/bin/pip" install --quiet uv==0.12.24; then
+    echo_ok "uv ready"
+else
+    echo_warn "uv install FAILED; Spoolman provisioning fails until it is installed"
+fi
+exec 201<&-
 
 echo_info "Pre-generating framebuffer splash cache ..."
 _as_blocks "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
 echo_ok "Splash cache ready"
+
+# First-time setup of a DeviceDiscovery clone the updater provisioned (the same
+# steps as that repo's scripts/install.sh, which needs sudo the hook lacks).
+# Later updates only rebuild, through updater/hooks/DeviceDiscovery.sh.
+_DD_REPO="$_BSENV_HOME/DeviceDiscovery"
+_DD_UNIT="device-discoveryd.service"
+_setup_device_discovery() {
+    # Called in an `||` context, where set -e is off: every step checks itself.
+    if [[ "$(cat "$_DD_REPO/.install-mode" 2>/dev/null)" == "prebuilt" ]]; then
+        sudo apt-get install -y --no-install-recommends \
+            curl ca-certificates libusb-1.0-0 libudev1 || return 1
+    else
+        sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libusb-1.0-0-dev libudev-dev nlohmann-json3-dev || return 1
+    fi
+    # As blocks, so build/ and bin/ stay writable by later updater hook runs.
+    sudo -u "$_BSENV_USER" "$_DD_REPO/scripts/build.sh" || return 1
+    if [[ "$(systemctl show --property=LoadState --value "$_DD_UNIT")" != "loaded" ]]; then
+        sudo systemctl link "$_DD_REPO/systemd/$_DD_UNIT" || return 1
+        sudo systemctl daemon-reload || return 1
+    fi
+    sudo systemctl enable "$_DD_UNIT" || return 1
+    sudo systemctl restart "$_DD_UNIT" || return 1
+}
+if [[ -d "$_DD_REPO/.git" ]]; then
+    if [[ -x "$_DD_REPO/bin/device_discoveryd" ]] &&
+        [[ "$(systemctl show --property=LoadState --value "$_DD_UNIT")" == "loaded" ]]; then
+        echo_ok "DeviceDiscovery already set up"
+    else
+        echo_info "Setting up DeviceDiscovery (first build can take several minutes) ..."
+        if _setup_device_discovery; then
+            echo_ok "DeviceDiscovery installed and started"
+        else
+            # Non-fatal: the next updater run defers to this script again.
+            echo_error "DeviceDiscovery setup failed, retried on the next update"
+        fi
+    fi
+fi
+
+# Restart the daemon last, --no-block, so it starts after everything above is in
+# place and after this run ends. The restarted daemon may provision components a
+# self-update added and touch the deploy flag again; restarting earlier could
+# let that happen mid-run, and BlocksScreen-deploy.service's ExecStartPost would
+# then delete the flag and drop the follow-up setup.
+sudo systemctl --no-block restart BlocksScreen-updater.service || true
+echo_ok "BlocksScreen-updater restart queued"
 
 echo_ok "BlocksScreen updater setup complete"

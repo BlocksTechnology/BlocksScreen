@@ -1,6 +1,8 @@
 import helper_methods as helper_methods
 from PyQt6 import QtCore, QtWidgets
 
+MIN_TIMEOUT_MS = 60_000
+
 
 class ScreenSaver(QtCore.QObject):
     """Screensaver that uses X11 DPMS to blank the display after inactivity."""
@@ -27,9 +29,12 @@ class ScreenSaver(QtCore.QObject):
                 self.dpms_standby_timeout if self.dpms_standby_timeout else 900000
             )
         else:
-            self.blank_timeout = self.screensaver_config.getint(
-                "timeout", default=500000
-            )
+            try:
+                timeout = self.screensaver_config.getint("timeout", default=500000)
+            except ValueError:
+                timeout = 500000
+            # 0 fires at once and keeps the screen blank, so enforce a floor
+            self.blank_timeout = max(timeout, MIN_TIMEOUT_MS)
         QtWidgets.QApplication.instance().installEventFilter(self)
         self.timer.timeout.connect(self.check_dpms)
         self.timer.setInterval(self.blank_timeout)

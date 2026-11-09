@@ -119,6 +119,12 @@ class MainWindow(QtWidgets.QMainWindow):
     in_case_error = QtCore.pyqtSignal(name="in-case-error")
 
     call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
+    device_config_accepted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        list, name="device-config-accepted"
+    )
+    device_config_declined: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        list, name="device-config-declined"
+    )
 
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
@@ -137,6 +143,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._reconnect_timer.setInterval(15_000)
         self._reconnect_timer.timeout.connect(self._on_reconnect_timer)
         self._klippy_ready: bool = False
+        self._klippy_state: str | None = None
         self._klipper_auto_restart_pending: bool = False
         self._klipper_restart_timeout = QtCore.QTimer(self)
         self._klipper_restart_timeout.setSingleShot(True)
@@ -177,7 +184,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
-        self.printPanel = PrintTab(self.printTab, self.file_data, self.ws, self.printer)
+        self.printPanel = PrintTab(
+            self.printTab, self.file_data, self.ws, self.printer, self.amu_manager
+        )
+        self.printPanel.notify.connect(self.notiPage.new_notication)
         self.usb_manager.usb_mounted.connect(
             self.printPanel.filesPage_widget.on_usb_added
         )
@@ -200,6 +210,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.conn_window.on_websocket_connection_achieved
         )
         self.ws.connected_signal.connect(self._arm_health_bless)
+        self.ws.connected_signal.connect(self._try_device_config_restart)
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
@@ -208,6 +219,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
         self.in_case_error.connect(self.printPanel.in_case_error)
         self.in_case_error.connect(self.filamentPanel.in_case_error)
+        self.conn_window.page_shown.connect(self.filamentPanel.hide_load_popup)
 
         self.show_notifications.connect(self.notiPage.new_notication)
 
@@ -266,6 +278,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.sensor_update.connect(self.on_temp_sensor_update)
         self.printer.object_updated.connect(self.amu_manager.on_object_updated)
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
+        self.ws.klippy_state_signal.connect(self.amu_manager.on_klippy_state)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
@@ -286,9 +299,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel.disable_popups.connect(self.popup_toggle)
         self.updater_worker.status_ready.connect(self.update_page.handle_status_ready)
         self.updater_worker.busy_changed.connect(self.update_page.handle_busy_changed)
+        self.updater_worker.provisioning_changed.connect(
+            self.update_page.handle_provisioning_changed
+        )
+        self.updater_worker.replay_busy()
         self.updater_worker.daemon_unavailable.connect(self.on_updater_unavailable)
         self.updater_worker.daemon_unavailable.connect(
             self.update_page.handle_daemon_unavailable
+        )
+        self.updater_worker.daemon_restarting.connect(
+            self.update_page.handle_daemon_restarting
         )
         self.controlPanel.lock_ui.connect(self.set_ui_lock)
         self.updater_worker.request_reconnect.connect(self._on_post_update_reconnect)
@@ -345,18 +365,25 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cancelpage.on_print_stats_update
         )
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
-        # Reprint routes through on_print_start for the same full reset as a fresh print.
-        self.cancelpage.reprint_start.connect(
-            self.printPanel.jobStatusPage_widget.on_print_start
-        )
+        # Reprint takes the fresh-print path: same unloaded check and full reset.
+        self.cancelpage.reprint_start.connect(self.printPanel.start_print)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
         self.printer.display_update.connect(self._handle_display_status)
 
         # Source of truth for job activity; keeps print tab off the main page mid-job.
         self._print_state = "standby"
+        self._print_state_known = False
         self.printer.print_stats_update[str, str].connect(self._track_print_state)
 
         self.print_status = "idle"
+        # Plugged-in devices whose printer.cfg template waits for the user's
+        # OK (the question waits for the end of a running print), and the
+        # ones the open popup is asking about.
+        self._pending_device_confirm: list[str] = []
+        self._device_confirm_names: list[str] = []
+        self._device_config_popup: BasePopup | None = None
+        # printer.cfg changed for a device; Klipper must restart to load it.
+        self._device_restart_pending = False
         self.chamber_temp_display.hide()
 
         if self.config.has_section("server"):
@@ -453,6 +480,10 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str, name="on-klippy-state")
     def _on_klippy_state(self, state: str) -> None:
         self._klippy_ready = state == "ready"
+        self._klippy_state = state
+        if state != "ready":
+            # print_stats is re-reported once Klipper is ready again.
+            self._print_state_known = False
         if state == "disconnected":
             self._klipper_disconnect_grace.start()
         else:
@@ -467,6 +498,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._klipper_restart_timeout.stop()
             if not self._post_update_reconnect:
                 self.loadscreen.hide()
+        self._try_device_config_restart()
+        self._prompt_device_confirmation()
 
     @QtCore.pyqtSlot(name="auto-restart-klipper")
     def _auto_restart_klipper(self) -> None:
@@ -479,11 +512,15 @@ class MainWindow(QtWidgets.QMainWindow):
         ):
             return
         _logger.info("Klipper disconnected — auto-restarting service")
+        self._begin_klipper_restart()
+        self.ws.api.restart_service("klipper")
+
+    def _begin_klipper_restart(self) -> None:
+        """Mark a Klipper restart in flight so "disconnected" won't restart it again"""
         self._klipper_auto_restart_pending = True
         self.loadwidget.set_status_message("Restarting Klipper...")
         self.loadscreen.show()
         self._klipper_restart_timeout.start()
-        self.ws.api.restart_service("klipper")
 
     @QtCore.pyqtSlot(name="arm-health-bless")
     def _arm_health_bless(self) -> None:
@@ -674,10 +711,131 @@ class MainWindow(QtWidgets.QMainWindow):
             ]
         )
 
+    @QtCore.pyqtSlot(list, name="on-device-config-confirmation-required")
+    def on_device_confirmation_required(self, profiles: list) -> None:
+        """Ask whether printer.cfg should be configured for newly plugged-in devices.
+
+        Nothing is written until the user confirms (device_config_accepted).
+        The question waits while a job is running or popups are disabled.
+        """
+        _logger.info("Device configuration prompt requested for %s", profiles)
+        for name in profiles:
+            if (
+                name not in self._pending_device_confirm
+                and name not in self._device_confirm_names
+            ):
+                self._pending_device_confirm.append(name)
+        self._prompt_device_confirmation()
+
+    def _device_prompt_blocked(self) -> str:
+        """Why the device prompt has to wait ('' when it can be shown)."""
+        if self._is_job_active() or self.print_status == "printing":
+            return "a job is running"
+        if self._popup_toggle:
+            return "popups are disabled"
+        if self._update_in_progress:
+            return "an update is running"
+        return ""
+
+    def _prompt_device_confirmation(self) -> None:
+        if not self._pending_device_confirm:
+            return
+        reason = self._device_prompt_blocked()
+        if reason:
+            _logger.info(
+                "Device configuration prompt for %s deferred: %s",
+                self._pending_device_confirm,
+                reason,
+            )
+            return
+        try:
+            self._show_device_confirmation()
+        except Exception:  # noqa: BLE001  # pylint: disable=broad-except
+            # Optional prompt: never let it take the screen down.
+            _logger.exception("Could not show the device configuration prompt")
+
+    def _show_device_confirmation(self) -> None:
+        self._device_confirm_names.extend(self._pending_device_confirm)
+        self._pending_device_confirm = []
+        if self._device_config_popup is None:
+            self._device_config_popup = BasePopup(self, floating=True)
+            self._device_config_popup.accepted.connect(self._on_device_config_accept)
+            self._device_config_popup.rejected.connect(self._on_device_config_decline)
+        devices = ", ".join(n.upper() for n in self._device_confirm_names)
+        self._device_config_popup.set_message(
+            f"New device detected: {devices}\n"
+            "Update the printer configuration for it\n"
+            "and restart Klipper?"
+        )
+        self._device_config_popup.confirm_button_text("Configure")
+        self._device_config_popup.cancel_button_text("Not now")
+        if not self._device_config_popup.isVisible():
+            self._device_config_popup.open()
+        _logger.info("Device configuration prompt shown for %s", devices)
+
+    @QtCore.pyqtSlot(name="on-device-config-accept")
+    def _on_device_config_accept(self) -> None:
+        names, self._device_confirm_names = self._device_confirm_names, []
+        if names:
+            self.device_config_accepted.emit(names)
+
+    @QtCore.pyqtSlot(name="on-device-config-decline")
+    def _on_device_config_decline(self) -> None:
+        names, self._device_confirm_names = self._device_confirm_names, []
+        if names:
+            self.device_config_declined.emit(names)
+
+    @QtCore.pyqtSlot(list, name="on-device-config-changed")
+    def on_device_config_changed(self, profiles: list) -> None:
+        """printer.cfg was updated for plugged-in devices: restart Klipper."""
+        _logger.info("printer.cfg updated for %s", ", ".join(profiles))
+        self.request_klipper_restart()
+
+    def request_klipper_restart(self) -> None:
+        """Restart Klipper as soon as it is safe (never during a job)."""
+        self._device_restart_pending = True
+        self._try_device_config_restart()
+
+    def _device_restart_blocked(self) -> str:
+        """Why the Klipper restart has to wait ('' when it can go ahead)."""
+        if self._klippy_state is None:
+            return "Klipper state not known yet"
+        if self._klippy_state == "ready" and not self._print_state_known:
+            return "print state not known yet"
+        if self._is_job_active() or self.print_status == "printing":
+            return "a job is running"
+        if self._update_in_progress:
+            return "an update is running"
+        if self._klipper_auto_restart_pending:
+            return "a Klipper restart is already in progress"
+        return ""
+
+    @QtCore.pyqtSlot(name="try-device-config-restart")
+    def _try_device_config_restart(self) -> None:
+        if not self._device_restart_pending:
+            return
+        reason = self._device_restart_blocked()
+        if reason:
+            _logger.info("Klipper restart for new device config deferred: %s", reason)
+            return
+        # A service restart (not FIRMWARE_RESTART) works whatever state
+        # Klippy is in, including when the old config kept it from starting.
+        if not self.ws.api.restart_service("klipper"):
+            _logger.warning(
+                "Klipper restart for new device config deferred: "
+                "Moonraker not connected"
+            )
+            return
+        _logger.info("Restarting Klipper to load the new device config")
+        self._device_restart_pending = False
+        self._begin_klipper_restart()
+
     @QtCore.pyqtSlot(bool, name="toggle-popups")
     def popup_toggle(self, toggle: bool) -> None:
         """Toggles app popups"""
         self._popup_toggle = toggle
+        if not toggle:
+            self._prompt_device_confirmation()
 
     @QtCore.pyqtSlot(bool, name="set-ui-lock")
     def set_ui_lock(self, locked: bool) -> None:
@@ -701,6 +859,10 @@ class MainWindow(QtWidgets.QMainWindow):
         """Track ``print_stats.state`` as the source of truth for job activity."""
         if field == "state":
             self._print_state = value
+            self._print_state_known = True
+            if not self._is_job_active():
+                self._try_device_config_restart()
+                self._prompt_device_confirmation()
 
     def _is_job_active(self) -> bool:
         """True while a job occupies the printer; paused included so runout pauses hold the page."""
@@ -926,9 +1088,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_printer_message(self, method, data, metadata) -> None:
         """Handle Printer messages"""
-        if "info" in method:
-            # TODO: Handle info
-            ...
+        if "info" in method and isinstance(data, dict):
+            self.conn_window.on_printer_info(data)
         if "print" in method:
             if "start" in method and "ok" in data:
                 self.printer_state_signal.emit("printing")
@@ -1268,6 +1429,8 @@ class MainWindow(QtWidgets.QMainWindow):
             events.PrintCancelled.type(),
         ):
             self.print_status = "idle"
+            QtCore.QTimer.singleShot(0, self._prompt_device_confirmation)
+            QtCore.QTimer.singleShot(0, self._try_device_config_restart)
             if event.type() == events.PrintCancelled.type():
                 self.handle_cancel_print()
             self.enable_tab_bar()
@@ -1415,7 +1578,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return tab
 
     def _setup_header(self) -> None:
-        self.main_header_layout = QtWidgets.QGroupBox(parent=self.main_widget)
+        self.main_header_layout = QtWidgets.QFrame(parent=self.main_widget)
         self.main_header_layout.setObjectName("main_header_layout")
         self.main_header_layout.setGeometry(QtCore.QRect(0, 0, 800, 60))
         self.main_header_layout.setMinimumSize(QtCore.QSize(800, 60))
@@ -1436,7 +1599,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "    selection-color:rgb(60,60,60);\n"
             "}\n"
             "\n"
-            "QGroupBox{\n"
+            "#main_header_layout{\n"
             "    background-color: rgb(50,50,50);\n"
             "    border: none; \n"
             "    border-color : rgb(60,60,60);\n"

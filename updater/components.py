@@ -21,7 +21,7 @@ _HEALTH_URL_RE = re.compile(
 _SERVICE_BANNED = set("/\\;&|$`") | {" ", "\t"}
 OVERRIDE_PATH = Path("~/printer_data/config/blockscreen_updater.yaml").expanduser()
 
-# Unioned into EVERY apt component: a kernel/firmware bump is unrecoverable on a 1-partition no-SSH Pi.
+# Unioned into every apt component: a kernel/firmware bump bricks a no-SSH Pi.
 _KERNEL_FIRMWARE_EXCLUDES: tuple[str, ...] = (
     "^linux-image",
     "^linux-headers",
@@ -53,7 +53,6 @@ def _parse_git_branch(name: str, raw_branch: object) -> tuple[str | None, bool]:
     if raw_branch is None:
         return None, True
     branch = str(raw_branch)
-    # Strip a stray remote prefix: `origin/x` would fetch `origin/origin/x`.
     if branch.startswith("origin/"):
         logger.warning(
             "Component %r branch %r has an 'origin/' prefix - stripping it",
@@ -92,7 +91,6 @@ def _parse_health_url(name: str, url: object) -> str | None:
 def _parse_reset_mode(name: str, reset_mode: object) -> str:
     """Return 'hard'/'soft'; unknown values fall back to 'hard' (fleet default)."""
     if reset_mode not in ("hard", "soft"):
-        # An unknown value must not silently take the soft path (fleet default is hard).
         logger.warning(
             "Component %r has invalid reset_mode %r - using 'hard'",
             name,
@@ -169,7 +167,6 @@ def _validate_apt_component(name: str, data: dict) -> ComponentConfig:
     apt_exclude: tuple[str, ...] = ()
     if isinstance(raw_exclude, list):
         apt_exclude = tuple(str(p) for p in raw_exclude if isinstance(p, str))
-    # Kernel/firmware guard is non-negotiable: prepend it, drop any duplicates.
     apt_exclude = _KERNEL_FIRMWARE_EXCLUDES + tuple(
         p for p in apt_exclude if p not in _KERNEL_FIRMWARE_EXCLUDES
     )
@@ -226,12 +223,14 @@ def _merge(base: list[dict], override: list[dict]) -> list[dict]:
     return list(base_by_name.values())
 
 
-def _load_bundled_yaml(yaml) -> dict | None:
-    """Read + parse the bundled components.yaml; None on any read/parse error."""
+def _load_bundled_yaml(yaml, text: str | None = None) -> dict | None:
+    """Parse text, else the bundled components.yaml; None on any read/parse error."""
     bundled_path = Path(__file__).parent / "components.yaml"
     try:
-        with open(bundled_path) as f:  # noqa: PTH123
-            bundled_data = yaml.safe_load(f)
+        if text is None:
+            with open(bundled_path) as f:  # noqa: PTH123
+                text = f.read()
+        bundled_data = yaml.safe_load(text)
     except OSError:
         logger.exception("bundled_data not found")
         return None
@@ -290,7 +289,6 @@ def _build_configs(raw_components: list[dict]) -> list[ComponentConfig]:
         cfg = _validate_component(entry)
         if cfg is not None:
             configs.append(cfg)
-    # Auto-inject system apt component if none configured in YAML.
     if not any(c.kind == "apt" for c in configs):
         configs.insert(
             0,
@@ -304,18 +302,20 @@ def _build_configs(raw_components: list[dict]) -> list[ComponentConfig]:
     return configs
 
 
-def load_components() -> tuple[list[ComponentConfig], float]:
-    """Load/validate components from bundled YAML merged with the user override."""
+def load_components(
+    bundled_text: str | None = None,
+) -> tuple[list[ComponentConfig], float]:
+    """Load/validate components from bundled YAML (or bundled_text) merged with the user override."""
     try:
         import yaml  # noqa: PLC0415
 
-        # A truncated install (interrupted pip, power cut) still imports but exposes only dunders.
+        # A truncated install (power cut mid-pip) imports but exposes only dunders.
         _ = (yaml.safe_load, yaml.YAMLError)
     except (ImportError, AttributeError):
         logger.exception("PyYAML missing or broken; updater idle until venv repair")
         return [], 1440 * 60.0
 
-    bundled_data = _load_bundled_yaml(yaml)
+    bundled_data = _load_bundled_yaml(yaml, bundled_text)
     if bundled_data is None:
         return [], 1440 * 60.0
     raw_components: list[dict] = bundled_data.get("components", [])

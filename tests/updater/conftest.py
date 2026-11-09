@@ -4,8 +4,9 @@ Mocks sdbus before any updater.dbus_service import so tests run
 withouth a real D-Bus session bus.
 """
 
+import asyncio
 import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -33,6 +34,17 @@ def mock_sdbus():
         yield mock
 
 
+@pytest.fixture(autouse=True)
+def printing():
+    """Klipper idle unless a test sets return_value; never dials a real klippy.sock."""
+    m = AsyncMock(return_value=False)
+    with (
+        patch("updater.service.klipper_printing", m),
+        patch("updater.dbus_service.klipper_printing", m),
+    ):
+        yield m
+
+
 @pytest.fixture
 def svc():
     """UpdaterDbusService with mocked UpdateService and signals."""
@@ -49,6 +61,16 @@ def svc():
     )
     mock_svc.recover = AsyncMock()
     mock_svc.has_fetch_failures = MagicMock(return_value=False)
+    mock_svc.provision_missing = AsyncMock(return_value=False)
+    mock_svc.run_followup = AsyncMock(return_value=(False, False))
+    mock_svc.background_apt_upgrade = AsyncMock()
+    mock_svc.daemon_restart_pending = False
+    mock_svc.reconcile = AsyncMock(return_value=True)
+    mock_svc.reconcile_if_pending = AsyncMock()
+    mock_svc.deploy_pending = MagicMock(return_value=False)
+    # Units stay live while the flag is set unless a test says otherwise.
+    mock_svc.deploy_running = AsyncMock(side_effect=lambda: mock_svc.deploy_pending())
+    mock_svc.deploy_flag_stamp = MagicMock(return_value=1)
     mock_svc._components = [
         ComponentConfig(name="moonraker", kind="git"),
         ComponentConfig(name="klipper", kind="git"),
@@ -63,10 +85,26 @@ def svc():
     s = UpdaterDbusService.__new__(UpdaterDbusService)
     s._svc = mock_svc
     s._busy = False
+    s._provisioning = False
+    s._provisioned = False
+    s._followed_up = False
+    s._boot_pass_done = True
+    s._deploy_hold = None
+    s._capped_flag = None
     s._background_tasks = set()
+    s._closing = False
     s._status_check_in_progress = False
     s._status_pending = False
     s.busy_changed = MagicMock()
+    s.provisioning_changed = MagicMock()
     s.status_ready = MagicMock()
     s.error = MagicMock()
     return s
+
+
+@pytest.fixture
+async def reconciled(svc):
+    """svc whose boot reconcile already finished, so the periodic check can provision."""
+    svc._reconcile_task = asyncio.get_running_loop().create_future()
+    svc._reconcile_task.set_result(None)
+    return svc

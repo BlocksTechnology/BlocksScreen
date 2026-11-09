@@ -146,7 +146,12 @@ printf '%s\n' "$_attempts" > "$_BOOT_DIR/.boot_attempts.tmp" 2>/dev/null \
 echo "[BlocksScreen-start] boot attempt $_attempts"
 _last_good=$(tr -d '[:space:]' < "$_BOOT_DIR/last_good_commit" 2>/dev/null || echo "")
 _cur_head=$(git -C "$BS_PATH" rev-parse HEAD 2>/dev/null || echo "")
-if [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] && [ -n "$_last_good" ] \
+if [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] \
+   && bs_selfheal_engaged "$_BOOT_DIR/updater_state.json" "$BSENV/bin/python3.11"; then
+    # One rollback authority at a time: reverting here would undo the daemon's rung (it resets HEAD on purpose).
+    echo "BlocksScreen: crash loop ($_attempts boots) - updater self-heal owns recovery, not rolling back"
+    printf '0\n' > "$_BOOT_DIR/boot_attempts" 2>/dev/null || true
+elif [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] && [ -n "$_last_good" ] \
    && [ -n "$_cur_head" ] && [ "$_last_good" != "$_cur_head" ]; then
     echo "BlocksScreen: crash loop ($_attempts boots) - rolling back to ${_last_good:0:8}"
     if git -C "$BS_PATH" reset --hard "$_last_good" 2>/dev/null; then

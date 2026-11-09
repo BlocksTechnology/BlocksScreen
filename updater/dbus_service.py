@@ -12,14 +12,19 @@ from pathlib import Path
 
 import sdbus
 
+from updater.executor import klipper_printing
 from updater.locking import process_lock
-from updater.models import ComponentStatus
+from updater.models import DEPLOY_HOLD_CAP_S as _DEPLOY_HOLD_CAP_S
+from updater.models import PRINTER_BUSY, ComponentStatus
 from updater.service import UpdateService
 
 _log = logging.getLogger(__name__)
 _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
-# Poll again this soon while a git fetch is failing: a boot-time DNS miss must not hide updates for a full poll interval.
 _FETCH_RETRY_INTERVAL_S = 300.0
+_RECONCILE_RETRY_S = 5.0
+_BOOT_DELAY_S = 3.0
+_SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
+_DEPLOY_POLL_S = 1.0
 
 
 class DbusProgressCallback:
@@ -98,27 +103,84 @@ class UpdaterInterface(
         """Emitted on True↔False transition only (state-machine guard)."""
         raise NotImplementedError
 
+    @sdbus.dbus_signal_async("b")
+    def provisioning_changed(self) -> tuple[bool]:
+        """Emitted on True↔False transition while a missing component is being installed."""
+        raise NotImplementedError
+
     def __init__(self) -> None:
-        """Wire the service and busy state, then spawn the boot, poll, and self-heal tasks."""
+        """Start idle: busy rises only once a reachable install actually begins."""
         super().__init__()
         self._svc = UpdateService(callback=DbusProgressCallback(self))
         self._busy: bool = False
+        self._provisioning: bool = False
+        self._provisioned: bool = False
+        self._followed_up: bool = False
+        # request_status waits for the boot pass, so a client never sees pre-install status.
+        self._boot_pass_done: bool = False
+        self._deploy_hold: asyncio.Task | None = None
+        # Flag stamp that already used up the cap: never hold for it again.
+        self._capped_flag: int | None = None
         self._background_tasks: set[asyncio.Task] = set()
+        self._closing: bool = False
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
         self._invalid_requests: int = 0
-        self._spawn(self._svc.reconcile(), name="boot_reconcile")
+        self._reconcile_task = self._spawn(
+            self._boot_reconcile(), name="boot_reconcile"
+        )
         self._spawn(self._svc.background_prime_nrestarts(), name="boot_prime_nrestarts")
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
         self._spawn(self._svc.supervise_ui(), name="supervise_ui")
         self._spawn(self._svc.forward_heal_ui(), name="forward_heal_ui")
+        # install-updater restarts us before its run ends: resume the hold.
+        # Silent: not exported yet, clients read it via get_busy on connect.
+        if self._svc.deploy_pending():
+            self._busy = True
+            self._deploy_hold = self._spawn(self._hold_for_deploy(), name="deploy_hold")
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
         task = asyncio.get_running_loop().create_task(coro, name=name)
         self._background_tasks.add(task)
         task.add_done_callback(self._task_done)
+        if self._closing:
+            task.cancel()
         return task
+
+    async def shutdown(self) -> None:
+        """Cancel background tasks, including late spawns, before the loop closes."""
+        self._closing = True
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _SHUTDOWN_DRAIN_S
+        while pending := [t for t in self._background_tasks if not t.done()]:
+            if (remaining := deadline - loop.time()) <= 0:
+                _log.warning(
+                    "shutdown: %d task(s) still running after %.0fs; "
+                    "boot heal reverts any in-flight update",
+                    len(pending),
+                    _SHUTDOWN_DRAIN_S,
+                )
+                return
+            for task in pending:
+                task.cancel()
+            # gather would wait out shielded rollbacks
+            await asyncio.wait(pending, timeout=remaining)
+
+    async def _boot_reconcile(self) -> None:
+        """Run the boot heal; retry in the background while the lock is held."""
+        if not await self._svc.reconcile():
+            # The start script takes this lock on every UI start; a cold boot races it.
+            _log.info("reconcile: another updater holds the lock - deferring boot heal")
+            self._spawn(self._retry_reconcile(), name="boot_reconcile_retry")
+
+    async def _retry_reconcile(self) -> None:
+        """Poll until the lock frees and the deferred boot heal has run."""
+        while True:
+            await asyncio.sleep(_RECONCILE_RETRY_S)
+            if await self._svc.reconcile():
+                _log.info("reconcile: deferred boot heal done")
+                return
 
     def _task_done(self, task: asyncio.Task) -> None:
         """Drop the task ref and log its exception now, not at some later GC."""
@@ -129,12 +191,62 @@ class UpdaterInterface(
         if exc is not None:
             _log.error("task %r failed", task.get_name(), exc_info=exc)
 
+    def _provision_busy(self, busy: bool) -> None:
+        self._set_provisioning(busy)
+        self._set_busy(busy)
+
+    def _set_provisioning(self, provisioning: bool) -> None:
+        if provisioning != self._provisioning:
+            self._provisioning = provisioning
+            self.provisioning_changed.emit((provisioning,))
+
     def _set_busy(self, busy: bool) -> None:
+        """Busy stays up while install-updater.sh runs out-of-band, so the UI keeps its overlay."""
+        if not busy and self._hold_wanted():
+            if self._deploy_hold is None:
+                self._deploy_hold = self._spawn(
+                    self._hold_for_deploy(), name="deploy_hold"
+                )
+            busy = True
+        self._emit_busy(busy)
+
+    def _emit_busy(self, busy: bool) -> None:
         """Emit busy_changed only on state transitions to avoid redundant signals."""
         if busy != self._busy:
             self._busy = busy
             _log.info("busy_changed -> %s", busy)
             self.busy_changed.emit((busy,))
+
+    def _hold_wanted(self) -> bool:
+        """A deploy flag is set and has not already used up the hold cap."""
+        return (
+            self._svc.deploy_pending()
+            and self._svc.deploy_flag_stamp() != self._capped_flag
+        )
+
+    async def _hold_for_deploy(self) -> None:
+        """Hold busy while install-updater runs; release on exit, dead units or the cap."""
+        _log.info("deploy flag set - holding busy until install-updater finishes")
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _DEPLOY_HOLD_CAP_S
+        try:
+            while await self._svc.deploy_running():
+                if loop.time() >= deadline:
+                    _log.warning(
+                        "install-updater still running after %.0fs - releasing busy",
+                        _DEPLOY_HOLD_CAP_S,
+                    )
+                    self._capped_flag = self._svc.deploy_flag_stamp()
+                    break
+                await asyncio.sleep(_DEPLOY_POLL_S)
+        finally:
+            self._deploy_hold = None
+        # A provisioning pass that started under the hold still owns busy.
+        if not self._provisioning:
+            self._emit_busy(busy=False)
+            # The follow-up skipped while the hold owned busy: run it now, not at the next poll.
+            if self._provisioned and not self._followed_up:
+                self._spawn(self._followup_pass(), name="followup_after_deploy")
 
     def _validate_component_name(self, name: str) -> bool:
         """SEC: verify component exists to prevent abuse on unknown names."""
@@ -190,20 +302,55 @@ class UpdaterInterface(
         self.status_ready.emit((json_payload,))
 
     async def _periodic_status_check(self) -> None:
-        """Emit status shortly after startup, then at the poll interval - or sooner while fetches fail."""
-        await asyncio.sleep(3.0)
+        """Provision once; emit status per poll, sooner on fetch failure or deferral."""
+        await asyncio.sleep(_BOOT_DELAY_S)
         while True:
             try:
+                if not self._provisioned:
+                    await asyncio.wait({self._reconcile_task})
+                    deferred = await self._svc.provision_missing(self._provision_busy)
+                    self._provisioned = not deferred
+                    _log.info("provisioning pass done (deferred=%s)", deferred)
+            except Exception as exc:  # noqa: BLE001
+                _log.error("provisioning pass failed: %s", exc)
+            # Emitted even after a failed pass: request_status stays silent until then.
+            self._boot_pass_done = True
+            try:
                 await self._emit_status()
-                if await self._svc.provision_missing():
-                    await self._emit_status()  # reflect freshly-installed components
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
+            await self._followup_pass()
             interval = self._svc.poll_interval
             if self._svc.has_fetch_failures():
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)
                 _log.info("fetch failures pending - re-polling in %.0fs", interval)
+            elif not self._provisioned or not self._followed_up:
+                interval = min(_FETCH_RETRY_INTERVAL_S, interval)
+                _log.info(
+                    "provisioning/followup deferred - re-polling in %.0fs", interval
+                )
             await asyncio.sleep(interval)
+
+    async def _followup_pass(self) -> None:
+        """After provisioning, apply manifest changes the previous daemon could not see."""
+        if not self._provisioned or self._followed_up or self._busy:
+            return
+        try:
+            retry, ran = await self._svc.run_followup(self._set_busy)
+            if ran:
+                await self._emit_status()
+        except Exception as exc:  # noqa: BLE001
+            _log.error("followup pass failed: %s", exc, exc_info=True)
+            retry, ran = False, False
+        self._followed_up = not retry
+        # A failed try that will retry sweeps apt once the follow-up settles.
+        if not ran or retry:
+            return
+        # The restart that led here skipped the Update's background apt sweep.
+        if not self._svc.daemon_restart_pending:
+            self._spawn(
+                self._svc.background_apt_upgrade(), name="background_apt_upgrade"
+            )
 
     @sdbus.dbus_method_async(result_signature="b")
     async def update_all(self) -> bool:
@@ -219,7 +366,7 @@ class UpdaterInterface(
         """D-Bus method: fire-and-forget; reply is sent immediately, update runs as a task."""
         if self._busy:
             return False
-        if not self._validate_component_name(name):  # SEC: reject unknown components
+        if not self._validate_component_name(name):
             _log.warning("update_component called with unknown component %r", name)
             return False
         self._set_busy(busy=True)
@@ -231,7 +378,7 @@ class UpdaterInterface(
         """D-Bus method: fire-and-forget; reply is sent immediately, recover runs as a task."""
         if self._busy:
             return False
-        if not self._validate_component_name(name):  # SEC: reject unknown components
+        if not self._validate_component_name(name):
             _log.warning("recover called with unknown component %r", name)
             return False
         self._set_busy(busy=True)
@@ -252,48 +399,47 @@ class UpdaterInterface(
         label: str,
         target: str,
     ) -> bool:
-        """Run work() under the cross-process lock, always clearing busy; True if the lock was held."""
+        """Run work() under the cross-process lock, then clear busy; True if the lock was held."""
         ran = False
         try:
             with process_lock() as acquired:
                 if not acquired:
                     _log.warning("%s: a CLI run holds the lock; skipping", label)
-                    # Surface the rejection so the UI toasts instead of going silent.
                     self.error.emit((target, "another update is running"))
                     return False
+                # The UI checks too, but a print can start while its confirm popup is open.
+                # Fail closed: a Klippy too loaded to answer may be mid-print.
+                if await klipper_printing(unanswered=True):
+                    _log.warning("%s: printer busy or not answering; skipping", label)
+                    self.error.emit((target, PRINTER_BUSY))
+                    return False
                 ran = True
+                await self._svc.reconcile_if_pending()
                 await work()
         except Exception as exc:  # noqa: BLE001
             _log.error("_run_%s failed: %s", label, exc, exc_info=True)
         finally:
-            self._set_busy(busy=False)
+            # a running install owns busy
+            if ran or not self._provisioning:
+                self._set_busy(busy=False)
         return ran
 
     async def _run_update_all(self) -> None:
-        """Update dirty components under the process lock, then a background apt pass."""
+        """Update dirty components; no background apt if a restart may SIGKILL dpkg."""
         ran = await self._run_with_lock(
             self._update_all_locked, "update_all", "updater"
         )
-        # Silent apt pass only if we held the lock; else the CLI run owns apt.
-        if ran:
+        if ran and self._svc.daemon_restart_pending:
+            _log.info("background apt upgrade skipped: daemon restart pending")
+        elif ran:
             self._spawn(
                 self._svc.background_apt_upgrade(), name="background_apt_upgrade"
             )
 
     async def _update_all_locked(self) -> None:
-        """Update only the components whose status is dirty."""
+        """Update dirty components and errored git repos (update self-heals those)."""
         statuses = await self._svc.check_status()
-        dirty = {
-            name
-            for name, s in statuses.items()
-            if s.commits_behind
-            or s.packages_upgradable > 0
-            or s.has_local_changes
-            or s.needs_install
-            or s.branch_mismatch
-            # Errored git repos included: the update flow self-heals them.
-            or (s.error is not None and s.kind != "apt")
-        }
+        dirty = {name for name, s in statuses.items() if s.needs_update}
         if dirty:
             await self._svc.update_all(dirty)
         else:
@@ -315,6 +461,9 @@ class UpdaterInterface(
     async def request_status(self) -> None:
         """D-Bus method: reply immediately, status arrives via status_ready signal."""
         _log.info("request_status called")
+        if not self._boot_pass_done:
+            _log.info("request_status: boot pass pending, its status follows")
+            return
         self._spawn(self._emit_status(force=True), name="request_status")
 
     @sdbus.dbus_method_async(result_signature="b")
@@ -322,9 +471,17 @@ class UpdaterInterface(
         """D-Bus method: return current busy state so reconnecting clients can sync."""
         return self._busy
 
+    @sdbus.dbus_method_async(result_signature="b")
+    async def get_provisioning(self) -> bool:
+        """D-Bus method: True while a missing component is being installed."""
+        return self._provisioning
+
     @sdbus.dbus_method_async()
     async def cancel(self) -> None:
-        """D-Bus method: cancel the running update or recover task and wait for cleanup."""
+        """D-Bus method: cancel the task, then wait (not re-cancel) for its rollback."""
+        if self._provisioning:
+            _log.info("cancel() ignored: component install in progress")
+            return
         cancelled_tasks: list[asyncio.Task] = []
         for task in list(self._background_tasks):
             name = task.get_name()
@@ -333,7 +490,6 @@ class UpdaterInterface(
                 cancelled_tasks.append(task)
                 _log.info("cancelled task %r", name)
         if cancelled_tasks:
-            # asyncio.wait never re-cancels: rollback isn't interrupted again.
             _done, pending = await asyncio.wait(cancelled_tasks, timeout=150.0)
             if pending:
                 _log.error(

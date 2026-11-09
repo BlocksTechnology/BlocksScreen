@@ -545,3 +545,15 @@ components:
     bs = next(c for c in configs if c.name == "BlocksScreen")
     assert bs.branch == "Release-2.0"  # stray origin/ prefix stripped
     assert any("origin/" in r.message for r in caplog.records)
+
+
+def test_shipped_happy_hare_is_pinned_without_service():
+    with patch("updater.components.OVERRIDE_PATH", Path("/nonexistent/override.yaml")):
+        configs, _ = load_components()
+    hh = next(c for c in configs if c.name == "Happy-Hare")
+    assert hh.install_if_missing and hh.url
+    assert hh.version == "d5cce9f96991b270ff570b7497bbf6b4463a82b9"
+    assert (hh.branch, hh.reset_mode) == ("v3", "hard")
+    assert hh.service is None
+    names = [c.name for c in configs]
+    assert names.index("moonraker") < names.index("Happy-Hare")

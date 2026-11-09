@@ -1,20 +1,23 @@
 import logging
 import os
+import shlex
 import shutil
 import signal
 import socket
 import subprocess  # nosec B404
 import sys
+import threading
 import typing
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from configfile import get_configparser
+from lib.klipper_message_filter import Severity  # noqa: E402
 from lib.panels.mainWindow import MainWindow  # noqa: E402
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
 from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
-from tools.configuration_manager import ConfigManager
+from tools.configuration_manager import DeviceConfigManager, DeviceConfigWatcher
 
 install_crash_handler()
 
@@ -68,11 +71,7 @@ RESET = "\033[0m"
 
 
 def _write_splash_to_fb0() -> None:
-    """Write precomputed splash to fb0 while KD_GRAPHICS is still active.
-
-    Called from SIGTERM handler so fb0 already shows the splash before X exits,
-    eliminating the brief black frame between X shutdown and ExecStopPost.
-    """
+    """Write the precomputed splash to fb0 on SIGTERM, before window teardown."""
     try:
         if _SPLASH_CACHE.exists():
             _FB0.write_bytes(_SPLASH_CACHE.read_bytes())
@@ -166,18 +165,49 @@ def _setup_sigterm(app: BlocksScreenApp) -> None:
 
 
 def on_quit() -> None:
-    logging.info("Final exit cleanup")
+    # Daemon threads alive here can emit into widgets sip destroys at exit (the stop SEGV).
+    _alive = [t.name for t in threading.enumerate() if t is not threading.main_thread()]
+    logging.info("Final exit cleanup, threads still alive: %s", _alive)
     LogManager.shutdown()
+
+
+conf_man: DeviceConfigManager | None = None
+device_watcher: DeviceConfigWatcher | None = None
 
 
 def initialize_conf_manager() -> None:
     global conf_man
     try:
-        conf_man = ConfigManager(get_configparser())
+        logging.info("[DeviceConfigManager] Initializing...")
+        conf_man = DeviceConfigManager(get_configparser())
     except Exception as e:
-        _logger.error(
+        logging.error(
             "Caught Exception on configuration_manager tool: %s" % e, exc_info=True
         )
+
+
+def _seed_variables(main_window: MainWindow, manager: DeviceConfigManager) -> None:
+    """SAVE_VARIABLE repo keys Klipper lacks: a file append is lost on its next save."""
+    defaults = manager.variable_defaults()
+    sent: set[str] = set()
+
+    def _on_update(status: dict) -> None:
+        live = status.get("variables")
+        if live is None:
+            return
+        for key in defaults.keys() - live.keys() - sent:
+            sent.add(key)
+            logging.info("Seeding Klipper variable %s = %s", key, defaults[key])
+            main_window.run_gcode_signal.emit(
+                f"SAVE_VARIABLE VARIABLE={key} VALUE={shlex.quote(defaults[key])}"
+            )
+
+    def _on_state(_state: str) -> None:
+        # Emits are change-only and a fast restart emits just "ready": clear on any.
+        sent.clear()
+
+    main_window.printer.save_variables_update.connect(_on_update)
+    main_window.ws.klippy_state_signal.connect(_on_state)
 
 
 def _sd_notify(msg: str) -> None:
@@ -298,14 +328,15 @@ class _FirstPaintRefresh(QtCore.QObject):
 if __name__ == "__main__":
     setup_logging(
         filename="logs/BlocksScreen.log",
-        level=logging.DEBUG,
+        level=logging.INFO,
         console_output=True,
-        console_level=logging.DEBUG,
+        console_level=logging.INFO,
         capture_stderr=True,
         capture_stdout=False,
     )
     _logger = logging.getLogger(__name__)
     _logger.info("============ BlocksScreen Initializing ============")
+
     initialize_conf_manager()
     BlocksScreen = BlocksScreenApp([])
     BlocksScreen.setApplicationName("BlocksScreen")
@@ -313,9 +344,38 @@ if __name__ == "__main__":
     BlocksScreen.setDesktopFileName("BlocksScreen")
     _splash = show_splash()
     main_window = MainWindow()
+
+    if conf_man is not None:
+        if conf_man.boot_changed:
+            # Klipper may have started before the boot sync rewrote its
+            # config; restarted once Moonraker is up and no job runs.
+            main_window.request_klipper_restart()
+        _seed_variables(main_window, conf_man)
+        if notice := conf_man.replaced_notice():
+            main_window.show_notifications.emit(
+                "configurator", notice, Severity.WARNING.value, False
+            )
+        # Live side of the device templates: printer.cfg follows devices
+        # plugged in while running (after the user's OK for templates that
+        # ask for it), and Klipper is restarted to load it.
+        # Optional: without it the screen works as before, just no hotplug.
+        try:
+            _logger.info("[DEVICE WATCHER] Initializing...")
+            device_watcher = DeviceConfigWatcher(conf_man, parent=main_window)
+            device_watcher.config_changed.connect(main_window.on_device_config_changed)
+            device_watcher.confirmation_required.connect(
+                main_window.on_device_confirmation_required
+            )
+            main_window.device_config_accepted.connect(device_watcher.accept)
+            main_window.device_config_declined.connect(device_watcher.decline)
+            device_watcher.start()
+            BlocksScreen.aboutToQuit.connect(device_watcher.stop)
+        except Exception as e:  # noqa: BLE001
+            _logger.error("Device hotplug disabled: %s", e, exc_info=True)
     BlocksScreen.processEvents()
     BlocksScreen.aboutToQuit.connect(on_quit)
     _setup_sigterm(BlocksScreen)
+
     # Event-driven repaint: fire the moment the window first paints (parented to
     # main_window so it lives as long as the window).
     _FirstPaintRefresh(main_window)

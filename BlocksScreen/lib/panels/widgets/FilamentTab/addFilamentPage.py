@@ -1,6 +1,7 @@
 import typing
 
 from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.panels.widgets.FilamentTab.colorWheelWidget import ColorWheelWidget
 from lib.panels.widgets.Common.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.Common.numpadPage import CustomNumpad
@@ -33,6 +34,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._color_hex = "ffffff"
 
         self._build_ui()
+        self._popup = Popup(self)
 
         self._keyboard = CustomQwertyKeyboard(self)
         self._keyboard.hide()
@@ -68,6 +70,9 @@ class AddFilamentPage(QtWidgets.QWidget):
         self.update()
 
     def reset(self):
+        """Restore the form defaults and drop any pending submit."""
+        self.request_filament_body = None
+        self._submit_btn.setEnabled(True)
         self._name_field.setText("")
         self._material_field.setText("PLA")
         self._set_color("ffffff")
@@ -78,11 +83,13 @@ class AddFilamentPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on-add-filament-result")
     def on_add_filament_result(self, result: dict) -> None:
+        self._submit_btn.setEnabled(True)
         if result.get("error") is None:
             self.accepted.emit()
         else:
-            ...
-            # TODO: some responsiveness here
+            self._popup.new_message(
+                message_type=Popup.MessageType.ERROR, message="Could not add filament"
+            )
 
     def _show_keyboard(
         self,
@@ -195,6 +202,7 @@ class AddFilamentPage(QtWidgets.QWidget):
             body["density"] = 1.24
 
         body["diameter"] = 1.75  # Default diameter, can be modified later if needed
+        self._submit_btn.setEnabled(False)
         if vendor_text != "---":
             self.request_add_manufacturer.emit({"name": vendor_text})
             self.request_filament_body = body
@@ -211,7 +219,11 @@ class AddFilamentPage(QtWidgets.QWidget):
             body["vendor_id"] = vendor_id
             self.request_add_filament.emit(body)
         else:
-            ...
+            self.request_filament_body = None
+            self._submit_btn.setEnabled(True)
+            self._popup.new_message(
+                message_type=Popup.MessageType.ERROR, message="Could not add vendor"
+            )
 
     def _build_ui(self) -> None:
         def _f(pt: int) -> QtGui.QFont:
@@ -387,12 +399,12 @@ class AddFilamentPage(QtWidgets.QWidget):
         )
         root.addItem(spacer)
         # Submit
-        submit_btn = BlocksCustomButton(self)
-        submit_btn.setFixedSize(400, 80)
-        submit_btn.setFont(_f(16))
-        submit_btn.setText("New Filament")
-        submit_btn.setPixmap(
+        self._submit_btn = BlocksCustomButton(self)
+        self._submit_btn.setFixedSize(400, 80)
+        self._submit_btn.setFont(_f(16))
+        self._submit_btn.setText("New Filament")
+        self._submit_btn.setPixmap(
             QtGui.QPixmap(":/filament_related/media/btn_icons/add filament.svg")
         )
-        submit_btn.clicked.connect(self._on_submit)
-        root.addWidget(submit_btn, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._submit_btn.clicked.connect(self._on_submit)
+        root.addWidget(self._submit_btn, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)

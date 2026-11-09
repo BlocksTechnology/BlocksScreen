@@ -77,18 +77,18 @@ class MoonRest:
         return self.get_request(method="server/info")
 
     def get_spool(self, spool_id: int) -> dict | None:
-        """Spoolman spool via Moonraker, None on error."""
-        response = self.get_request(f"server/spoolman/spool/{spool_id}")
+        """Spoolman spool via the Moonraker proxy, None on error."""
+        response = self.post_request(
+            "server/spoolman/proxy",
+            json={
+                "request_method": "GET",
+                "path": f"/v1/spool/{spool_id}",
+                "use_v2_response": False,
+            },
+        )
         if not isinstance(response, dict):
             return None
         return response.get("result")
-
-    def set_spool_used_weight(self, spool_id: int, weight: float) -> bool:
-        """Set a spool's used_weight; True on success."""
-        response = self.post_request(
-            f"server/spoolman/spool/{spool_id}", json={"used_weight": weight}
-        )
-        return response is not None
 
     def firmware_restart(self):
         """POST firmware_restart to Moonraker."""

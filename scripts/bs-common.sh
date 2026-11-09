@@ -168,6 +168,24 @@ bs_ensure_usb_max_current() {
     return 0
 }
 
+# True while a live updater daemon runs its UI recovery ladder (fast_attempt > 0, not saturated). $1 = state file, $2 = python.
+bs_selfheal_engaged() {
+    local state="$1" py="$2"
+    [ -f "$state" ] && [ -x "$py" ] || return 1
+    [ -f "${state%/*}/selfheal_fault.json" ] && return 1
+    systemctl is-active --quiet BlocksScreen-updater.service 2>/dev/null || return 1
+    "$py" - "$state" 2>/dev/null <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        comp = json.load(f).get("BlocksScreen")
+except (OSError, ValueError, AttributeError):
+    sys.exit(1)
+n = comp.get("fast_attempt") if isinstance(comp, dict) else 0
+sys.exit(0 if type(n) is int and n > 0 else 1)
+PY
+}
+
 # Disable Moonraker management of repos the BlocksScreen daemon now owns, so a
 # Mainsail "Update All" can't trip on them. Grep-gated marker so it runs once.
 bs_disable_overlapping_update_managers() {

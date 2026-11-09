@@ -9,18 +9,17 @@ from pathlib import Path
 
 
 def _runtime_dir() -> Path:
-    """Return a writable user-owned runtime dir, preferring tmpfs over the cache."""
+    """Return a 0700 runtime dir (tmpfs first) so no one else can plant a sentinel."""
     cache = Path.home() / ".cache" / "blockscreen"
     for d in (Path("/run/blockscreen"), cache):
         try:
             d.mkdir(parents=True, exist_ok=True)
-            # Owner-only: nothing else may plant a sentinel to force a restart.
             with contextlib.suppress(OSError):
                 d.chmod(0o700)
             return d
         except OSError:
             continue
-    # Broken home: return the cache path so open() surfaces the error (no /tmp).
+    # Broken home: let open() fail loudly instead of falling back to /tmp.
     return cache
 
 
@@ -36,11 +35,10 @@ def restart_sentinel_path() -> Path:
 
 @contextlib.contextmanager
 def process_lock() -> Iterator[bool]:
-    """Acquire the shared updater lock non-blocking."""
+    """Acquire the shared updater lock non-blocking; an OSError counts as not held."""
     try:
         f = open(lock_path(), "w")  # noqa: SIM115, PTH123
     except OSError:
-        # Disk-full/RO SD: treat as "not acquired" so the caller degrades gracefully.
         yield False
         return
     try:

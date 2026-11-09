@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import typing
 from types import MappingProxyType
 
@@ -13,9 +14,15 @@ from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
-from updater.models import ComponentStatus
+from updater.models import PRINTER_BUSY, ComponentStatus
 
 _log = logging.getLogger(__name__)
+_DESCRIBE_SUFFIX = re.compile(r"-(\d+)-g[0-9a-f]+$")
+
+
+def _compact_version(describe: str) -> str:
+    """`v1.0.0-12-gabc1234` -> `v1.0.0+12`, so commits past one tag stay distinguishable."""
+    return _DESCRIBE_SUFFIX.sub(r"+\1", describe)
 
 
 class UpdatePage(QtWidgets.QWidget):
@@ -47,6 +54,12 @@ class UpdatePage(QtWidgets.QWidget):
         }
     )
 
+    _PROVISION_STEP_LABELS: typing.ClassVar[MappingProxyType[int, str]] = (
+        MappingProxyType(
+            {1: "cloning", 2: "installing deps", 3: "setting up", 4: "starting"}
+        )
+    )
+
     _APT_STEP_LABELS: typing.ClassVar[MappingProxyType[int, str]] = MappingProxyType(
         {1: "updating packages", 2: "upgrading packages"}
     )
@@ -73,6 +86,8 @@ class UpdatePage(QtWidgets.QWidget):
         self._update_avail: bool = False
         self._post_update_status_pending: bool = False
         self._overlay_shown: bool = False
+        self._restart_pending: bool = False
+        self._provisioning: bool = False
         self._elapsed_time_seconds: int = 0
         self._elapsed_timer: QtCore.QTimer = QtCore.QTimer(self)
         self._elapsed_timer.setSingleShot(False)
@@ -82,6 +97,15 @@ class UpdatePage(QtWidgets.QWidget):
         self._busy_timeout_timer.setSingleShot(True)
         self._busy_timeout_timer.setInterval(400_000)  # 400s > 360s watchdog
         self._busy_timeout_timer.timeout.connect(self._on_busy_timeout)
+        # Reusable: a stale singleShot from update N would close update N+1's overlay.
+        self._restart_grace_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._restart_grace_timer.setSingleShot(True)
+        self._restart_grace_timer.setInterval(15000)
+        self._restart_grace_timer.timeout.connect(self._dismiss_after_restart_grace)
+        self._stale_overlay_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._stale_overlay_timer.setSingleShot(True)
+        self._stale_overlay_timer.setInterval(60000)
+        self._stale_overlay_timer.timeout.connect(self._dismiss_stale_overlay)
         self._update_confirm_popup: BasePopup | None = None
         self.show_loading(True)
 
@@ -114,7 +138,7 @@ class UpdatePage(QtWidgets.QWidget):
             self.show_loading(False)
             self.call_load_panel.emit(False, "", False)
             self._show_toast(
-                "Update is taking longer than expected - tap refresh to check status"
+                "Still working in the background - tap refresh to check status"
             )
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
@@ -141,7 +165,7 @@ class UpdatePage(QtWidgets.QWidget):
         return super().resizeEvent(a0)
 
     def _needs_update(self, status: ComponentStatus) -> bool:
-        # Mirrors daemon dirty-set: errored git repos self-heal; apt errors don't.
+        """Mirror the daemon's dirty set: errored git repos count, apt errors don't."""
         return bool(
             status.commits_behind
             or status.packages_upgradable > 0
@@ -156,8 +180,8 @@ class UpdatePage(QtWidgets.QWidget):
             return "status error"
         if status.kind in ("system", "apt"):
             return "updates available"
-        current = status.current_version or status.current_hash[:8]
-        return f"{current} → {status.remote_version or 'unknown'}"
+        current = _compact_version(status.current_version) or status.current_hash[:8]
+        return f"{current} → {_compact_version(status.remote_version) or 'unknown'}"
 
     def _make_white_label(
         self,
@@ -311,7 +335,7 @@ class UpdatePage(QtWidgets.QWidget):
         )
 
     def handle_status_ready(self, json_str: str) -> None:
-        """Update component statuses from a JSON payload and refresh the list."""
+        """Parse statuses per entry so one bad entry can't blank the list; refresh."""
         self.update_all_btn.setEnabled(True)
         _log.debug("handle_status_ready: busy=%s", self._busy)
         try:
@@ -319,10 +343,8 @@ class UpdatePage(QtWidgets.QWidget):
         except (json.JSONDecodeError, TypeError) as exc:
             _log.error("handle_status_ready: bad payload '%s'", exc)
             _log.debug(json_str)
-            # Keep the last good list but tell the user it may be stale.
             self._show_toast("Status update failed - tap refresh to retry")
             return
-        # Build per-component so one malformed entry can't blank the whole list.
         self._statuses = {}
         for name, fields in data.items():
             try:
@@ -336,10 +358,11 @@ class UpdatePage(QtWidgets.QWidget):
         self._update_avail = _update_avail
         if not self._busy:
             self.show_loading(False)
-            if self._post_update_status_pending:
+            if self._post_update_status_pending and not self._restart_pending:
                 _log.debug("status_ready: emitting call_load_panel(False)")
                 self.call_load_panel.emit(False, "", False)
                 self._post_update_status_pending = False
+                self._overlay_shown = False
         else:
             _log.debug("status_ready: skipping loadscreen dismiss (busy=True)")
         self.build_cards()
@@ -351,24 +374,77 @@ class UpdatePage(QtWidgets.QWidget):
         self._busy = busy
         self.show_loading(busy)
         if busy:
+            if self._provisioning:
+                self._show_provisioning_overlay()
+            elif not self._overlay_shown:
+                # Busy this UI did not start: it restarted mid-update, block it too.
+                self._overlay_shown = True
+                self.call_load_panel.emit(True, "Update in progress ...", False)
+            self._restart_pending = False
+            self._restart_grace_timer.stop()
+            self._stale_overlay_timer.stop()
             self._elapsed_time_seconds = 0
             self._elapsed_timer.start()
             self._busy_timeout_timer.start()
             self._elapsed_time_label.show()
             self._progress_label.setText("")
             self._progress_label.show()
-            self._cancel_btn.show()
+            # The daemon ignores cancel() while installing a component.
+            self._cancel_btn.setVisible(not self._provisioning)
         else:
+            self._provisioning = False
             self._elapsed_timer.stop()
             self._busy_timeout_timer.stop()
             self._elapsed_time_label.hide()
             self._progress_label.hide()
             self._cancel_btn.hide()
             self.update_all_btn.setEnabled(True)
-            if self._overlay_shown:
-                self._overlay_shown = False
-                self.call_load_panel.emit(False, "", False)
+            if self._restart_pending:
+                # Keep the overlay up: SIGTERM is imminent, MainWindow would flash.
+                self._restart_grace_timer.start()
+            elif self._overlay_shown:
+                # Hold the overlay until fresh status lands, else stale cards flash.
+                self._post_update_status_pending = True
+                self._stale_overlay_timer.start()
             self._request_status_debounced()
+
+    def handle_provisioning_changed(self, provisioning: bool) -> None:
+        """Daemon-declared: the current busy period installs a missing component."""
+        self._provisioning = provisioning
+        if provisioning and self._busy:
+            self._cancel_btn.hide()
+            self._show_provisioning_overlay()
+        elif self._busy:
+            # Still busy after the clone: the daemon holds it for install-updater.
+            self._show_finishing_overlay()
+
+    def _show_provisioning_overlay(self) -> None:
+        self._overlay_shown = True
+        self.call_load_panel.emit(True, "Missing component, installing ...", False)
+
+    def _show_finishing_overlay(self) -> None:
+        self._overlay_shown = True
+        self.call_load_panel.emit(True, "Finishing installation ...", False)
+
+    @QtCore.pyqtSlot(name="handle-daemon-restarting")
+    def handle_daemon_restarting(self) -> None:
+        """Daemon left mid-busy to restart: keep the overlay until the new one reports."""
+        self._cancel_btn.hide()
+        self._show_finishing_overlay()
+
+    def _dismiss_stale_overlay(self) -> None:
+        """Drop the overlay if the post-update status never arrived."""
+        if self._overlay_shown and not self._busy:
+            self._overlay_shown = False
+            self._post_update_status_pending = False
+            self.call_load_panel.emit(False, "", False)
+
+    def _dismiss_after_restart_grace(self) -> None:
+        """Drop the overlay if the expected UI restart never came."""
+        if self._restart_pending and not self._busy:
+            self._restart_pending = False
+            self._overlay_shown = False
+            self.call_load_panel.emit(False, "", False)
 
     @QtCore.pyqtSlot(name="on-update-all-clicked")
     def on_update_all_clicked(self) -> None:
@@ -386,7 +462,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._show_update_confirm()
 
     def _show_update_confirm(self) -> None:
-        # Dialogs parented to the page outlive close(); drop the previous one.
+        """Show the confirm dialog; delete the previous one, which outlives close()."""
         if self._update_confirm_popup is not None:
             self._update_confirm_popup.deleteLater()
         popup = BasePopup(self, floating=True)
@@ -419,6 +495,8 @@ class UpdatePage(QtWidgets.QWidget):
         status = self._statuses.get(name)
         if status and status.kind == "apt":
             label = self._APT_STEP_LABELS.get(step, "working")
+        elif self._provisioning:
+            label = self._PROVISION_STEP_LABELS.get(step, "working")
         else:
             label = self._STEP_LABELS.get(step, "working")
         _log.info("step_complete: %s %d/%d (%s)", name, step, total, label)
@@ -426,7 +504,11 @@ class UpdatePage(QtWidgets.QWidget):
         if self._busy_timeout_timer.isActive():
             self._busy_timeout_timer.start()
         self._overlay_shown = True
-        overlay_msg = f"{name}: {label}"
+        # Latched: a later step of another component must not clear it.
+        self._restart_pending |= name == "BlocksScreen" and step == total
+        overlay_msg = (
+            f"Installing {name}: {label}" if self._provisioning else f"{name}: {label}"
+        )
         self._progress_label.setText(f"Step {step}/{total}")
         self.call_load_panel.emit(True, overlay_msg, False)
 
@@ -442,8 +524,10 @@ class UpdatePage(QtWidgets.QWidget):
 
     def handle_error_occurred(self, name: str, reason: str) -> None:
         """Show a toast with the error reason and prompt the user to refresh."""
-        error_msg = f"{name} update failed: {reason}. Tap refresh to retry."
-        self._show_toast(error_msg)
+        if reason == PRINTER_BUSY:
+            self._show_toast("Printer is busy or not responding. Try again later.")
+            return
+        self._show_toast(f"{name} update failed: {reason}. Tap refresh to retry.")
 
     def handle_update_rejected(self) -> None:
         """Daemon refused the request (already busy): drop the optimistic overlay and toast."""
@@ -477,7 +561,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._cancel_btn.hide()
         self.show_loading(False)
         self._show_toast(
-            "Updater unavailable. Check system logs or restart BlocksScreen.",
+            "Updater unavailable, retrying ...",
             success=False,
         )
         self.update_all_btn.setEnabled(False)
@@ -593,7 +677,6 @@ class UpdatePage(QtWidgets.QWidget):
         self._progress_label.setWordWrap(True)
         self._progress_label.hide()
 
-        # Touch target size: minimum 44×44 px per WCAG; set to 60px tall for comfort
         self._cancel_btn = BlocksCustomButton(self._loadwidget)
         self._cancel_btn.setMinimumSize(QtCore.QSize(240, 60))
         self._cancel_btn.setMaximumSize(QtCore.QSize(320, 60))
