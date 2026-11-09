@@ -27,6 +27,9 @@ if typing.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Upper bound for CANCEL_PRINT, including an MMU unload over a long bowden.
+_CANCEL_TIMEOUT_MS = 180_000
+
 
 class PrintTab(QtWidgets.QStackedWidget):
     """Print tab: files, confirm, job status and tuning pages."""
@@ -78,9 +81,14 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._finish_print_handled: bool = False
         self._cancel_z_snapshot: float = 0.0
         self._cancel_pending: bool = False
+        self._cancel_saw_busy: bool = False
         self._print_state: str = ""
         self._idle_state: str = ""
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
+        self._cancel_timer = QtCore.QTimer(self)
+        self._cancel_timer.setSingleShot(True)
+        self._cancel_timer.setInterval(_CANCEL_TIMEOUT_MS)
+        self._cancel_timer.timeout.connect(self._on_cancel_timeout)
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
@@ -304,7 +312,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         if value != "standby":
             self._maybe_finish_cancel()
             return
-        self._cancel_pending = False
+        self._clear_cancel()
         self.call_load_panel.emit(False, "", False)
         self.on_cancel_print.emit()
         if not self._finish_print_handled and self._cancel_z_snapshot != 0:
@@ -426,14 +434,28 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def _maybe_finish_cancel(self) -> None:
         """Drop the cancelling loadscreen once the cancel macro and its moves are done."""
-        # print_stats turns cancelled mid-macro; idle_timeout stays Printing until the gcode mutex and moves free.
-        if (
-            self._cancel_pending
-            and self._print_state == "cancelled"
-            and self._idle_state.lower() != "printing"
-        ):
-            self._cancel_pending = False
-            self.call_load_panel.emit(False, "", False)
+        if not self._cancel_pending:
+            return
+        busy = self._idle_state.lower() == "printing"
+        # idle_timeout is already Ready when paused; require Printing after the cancel starts.
+        self._cancel_saw_busy = self._cancel_saw_busy or busy
+        if self._print_state == "cancelled" and self._cancel_saw_busy and not busy:
+            self._clear_cancel()
+            # Forced: MainWindow drops unforced hides while printPanel is hidden.
+            self.call_load_panel.emit(False, "", True)
+
+    def _clear_cancel(self) -> None:
+        """Forget the pending cancel and stop its safety timer."""
+        self._cancel_pending = False
+        self._cancel_timer.stop()
+
+    @QtCore.pyqtSlot(name="on_cancel_timeout")
+    def _on_cancel_timeout(self) -> None:
+        """Drop the cancel loadscreen if the idle update that ends the cancel never came."""
+        if not self._cancel_pending:
+            return
+        self._clear_cancel()
+        self.call_load_panel.emit(False, "", True)
 
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
@@ -442,7 +464,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             return
         if self._cancel_pending:
             # E-stop during the cancel macro: print_stats never reaches cancelled.
-            self._cancel_pending = False
+            self._clear_cancel()
             self.call_load_panel.emit(False, "", False)
         self.BasePopup_z_offset.reject()
         self.save_config_btn.setVisible(False)
@@ -478,6 +500,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         ):
             self._cancel_z_snapshot = self._active_z_offset
         self._cancel_pending = True
+        self._cancel_saw_busy = self._idle_state.lower() == "printing"
+        self._cancel_timer.start()
         self.ws.api.cancel_print()
         self.call_load_panel.emit(True, "Cancelling print...\nPlease wait", False)
 

@@ -57,11 +57,14 @@ def _tab(*, true_zero: bool) -> SimpleNamespace:
         _active_z_offset=0.05,
         _cancel_z_snapshot=0.0,
         _cancel_pending=False,
+        _cancel_saw_busy=False,
+        _cancel_timer=MagicMock(),
         _print_state="printing",
         _idle_state="Printing",
     )
     tab.save_config = lambda: PrintTab.save_config(tab)
     tab._maybe_finish_cancel = lambda: PrintTab._maybe_finish_cancel(tab)
+    tab._clear_cancel = lambda: PrintTab._clear_cancel(tab)
     return tab
 
 
@@ -97,6 +100,32 @@ def test_cancel_loadscreen_waits_for_cancel_macro_to_finish():
 
     PrintTab.on_idle_timeout_update(tab, "state", "Ready")
     assert _hides(tab) == 1
+    assert tab._cancel_pending is False
+    assert tab.call_load_panel.emit.call_args.args == (False, "", True)
+    tab._cancel_timer.stop.assert_called()
+
+
+def test_cancel_from_pause_waits_for_the_macro_to_turn_idle_busy():
+    tab = _tab(true_zero=True)
+    tab._idle_state = "Ready"
+    PrintTab.handle_cancel_print(tab)
+
+    PrintTab.on_print_stats_update(tab, "state", "cancelled")
+    assert _hides(tab) == 0
+
+    PrintTab.on_idle_timeout_update(tab, "state", "Printing")
+    PrintTab.on_idle_timeout_update(tab, "state", "Ready")
+    assert _hides(tab) == 1
+
+
+def test_cancel_timeout_drops_loadscreen_when_idle_never_arrives():
+    tab = _tab(true_zero=True)
+    PrintTab.handle_cancel_print(tab)
+    tab._cancel_timer.start.assert_called_once_with()
+
+    PrintTab._on_cancel_timeout(tab)
+
+    assert tab.call_load_panel.emit.call_args.args == (False, "", True)
     assert tab._cancel_pending is False
 
 
