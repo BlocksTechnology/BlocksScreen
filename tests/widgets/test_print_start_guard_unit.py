@@ -110,6 +110,10 @@ class TestStartPrint:
             "USB-STICK/my cube.gcode",
         ),
         (["// action:blocks_usb_print cube.gcode"], None),
+        (
+            ["// action:blocks_usb_print USB-STICK/cube.gcode\r\n"],
+            "USB-STICK/cube.gcode",
+        ),
         (["// blocks_usb_print USB-STICK/cube.gcode", "ok"], None),
     ],
 )
@@ -122,11 +126,22 @@ def test_usb_print_action_from_macro(lines, started) -> None:
         tab._begin_print.assert_not_called()
         tab.run_gcode_signal.emit.assert_not_called()
     else:
-        tab._begin_print.assert_called_once_with(started)
+        tab._begin_print.assert_called_once_with(started, from_console=True)
         tab.run_gcode_signal.emit.assert_called_once_with(
             "SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE"
             " VARIABLE=usb_pending VALUE='\"\"'"
         )
+
+
+@pytest.mark.parametrize("pending_from_console", [True, False])
+def test_refused_start_keeps_pending_import_origin(pending_from_console) -> None:
+    # The refusal belongs to the new request; the running import keeps its origin.
+    tab = _tab(None)
+    tab._usb_pending = True
+    tab._usb_from_console = pending_from_console
+    tab._start_usb_import = MagicMock()
+    assert tab._begin_print("USB-STICK/b.gcode", from_console=not pending_from_console)
+    assert tab._usb_from_console is pending_from_console
 
 
 def test_refused_hand_off_is_acked_and_reported_to_console() -> None:
@@ -218,13 +233,46 @@ class TestUsbImportDone:
         tab._usb_settle_timer.start.assert_not_called()
         self._printed(tab)
 
-    def test_timeout_gives_up_without_printing(self, tab) -> None:
-        self._done(tab)
+    @staticmethod
+    def _timeout(tab, sent: bool = True) -> list:
+        replies: list = []
+
+        def send_request(method, params, callback):
+            assert (method, params) == (
+                "server.files.metadata",
+                {"filename": "cube.gcode"},
+            )
+            replies.append(callback)
+            return sent
+
+        tab.ws = SimpleNamespace(send_request=send_request)
         PrintTab._on_usb_settle_timeout(tab)
+        return replies
+
+    def test_timeout_prints_once_metadata_exists(self, tab) -> None:
+        # Moonraker stores metadata only after its processors, Happy Hare's included.
+        self._done(tab)
+        self._timeout(tab)[0]({"filename": "cube.gcode", "size": 4})
+        self._printed(tab)
+
+    @pytest.mark.parametrize("sent", [True, False])
+    def test_timeout_without_metadata_gives_up(self, tab, sent) -> None:
+        self._done(tab)
+        replies = self._timeout(tab, sent)
+        if sent:
+            replies[0]({"error": {"code": 404, "message": "Metadata not available"}})
         assert tab._usb_pending is False
         tab.jobStatusPage_widget.on_print_start.assert_not_called()
         tab.remember.assert_not_called()  # never processed, so never reusable
         assert "Start it from the file list" in tab.notify.emit.call_args.args[1]
+
+    def test_metadata_reply_after_abort_is_dropped(self, tab) -> None:
+        self._done(tab)
+        reply = self._timeout(tab)[0]
+        tab._end_usb_print("cancelled")
+        reply({"filename": "cube.gcode"})
+        tab.jobStatusPage_widget.on_print_start.assert_not_called()
+        tab.notify.emit.assert_called_once()
 
     def test_job_started_meanwhile_blocks_the_copy(self, tab) -> None:
         self._done(tab)

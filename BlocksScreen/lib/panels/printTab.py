@@ -25,6 +25,7 @@ from lib.utils.display_button import DisplayButton
 from lib.utils.usb_import import (
     UsbImportSignals,
     UsbImportTask,
+    ensure_copies_dir,
     remember_import_async,
 )
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -38,6 +39,7 @@ USB_PRINT_ACTION = "// action:blocks_usb_print "
 # The override hands USB files over only once this is True; older pairs print directly.
 USB_PRINT_FLAG = "blocksscreen_usb"
 # Clears the override's fallback; sent even when the print is refused (see _on_gcode_response).
+# Klipper reads VALUE as a Python literal, so '""' stores the empty string.
 USB_PRINT_ACK = (
     "SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE VARIABLE=usb_pending VALUE='\"\"'"
 )
@@ -118,6 +120,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.config: BlocksScreenConfig = get_configparser()
         # TODO: Get the gcode path from the configfile by asking the websocket first
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
+        ensure_copies_dir(pathlib.Path(self.gcode_path))
         self.setMouseTracking(True)
 
         self.sliderPage = SliderPage(self)
@@ -400,7 +403,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             return self.amu_manager.print_start_refusal()
         return ""
 
-    def _begin_print(self, file: str) -> str:
+    def _begin_print(self, file: str, from_console: bool = False) -> str:
         """Start or import *file*; returns the refusal shown on screen, or ""."""
         if reason := self._print_refusal():
             logger.warning("Print start of %s blocked: %s", file, reason)
@@ -408,6 +411,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             return reason
         if helper_methods.is_usb_path(file):
             self._start_usb_import(file)
+            self._usb_from_console = from_console
         else:
             self.jobStatusPage_widget.on_print_start(file)
         return ""
@@ -416,19 +420,18 @@ class PrintTab(QtWidgets.QStackedWidget):
     def _on_gcode_response(self, messages: list) -> None:
         """Import a USB file whose print another client started through Klipper."""
         for line in messages:
-            file = str(line).removeprefix(USB_PRINT_ACTION)
+            text = str(line).rstrip()
+            file = text.removeprefix(USB_PRINT_ACTION)
             # The macro sends USB paths only; a local one would bypass the touchscreen.
-            if file == line or not helper_methods.is_usb_path(file):
+            if file == text or not helper_methods.is_usb_path(file):
                 continue
             # Ack even a refusal: the fallback would print from USB past the same checks.
             self.run_gcode_signal.emit(USB_PRINT_ACK)
-            self._usb_from_console = True
-            if reason := self._begin_print(file):
+            if reason := self._begin_print(file, from_console=True):
                 self._console_error(f"USB print refused: {reason}")
 
     def _console_error(self, message: str) -> None:
         """Report a failed console-started USB print back to the Klipper console."""
-        self._usb_from_console = False
         msg = message.replace('"', "'")  # a quote would end RESPOND's MSG early
         self.run_gcode_signal.emit(f'RESPOND TYPE=error MSG="{msg}"')
 
@@ -507,12 +510,24 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(name="on_usb_settle_timeout")
     def _on_usb_settle_timeout(self) -> None:
-        """Give up without printing: the copy may still be unprocessed."""
-        local = self._usb_local
-        logger.warning("No create_file for %s within the settle timeout", local)
-        self._end_usb_print(
-            f"{local} is still being processed. Start it from the file list."
-        )
+        """Ask Moonraker for the copy's metadata: the notification may have been lost."""
+        token, local = self._usb_token, self._usb_local
+
+        def on_reply(reply: object) -> None:
+            if token != self._usb_token:
+                return
+            if isinstance(reply, dict) and "error" not in reply:
+                self._usb_print_local_copy()
+                return
+            logger.warning("No metadata for %s after the settle timeout", local)
+            self._end_usb_print(
+                f"{local} is still being processed.\nStart it from the file list."
+            )
+
+        if not self.ws.send_request(
+            "server.files.metadata", {"filename": local}, callback=on_reply
+        ):
+            on_reply({"error": {"code": -1, "message": "not connected"}})
 
     def _usb_print_local_copy(self) -> None:
         """Index the settled local copy and start printing it."""

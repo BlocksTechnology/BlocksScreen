@@ -22,6 +22,8 @@ SAMPLE = 64 * 1024
 STATE_DIR_NAME = ".usb_import"
 INDEX_NAME = "index.json"
 PART_PREFIX = ".bs-usb-"  # scopes the stale-temp sweep to our own files
+COPIES_DIR_NAME = "usb_copies"  # must not match helper_methods.USB_LINK_PREFIXES
+MAX_COPIES = 20  # oldest beyond this are deleted; an open (printing) one stays readable
 _INDEX_LOCK = threading.Lock()  # the index is written from pool threads
 _COMMIT_LOCK = threading.Lock()  # name pick + rename, so two copies never pick one name
 _SWEPT: set[pathlib.Path] = set()  # temp dirs already cleaned in this process
@@ -112,8 +114,8 @@ def remember_import_async(gcode_root: pathlib.Path, key: str, local_name: str) -
     )
 
 
-def _tmp_dir(gcode_root: pathlib.Path) -> pathlib.Path:
-    """Scratch dir outside the gcodes tree, or the gcodes root if on another fs."""
+def _tmp_dir(gcode_root: pathlib.Path, dest_dir: pathlib.Path) -> pathlib.Path:
+    """Scratch dir outside the gcodes tree, or *dest_dir* if on another fs."""
     # Outside Moonraker's inotify tree the final rename reads as a plain create_file.
     tmp_dir = _state_dir(gcode_root)
     try:
@@ -122,7 +124,7 @@ def _tmp_dir(gcode_root: pathlib.Path) -> pathlib.Path:
             return tmp_dir  # same fs keeps os.replace atomic
     except OSError:
         pass
-    return gcode_root
+    return dest_dir
 
 
 def _free_name(src: pathlib.Path, dest_dir: pathlib.Path) -> pathlib.Path:
@@ -134,6 +136,29 @@ def _free_name(src: pathlib.Path, dest_dir: pathlib.Path) -> pathlib.Path:
         if not cand.exists() and not cand.is_symlink():
             return cand
         n += 1
+
+
+def ensure_copies_dir(gcode_root: pathlib.Path) -> None:
+    """Create the copies dir ahead of any import."""
+    # Moonraker reports files landing in a just-created dir only via its create_dir.
+    try:
+        (gcode_root / COPIES_DIR_NAME).mkdir(exist_ok=True)
+    except OSError as e:
+        logger.warning("Could not create %s: %s", COPIES_DIR_NAME, e)
+
+
+def _prune_copies(copies_dir: pathlib.Path, keep: int) -> None:
+    """Delete the oldest gcodes in *copies_dir* until at most *keep* remain."""
+    aged: list[tuple[int, pathlib.Path]] = []
+    for f in copies_dir.glob(f"*{ALLOWED_EXT}"):
+        try:
+            if f.is_file():
+                aged.append((f.stat().st_mtime_ns, f))
+        except OSError:
+            continue  # deleted meanwhile
+    aged.sort()
+    for _, old in aged[: max(len(aged) - keep, 0)]:
+        old.unlink(missing_ok=True)
 
 
 def _fsync(path: pathlib.Path) -> None:
@@ -163,7 +188,7 @@ def _copy_atomic(
     tmp_dir: pathlib.Path,
 ) -> pathlib.Path:
     """Copy *src* into *dest_dir* via a synced temp file; returns the final path."""
-    _sweep_stale_parts(tmp_dir)  # tmp_dir may be the shared gcodes root
+    _sweep_stale_parts(tmp_dir)  # tmp_dir may be the copies dir itself
     free = shutil.disk_usage(dest_dir).free
     if free < src_st.st_size + MIN_FREE_MARGIN:
         raise UsbImportError(f"Not enough free space ({free // MB} MB free)")
@@ -182,14 +207,17 @@ def _copy_atomic(
         with _COMMIT_LOCK:
             final = _free_name(src, dest_dir)
             os.replace(tmp, final)
-        _fsync(dest_dir)  # persist the rename itself across power loss
+        try:
+            _fsync(dest_dir)  # persist the rename itself across power loss
+        except OSError as e:
+            logger.warning("Could not sync %s: %s", dest_dir, e)
     finally:
         tmp.unlink(missing_ok=True)
     return final
 
 
 def import_usb_gcode(gcode_root: pathlib.Path, filename: str) -> tuple[str, bool, str]:
-    """Copy USB *filename* into *gcode_root*; returns (local name, reused, key)."""
+    """Copy USB *filename* into the copies dir; returns (gcodes-relative path, reused, key)."""
     root = gcode_root.resolve()
     rel = filename.strip("/")
     if not helper_methods.is_usb_path(rel):
@@ -208,13 +236,17 @@ def import_usb_gcode(gcode_root: pathlib.Path, filename: str) -> tuple[str, bool
         final = _indexed_copy(root, key)
         reused = final is not None
         if final is None:
-            final = _copy_atomic(src, src_st, root, _tmp_dir(root))
+            copies = root / COPIES_DIR_NAME
+            copies.mkdir(exist_ok=True)
+            _prune_copies(copies, MAX_COPIES - 1)
+            final = _copy_atomic(src, src_st, copies, _tmp_dir(root, copies))
     except OSError as e:
         raise UsbImportError(
             f"Copy failed, was the USB drive removed? ({e.strerror})"
         ) from e
-    logger.info("USB import %s -> %s (reused=%s)", rel, final.name, reused)
-    return final.name, reused, key
+    local = final.relative_to(root).as_posix()
+    logger.info("USB import %s -> %s (reused=%s)", rel, local, reused)
+    return local, reused, key
 
 
 class UsbImportSignals(QtCore.QObject):
