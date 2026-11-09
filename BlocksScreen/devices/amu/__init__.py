@@ -1,13 +1,15 @@
-"""AMU / HAPPY-Hare MMU package
+"""AMU / Happy-Hare MMU package.
 
 Architecture:
     AMUManager (manager.py)
-        └── Main AMU manager its responsible for the AMU backend
+        └── AMU backend
     Models (models.py)
-        └── Data classes for type safety
-        └── Enums for states and types
+        └── Typed dataclasses and state enums
+    ConfigToggler (config_toggler.py)
+        └── AMU/non-AMU printer.cfg switch
 """
 
+from .config_toggler import ConfigToggler, ToggleResult
 from .manager import AMUManager
 from .models import (
     FilamentPos,
@@ -16,14 +18,11 @@ from .models import (
     MMUState,
     SpoolmanSupport,
 )
-from .config_toggler import ConfigToggler
 
 __all__: list[str] = [
-    # manager
     "AMUManager",
-    # config_toggler
     "ConfigToggler",
-    # models
+    "ToggleResult",
     "FilamentPos",
     "GateInfo",
     "GateStatus",
