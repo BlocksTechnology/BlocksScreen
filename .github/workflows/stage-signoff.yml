@@ -1,0 +1,133 @@
+name: Stage sign-off
+
+# Approving this run records a `staging` deployment for the stage tip; the Prod and
+# Release Branches rulesets require it before a PR can merge.
+# Promote with `git fetch origin && git push origin origin/dev:stage`: never local dev, which can hold unreviewed commits.
+on:
+  push:
+    branches: [stage]
+
+permissions: {}
+
+jobs:
+  # No environment: it would wait for the approval it announces, so the webhook is a repository secret.
+  notify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Send the change list to the Hardware team
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WEBHOOK: ${{ secrets.HW_TEAMS_WEBHOOK }}
+        run: |
+          before=$(jq -r .before "$GITHUB_EVENT_PATH")
+          if [[ $before =~ ^0+$ ]]; then
+            echo "::notice::stage was created by this push, no previous tip to compare"
+            exit 0
+          fi
+          # Merge commits and Dependabot bumps are skipped: neither is something to test by hand on a printer.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/compare/$before...$GITHUB_SHA?per_page=100" \
+            --jq '.commits[] | select((.parents | length == 1) and .author.login != "dependabot[bot]")
+              | {sha, author: (.author.login // .commit.author.name), subject: (.commit.message | split("\n")[0])}' \
+            > commits.json
+          if [[ ! -s commits.json ]]; then
+            echo "::notice::nothing to test by hand in this push (only merge commits or Dependabot bumps), no email sent"
+            exit 0
+          fi
+          # Squash subjects are the PR titles; @html because they are free text from PR authors.
+          # Tables, bgcolor and inline styles only: Outlook for Windows renders with Word.
+          cat > notify.jq <<'JQ'
+          def font: "font-family:Segoe UI,Helvetica,Arial,sans-serif;";
+          def line: "border-bottom:1px solid #afb8c1;";
+          def kind: {feat: 0, fix: 1, perf: 2, refactor: 3, revert: 4}[.type // ""] // 5;
+          def colour: ["#1a7f37", "#cf222e", "#8250df", "#0969da", "#bc4c00", "#59636e"][.];
+          def heading: ["Features", "Fixes", "Performance", "Refactors", "Reverts", "Other changes"][.];
+          # Printed on A4: borders and text colour only (print drops backgrounds); 6.35 mm rows fit one handwritten line.
+          def section: (.[0] | kind) as $k
+            | "<tr style='break-inside:avoid;page-break-inside:avoid;page-break-after:avoid'><td colspan='5' "
+            + "style='\(font)padding:10px 0 3px;border-bottom:2px solid \($k | colour);font-size:11px;"
+            + "font-weight:bold;letter-spacing:1px;color:\($k | colour)'>\($k | heading | ascii_upcase) &middot; "
+            + "\(length)</td></tr>";
+          # The author gets its own column so the title alone fills Change: most then fit one line.
+          def row: "<tr style='break-inside:avoid;page-break-inside:avoid'><td width='18' valign='top' "
+            + "style='\(line)padding:4px 0 0;font-family:Segoe UI Symbol,Arial,sans-serif;font-size:14px;"
+            + "line-height:16px;color:#59636e'>&#9744;</td><td width='50' valign='top' style='\(line)\(font)"
+            + "padding:5px 4px 0 0;font-size:11px;line-height:14px;white-space:nowrap'><a href='\(.url)' "
+            + "style='color:#0969da;text-decoration:none'>\(.ref)</a></td><td valign='top' style='\(line)\(font)"
+            + "padding:4px 8px 4px 0;font-size:12px;line-height:16px;color:#1f2328'>"
+            + (if .scope then "<span style='color:#59636e'>\(.scope | @html):</span> " else "" end)
+            + (.summary | @html) + (if .breaking then " <b style='color:#cf222e'>(breaking)</b>" else "" end)
+            + "</td><td width='64' valign='top' style='\(line)\(font)padding:5px 4px 0 0;font-size:10px;"
+            + "line-height:14px;color:#59636e;white-space:nowrap;overflow:hidden'>\(.author // "unknown" | @html)"
+            + "</td><td width='26%' height='24' style='\(line)border-left:1px solid #afb8c1'>&nbsp;</td></tr>";
+          # Fixed layout takes the widths from this header row; auto layout let BY steal space from Change.
+          def th($label; $width; $pad): "<td\(if $width == "" then "" else " width='\($width)'" end) "
+            + "style='\(font)padding:6px 0 4px \($pad)px;"
+            + "border-bottom:1px solid #1f2328;font-size:10px;font-weight:bold;letter-spacing:1px;color:#59636e'>"
+            + "\($label)</td>";
+          def blank($label; $width): "<td width='1%' valign='bottom' style='\(font)padding:0 6px 3px 0;"
+            + "font-size:12px;color:#59636e;white-space:nowrap'>\($label)</td><td width='\($width)' height='26' "
+            + "style='border-bottom:1px solid #8c959f'>&nbsp;</td>";
+          [inputs | . as $c
+            | (.subject | capture("^(?<title>.*?)(?: \\(#(?<pr>[0-9]+)\\))?$")) as $s
+            | ($s.title | capture("^(?<type>[a-z]+)(?:\\((?<scope>[^)]*)\\))?(?<bang>!)?: (?<desc>.+)$")
+                // {type: null, scope: null, bang: null, desc: $s.title}) as $cc
+            | {title: $s.title, pr: ($s.pr | if . then tonumber else null end), sha: $c.sha, author: $c.author,
+               url: (if $s.pr then "\($url)/pull/\($s.pr)" else "\($url)/commit/\($c.sha)" end),
+               ref: (if $s.pr then "#\($s.pr)" else $c.sha[:7] end),
+               type: $cc.type, scope: $cc.scope, breaking: ($cc.bang != null),
+               summary: ($cc.desc | (.[:1] | ascii_upcase) + .[1:])}]
+          | reverse as $all | ($all | length) as $n | $sha[:8] as $short
+          | (if $n == 0 then "No changes" elif $n == 1 then "1 change" else "\($n) changes" end) as $count
+          | {subject: "BlocksScreen stage \($short): \($count) to test", stage: $short, sha: $sha,
+             items: ($all | map({title, url, pr, author})),
+             html: ("<div style='display:none;max-height:0;overflow:hidden;mso-hide:all'>\($count) on stage "
+              + "\($short) to test.</div><table role='presentation' width='100%' cellpadding='0' cellspacing='0' "
+              + "border='0'><tr><td align='center' style='padding:8px 0'><table role='presentation' width='680' "
+              + "cellpadding='0' cellspacing='0' border='0' bgcolor='#ffffff' style='width:100%;max-width:680px;"
+              + "background-color:#ffffff;border-top:4px solid #1f2328'>"
+              + "<tr><td style='padding:10px 12px 0'><table role='presentation' width='100%' cellpadding='0' "
+              + "cellspacing='0' border='0'><tr><td style='\(font)font-size:11px;letter-spacing:1px;color:#59636e'>"
+              + "BLOCKSSCREEN STAGE TEST SHEET</td><td align='right' style='\(font)font-size:11px;color:#59636e'>"
+              + "\(now | strftime("%Y-%m-%d"))</td></tr></table><p style='\(font)margin:4px 0 0;font-size:18px;"
+              + "line-height:24px;font-weight:bold;color:#1f2328'>\($count) to test<span style='font-size:12px;"
+              + "font-weight:normal;color:#59636e'>&nbsp;&nbsp;stage <a href='\($url)/commit/\($sha)' "
+              + "style='color:#0969da'>\($short)</a> &middot; pushed by \($actor | @html)</span></p></td></tr>"
+              + "<tr><td style='padding:6px 12px 0'><table role='presentation' width='100%' cellpadding='0' "
+              + "cellspacing='0' border='0'><tr>\(blank("Tester"; "38%"))<td width='16'>&nbsp;</td>"
+              + "\(blank("Date"; "18%"))<td width='16'>&nbsp;</td>\(blank("Printer"; "22%"))</tr></table></td></tr>"
+              + "<tr><td style='\(font)padding:10px 12px 0;font-size:12px;line-height:16px;color:#1f2328'>"
+              + "Tick each change once it works on a staging printer and write any problem in Note. "
+              + "Approve the sign-off run when everything passes.</td></tr>"
+              + "<tr><td style='padding:4px 12px 0'><table role='presentation' width='100%' cellpadding='0' "
+              + "cellspacing='0' border='0' style='table-layout:fixed'><thead "
+              + "style='display:table-header-group;break-inside:avoid'><tr>\(th("&#10003;"; "18"; 0))"
+              + "\(th("PR"; "50"; 0))\(th("CHANGE"; ""; 0))\(th("BY"; "64"; 0))\(th("NOTE"; "26%"; 8))</tr></thead>"
+              + "<tbody>\([$all | group_by(kind)[] | section, (.[] | row)] | join(""))</tbody></table></td></tr>"
+              + "<tr><td style='\(font)padding:10px 12px 12px;font-size:11px;color:#59636e'>"
+              + "Sent automatically on every stage push.</td></tr></table></td></tr></table>")}
+          JQ
+          jq -n -f notify.jq --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --arg sha "$GITHUB_SHA" --arg actor "$GITHUB_ACTOR" commits.json > payload.json
+          jq -r .html payload.json >> "$GITHUB_STEP_SUMMARY"
+          if [[ -z $WEBHOOK ]]; then
+            echo "::warning::HW_TEAMS_WEBHOOK is not set, the Hardware team was not notified"
+            exit 0
+          fi
+          # Payload {subject, html, stage, sha, items} feeds a Power Automate flow (Teams webhook trigger) that sends the email.
+          curl --fail-with-body -sS --retry 3 --max-time 30 -H 'Content-Type: application/json' \
+            --data-binary @payload.json "$WEBHOOK"
+
+  signoff:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: staging
+    # Only the newest stage tip needs sign-off; notify stays out so every push reports its own range.
+    concurrency:
+      group: stage-signoff
+      cancel-in-progress: true
+    steps:
+      - name: Record staging sign-off
+        run: echo "Staging printers validated $GITHUB_SHA"
