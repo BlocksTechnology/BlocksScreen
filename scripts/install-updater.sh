@@ -164,10 +164,7 @@ if ! grep -qsx 'Storage=volatile' "$_JD_DROPIN"; then
     rm -f "$_jd_tmp"
     sudo systemctl restart systemd-journald 2>/dev/null || true
 fi
-# Unused once volatile; only frees the space the old persistent journal held.
-if grep -qsx 'Storage=volatile' "$_JD_DROPIN"; then
-    sudo rm -rf /var/log/journal
-fi
+# /var/log/journal is kept: journalctl still reads its history, and a later drop-in may re-enable it.
 echo_ok "journald volatile"
 
 echo_info "Scoping git safe.directory to component repos ..."
