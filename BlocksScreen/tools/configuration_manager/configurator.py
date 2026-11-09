@@ -35,10 +35,8 @@ def _opt_line(opt: str, val: str) -> str:
 
 
 def _timestamp() -> str:
-    """Return the current timestamp in ISO8601 format
-
-    Largest unit of time to the smaller one"""
-    return datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+    """Local time in ISO 8601 basic format: no colons, safe over SMB and scp."""
+    return datetime.now().strftime("%Y%m%dT%H%M%S")
 
 
 def is_git_repo(path: pathlib.Path) -> bool:
@@ -317,17 +315,9 @@ class ConfigManager:
         return file_dir.stat(follow_symlinks=False)
 
     def _get_missing_symlinks(
-        self,
-        root: pathlib.Path | str,
-        repo: pathlib.Path | str,
-        mode: Literal[0, 1] = 0,
+        self, root: pathlib.Path | str, repo: pathlib.Path | str
     ) -> list[pathlib.Path]:
-        """Scan the `root` directory for missing symbolic links compared
-        against files on `repo` directory.
-
-        Returns:
-            list: paths for Missing symlinks
-        """
+        """Repo cfg files whose mirrored path under `root` does not resolve to them."""
         _root = pathlib.Path(root)
         _repo = pathlib.Path(repo)
         if not _root.is_dir() or not _root.exists():
@@ -335,29 +325,14 @@ class ConfigManager:
         if not _repo.is_dir() or not _repo.exists():
             raise NotADirectoryError("Provided repo dir missing or does not exist")
 
-        _resolved: set[str] = {
-            f.resolve().as_posix() for f in _root.rglob("*") if f.is_symlink()
-        }
-
-        if mode:
-            for f in list(_root.rglob("*")):
-                if f.is_symlink() and f.is_dir():
-                    resolved_dir = f.resolve()
-                    if resolved_dir.exists():
-                        for sub in resolved_dir.rglob("*"):
-                            _resolved.add(sub.as_posix())
-
-        _missing = []
-        for d in _repo.rglob("*.cfg"):
-            # ignore copy files
-            if d.parts[-1] in self.cpy_files:
-                continue
-            # ignore .git dir files
-            if ".git" in d.parts:
-                continue
-            if not resolve_symlink(d, _resolved):
-                _missing.append(d)
-        return _missing
+        # resolve() follows folder links too, so a linked config/ or subfolder counts.
+        return [
+            d
+            for d in _repo.rglob("*.cfg")
+            if d.name not in self.cpy_files
+            and ".git" not in d.parts
+            and (_root / d.relative_to(_repo)).resolve() != d.resolve()
+        ]
 
     def _build_file_index(
         self, root: pathlib.Path
@@ -414,10 +389,7 @@ class ConfigManager:
                         _logger.error("Could not symlink %s: %s", target, e)
 
         except Exception as e:
-            _logger.error(
-                "Caught exception while creating symbolic links for configuration files: %s"
-                % e
-            )
+            _logger.error("Could not create config symlinks: %s", e)
 
     def _link_repo_file(
         self, src: pathlib.Path, repo_real: pathlib.Path, config_real: pathlib.Path
@@ -432,24 +404,22 @@ class ConfigManager:
         if parent_real != config_real / src_rel.parent:
             _logger.warning("Skipping %s: its folder links to %s", target, parent_real)
             return
-        if target.is_symlink():
+        if target.is_symlink() or target.is_file():
             if target.resolve() == src.resolve():
                 return
-            _logger.warning("Repointing %s from %s", target, target.readlink())
-        elif target.is_file():
             backup = self._backup_file(target, src_rel)
             _logger.warning("Replacing local %s, original kept at %s", target, backup)
         ensure_dir(target.parent)
         _atomic_symlink(src, target)
 
     def _backup_file(self, path: pathlib.Path, rel: pathlib.PurePath) -> pathlib.Path:
-        """Copy `path` under backup_dir mirroring `rel`, never overwriting an older backup."""
+        """Copy `path` under backup_dir at `rel`, links kept as links; never overwrites."""
         base = self.backup_dir / rel.parent / f"{rel.name}.{_timestamp()}"
         ensure_dir(base.parent)
         backup, n = base, 1
         while backup.exists():
             backup, n = base.with_name(f"{base.name}.{n}"), n + 1
-        shutil.copy2(path, backup)
+        shutil.copy2(path, backup, follow_symlinks=False)
         return backup
 
     def _section_blocks(self, lines):
@@ -457,7 +427,7 @@ class ConfigManager:
         name = None
         block = []
         for line in lines:
-            m = re.match("^\[\s*(.+?)\s*\]\s*$", line)
+            m = re.match(r"^\[\s*(.+?)\s*\]\s*$", line)
             if m:
                 if block:
                     blocks.append((name, block))

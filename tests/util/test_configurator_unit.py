@@ -371,6 +371,21 @@ class TestGetMissingSymlinks:
         result = mgr._get_missing_symlinks(cfg_dir, repo)
         assert len(result) == 2
 
+    def test_local_file_counts_as_missing_despite_other_link(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(mgr.repo / "a.cfg", "repo")
+        (mgr.config_dir / "alias.cfg").symlink_to(src)
+        _write(mgr.config_dir / "a.cfg", "local")
+        mgr.cpy_files = []
+        assert mgr._get_missing_symlinks(mgr.config_dir, mgr.repo) == [src]
+
+    def test_folder_link_into_repo_counts_as_linked(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        _write(mgr.repo / "sub" / "a.cfg", "repo")
+        (mgr.config_dir / "sub").symlink_to(mgr.repo / "sub", target_is_directory=True)
+        mgr.cpy_files = []
+        assert mgr._get_missing_symlinks(mgr.config_dir, mgr.repo) == []
+
     def test_excludes_copy_files(self, tmp_path):
         mgr = _make_manager(tmp_path)
         repo = mgr.repo
@@ -503,6 +518,8 @@ class TestSymlinkConfig:
         mgr._symlink_config([src])
         assert (mgr.config_dir / "a.cfg").resolve() == src.resolve()
         assert old.read_text() == "old"
+        (backup,) = mgr.backup_dir.glob("a.cfg.*")
+        assert backup.is_symlink() and backup.readlink() == old
 
     def test_folder_link_outside_repo_skipped(self, tmp_path, mock_home):
         mgr = _make_manager(tmp_path, repo=mock_home / "repo")
