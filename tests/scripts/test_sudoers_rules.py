@@ -78,8 +78,9 @@ def _expanded_rules() -> set[str]:
     return rules
 
 
-def _machine_sudo_argvs() -> list[list[str]]:
-    """The systemctl argvs MachineControl runs through sudo."""
+@pytest.fixture
+def sudo_argvs() -> tuple[MachineControl, list[list[str]]]:
+    """A MachineControl that records its argvs instead of running them."""
     argvs: list[list[str]] = []
 
     def record(argv: list[str]) -> str:
@@ -88,15 +89,26 @@ def _machine_sudo_argvs() -> list[list[str]]:
 
     mc = MachineControl(None)
     mc._run_command = record
-    mc.restart_klipper_service()
-    mc.restart_moonraker_service()
-    return [a for a in argvs if a[0] == "sudo"]
+    return mc, argvs
 
 
-@pytest.mark.parametrize("argv", _machine_sudo_argvs(), ids=" ".join)
-def test_machine_control_argv_matches_a_rule(argv):
-    assert argv[:2] == ["sudo", "-n"]
-    assert f"/usr/bin/{' '.join(argv[2:])}" in _expanded_rules()
+@pytest.mark.parametrize(
+    "slot",
+    [
+        "machine_restart",
+        "machine_shutdown",
+        "restart_klipper_service",
+        "restart_moonraker_service",
+    ],
+)
+def test_machine_control_argv_matches_a_rule(sudo_argvs, slot):
+    mc, argvs = sudo_argvs
+    getattr(mc, slot)()
+    sudo = [a for a in argvs if a[0] == "sudo"]
+    assert sudo
+    for argv in sudo:
+        assert argv[:2] == ["sudo", "-n"]
+        assert f"/usr/bin/{' '.join(argv[2:])}" in _expanded_rules()
 
 
 class TestWrapperValidation:

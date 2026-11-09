@@ -64,3 +64,31 @@ def test_klipper_restart_runs_when_host_mcu_start_fails(mc, run):
     ]
     assert mc.restart_klipper_service() == "out\n"
     assert run.call_count == 3
+
+
+def test_host_mcu_load_state_is_queried_once(mc, run):
+    run.return_value = _loaded()
+    mc.restart_klipper_service()
+    mc.restart_klipper_service()
+    shows = [c for c in _commands(run) if c[:2] == ["systemctl", "show"]]
+    assert len(shows) == 1
+
+
+def test_failed_load_state_query_is_retried(mc, run):
+    run.side_effect = [
+        FileNotFoundError(),
+        run.return_value,
+        _loaded(),
+        run.return_value,
+        run.return_value,
+    ]
+    mc.restart_klipper_service()
+    mc.restart_klipper_service()
+    assert [
+        "sudo",
+        "-n",
+        "systemctl",
+        "--no-block",
+        "start",
+        "klipper-mcu.service",
+    ] in (_commands(run))

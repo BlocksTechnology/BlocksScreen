@@ -20,16 +20,17 @@ class MachineControl(QtCore.QObject):
     def __init__(self, parent: typing.Optional["QtCore.QObject"]) -> None:
         super().__init__(parent)
         self.setObjectName("MachineControl")
+        self._load_states: dict[str, bool] = {}
 
     @QtCore.pyqtSlot(name="machine_restart")
     def machine_restart(self) -> str | None:
         """Reboot machine"""
-        return self._run_command(["sudo", "-n", "reboot", "now"])
+        return self._run_command(["sudo", "-n", "systemctl", "reboot"])
 
     @QtCore.pyqtSlot(name="machine_shutdown")
     def machine_shutdown(self) -> str | None:
         """Shutdown machine"""
-        return self._run_command(["sudo", "-n", "shutdown", "now"])
+        return self._run_command(["sudo", "-n", "systemctl", "poweroff"])
 
     @QtCore.pyqtSlot(name="restart_klipper_service")
     def restart_klipper_service(self) -> str | None:
@@ -52,10 +53,15 @@ class MachineControl(QtCore.QObject):
 
     def _unit_loaded(self, unit: str) -> bool:
         """True if systemd knows ``unit``; printers without a host MCU lack it."""
-        state = self._run_command(
-            ["systemctl", "show", "--property=LoadState", "--value", unit]
-        )
-        return bool(state) and state.split()[0] == "loaded"
+        if unit not in self._load_states:
+            out = self._run_command(
+                ["systemctl", "show", "--property=LoadState", "--value", unit]
+            )
+            words = (out or "").split()
+            if not words:
+                return False  # Query failed: ask again next time
+            self._load_states[unit] = words[0] == "loaded"
+        return self._load_states[unit]
 
     def check_service_state(self, service_name: str | None):
         """Check service status

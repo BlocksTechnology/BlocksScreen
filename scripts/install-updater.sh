@@ -73,6 +73,7 @@ SUDOERS_TMP=$(mktemp)
 # The wrapper is the only apt/dpkg grant; kept in sync by tests/scripts/test_sudoers_rules.py.
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/local/sbin/bs-apt-helper *\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot\n' >>"$SUDOERS_TMP"
+printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl poweroff\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 7\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 8\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/bash %s/scripts/install-updater.sh\n' "$BS_PATH" >>"$SUDOERS_TMP"
