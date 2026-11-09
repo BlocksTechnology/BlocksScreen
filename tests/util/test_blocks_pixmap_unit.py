@@ -1,11 +1,7 @@
-"""Unit tests for the BlocksPixmap registry and the Icon key enum.
-
-Qt resolves an unknown ':/' key to a null QPixmap with no exception and no log
-line, so a typo in Icon would ship as a blank rectangle on the panel. These
-tests turn that into a red test, and pin the size win the registry exists for.
-"""
+"""Unit tests for BlocksPixmap; Qt turns an unknown key into a silent null pixmap."""
 
 import importlib
+from pathlib import Path
 
 import pytest
 from PyQt6 import QtCore, QtGui
@@ -13,21 +9,14 @@ from PyQt6 import QtCore, QtGui
 from BlocksScreen.lib.utils.blocks_pixmap import BlocksPixmap, Icon
 
 _RC_PACKAGE = "BlocksScreen.lib.ui.resources"
-_RC_MODULES = (
-    "background_resources_rc",
-    "font_rc",
-    "graphic_resources_rc",
-    "icon_resources_rc",
-    "main_menu_resources_rc",
-    "top_bar_resources_rc",
-)
+_RESOURCES = Path(__file__).resolve().parents[2] / "BlocksScreen/lib/ui/resources"
 
 
 @pytest.fixture(autouse=True)
 def _resources(qapp):
     """Register the compiled blobs, then leave the caches empty for the next test."""
-    for module in _RC_MODULES:
-        importlib.import_module(f"{_RC_PACKAGE}.{module}")
+    for blob in sorted(_RESOURCES.glob("*_rc.py")):
+        importlib.import_module(f"{_RC_PACKAGE}.{blob.stem}")
     BlocksPixmap.clear()
     yield
     BlocksPixmap.clear()

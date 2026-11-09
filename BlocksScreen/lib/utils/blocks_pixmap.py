@@ -1,24 +1,11 @@
-"""One load-once registry for every Qt resource pixmap the panel draws.
-
-Loading an icon by path yields its intrinsic buffer, which for most of the
-btn_icons is a 600x600 RGBA surface costing 1.37 MiB even when it is painted at
-32px. Going through QIcon instead makes QSvgIconEngine rasterize at the
-requested size: measured on the RF50, the whole set costs 16.1 MiB at 64px
-against 273.0 MiB intrinsic, and loads in 278 ms against 848 ms.
-
-Every path lives in the Icon enum so a typo is a NameError rather than Qt's
-silent null pixmap, and tests/util/test_blocks_pixmap_unit.py proves each member
-still resolves.
-"""
+"""Load-once registry of Qt resource pixmaps, rendered at draw size instead of intrinsic size."""
 
 from enum import StrEnum
-from typing import ClassVar
 
 from PyQt6 import QtCore, QtGui
 
-# Setup-time callers cannot know their paint size, and the widgets rescale anyway;
-# 128 clears the tallest button (90px hole, 0.8 fill) at 64 KiB a surface.
-ICON_SIZE = QtCore.QSize(128, 128)
+# Setup-time callers cannot know their paint size; 128 clears the tallest button.
+_ICON_EDGE = 128
 
 
 class Icon(StrEnum):
@@ -38,6 +25,7 @@ class Icon(StrEnum):
     BASE_DADOS_SPOOL_1 = ":/filament_related/media/btn_icons/base dados spool 1.svg"
     BLOWER = ":/fan_related/media/btn_icons/blower.svg"
     BLTOUCH = ":/z_levelling/media/btn_icons/bltouch.svg"
+    CHAMBER_TEMP_TOPBAR = ":/top_bar_icons/media/topbar/chamber_temp_topbar.svg"
     CHANGE_FILAMENT = ":/filament_related/media/btn_icons/change_filament.svg"
     CHECK_GATE_1 = ":/filament_related/media/btn_icons/check gate 1.svg"
     EDDY_MECH = ":/z_levelling/media/btn_icons/eddy_mech.svg"
@@ -56,6 +44,7 @@ class Icon(StrEnum):
     GARBAGE_ICON = ":/ui/media/btn_icons/garbage-icon.svg"
     HALF_SPOLL = ":/filament_related/media/btn_icons/half_spoll.svg"
     HOTSPOT = ":/network/media/btn_icons/hotspot.svg"
+    HUMIDITY = ":/temperature_related/media/btn_icons/humidity.svg"
     INDUCTIVE = ":/z_levelling/media/btn_icons/inductive.svg"
     INFO = ":/ui/media/btn_icons/info.svg"
     INPUT_SHAPER_AUTO = ":/input_shaper/media/btn_icons/input_shaper_auto.svg"
@@ -69,6 +58,7 @@ class Icon(StrEnum):
     MOVE_NOZZLE_CLOSE = ":/baby_step/media/btn_icons/move_nozzle_close.svg"
     NO = ":/dialog/media/btn_icons/no.svg"
     NOTIFICATION = ":/ui/media/btn_icons/notification.svg"
+    NOZZLE_TOPBAR = ":/extruder_related/media/btn_icons/nozzle_topbar.svg"
     NYLON_FILAMENT_TOPBAR = ":/top_bar_icons/media/topbar/nylon_filament_topbar.svg"
     PAUSE = ":/ui/media/btn_icons/pause.svg"
     PC_FILAMENT_TOPBAR = ":/top_bar_icons/media/topbar/pc_filament_topbar.svg"
@@ -84,7 +74,12 @@ class Icon(StrEnum):
     RIGHT_ARROW = ":/arrow_icons/media/btn_icons/right_arrow.svg"
     SAVE = ":/ui/media/btn_icons/save.svg"
     SEE = ":/ui/media/btn_icons/see.svg"
+    SORT_ASC = ":/arrow_icons/media/btn_icons/sort_asc.svg"
+    SORT_DESC = ":/arrow_icons/media/btn_icons/sort_desc.svg"
     SPEED = ":/motion/media/btn_icons/speed.svg"
+    STANDART_TEMPERATURE = (
+        ":/temperature_related/media/btn_icons/standart_temperature.svg"
+    )
     STATIC_IP = ":/network/media/btn_icons/network/static_ip.svg"
     STOP = ":/ui/media/btn_icons/stop.svg"
     SWITCH_ZOOM = ":/extruder_related/media/btn_icons/switch_zoom.svg"
@@ -121,8 +116,8 @@ class BlocksPixmap:
     """Process-wide cache of QIcons and the pixmaps rendered from them."""
 
     # Two QIcons over one path do not share their render cache, so hold the QIcon.
-    _icons: ClassVar[dict[str, QtGui.QIcon]] = {}
-    _pixmaps: ClassVar[dict[tuple[str, int, int], QtGui.QPixmap]] = {}
+    _icons: dict[str, QtGui.QIcon] = {}
+    _pixmaps: dict[tuple[str, int, int], QtGui.QPixmap] = {}
 
     _MAX_PIXMAPS = 64
 
@@ -137,8 +132,10 @@ class BlocksPixmap:
         return cached
 
     @classmethod
-    def get(cls, icon: Icon | str, size: QtCore.QSize = ICON_SIZE) -> QtGui.QPixmap:
-        """Return *icon* rasterized at *size*, cached across calls."""
+    def get(cls, icon: Icon | str, size: QtCore.QSize | None = None) -> QtGui.QPixmap:
+        """Return *icon* rasterized at *size* (default 128x128), cached across calls."""
+        if size is None:
+            size = QtCore.QSize(_ICON_EDGE, _ICON_EDGE)
         key = (str(icon), size.width(), size.height())
         cached = cls._pixmaps.get(key)
         if cached is not None:
