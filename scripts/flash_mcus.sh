@@ -52,6 +52,7 @@ FW_OUT=""            # out/ dir of the last build_firmware, trailing slash (Klip
 FW_BIN=""            # klipper.bin of the last build_firmware
 declare -a FW_MAKE_ARGS=() # KCONFIG_CONFIG/OUT of the last build, reused by `make flash`
 KLIPPER_HOLD_DROPIN="/run/systemd/system/klipper.service.d/50-flash-mcus-hold.conf"
+FLASH_LOCK="$FW_BUILD_ROOT/flash.lock"
 
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -246,7 +247,7 @@ ensure_klipper_running() {
     ip link show can0 up >/dev/null 2>&1 || max_wait=5
     local waited=0 state=""
     while [ "$waited" -lt "$max_wait" ]; do
-        state=$(python3 "$VERSIONS_PY" state --url "$MOONRAKER_URL" 2>/dev/null) || true
+        state=$(python3 "$VERSIONS_PY" state --url "$MOONRAKER_URL") || true
         case "$state" in
         ready)
             ok "Klipper is ready (all MCUs connected)"
@@ -289,6 +290,20 @@ release_klipper() {
     sudo systemctl daemon-reload
 }
 
+# Held on fd 9 for the whole run; the kernel drops it on any exit, SIGKILL included.
+take_flash_lock() {
+    mkdir -p "$FW_BUILD_ROOT" || return 1
+    exec 9>"$FLASH_LOCK" || return 1
+    flock -n 9
+}
+
+# With the lock taken, a hold left behind belongs to a killed run (SIGKILL, OOM).
+recover_stale_hold() {
+    [ -f "$KLIPPER_HOLD_DROPIN" ] || return 0
+    warn "Removing a Klipper start block left by an interrupted flash"
+    release_klipper && sudo systemctl start klipper
+}
+
 # Wait for "ready"; FIRMWARE_RESTART up to twice if an MCU is left in shutdown or error.
 verify_klipper_ready() {
     local attempt
@@ -307,7 +322,7 @@ query_moonraker_versions() {
     [ "$CONTEXT" = "laptop" ] && return 0
 
     local lines sec_name ver
-    lines=$(python3 "$VERSIONS_PY" query --url "$MOONRAKER_URL" 2>/dev/null) || {
+    lines=$(python3 "$VERSIONS_PY" query --url "$MOONRAKER_URL") || {
         warn "Could not query Moonraker for MCU versions"
         return 1
     }
@@ -332,7 +347,7 @@ record_flash() {
     done < <(parse_config_metadata "$cfg")
     [ -z "$section" ] && return 0
     python3 "$VERSIONS_PY" record --state-file "$MCU_VERSIONS_FILE" --section "$section" \
-        --version "$SRC_VERSION" --interface "$iface" --result "$result" 2>/dev/null || true
+        --version "$SRC_VERSION" --interface "$iface" --result "$result" || true
 }
 
 # Git hash of a version string, display only.
@@ -346,7 +361,7 @@ get_source_version() {
 # Prefix match: git abbreviates hashes to varying lengths.
 versions_match() {
     [ -z "$1" ] && return 1
-    python3 "$VERSIONS_PY" match "$1" "$2" 2>/dev/null
+    python3 "$VERSIONS_PY" match "$1" "$2"
 }
 
 ensure_can_up() {
@@ -396,7 +411,8 @@ klipper_can_query() {
         }'
 }
 
-# Chip type of a CAN node in Katapult; `-s` is read-only. Output: "mcu_type|".
+# Chip type of a CAN node in Katapult. Output: "mcu_type|".
+# `-s` sends no bootloader jump (flashtool.py CanSocket.run); Klipper ignores its admin cmds.
 probe_can_mcu() {
     local output
     output=$(timeout 10 python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" \
@@ -623,11 +639,12 @@ _make_build() {
     FW_OUT="$dir/out/"
     FW_MAKE_ARGS=("KCONFIG_CONFIG=$dir/.config" "OUT=$FW_OUT")
     make -C "$src" "${FW_MAKE_ARGS[@]}" -s olddefconfig 2>&1 | _indent
-    make -C "$src" "${FW_MAKE_ARGS[@]}" -j"$(nproc)" -s 2>&1 | _indent
-    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
-        err "$err_msg"
-        return 1
+    if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+        make -C "$src" "${FW_MAKE_ARGS[@]}" -j"$(nproc)" -s 2>&1 | _indent
+        [ "${PIPESTATUS[0]}" -eq 0 ] && return 0
     fi
+    err "$err_msg"
+    return 1
 }
 
 is_linux_config() { grep -q '^CONFIG_MACH_LINUX=y' "$1"; }
@@ -1258,7 +1275,7 @@ cmd_flash() {
 
     if [ "$CONTEXT" = "pi" ]; then
         local print_state
-        print_state=$(python3 "$VERSIONS_PY" print-state --url "$MOONRAKER_URL" 2>/dev/null) || true
+        print_state=$(python3 "$VERSIONS_PY" print-state --url "$MOONRAKER_URL") || true
         if [[ "$print_state" == "printing" || "$print_state" == "paused" ]]; then
             err "A print is $print_state - flashing would stop Klipper mid-print. Aborting."
             return 1
@@ -1266,14 +1283,14 @@ cmd_flash() {
     fi
 
     # Interrupts (incl. SSH hangup) finish the current step, then Klipper is restarted.
-    local _flash_aborted=false
+    local _flash_aborted=false _saved_traps
+    _saved_traps=$(trap -p INT TERM HUP TSTP)
     trap 'warn "Signal caught - finishing current flash step before stopping..."; _flash_aborted=true' INT TERM HUP
     trap '' TSTP # block Ctrl-Z completely
 
     header "Stopping Klipper..."
     if [ "$CONTEXT" = "pi" ]; then
         hold_klipper || warn "Could not block Klipper restarts - a UI may restart it mid-flash"
-        trap release_klipper EXIT
     fi
     sudo systemctl stop klipper 2>/dev/null || true
     sleep 2
@@ -1385,13 +1402,13 @@ cmd_flash() {
         fi
     done
 
-    trap - INT TERM HUP TSTP # restore signals
+    trap - INT TERM HUP TSTP
+    eval "$_saved_traps" # e.g. the TUI's terminal restore
 
     save_uuid_cache
 
     header "Starting Klipper..."
     release_klipper
-    trap - EXIT
     if $_bridge_flashed; then
         # The bridge re-enumerates after flashing; Klipper cannot connect until can0 is back.
         local _w
@@ -1693,6 +1710,7 @@ main() {
             ;;
         --flash-all) mode="flash" ;;
         --versions) mode="versions" ;;
+        --release) mode="release" ;;
         --force) FORCE=true ;;
         --help | -h)
             cat >&2 <<'EOF'
@@ -1704,6 +1722,7 @@ USAGE:
   flash_mcus.sh --flash <name...>      Flash named MCUs (e.g. octopus eddy_duo)
   flash_mcus.sh --flash-all            Flash all outdated MCUs non-interactively
   flash_mcus.sh --versions             Report MCU vs host versions, update the versions file
+  flash_mcus.sh --release              Remove a Klipper start block left by a killed flash
   flash_mcus.sh --help                 Show this help
 
 OPTIONS:
@@ -1748,6 +1767,16 @@ EOF
         exit $?
     fi
 
+    if [ "$mode" = "release" ]; then
+        take_flash_lock || {
+            err "A flash is running; it releases Klipper when it ends"
+            exit 1
+        }
+        [ -f "$KLIPPER_HOLD_DROPIN" ] || info "No Klipper start block found"
+        recover_stale_hold
+        exit $?
+    fi
+
     [ ! -d "$MCU_CONFIG_DIR" ] && {
         echo "ERROR: $MCU_CONFIG_DIR not found"
         exit 1
@@ -1758,6 +1787,15 @@ EOF
     fi
 
     detect_context
+    if [ "$CONTEXT" = "pi" ]; then
+        if take_flash_lock; then
+            recover_stale_hold
+            trap release_klipper EXIT # the only EXIT trap: a hold never outlives this run
+        elif [ "$mode" != "json" ]; then
+            err "Another flash_mcus.sh is running"
+            exit 1
+        fi
+    fi
     ensure_katapult 2>/dev/null || true
     load_uuid_cache
     load_uuids_from_printer_cfg 2>/dev/null || true

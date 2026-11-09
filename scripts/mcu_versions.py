@@ -17,23 +17,25 @@ import sys
 import tempfile
 import urllib.parse
 import urllib.request
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 SCHEMA = 1
-_HASH_RE = re.compile(r"(?:^|-)g([0-9a-f]{7,40})(?:-|$)")
+# buildcommands.py: `git describe --always --tags --long --dirty`, so a tag always
+# carries -<count>-g<hash>; without tags --always gives the bare hash.
+_DESCRIBE_RE = re.compile(r"^(?:v\S*?-\d+-g)?([0-9a-f]{7,40})(?=-|$)")
 _LOG = logging.getLogger("mcu_versions")
 
 
 def git_hash(version: str) -> str:
-    """Return the git hash in a Klipper version string, or ''."""
-    match = _HASH_RE.search(version or "")
+    """Return the git hash of a Klipper version string, or ''."""
+    match = _DESCRIBE_RE.match(version or "")
     return match.group(1) if match else ""
 
 
 def is_klipper_version(version: str) -> bool:
     """True for Klipper firmware versions; other devices report their own format."""
-    return bool(git_hash(version)) or (version or "").startswith("v")
+    return bool(git_hash(version))
 
 
 def versions_match(running: str, source: str) -> bool:
@@ -49,7 +51,7 @@ def versions_match(running: str, source: str) -> bool:
 
 
 def _now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def _get(base_url: str, path: str, timeout: float) -> dict:
@@ -102,19 +104,30 @@ def load_state(path: Path | None) -> dict:
     except (OSError, ValueError) as exc:
         _LOG.warning("ignoring unreadable %s: %s", path, exc)
         return {"schema": SCHEMA, "mcus": {}}
-    state.setdefault("mcus", {})
+    if not isinstance(state, dict) or not isinstance(state.get("mcus"), dict):
+        _LOG.warning("ignoring malformed %s", path)
+        return {"schema": SCHEMA, "mcus": {}}
     return state
 
 
 def save_state(path: Path | None, state: dict) -> bool:
-    """Write the state atomically; skip when the target directory does not exist."""
+    """Write the state atomically; False when its directory is missing or unwritable."""
     if path is None or not path.parent.is_dir():
         return False
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    with os.fdopen(fd, "w") as fh:
-        json.dump(state, fh, indent=2, sort_keys=True)
-        fh.write("\n")
-    os.replace(tmp, path)
+    tmp = None
+    try:
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+        with os.fdopen(fd, "w") as fh:
+            json.dump(state, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except (OSError, TypeError, ValueError) as exc:
+        _LOG.warning("could not write %s: %s", path, exc)
+        if tmp is not None:
+            Path(tmp).unlink(missing_ok=True)
+        return False
     return True
 
 
@@ -227,7 +240,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         live = query_moonraker(args.url)
     except (OSError, ValueError, KeyError) as exc:
-        _LOG.warning("Moonraker query failed at %s: %s", args.url, exc)
+        # `state` is polled while Klippy starts, when failures are expected.
+        if args.cmd != "state":
+            _LOG.warning("Moonraker query failed at %s: %s", args.url, exc)
         return 1
     if args.cmd == "state":
         out.write(live["klippy_state"] + "\n")
@@ -237,8 +252,10 @@ def main(argv: list[str] | None = None) -> int:
             out.write(f"{section}\t{data['version']}\n")
         return 0
     state = merge_report(load_state(args.state_file), live, args.source)
-    if args.state_file and not save_state(args.state_file, state):
+    if args.state_file and not args.state_file.parent.is_dir():
         _LOG.warning("state not written, %s does not exist", args.state_file.parent)
+    else:
+        save_state(args.state_file, state)
     if args.json:
         out.write(json.dumps(state, indent=2, sort_keys=True) + "\n")
     elif not args.quiet:

@@ -37,6 +37,40 @@ def test_versions_match(running: str, source: str, expected: bool) -> None:
     assert mv.versions_match(running, source) is expected
 
 
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        (SRC, "1a2b3c4d"),
+        ("v0.0.1-412-g36534d7", "36534d7"),  # fork with its own tags
+        ("v0.12.0-rf50-5-g36534d7", "36534d7"),
+        ("1a2b3c4d", "1a2b3c4d"),  # untagged checkout: --always gives the bare hash
+        ("1a2b3c4d-dirty-20260101_120000-host", "1a2b3c4d"),
+        ("v1.2.3", ""),  # third-party firmware; Klipper's --long never omits -N-g
+        ("Probe 2.1.0", ""),
+        ("?-20260101_120000-host", ""),  # built without git or klippy/.version
+        ("", ""),
+    ],
+)
+def test_klipper_version_shape(version: str, expected: str) -> None:
+    assert mv.git_hash(version) == expected
+    assert mv.is_klipper_version(version) is bool(expected)
+
+
+@pytest.mark.parametrize("body", ["[]", '{"mcus": []}', "null"])
+def test_malformed_state_is_ignored(tmp_path: Path, body: str) -> None:
+    state_file = tmp_path / "s.json"
+    state_file.write_text(body)
+    assert mv.load_state(state_file) == {"schema": mv.SCHEMA, "mcus": {}}
+
+
+def test_failed_save_leaves_no_temp_file(tmp_path: Path) -> None:
+    state_file = tmp_path / "s.json"
+    state_file.write_text("{}")
+    assert mv.save_state(state_file, {"bad": object()}) is False
+    assert [p.name for p in tmp_path.iterdir()] == ["s.json"]
+    assert state_file.read_text() == "{}"
+
+
 def test_merge_keeps_history_and_marks_gone_mcus() -> None:
     state = {"mcus": {"mcu old": {"connected": True}}}
     mv.record_flash(state, "mcu", SRC, "dfu", "ok")
@@ -124,3 +158,50 @@ def test_shell_helpers(tmp_path: Path) -> None:
         timeout=20,
     ).stdout.split()
     assert out == ["match", "empty", f"{tmp_path}/usb-Klipper_mcu_ABC"]
+
+
+def _run_lock_script(tmp_path: Path, body: str) -> subprocess.CompletedProcess:
+    # sudo stub: runs file ops for real, echoes systemctl calls
+    script = (
+        f'. "{_SCRIPTS / "flash_mcus.sh"}"; '
+        f'KLIPPER_HOLD_DROPIN="{tmp_path}/hold.conf"; '
+        'sudo() { if [ "$1" = systemctl ]; then echo "$*"; else "$@"; fi; }; ' + body
+    )
+    return subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        env={
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "FW_BUILD_ROOT": str(tmp_path),
+        },
+    )
+
+
+def test_stale_hold_is_released_once_lock_is_free(tmp_path: Path) -> None:
+    (tmp_path / "hold.conf").write_text("[Unit]\n")
+    res = _run_lock_script(tmp_path, "take_flash_lock && recover_stale_hold")
+    assert res.returncode == 0, res.stderr
+    assert not (tmp_path / "hold.conf").exists()
+    assert res.stdout.split("\n")[:2] == [
+        "systemctl daemon-reload",
+        "systemctl start klipper",
+    ]
+
+
+def test_hold_of_a_running_flash_is_kept(tmp_path: Path) -> None:
+    (tmp_path / "hold.conf").write_text("[Unit]\n")
+    holder = subprocess.Popen(["flock", str(tmp_path / "flash.lock"), "sleep", "30"])
+    try:
+        for _ in range(100):
+            if (tmp_path / "flash.lock").exists():
+                break
+            threading.Event().wait(0.05)
+        res = _run_lock_script(tmp_path, "take_flash_lock || echo busy")
+    finally:
+        holder.kill()
+        holder.wait()
+    assert res.stdout.strip() == "busy"
+    assert (tmp_path / "hold.conf").exists()
