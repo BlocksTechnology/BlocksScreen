@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from configfile import get_configparser
+from lib.klipper_message_filter import Severity
 from lib.panels.mainWindow import MainWindow  # noqa: E402
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
 from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
@@ -350,6 +351,10 @@ if __name__ == "__main__":
             # printer.cfg; restarted once Moonraker is up and no job runs.
             main_window.request_klipper_restart()
         _seed_variables(main_window, conf_man)
+        if notice := conf_man.replaced_notice():
+            main_window.show_notifications.emit(
+                "configurator", notice, Severity.WARNING.value, False
+            )
         # Live side of the device templates: printer.cfg follows devices
         # plugged in while running (after the user's OK for templates that
         # ask for it), and Klipper is restarted to load it.

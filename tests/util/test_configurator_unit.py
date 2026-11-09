@@ -469,11 +469,26 @@ class TestSymlinkConfig:
         src_a = _write(mock_home / "repo" / "sub" / "a.cfg", "repo")
         src_b = _write(mock_home / "repo" / "b.cfg", "x")
         _write(mgr.config_dir / "sub" / "a.cfg", "local")
-        mgr._symlink_config([src_a, src_b])
+        assert mgr._symlink_config([src_a, src_b]) == [pathlib.PurePath("sub/a.cfg")]
         assert (mgr.config_dir / "sub" / "a.cfg").resolve() == src_a.resolve()
         assert (mgr.config_dir / "b.cfg").resolve() == src_b.resolve()
         backups = list(mgr.backup_dir.glob("sub/a.cfg.*"))
         assert [b.read_text() for b in backups] == ["local"]
+
+    @pytest.mark.parametrize(
+        ("replaced", "expected"),
+        [
+            ([], ""),
+            (["sub/a.cfg"], "a.cfg was reset to the RF50 default.\n"),
+            (["a.cfg", "b.cfg"], "2 config files were reset to the RF50 defaults.\n"),
+        ],
+    )
+    def test_replaced_notice(self, tmp_path, replaced, expected):
+        mgr = _make_manager(tmp_path)
+        mgr.replaced_files = [pathlib.PurePath(r) for r in replaced]
+        notice = mgr.replaced_notice()
+        assert notice.startswith(expected)
+        assert (str(mgr.backup_dir) in notice) is bool(replaced)
 
     def test_backups_never_collide(self, tmp_path, mock_home, monkeypatch):
         monkeypatch.setattr(
