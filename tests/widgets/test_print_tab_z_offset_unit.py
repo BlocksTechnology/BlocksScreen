@@ -59,13 +59,23 @@ def _tab(*, true_zero: bool) -> SimpleNamespace:
         _cancel_pending=False,
         _cancel_saw_busy=False,
         _cancel_timer=MagicMock(),
+        _cancel_settle=MagicMock(),
+        _cancel_returned=False,
+        _cancel_gen=0,
         _print_state="printing",
         _idle_state="Printing",
     )
     tab.save_config = lambda: PrintTab.save_config(tab)
     tab._maybe_finish_cancel = lambda: PrintTab._maybe_finish_cancel(tab)
     tab._clear_cancel = lambda: PrintTab._clear_cancel(tab)
+    tab._finish_cancel = lambda: PrintTab._finish_cancel(tab)
+    tab._on_cancel_reply = lambda gen, reply: PrintTab._on_cancel_reply(tab, gen, reply)
     return tab
+
+
+def _cancel_reply(tab: SimpleNamespace):
+    """The callback handle_cancel_print gave printer.print.cancel."""
+    return tab.ws.api.cancel_print.call_args.kwargs["callback"]
 
 
 def _hides(tab: SimpleNamespace) -> int:
@@ -144,3 +154,46 @@ def test_shutdown_during_cancel_clears_loadscreen():
 
     assert _hides(tab) == 1
     assert tab._cancel_pending is False
+
+
+@pytest.mark.parametrize("late_busy", [False, True])
+def test_fast_cancel_from_pause_ends_on_the_macro_reply(late_busy):
+    tab = _tab(true_zero=True)
+    tab._idle_state = "Ready"
+    PrintTab.handle_cancel_print(tab)
+    _cancel_reply(tab)({})
+    tab._cancel_settle.start.assert_called_once_with()
+    assert _hides(tab) == 0
+    if late_busy:  # the macro's Printing update landed during the settle
+        PrintTab.on_idle_timeout_update(tab, "state", "Printing")
+    PrintTab._on_cancel_settled(tab)
+    assert _hides(tab) == (0 if late_busy else 1)
+    PrintTab.on_idle_timeout_update(tab, "state", "Ready")
+    assert tab.call_load_panel.emit.call_args.args == (False, "", True)
+    assert tab._cancel_pending is False
+
+
+def test_failed_cancel_reply_releases_loadscreen():
+    tab = _tab(true_zero=True)
+    PrintTab.handle_cancel_print(tab)
+    _cancel_reply(tab)({"error": {"code": 400, "message": "Must home axis first"}})
+    assert tab.call_load_panel.emit.call_args.args == (False, "", True)
+    assert tab._cancel_pending is False
+
+
+def test_unsent_cancel_releases_loadscreen():
+    tab = _tab(true_zero=True)
+    tab.ws.api.cancel_print.return_value = False
+    PrintTab.handle_cancel_print(tab)
+    assert tab.call_load_panel.emit.call_args.args == (False, "", True)
+    assert tab._cancel_pending is False
+
+
+def test_reply_of_an_earlier_cancel_is_ignored():
+    tab = _tab(true_zero=True)
+    PrintTab.handle_cancel_print(tab)
+    stale = _cancel_reply(tab)
+    PrintTab._on_cancel_timeout(tab)
+    PrintTab.handle_cancel_print(tab)
+    stale({"error": {"code": -1, "message": "not connected"}})
+    assert tab._cancel_pending is True

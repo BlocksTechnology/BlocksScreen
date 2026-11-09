@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 # Upper bound for CANCEL_PRINT, including an MMU unload over a long bowden.
 _CANCEL_TIMEOUT_MS = 180_000
+# A Printing update can lag the cancel reply by one 250 ms status push.
+_CANCEL_SETTLE_MS = 1_000
 
 
 class PrintTab(QtWidgets.QStackedWidget):
@@ -82,6 +84,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._cancel_z_snapshot: float = 0.0
         self._cancel_pending: bool = False
         self._cancel_saw_busy: bool = False
+        self._cancel_returned: bool = False  # CANCEL_PRINT ran to its end
+        self._cancel_gen: int = 0  # drops a cancel reply that outlived its cancel
         self._print_state: str = ""
         self._idle_state: str = ""
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
@@ -89,6 +93,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._cancel_timer.setSingleShot(True)
         self._cancel_timer.setInterval(_CANCEL_TIMEOUT_MS)
         self._cancel_timer.timeout.connect(self._on_cancel_timeout)
+        self._cancel_settle = QtCore.QTimer(self)
+        self._cancel_settle.setSingleShot(True)
+        self._cancel_settle.setInterval(_CANCEL_SETTLE_MS)
+        self._cancel_settle.timeout.connect(self._on_cancel_settled)
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
@@ -313,6 +321,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             self._maybe_finish_cancel()
             return
         self._clear_cancel()
+        # Unforced: MainWindow's update and restart overlays outrank this release.
         self.call_load_panel.emit(False, "", False)
         self.on_cancel_print.emit()
         if not self._finish_print_handled and self._cancel_z_snapshot != 0:
@@ -439,23 +448,46 @@ class PrintTab(QtWidgets.QStackedWidget):
         busy = self._idle_state.lower() == "printing"
         # idle_timeout is already Ready when paused; require Printing after the cancel starts.
         self._cancel_saw_busy = self._cancel_saw_busy or busy
-        if self._print_state == "cancelled" and self._cancel_saw_busy and not busy:
-            self._clear_cancel()
-            # Forced: MainWindow drops unforced hides while printPanel is hidden.
-            self.call_load_panel.emit(False, "", True)
+        if busy:
+            return
+        # The macro's return covers a cancel whose Printing phase was never reported.
+        if self._cancel_returned or (
+            self._print_state == "cancelled" and self._cancel_saw_busy
+        ):
+            self._finish_cancel()
+
+    def _finish_cancel(self) -> None:
+        """Forget the pending cancel and release its loadscreen."""
+        self._clear_cancel()
+        # Forced: MainWindow drops unforced hides while printPanel is hidden.
+        self.call_load_panel.emit(False, "", True)
 
     def _clear_cancel(self) -> None:
-        """Forget the pending cancel and stop its safety timer."""
+        """Forget the pending cancel and stop its timers."""
         self._cancel_pending = False
         self._cancel_timer.stop()
+        self._cancel_settle.stop()
+
+    def _on_cancel_reply(self, gen: int, reply: object) -> None:
+        """Moonraker answers printer.print.cancel only once CANCEL_PRINT has returned."""
+        if gen != self._cancel_gen or not self._cancel_pending:
+            return
+        if isinstance(reply, dict) and "error" in reply:
+            self._finish_cancel()  # Klipper reports the failure itself
+            return
+        self._cancel_settle.start()
+
+    @QtCore.pyqtSlot(name="on_cancel_settled")
+    def _on_cancel_settled(self) -> None:
+        """Count the cancel as returned once a late Printing update had time to land."""
+        self._cancel_returned = True
+        self._maybe_finish_cancel()
 
     @QtCore.pyqtSlot(name="on_cancel_timeout")
     def _on_cancel_timeout(self) -> None:
-        """Drop the cancel loadscreen if the idle update that ends the cancel never came."""
-        if not self._cancel_pending:
-            return
-        self._clear_cancel()
-        self.call_load_panel.emit(False, "", True)
+        """Drop the cancel loadscreen if neither the reply nor the idle update came."""
+        if self._cancel_pending:
+            self._finish_cancel()
 
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
@@ -465,6 +497,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         if self._cancel_pending:
             # E-stop during the cancel macro: print_stats never reaches cancelled.
             self._clear_cancel()
+            # Unforced: MainWindow's update and restart overlays outrank this release.
             self.call_load_panel.emit(False, "", False)
         self.BasePopup_z_offset.reject()
         self.save_config_btn.setVisible(False)
@@ -500,10 +533,14 @@ class PrintTab(QtWidgets.QStackedWidget):
         ):
             self._cancel_z_snapshot = self._active_z_offset
         self._cancel_pending = True
+        self._cancel_returned = False
         self._cancel_saw_busy = self._idle_state.lower() == "printing"
+        self._cancel_gen += 1
         self._cancel_timer.start()
-        self.ws.api.cancel_print()
         self.call_load_panel.emit(True, "Cancelling print...\nPlease wait", False)
+        on_reply = partial(self._on_cancel_reply, self._cancel_gen)
+        if not self.ws.api.cancel_print(callback=on_reply):
+            on_reply({"error": {"code": -1, "message": "not connected"}})
 
     def change_page(self, index: int) -> None:
         """Request page change to global manager."""
