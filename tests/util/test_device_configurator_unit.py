@@ -245,6 +245,15 @@ class TestBootChanged:
         assert _boot(dirs, monkeypatch, [AMU]).boot_changed is True
         assert _boot(dirs, monkeypatch, [AMU]).boot_changed is False
 
+    def test_local_cfg_replaced(self, dirs, monkeypatch):
+        repo, config_dir, _ = dirs
+        (repo / "extra.cfg").write_text("[gcode_macro A]\ngcode: G28\n")
+        _boot(dirs, monkeypatch, [AMU])
+        (config_dir / "extra.cfg").unlink()
+        (config_dir / "extra.cfg").write_text("[gcode_macro A]\ngcode: M84\n")
+        assert _boot(dirs, monkeypatch, [AMU]).boot_changed is True
+        assert _boot(dirs, monkeypatch, [AMU]).boot_changed is False
+
 
 class TestScanDevices:
     def test_by_id_listing_fills_in_what_the_daemon_missed(self, monkeypatch):
