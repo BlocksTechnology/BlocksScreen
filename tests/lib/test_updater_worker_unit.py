@@ -13,6 +13,13 @@ _BUS = "com.blockscreen.Updater"
 _UNIT = "BlocksScreen-updater.service"
 
 
+def _limit(name: str) -> float:
+    """Read a watchdog constant lazily, like _make_worker's import."""
+    import BlocksScreen.lib.updater_worker as uw
+
+    return getattr(uw, name)
+
+
 def _make_worker():
     """Create UpdaterWorker without starting the asyncio daemon thread."""
     from BlocksScreen.lib.updater_worker import UpdaterWorker
@@ -200,14 +207,79 @@ class TestWatchdog:
         await worker._busy_watchdog()  # must not raise or emit
 
     @pytest.mark.asyncio
-    async def test_watchdog_emits_after_idle_limit(self, worker, qtbot):
+    async def test_watchdog_unanswered_daemon_is_unavailable(self, worker, qtbot):
         received = []
         worker.daemon_unavailable.connect(lambda: received.append(True))
         worker._busy_false_event.clear()
-        # Last activity far in the past → idle exceeds the limit → emit at once.
-        worker._last_activity = worker._loop.time() - 100_000
+        worker._proxy.get_busy = AsyncMock(side_effect=TimeoutError)
+        worker._schedule_reconnect = MagicMock()
+        worker._last_activity = worker._loop.time() - _limit("_BUSY_IDLE_LIMIT")
         await worker._busy_watchdog()
         assert received == [True]
+        worker._schedule_reconnect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_watchdog_idle_answer_clears_busy(self, worker, qtbot):
+        """A lost busy_changed(False) must not read as a dead daemon."""
+        unavailable, busy = [], []
+        worker.daemon_unavailable.connect(lambda: unavailable.append(True))
+        worker.busy_changed.connect(busy.append)
+        worker._busy_false_event.clear()
+        worker._last_busy = True
+        worker._proxy.get_busy = AsyncMock(return_value=False)
+        worker._last_activity = worker._loop.time() - _limit("_BUSY_IDLE_LIMIT")
+        await worker._busy_watchdog()
+        assert unavailable == [] and busy == [False]
+        assert worker._last_busy is False and worker._busy_false_event.is_set()
+
+    @pytest.mark.asyncio
+    async def test_watchdog_busy_answer_waits_without_refreshing(self, worker, qtbot):
+        """A deploy hold sends no progress; a busy answer keeps waiting but not forever."""
+        received = []
+        worker.daemon_unavailable.connect(lambda: received.append(True))
+        worker._busy_false_event.clear()
+        worker._last_activity = stale = worker._loop.time() - _limit("_BUSY_IDLE_LIMIT")
+
+        async def busy():
+            asyncio.get_running_loop().call_soon(worker._busy_false_event.set)
+            return True
+
+        worker._proxy.get_busy = AsyncMock(side_effect=busy)
+        await worker._busy_watchdog()
+        assert received == [] and worker._last_activity == stale
+
+    @pytest.mark.asyncio
+    async def test_watchdog_stuck_busy_daemon_gives_up(self, worker, qtbot):
+        received = []
+        worker.daemon_unavailable.connect(lambda: received.append(True))
+        worker._busy_false_event.clear()
+        worker._proxy.get_busy = AsyncMock(return_value=True)
+        worker._schedule_reconnect = MagicMock()
+        worker._last_activity = worker._loop.time() - _limit("_BUSY_SILENT_MAX")
+        await worker._busy_watchdog()
+        assert received == [True]
+        # The daemon answers, so reconnecting would only re-arm the same stuck state.
+        worker._schedule_reconnect.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_idle_signal_after_giving_up_clears_busy(self, worker, qtbot):
+        """The listener survives the give-up, so the daemon's eventual idle still lands."""
+        busy = []
+        worker.busy_changed.connect(busy.append)
+        worker._busy_false_event.clear()
+        worker._last_busy = True
+        worker._proxy.get_busy = AsyncMock(return_value=True)
+        worker._schedule_reconnect = MagicMock()
+        worker._last_activity = worker._loop.time() - _limit("_BUSY_SILENT_MAX")
+        await worker._busy_watchdog()
+
+        async def _gen():
+            yield False
+
+        worker._proxy.busy_changed = _gen()
+        await worker._listen_busy_changed()
+        assert busy == [False] and worker._last_busy is False
+        assert worker._busy_false_event.is_set()
 
 
 class _Msg:

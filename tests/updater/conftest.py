@@ -37,7 +37,11 @@ def mock_sdbus():
 @pytest.fixture(autouse=True)
 def printing():
     """Klipper idle unless a test sets return_value; never dials a real klippy.sock."""
-    with patch("updater.service.klipper_printing", AsyncMock(return_value=False)) as m:
+    m = AsyncMock(return_value=False)
+    with (
+        patch("updater.service.klipper_printing", m),
+        patch("updater.dbus_service.klipper_printing", m),
+    ):
         yield m
 
 
