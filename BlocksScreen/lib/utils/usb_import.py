@@ -9,6 +9,7 @@ import pathlib
 import shutil
 import tempfile
 import threading
+import time
 
 import helper_methods
 from PyQt6 import QtCore
@@ -23,7 +24,7 @@ STATE_DIR_NAME = ".usb_import"
 INDEX_NAME = "index.json"
 PART_PREFIX = ".bs-usb-"  # scopes the stale-temp sweep to our own files
 COPIES_DIR_NAME = "usb_copies"  # must not match helper_methods.USB_LINK_PREFIXES
-MAX_COPIES = 20  # oldest beyond this are deleted; an open (printing) one stays readable
+MAX_COPIES = 20  # least recently used beyond this are deleted, never the current job
 _INDEX_LOCK = threading.Lock()  # the index is written from pool threads
 _COMMIT_LOCK = threading.Lock()  # name pick + rename, so two copies never pick one name
 _SWEPT: set[pathlib.Path] = set()  # temp dirs already cleaned in this process
@@ -52,7 +53,7 @@ def _source_key(src: pathlib.Path, st: os.stat_result) -> str:
 
 
 def _load_index(gcode_root: pathlib.Path) -> dict:
-    """Source key -> {file, size, mtime_ns} of earlier imports; empty if unreadable."""
+    """Source key -> {file, size, mtime_ns, used_ns} of imports; empty if unreadable."""
     try:
         data = json.loads((_state_dir(gcode_root) / INDEX_NAME).read_text())
     except (OSError, ValueError):
@@ -77,7 +78,7 @@ def _indexed_copy(gcode_root: pathlib.Path, key: str) -> pathlib.Path | None:
 
 
 def remember_import(gcode_root: pathlib.Path, key: str, local_name: str) -> None:
-    """Record *local_name* as the copy for *key*, once Moonraker has processed it."""
+    """Record *local_name* as the copy for *key* and mark it used, once processed."""
     # Moonraker and Happy Hare rewrite new gcodes, so the copy is only final now.
     root = gcode_root.resolve()
     st = (root / local_name).stat()
@@ -91,6 +92,7 @@ def remember_import(gcode_root: pathlib.Path, key: str, local_name: str) -> None
             "file": local_name,
             "size": st.st_size,
             "mtime_ns": st.st_mtime_ns,
+            "used_ns": time.time_ns(),
         }
         state = _state_dir(root)
         state.mkdir(exist_ok=True)
@@ -147,18 +149,34 @@ def ensure_copies_dir(gcode_root: pathlib.Path) -> None:
         logger.warning("Could not create %s: %s", COPIES_DIR_NAME, e)
 
 
-def _prune_copies(copies_dir: pathlib.Path, keep: int) -> None:
-    """Delete the oldest gcodes in *copies_dir* until at most *keep* remain."""
-    aged: list[tuple[int, pathlib.Path]] = []
-    for f in copies_dir.glob(f"*{ALLOWED_EXT}"):
+def _prune_copies(root: pathlib.Path, keep: int, job_file: str) -> None:
+    """Delete the least recently used copies until at most *keep* remain."""
+    # mtime is only the copy time; a reprinted copy's last use lives in the index.
+    with _INDEX_LOCK:
+        used = {
+            v["file"]: v["used_ns"]
+            for v in _load_index(root).values()
+            if isinstance(v, dict)
+            and isinstance(v.get("file"), str)
+            and isinstance(v.get("used_ns"), int)
+        }
+    aged: list[tuple[int, str]] = []
+    for f in (root / COPIES_DIR_NAME).glob(f"*{ALLOWED_EXT}"):
+        name = f.relative_to(root).as_posix()
         try:
             if f.is_file():
-                aged.append((f.stat().st_mtime_ns, f))
+                aged.append((max(f.stat().st_mtime_ns, used.get(name, 0)), name))
         except OSError:
             continue  # deleted meanwhile
     aged.sort()
-    for _, old in aged[: max(len(aged) - keep, 0)]:
-        old.unlink(missing_ok=True)
+    excess = len(aged) - keep
+    for _, name in aged:
+        if excess <= 0:
+            break
+        if name == job_file:
+            continue  # Moonraker would drop the running job's metadata and history file
+        (root / name).unlink(missing_ok=True)
+        excess -= 1
 
 
 def _fsync(path: pathlib.Path) -> None:
@@ -216,7 +234,9 @@ def _copy_atomic(
     return final
 
 
-def import_usb_gcode(gcode_root: pathlib.Path, filename: str) -> tuple[str, bool, str]:
+def import_usb_gcode(
+    gcode_root: pathlib.Path, filename: str, job_file: str = ""
+) -> tuple[str, bool, str]:
     """Copy USB *filename* into the copies dir; returns (gcodes-relative path, reused, key)."""
     root = gcode_root.resolve()
     rel = filename.strip("/")
@@ -237,8 +257,15 @@ def import_usb_gcode(gcode_root: pathlib.Path, filename: str) -> tuple[str, bool
         reused = final is not None
         if final is None:
             copies = root / COPIES_DIR_NAME
-            copies.mkdir(exist_ok=True)
-            _prune_copies(copies, MAX_COPIES - 1)
+            try:
+                copies.mkdir()
+                logger.warning(
+                    "Recreated %s, its new copy waits for the settle check",
+                    COPIES_DIR_NAME,
+                )
+            except FileExistsError:
+                pass
+            _prune_copies(root, MAX_COPIES - 1, job_file)
             final = _copy_atomic(src, src_st, copies, _tmp_dir(root, copies))
     except OSError as e:
         raise UsbImportError(
@@ -265,6 +292,7 @@ class UsbImportTask(QtCore.QRunnable):
         token: int,
         gcode_root: pathlib.Path,
         filename: str,
+        job_file: str = "",
     ) -> None:
         super().__init__()
         # Pool-owned and QObject-free, so no cross-thread delete.
@@ -273,6 +301,7 @@ class UsbImportTask(QtCore.QRunnable):
         self._token = token
         self._gcode_root = gcode_root
         self._filename = filename
+        self._job_file = job_file
 
     def _report(self, local: str, key: str, reused: bool, error: str) -> None:
         """Emit done; the receiver drops it if the token is stale."""
@@ -287,7 +316,9 @@ class UsbImportTask(QtCore.QRunnable):
     def run(self) -> None:
         """Copy, then report the local copy or the error text."""
         try:
-            local, reused, key = import_usb_gcode(self._gcode_root, self._filename)
+            local, reused, key = import_usb_gcode(
+                self._gcode_root, self._filename, self._job_file
+            )
         except UsbImportError as e:
             logger.warning("USB import of %s failed: %s", self._filename, e)
             self._report("", "", False, str(e))

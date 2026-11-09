@@ -263,24 +263,49 @@ def test_dir_sync_error_keeps_committed_copy(layout, monkeypatch, caplog) -> Non
     assert "Could not sync" in caplog.text
 
 
-def test_oldest_copies_are_pruned(layout, monkeypatch) -> None:
-    gcodes, drive, _ = layout
-    monkeypatch.setattr(usb_import, "MAX_COPIES", 3)
+def _aged_copies(gcodes: pathlib.Path, names: tuple[str, ...]) -> pathlib.Path:
+    """Copies dir holding *names*, oldest mtime first."""
     copies = gcodes / COPIES
     copies.mkdir()
-    for age, n in enumerate(("old", "mid", "new")):
+    for age, n in enumerate(names):
         f = copies / f"{n}.gcode"
         f.write_bytes(b"x")
         os.utime(f, ns=(age * 10**9, age * 10**9))
     (copies / "notes.txt").write_bytes(b"x")  # never ours to delete
+    return copies
+
+
+@pytest.mark.parametrize(
+    ("job_file", "survivors"),
+    [("", ["mid", "new"]), (f"{COPIES}/old.gcode", ["new", "old"])],
+)
+def test_oldest_copies_are_pruned(layout, monkeypatch, job_file, survivors) -> None:
+    gcodes, drive, _ = layout
+    monkeypatch.setattr(usb_import, "MAX_COPIES", 3)
+    copies = _aged_copies(gcodes, ("old", "mid", "new"))
+    (drive / "cube.gcode").write_bytes(b"G28\n")
+    import_usb_gcode(gcodes, "USB-STICK/cube.gcode", job_file)
+    left = sorted(p.stem for p in copies.glob("*.gcode"))
+    assert left == sorted(["cube", *survivors])
+    assert (copies / "notes.txt").exists()
+
+
+def test_reprinted_copy_outlives_newer_copies(layout, monkeypatch) -> None:
+    gcodes, drive, _ = layout
+    monkeypatch.setattr(usb_import, "MAX_COPIES", 3)
+    copies = _aged_copies(gcodes, ("old", "mid", "new"))
+    remember_import(gcodes, "k", f"{COPIES}/old.gcode")  # printed again just now
     (drive / "cube.gcode").write_bytes(b"G28\n")
     import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert sorted(p.name for p in copies.iterdir()) == [
-        "cube.gcode",
-        "mid.gcode",
-        "new.gcode",
-        "notes.txt",
-    ]
+    assert sorted(p.stem for p in copies.glob("*.gcode")) == ["cube", "new", "old"]
+
+
+def test_deleted_copies_dir_is_recreated(layout, caplog) -> None:
+    gcodes, drive, _ = layout
+    (drive / "cube.gcode").write_bytes(b"G28\n")
+    name, _, _ = import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
+    assert name == f"{COPIES}/cube.gcode"
+    assert f"Recreated {COPIES}" in caplog.text
 
 
 def test_ensure_copies_dir(tmp_path, caplog) -> None:

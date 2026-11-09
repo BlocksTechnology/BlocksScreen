@@ -106,6 +106,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._usb_local: str = ""
         self._usb_created: set[str] = set()
         self._usb_from_console: bool = False  # started by another client via Klipper
+        self._job_file: str = ""  # print_stats.filename, never pruned from the copies
         # Moonraker announces a new gcode only once its pre-processing is done.
         self._usb_settle_timer = QtCore.QTimer(self)
         self._usb_settle_timer.setSingleShot(True)
@@ -330,7 +331,9 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """Unblock tabs if on standby."""
+        """Track the job file; unblock tabs if on standby."""
+        if field == "filename" and isinstance(value, str):
+            self._job_file = value
         if isinstance(value, str) and "state" in field and value == "standby":
             if not self._usb_pending:  # the USB copy owns the loadscreen until it ends
                 self.call_load_panel.emit(False, "", False)
@@ -453,7 +456,11 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._usb_key = self._usb_local = ""
         self._usb_created.clear()
         task = UsbImportTask(
-            self._usb_signals, self._usb_token, pathlib.Path(self.gcode_path), file
+            self._usb_signals,
+            self._usb_token,
+            pathlib.Path(self.gcode_path),
+            file,
+            self._job_file,
         )
         self.call_load_panel.emit(True, "Copying file from USB...\nPlease wait", False)
         QtCore.QThreadPool.globalInstance().start(task)

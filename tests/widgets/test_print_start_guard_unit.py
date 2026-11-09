@@ -349,3 +349,21 @@ class TestUsbImportDone:
         tab._cancel_z_snapshot = 0.0
         PrintTab.on_print_stats_update(tab, "state", "standby")
         tab.call_load_panel.emit.assert_not_called()
+
+
+def test_import_spares_the_current_job_file(monkeypatch) -> None:
+    module = PrintTab._start_usb_import.__globals__  # the evicted module's namespace
+    task_cls = MagicMock()
+    monkeypatch.setitem(module, "UsbImportTask", task_cls)
+    monkeypatch.setattr(module["QtCore"].QThreadPool, "globalInstance", MagicMock())
+    tab = SimpleNamespace(
+        _usb_token=0,
+        _usb_created=set(),
+        _usb_signals=object(),
+        _job_file="",
+        gcode_path="/gcodes",
+        call_load_panel=MagicMock(),
+    )
+    PrintTab.on_print_stats_update(tab, "filename", "usb_copies/a.gcode")
+    PrintTab._start_usb_import(tab, "USB-STICK/b.gcode")
+    assert task_cls.call_args.args[-1] == "usb_copies/a.gcode"
