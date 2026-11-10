@@ -35,7 +35,7 @@ def layout(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     (gcodes / "USB-STICK").symlink_to(drive)
     mounts = {drive.resolve()}
     monkeypatch.setattr(
-        usb_import.os.path, "ismount", lambda p: pathlib.Path(p).resolve() in mounts
+        pathlib.Path, "is_mount", lambda p: pathlib.Path(p).resolve() in mounts
     )
     return gcodes, drive, mounts
 

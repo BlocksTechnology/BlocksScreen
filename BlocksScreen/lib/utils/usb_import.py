@@ -122,7 +122,7 @@ def _tmp_dir(gcode_root: pathlib.Path, dest_dir: pathlib.Path) -> pathlib.Path:
     tmp_dir = _state_dir(gcode_root)
     try:
         tmp_dir.mkdir(exist_ok=True)
-        if os.stat(tmp_dir).st_dev == os.stat(gcode_root).st_dev:
+        if tmp_dir.stat().st_dev == gcode_root.stat().st_dev:
             return tmp_dir  # same fs keeps os.replace atomic
     except OSError:
         pass
@@ -248,7 +248,7 @@ def import_usb_gcode(
         raise UsbImportError("Invalid file path")
     if src.suffix.lower() != ALLOWED_EXT:
         raise UsbImportError("Unsupported file type")
-    if not os.path.ismount(usb_root) or not src.is_file():
+    if not usb_root.is_mount() or not src.is_file():
         raise UsbImportError("File not found, was the USB drive removed?")
     try:
         src_st = src.stat()
