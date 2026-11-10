@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 import sdbus
 from PyQt6 import QtCore
+from updater.models import DEPLOY_HOLD_CAP_S
 
 if TYPE_CHECKING:
     from updater.dbus_service import UpdaterInterface
@@ -32,6 +33,8 @@ _RECONNECT_DELAYS = (5.0, 15.0, 30.0, 60.0)
 
 # Max silence from a busy daemon; progress signals refresh the deadline.
 _BUSY_IDLE_LIMIT = 360.0
+# Silence a daemon still answering busy may keep: a full deploy hold plus the idle limit.
+_BUSY_SILENT_MAX = DEPLOY_HOLD_CAP_S + _BUSY_IDLE_LIMIT
 
 _DAEMON_BUS_NAME = "com.blockscreen.Updater"
 _UPDATER_UNIT = "BlocksScreen-updater.service"
@@ -616,6 +619,16 @@ class UpdaterWorker(QtCore.QObject):
             self._provisioning_signals += 1
             self.provisioning_changed.emit(provisioning)
 
+    async def _probe_busy(self) -> bool | None:
+        """Ask the daemon whether it is busy; None when it does not answer."""
+        if self._proxy is None:
+            return None
+        try:
+            async with asyncio.timeout(5):
+                return bool(await self._proxy.get_busy())
+        except (sdbus.SdBusBaseError, TimeoutError):
+            return None
+
     async def _busy_watchdog(self) -> None:
         """Emit daemon_unavailable after _BUSY_IDLE_LIMIT s of no daemon progress."""
         if self._busy_false_event is None:
@@ -627,13 +640,26 @@ class UpdaterWorker(QtCore.QObject):
             idle = self._loop.time() - self._last_activity
             remaining = _BUSY_IDLE_LIMIT - idle
             if remaining <= 0:
-                _log.error(
-                    "busy watchdog: no daemon activity for %.0fs - daemon unavailable",
-                    idle,
-                )
-                self.daemon_unavailable.emit()
-                self._schedule_reconnect()
-                return
+                busy = await self._probe_busy()
+                if busy is False:
+                    _log.warning("busy watchdog: daemon idle, busy_changed(False) lost")
+                    self._last_busy = False
+                    self._busy_false_event.set()
+                    self.busy_changed.emit(False)
+                    return
+                if busy and idle < _BUSY_SILENT_MAX:
+                    # A deploy hold sends no progress; re-probe without refreshing the deadline.
+                    remaining = min(_BUSY_IDLE_LIMIT, _BUSY_SILENT_MAX - idle)
+                else:
+                    _log.error(
+                        "busy watchdog: no daemon progress for %.0fs (answering=%s)",
+                        idle,
+                        busy is not None,
+                    )
+                    self.daemon_unavailable.emit()
+                    if busy is None:
+                        self._schedule_reconnect()
+                    return
             try:
                 async with asyncio.timeout(remaining):
                     await self._busy_false_event.wait()

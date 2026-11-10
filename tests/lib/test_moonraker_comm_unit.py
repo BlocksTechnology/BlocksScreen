@@ -109,6 +109,15 @@ class TestServerInfoComponents:
         assert states == ["shutdown", "startup", "ready"]
         update.assert_called_once()
 
+    def test_state_signal_precedes_connected_tick(self, ws):
+        order = []
+        ws.klippy_state_signal.connect(lambda s: order.append(("state", s)))
+        ws.klippy_connected_signal.connect(lambda c: order.append(("tick", c)))
+        self._reply(
+            ws, {"result": {"klippy_state": "shutdown", "klippy_connected": True}}
+        )
+        assert order == [("state", "shutdown"), ("tick", True)]
+
     def test_klippy_restart_reemits_unchanged_state(self, ws):
         # A failed FIRMWARE_RESTART goes shutdown to shutdown faster than the poll
         states = []
