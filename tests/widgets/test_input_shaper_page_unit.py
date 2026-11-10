@@ -251,3 +251,14 @@ def test_sweep_progress_reaches_overlay(page):
     _start(p, sent, "SHAPER_CALIBRATE AXIS=Y")
     p.handle_gcode_response(["// Testing frequency 40 Hz"])
     assert loads[-1][1] == "Measuring resonances\nY axis: 40 Hz"
+
+
+def test_klipper_busy_blocks_new_run(page):
+    # After a websocket drop the replies are gone but Klipper may still sweep
+    p, _loads, sent, fails = page
+    p.klippy_busy = lambda: True
+    p.handle_is("SHAPER_CALIBRATE")
+    assert sent == {}
+    assert "still running" in fails[-1]
+    p.klippy_busy = lambda: False
+    _start(p, sent)

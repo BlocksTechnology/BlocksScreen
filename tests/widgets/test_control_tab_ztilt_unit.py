@@ -223,3 +223,45 @@ def test_forgotten_reply_does_not_clear_a_newer_send(qtbot):
     assert run.busy
     sent["B"]("ok")
     assert not run.busy
+
+
+def _record_hides(t) -> list[tuple[bool, bool]]:
+    hides: list[tuple[bool, bool]] = []
+    t.call_load_panel = SimpleNamespace(emit=lambda s, _m, f: hides.append((s, f)))
+    return hides
+
+
+def test_finished_run_forces_the_overlay_closed(tab):
+    t, _loads, callbacks = tab
+    hides = _record_hides(t)
+    _home(callbacks)
+    callbacks["Z_TILT_ADJUST"]("ok")
+    callbacks["G28 Z"]("ok")
+    assert hides[-1] == (False, True)
+
+
+def test_disconnect_close_stays_unforced(tab):
+    # Forcing it would also hide MainWindow's Klipper restart overlay
+    t, _loads, callbacks = tab
+    hides = _record_hides(t)
+    callbacks["G28\nM400"]({"error": {"code": 503, "message": "Klippy Disconnected"}})
+    assert hides[-1] == (False, False)
+
+
+def test_lost_link_blocks_retap_while_klipper_busy(tab):
+    t, _loads, callbacks = tab
+    klipper = {"busy": True}
+    t._ztilt.klippy_busy = lambda: klipper["busy"]
+    _home(callbacks)
+    gone = {"error": {"code": -1, "message": "disconnected"}}
+    callbacks["Z_TILT_ADJUST"](gone)
+    callbacks["G28 Z"](gone)
+    callbacks.clear()
+
+    ControlTab.handle_ztilt(t)
+    assert callbacks == {}
+    assert "still running" in t.ztilt_result_screen.set_message.call_args.args[0]
+
+    klipper["busy"] = False
+    ControlTab.handle_ztilt(t)
+    assert list(callbacks) == ["G28\nM400"]

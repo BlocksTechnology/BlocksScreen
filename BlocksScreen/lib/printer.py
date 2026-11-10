@@ -587,9 +587,10 @@ class Printer(QtCore.QObject):
     ) -> None:
         if "state" in value:
             self.idle_timeout_update[str, str].emit("state", value["state"])
-            if "printing" in value["state"]:
+            # Klipper reports "Printing" while any gcode runs, not only during a print
+            if value["state"].lower() == "printing":
                 self.printer_busy = True
-            elif self.printing_state != "printing" and value["state"] != "printing":
+            elif self.printing_state != "printing":
                 # It's also busy if the printer is printing or paused
                 self.printer_busy = False
         if "printing_time" in value:

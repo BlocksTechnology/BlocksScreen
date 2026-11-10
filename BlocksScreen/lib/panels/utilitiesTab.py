@@ -122,6 +122,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.is_popup.confirm_button.clicked.connect(self.run_input_shaper)
         self.is_page.run_gcode_signal.connect(self.run_gcode_signal)
         self.is_page.gcode_runner = self.ws.api.run_gcode
+        self.is_page.klippy_busy = lambda: self.printer.printer_busy
         self.ws.klippy_state_signal.connect(self.is_page.on_klippy_state)
         self.is_page.call_load_panel.connect(self.call_load_panel)
         self.printer.gcode_response.connect(self.is_page.handle_gcode_response)

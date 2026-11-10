@@ -30,11 +30,12 @@ class GcodeRun(QtCore.QObject):
         super().__init__(parent)
         # MoonAPI.run_gcode(script, callback=...); False means the request was not sent
         self.runner: Callable[..., bool] | None = None
+        # Klipper's own busy state; a websocket drop answers -1 while it keeps running
+        self.klippy_busy: Callable[[], bool] | None = None
         self._id = 0
         self._active = False
-        self._pending: set[object] = (
-            set()
-        )  # one token per sent script awaiting its reply
+        # One token per sent script awaiting its reply
+        self._pending: set[object] = set()
         self._watchdog = QtCore.QTimer(self)
         self._watchdog.setSingleShot(True)
         self._watchdog.setInterval(timeout_ms)
@@ -47,8 +48,10 @@ class GcodeRun(QtCore.QObject):
 
     @property
     def busy(self) -> bool:
-        """True while active or while Klipper still owes a reply to a sent script."""
-        return self._active or bool(self._pending)
+        """True while active, while a reply is owed, or while Klipper reports busy."""
+        if self._active or self._pending:
+            return True
+        return self.klippy_busy is not None and self.klippy_busy()
 
     def start(self) -> None:
         """Begin a run and arm the watchdog."""

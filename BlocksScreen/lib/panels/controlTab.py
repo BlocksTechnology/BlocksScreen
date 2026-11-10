@@ -73,6 +73,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         # Silence limit; every probing pass reports well within it
         self._ztilt = GcodeRun(180_000, self)
         self._ztilt.runner = self.ws.api.run_gcode
+        self._ztilt.klippy_busy = lambda: self.printer.printer_busy
         self._ztilt.timed_out.connect(self._on_ztilt_timeout)
         self.ztilt_result_screen = BasePopup(self, False, False)
         self.ztilt_result_screen_timer = QtCore.QTimer()
@@ -318,10 +319,10 @@ class ControlTab(QtWidgets.QStackedWidget):
     def handle_ztilt(self) -> None:
         """Home, run Z_TILT_ADJUST, home Z again; the overlay stays up until the end."""
         if self._ztilt.busy:
-            # After a timeout Klipper may still run the last tilt; a new one would queue
+            # A lost link or timeout can leave Klipper busy; a new run would queue
             if not self._ztilt.active:
                 self._ztilt_report(
-                    "The last calibration is still running.\n"
+                    "The printer is still running a command.\n"
                     "Wait for it to finish, then try again."
                 )
             return
@@ -329,6 +330,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._ztilt.start()
         self.call_load_panel.emit(True, "Calibrating Z-Tilt\nHoming the printer", False)
         if not self._ztilt.send("G28\nM400", self._on_ztilt_first_home):
+            _logger.warning("Z-Tilt: request not sent, Moonraker unreachable")
             self._ztilt_stop()
 
     def _home_keeps_tilt(self) -> bool:
@@ -342,10 +344,10 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.ztilt_result_screen.show()
         self.ztilt_result_screen_timer.start()
 
-    def _ztilt_stop(self, message: str = "") -> None:
+    def _ztilt_stop(self, message: str = "", force: bool = False) -> None:
         """End the Z-Tilt run, closing the overlay and showing ``message`` if any."""
         self._ztilt.stop()
-        self.call_load_panel.emit(False, "", False)
+        self.call_load_panel.emit(False, "", force)
         if message:
             self._ztilt_report(message)
 
@@ -410,7 +412,8 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
         else:
             message = "Z-Tilt calibration complete."
-        self._ztilt_stop(message)
+        # Forced: MainWindow drops unforced hides while its restart guards are set
+        self._ztilt_stop(message, force=True)
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
     def on_klippy_status(self, state: str):

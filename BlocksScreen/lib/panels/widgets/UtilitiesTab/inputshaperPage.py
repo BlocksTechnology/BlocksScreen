@@ -218,6 +218,15 @@ class InputShaperPage(QtWidgets.QStackedWidget):
     def gcode_runner(self, runner: Callable[..., bool] | None) -> None:
         self._run.runner = runner
 
+    @property
+    def klippy_busy(self) -> Callable[[], bool] | None:
+        """True while Klipper reports any gcode running; blocks a run that would queue."""
+        return self._run.klippy_busy
+
+    @klippy_busy.setter
+    def klippy_busy(self, check: Callable[[], bool] | None) -> None:
+        self._run.klippy_busy = check
+
     @QtCore.pyqtSlot(str, name="on-klippy-state")
     def on_klippy_state(self, state: str) -> None:
         """Close the save overlay once Klipper is back from the SAVE_CONFIG restart."""
@@ -347,10 +356,10 @@ class InputShaperPage(QtWidgets.QStackedWidget):
                 ``SHAPER_CALIBRATE AXIS=...`` command to send as is.
         """
         if self._run.busy:
-            # After a timeout Klipper may still run the last sweep; a new one would queue
+            # A lost link or timeout can leave Klipper busy; a new run would queue
             if not self._run.active:
                 self.run_failed.emit(
-                    "The last calibration is still running.\n"
+                    "The printer is still running a command.\n"
                     "Wait for it to finish, then try again."
                 )
             return
