@@ -4,6 +4,7 @@ import logging
 import socket
 import threading
 import typing
+from collections.abc import Callable
 
 import websocket
 from events import (
@@ -497,12 +498,13 @@ class MoonAPI(QtCore.QObject):
         return self._ws.send_request(method="printer.query_endstops.status")
 
     @QtCore.pyqtSlot(str, name="run_gcode")
-    def run_gcode(self, gcode: str):
-        """Run Gcode"""
+    @QtCore.pyqtSlot(str, "PyQt_PyObject", name="run_gcode")
+    def run_gcode(self, gcode: str, callback: Callable[[object], None] | None = None):
+        """Run Gcode; ``callback`` gets the reply once the script has finished"""
         if isinstance(gcode, str) is False or gcode is None:
             return False
         return self._ws.send_request(
-            method="printer.gcode.script", params={"script": gcode}
+            method="printer.gcode.script", params={"script": gcode}, callback=callback
         )
 
     def gcode_help(self):
