@@ -12,8 +12,10 @@ from pathlib import Path
 
 import sdbus
 
+from updater.executor import klipper_printing
 from updater.locking import process_lock
-from updater.models import ComponentStatus
+from updater.models import DEPLOY_HOLD_CAP_S as _DEPLOY_HOLD_CAP_S
+from updater.models import PRINTER_BUSY, ComponentStatus
 from updater.service import UpdateService
 
 _log = logging.getLogger(__name__)
@@ -23,8 +25,6 @@ _RECONCILE_RETRY_S = 5.0
 _BOOT_DELAY_S = 3.0
 _SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
 _DEPLOY_POLL_S = 1.0
-# oneshot has no start timeout: bounds a hung install-updater (first DeviceDiscovery build takes minutes).
-_DEPLOY_HOLD_CAP_S = 900.0
 
 
 class DbusProgressCallback:
@@ -406,6 +406,12 @@ class UpdaterInterface(
                 if not acquired:
                     _log.warning("%s: a CLI run holds the lock; skipping", label)
                     self.error.emit((target, "another update is running"))
+                    return False
+                # The UI checks too, but a print can start while its confirm popup is open.
+                # Fail closed: a Klippy too loaded to answer may be mid-print.
+                if await klipper_printing(unanswered=True):
+                    _log.warning("%s: printer busy or not answering; skipping", label)
+                    self.error.emit((target, PRINTER_BUSY))
                     return False
                 ran = True
                 await self._svc.reconcile_if_pending()

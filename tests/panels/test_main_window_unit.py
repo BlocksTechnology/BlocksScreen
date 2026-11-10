@@ -300,3 +300,19 @@ def test_real_confirmation_popup_opens_and_accepts(qtbot, monkeypatch) -> None:
     popup.accept()
     host._on_device_config_accept.assert_called_once()
     host._on_device_config_decline.assert_not_called()
+
+
+def test_cancel_page_leaves_loadscreen_alone() -> None:
+    # The page doubles as the reprint prompt; an end-of-print macro may still own the loadscreen.
+    win = SimpleNamespace(
+        _klippy_ready=True,
+        cancelpage=MagicMock(),
+        loadscreen=MagicMock(),
+        width=lambda: 800,
+        height=lambda: 480,
+    )
+
+    MainWindow._show_cancel_page_if_operational(win)
+
+    win.loadscreen.hide.assert_not_called()
+    win.cancelpage.show.assert_called_once()

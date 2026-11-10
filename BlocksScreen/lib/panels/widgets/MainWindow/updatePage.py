@@ -13,7 +13,7 @@ from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
-from updater.models import ComponentStatus
+from updater.models import PRINTER_BUSY, ComponentStatus
 
 _log = logging.getLogger(__name__)
 _DESCRIBE_SUFFIX = re.compile(r"-(\d+)-g[0-9a-f]+$")
@@ -523,8 +523,10 @@ class UpdatePage(QtWidgets.QWidget):
 
     def handle_error_occurred(self, name: str, reason: str) -> None:
         """Show a toast with the error reason and prompt the user to refresh."""
-        error_msg = f"{name} update failed: {reason}. Tap refresh to retry."
-        self._show_toast(error_msg)
+        if reason == PRINTER_BUSY:
+            self._show_toast("Printer is busy or not responding. Try again later.")
+            return
+        self._show_toast(f"{name} update failed: {reason}. Tap refresh to retry.")
 
     def handle_update_rejected(self) -> None:
         """Daemon refused the request (already busy): drop the optimistic overlay and toast."""

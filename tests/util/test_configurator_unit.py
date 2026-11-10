@@ -33,7 +33,6 @@ from BlocksScreen.tools.configuration_manager.configurator import (  # noqa: E40
     ensure_dir,
     get_file_checksum,
     is_git_repo,
-    resolve_symlink,
 )
 
 
@@ -179,30 +178,6 @@ class TestCheckBrokenSymlinks:
 
     def test_not_exist(self, tmp_path):
         assert check_broken_symlinks(tmp_path / "ghost") == []
-
-
-class TestResolveSymlink:
-    def test_symlink_found(self, tmp_path):
-        real = _write(tmp_path / "source.cfg", "x")
-        link = tmp_path / "configs" / "source.cfg"
-        link.parent.mkdir()
-        link.symlink_to(real)
-        assert resolve_symlink(real, {link.resolve().as_posix()}) is True
-
-    def test_symlink_not_found(self, tmp_path):
-        real = _write(tmp_path / "source.cfg", "x")
-        other = _write(tmp_path / "other.cfg", "x")
-        assert resolve_symlink(real, {other.resolve().as_posix()}) is False
-
-    def test_empty_set(self, tmp_path):
-        assert resolve_symlink(_write(tmp_path / "a.cfg", "x"), set()) is False
-
-    def test_symlinked_file_resolves_to_its_target(self, tmp_path):
-        real = _write(tmp_path / "original.cfg", "content")
-        deep = tmp_path / "sub" / "original.cfg"
-        deep.parent.mkdir()
-        deep.symlink_to(real)
-        assert resolve_symlink(deep, {real.resolve().as_posix()}) is True
 
 
 class TestGetFileChecksum:
@@ -370,6 +345,21 @@ class TestGetMissingSymlinks:
         result = mgr._get_missing_symlinks(cfg_dir, repo)
         assert len(result) == 2
 
+    def test_local_file_counts_as_missing_despite_other_link(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(mgr.repo / "a.cfg", "repo")
+        (mgr.config_dir / "alias.cfg").symlink_to(src)
+        _write(mgr.config_dir / "a.cfg", "local")
+        mgr.cpy_files = []
+        assert mgr._get_missing_symlinks(mgr.config_dir, mgr.repo) == [src]
+
+    def test_folder_link_into_repo_counts_as_linked(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        _write(mgr.repo / "sub" / "a.cfg", "repo")
+        (mgr.config_dir / "sub").symlink_to(mgr.repo / "sub", target_is_directory=True)
+        mgr.cpy_files = []
+        assert mgr._get_missing_symlinks(mgr.config_dir, mgr.repo) == []
+
     def test_excludes_copy_files(self, tmp_path):
         mgr = _make_manager(tmp_path)
         repo = mgr.repo
@@ -445,6 +435,135 @@ class TestSymlinkConfig:
         target = mgr.config_dir / "sub" / "deep.cfg"
         assert target.is_symlink()
         assert target.resolve() == src.resolve()
+
+    def test_local_file_replaced_and_backed_up(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src_a = _write(mock_home / "repo" / "sub" / "a.cfg", "repo")
+        src_b = _write(mock_home / "repo" / "b.cfg", "x")
+        _write(mgr.config_dir / "sub" / "a.cfg", "local")
+        assert mgr._symlink_config([src_a, src_b]) == [pathlib.PurePath("sub/a.cfg")]
+        assert (mgr.config_dir / "sub" / "a.cfg").resolve() == src_a.resolve()
+        assert (mgr.config_dir / "b.cfg").resolve() == src_b.resolve()
+        backups = list(mgr.backup_dir.glob("sub/a.cfg.*"))
+        assert [b.read_text() for b in backups] == ["local"]
+
+    @pytest.mark.parametrize(
+        ("replaced", "expected"),
+        [
+            ([], ""),
+            (["sub/a.cfg"], "a.cfg was reset to the RF50 default.\n"),
+            (["a.cfg", "b.cfg"], "2 config files were reset to the RF50 defaults.\n"),
+        ],
+    )
+    def test_replaced_notice(self, tmp_path, replaced, expected):
+        mgr = _make_manager(tmp_path)
+        mgr.replaced_files = [pathlib.PurePath(r) for r in replaced]
+        notice = mgr.replaced_notice()
+        assert notice.startswith(expected)
+        assert (str(mgr.backup_dir) in notice) is bool(replaced)
+
+    def test_backups_never_collide(self, tmp_path, mock_home, monkeypatch):
+        monkeypatch.setattr(
+            "BlocksScreen.tools.configuration_manager.configurator._timestamp",
+            lambda: "T",
+        )
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        srcs = [
+            _write(mock_home / "repo" / "sub" / "a.cfg", "repo"),
+            _write(mock_home / "repo" / "sub_a.cfg", "repo"),
+        ]
+        _write(mgr.config_dir / "sub" / "a.cfg", "nested")
+        _write(mgr.config_dir / "sub_a.cfg", "flat")
+        mgr._symlink_config(srcs)
+        first = mgr._backup_file(srcs[1], pathlib.PurePath("sub_a.cfg"))
+        assert (mgr.backup_dir / "sub" / "a.cfg.T").read_text() == "nested"
+        assert (mgr.backup_dir / "sub_a.cfg.T").read_text() == "flat"
+        assert first.name == "sub_a.cfg.T.1"
+
+    def test_failed_link_keeps_local_file(self, tmp_path, mock_home, monkeypatch):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        src = _write(mock_home / "repo" / "a.cfg", "repo")
+        local = _write(mgr.config_dir / "a.cfg", "local")
+
+        def _boom(self, target):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(pathlib.Path, "replace", _boom)
+        mgr._symlink_config([src])
+        assert not local.is_symlink() and local.read_text() == "local"
+        assert not list(mgr.config_dir.glob(".*.bs-link"))
+
+    def test_link_to_other_file_repointed(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src = _write(mock_home / "repo" / "a.cfg", "repo")
+        old = _write(tmp_path / "old-clone" / "a.cfg", "old")
+        (mgr.config_dir / "a.cfg").symlink_to(old)
+        mgr._symlink_config([src])
+        assert (mgr.config_dir / "a.cfg").resolve() == src.resolve()
+        assert old.read_text() == "old"
+        (backup,) = mgr.backup_dir.glob("a.cfg.*")
+        assert backup.is_symlink() and backup.readlink() == old
+
+    @pytest.mark.parametrize("as_link", [False, True])
+    def test_identical_content_relinked_silently(self, tmp_path, mock_home, as_link):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src = _write(mock_home / "repo" / "a.cfg", "repo")
+        if as_link:
+            old = _write(tmp_path / "old-clone" / "a.cfg", "repo")
+            (mgr.config_dir / "a.cfg").symlink_to(old)
+        else:
+            _write(mgr.config_dir / "a.cfg", "repo")
+        assert mgr._symlink_config([src]) == []
+        assert (mgr.config_dir / "a.cfg").resolve() == src.resolve()
+        assert not mgr.backup_dir.exists() or not any(mgr.backup_dir.iterdir())
+
+    def test_folder_link_outside_repo_skipped(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src = _write(mock_home / "repo" / "sub" / "a.cfg", "repo")
+        elsewhere = _write(tmp_path / "elsewhere" / "a.cfg", "theirs")
+        (mgr.config_dir / "sub").symlink_to(elsewhere.parent, target_is_directory=True)
+        mgr._symlink_config([src])
+        assert not elsewhere.is_symlink() and elsewhere.read_text() == "theirs"
+
+    def test_failed_link_does_not_stop_later_ones(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src_a = _write(mock_home / "repo" / "a.cfg", "repo")
+        src_b = _write(mock_home / "repo" / "b.cfg", "x")
+        (mgr.config_dir / "a.cfg").mkdir()
+        mgr._symlink_config([src_a, src_b])
+        assert (mgr.config_dir / "a.cfg").is_dir()
+        assert (mgr.config_dir / "b.cfg").resolve() == src_b.resolve()
+
+    def test_repo_file_behind_folder_link_untouched(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.mkdir(parents=True, exist_ok=True)
+        src = _write(mock_home / "repo" / "config" / "a.cfg", "repo")
+        (mgr.config_dir / "config").symlink_to(src.parent, target_is_directory=True)
+        mgr._symlink_config([src])
+        assert not src.is_symlink() and src.read_text() == "repo"
+        assert list(mgr.backup_dir.iterdir()) == []
+
+    def test_config_dir_linked_to_repo_untouched(self, tmp_path, mock_home):
+        mgr = _make_manager(tmp_path, repo=mock_home / "repo")
+        mgr.config_dir = mock_home / "config"
+        mgr.config_dir.symlink_to(mgr.repo, target_is_directory=True)
+        src = _write(mock_home / "repo" / "a.cfg", "repo")
+        mgr._symlink_config([src])
+        assert not src.is_symlink() and src.read_text() == "repo"
+        assert list(mgr.backup_dir.iterdir()) == []
 
 
 # =========================================================================
