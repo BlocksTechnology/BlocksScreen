@@ -314,6 +314,13 @@ class TestUsbImportDone:
         )
         assert tab._usb_from_console is False
 
+    def test_console_message_stays_one_gcode_line(self, tab) -> None:
+        tab._usb_from_console = True
+        self._done(tab, local="", error="a;b\nc")
+        assert self._responds(tab) == [
+            'RESPOND TYPE=error MSG="USB print failed: a,b c"'
+        ]
+
     def test_refusal_after_copy_reaches_console(self, tab) -> None:
         tab._usb_from_console = True
         tab.printer.printing_state = "printing"

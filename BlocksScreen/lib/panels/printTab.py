@@ -43,6 +43,8 @@ USB_PRINT_FLAG = "blocksscreen_usb"
 USB_PRINT_ACK = (
     "SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE VARIABLE=usb_pending VALUE='\"\"'"
 )
+# Klipper splits a script on newlines and cuts a line at ';' even inside quotes.
+_RESPOND_SAFE = str.maketrans({'"': "'", "\n": " ", "\r": " ", ";": ","})
 
 logger = logging.getLogger(__name__)
 
@@ -435,7 +437,7 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def _console_error(self, message: str) -> None:
         """Report a failed console-started USB print back to the Klipper console."""
-        msg = message.replace('"', "'")  # a quote would end RESPOND's MSG early
+        msg = message.translate(_RESPOND_SAFE)  # a quote would end RESPOND's MSG early
         self.run_gcode_signal.emit(f'RESPOND TYPE=error MSG="{msg}"')
 
     @QtCore.pyqtSlot(str, dict, name="on_gcode_macro_update")
