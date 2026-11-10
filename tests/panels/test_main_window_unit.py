@@ -316,3 +316,18 @@ def test_cancel_page_leaves_loadscreen_alone() -> None:
 
     win.loadscreen.hide.assert_not_called()
     win.cancelpage.show.assert_called_once()
+
+
+@pytest.mark.parametrize("state", ["ready", "shutdown", "disconnected"])
+def test_notify_klippy_reaches_klippy_status(state) -> None:
+    # str(...)[0] routed every notify_klippy_* to a missing _handle_n_message
+    win = SimpleNamespace(klippy_status=MagicMock())
+    win._handle_notify_klippy_message = MethodType(
+        MainWindow._handle_notify_klippy_message, win
+    )
+    method = f"notify_klippy_{state}"
+    event = SimpleNamespace(method=method, data={"method": method}, metadata=None)
+
+    MainWindow.messageReceivedEvent(win, event)
+
+    win.klippy_status.on_klippy_notify.assert_called_once_with(state)
