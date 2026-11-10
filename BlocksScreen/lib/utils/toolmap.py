@@ -146,9 +146,12 @@ class MmuToolmapWidget(QtWidgets.QWidget):
 
     def set_temps(self, current: float, target: float) -> None:
         """Set the extruder current/target temperatures shown under the heating message."""
+        shown = (f"{current:.0f}", f"{target:.0f}")  # paint draws whole degrees only
+        repaint = shown != (f"{self._current_temp:.0f}", f"{self._target_temp:.0f}")
         self._current_temp = current
         self._target_temp = target
-        self.update()
+        if repaint:
+            self.update()
 
     def set_filament_pos(self, pos: FilamentPos, bowden_progress: float = -1.0) -> None:
         """Animate the fill bar to the local-coordinate x matching the given filament position.
