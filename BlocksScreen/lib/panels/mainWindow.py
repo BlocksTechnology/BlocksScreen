@@ -1011,20 +1011,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.try_connection()
 
     def messageReceivedEvent(self, event: events.WebSocketMessageReceived) -> None:
-        """Helper method that handles dispatching websocket
-        event messages to their respective handlers
-
-        Args:
-            event (events.WebSocketMessageReceivedEvent): The message event with all its contents
-
-        Raises:
-            Exception: When a klippy status change comes from the
-            websocket, tries to send another event
-            corresponding to the incoming status.
-            If the QApplication instance is of type
-            None raises an exception because the event
-            cannot be sent.
-        """
+        """Dispatch a websocket message to the handler for its method's route."""
         _method = event.method
         _data = event.data
         _metadata = event.metadata
