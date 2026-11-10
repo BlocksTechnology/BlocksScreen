@@ -50,7 +50,7 @@ class StreamToLogger(TextIO):
                     self._original.write(message)
                     self._original.flush()
                 except OSError:
-                    # Original stream closed or broken pipe - continue logging
+                    # Original stream closed or broken pipe — continue logging
                     self._original = None
 
             self._buffer += message
@@ -122,7 +122,7 @@ class StreamToLogger(TextIO):
     def closed(self) -> bool:
         return False
 
-    def __enter__(self) -> "StreamToLogger":
+    def __enter__(self) -> StreamToLogger:
         return self
 
     def __exit__(self, *args) -> None:
@@ -349,8 +349,12 @@ class CrashHandler:
         """Install exception hooks."""
         # Setup faulthandler for C-level crashes (segfaults, etc.)
         try:
-            # faulthandler needs this handle open for the whole process lifetime
-            self._fault_file = open(self._fault_log_path, "w")  # noqa: SIM115
+            # Append: the systemd restart right after a SEGV would otherwise wipe its trace
+            self._fault_file = open(self._fault_log_path, "a")
+            self._fault_file.write(
+                f"--- run started {datetime.now().isoformat()} pid {os.getpid()} ---\n"
+            )
+            self._fault_file.flush()
             faulthandler.enable(file=self._fault_file, all_threads=True)
 
             # Also dump traceback on SIGUSR1 (useful for debugging hangs)
@@ -545,7 +549,7 @@ class CrashHandler:
             self._original_threading_excepthook(args)
 
         # Force exit if configured (for systemd restart)
-        # Skip for daemon threads - transient errors in background workers
+        # Skip for daemon threads — transient errors in background workers
         # (network, D-Bus) should not kill the whole process.
         if self._exit_on_crash:
             thread = args.thread
@@ -559,11 +563,7 @@ class CrashHandler:
         if self._original_threading_excepthook and hasattr(threading, "excepthook"):
             threading.excepthook = self._original_threading_excepthook
 
-        if self._fault_file:
-            try:
-                self._fault_file.close()
-            except OSError:
-                pass  # File already closed; nothing to recover
+        # Kept open: faulthandler writes teardown SEGVs here; a closed fd gets reused.
 
         CrashHandler._installed = False
         CrashHandler._instance = None

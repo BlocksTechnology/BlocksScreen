@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 import re
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 
 
 class MessageSource(enum.Enum):
@@ -40,7 +40,7 @@ def _sub(needle: str) -> Callable[[str], bool]:
 
 
 def _re(pattern: str) -> Callable[[str], bool]:
-    compiled_text = re.compile(pattern, re.IGNORECASE)
+    compiled_text = re.compile(pattern, re.I)
     return lambda text: compiled_text.search(text) is not None
 
 
@@ -74,7 +74,7 @@ RULES: tuple[MessageRule, ...] = (
         hint="Check board cooling",
         severity=Severity.WARNING,
     ),
-    # ── Gcode errors - Beacon probe ────────────────────────────────────────────
+    # ── Gcode errors — Beacon probe ────────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("sensor not in valid range"),
@@ -125,14 +125,14 @@ RULES: tuple[MessageRule, ...] = (
         display="Beacon Scan Height Invalid",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - BLTouch probe ──────────────────────────────────────────
+    # ── Gcode errors — BLTouch probe ──────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("failed to verify sensor state"),
         display="BLTouch Verify Failed",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - Eddy probe ─────────────────────────────────────────────
+    # ── Gcode errors — Eddy probe ─────────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("must calibrate probe_eddy_current"),
@@ -209,7 +209,7 @@ RULES: tuple[MessageRule, ...] = (
         hint="Recalibrate the probe",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - probe calibration ─────────────────────────────────────
+    # ── Gcode errors — probe calibration ─────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("manual probe failed"),
@@ -235,7 +235,7 @@ RULES: tuple[MessageRule, ...] = (
         hint="Clean the probe tip and retry",
         severity=Severity.WARNING,
     ),
-    # ── Gcode errors - Happy Hare MMU ──────────────────────────────────────────
+    # ── Gcode errors — Happy Hare MMU ──────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("mmu not enabled"),
@@ -285,14 +285,29 @@ RULES: tuple[MessageRule, ...] = (
         hint="Replace the empty spool",
         severity=Severity.ERROR,
     ),
+    # Same clog/tangle word Happy Hare reports and Mainsail's FlowGuard meter shows.
     MessageRule(
         source=MessageSource.GCODE_ERROR,
-        matcher=_sub("flowguard"),
-        display="Filament Tangle Detected",
-        hint="Clear the tangle",
+        matcher=_sub("clog/tangle has been detected"),
+        display="Filament Clog or Tangle",
+        hint="Check the nozzle and filament path",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - heater / temperature ───────────────────────────────────
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re(r"flowguard detected a clog|a clog has been detected"),
+        display="Filament Clog Detected",
+        hint="Check the nozzle and extruder",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re(r"flowguard detected a tangle|a tangle has been detected"),
+        display="Filament Tangle Detected",
+        hint="Check the spool and the feed into the MMU",
+        severity=Severity.ERROR,
+    ),
+    # ── Gcode errors — heater / temperature ───────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("adc out of range"),
@@ -330,7 +345,7 @@ RULES: tuple[MessageRule, ...] = (
         display="Heater Decoupled",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - MCU / timing ────────────────────────────────────────────
+    # ── Gcode errors — MCU / timing ────────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("lost communication with mcu"),
@@ -371,7 +386,7 @@ RULES: tuple[MessageRule, ...] = (
         display="Stepper Driver Error",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - homing ──────────────────────────────────────────────────
+    # ── Gcode errors — homing ──────────────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("timeout during homing"),
@@ -400,7 +415,7 @@ RULES: tuple[MessageRule, ...] = (
         hint="Check for obstructions",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - bed leveling ───────────────────────────────────────────
+    # ── Gcode errors — bed leveling ───────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_re(r"must.*z_tilt_adjust"),
@@ -420,7 +435,7 @@ RULES: tuple[MessageRule, ...] = (
         display="Leveling Failed",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - resonance tester ──────────────────────────────────────
+    # ── Gcode errors — resonance tester ──────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("no accelerometers specified"),
@@ -470,7 +485,7 @@ RULES: tuple[MessageRule, ...] = (
         hint="Check sensor connection",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - general ─────────────────────────────────────────────────
+    # ── Gcode errors — general ─────────────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("filament runout"),
@@ -544,7 +559,7 @@ RULES: tuple[MessageRule, ...] = (
         hint="Reduce the LED chain length",
         severity=Severity.ERROR,
     ),
-    # ── Gcode errors - Kalico / Danger Klipper ───────────────────────────────
+    # ── Gcode errors — Kalico / Danger Klipper ───────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("error on unused option"),
@@ -642,8 +657,8 @@ IGNORED_RULE = MessageRule(
 )
 
 _IGNORED: tuple[re.Pattern, ...] = (
-    re.compile(r"REMOVED log_path=", re.IGNORECASE),
-    re.compile(r"Alert: Automatically heating extruder to gatemap temp", re.IGNORECASE),
+    re.compile(r"REMOVED log_path=", re.I),
+    re.compile(r"Alert: Automatically heating extruder to gatemap temp", re.I),
     # add more patterns as needed,
 )
 

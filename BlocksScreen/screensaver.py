@@ -1,16 +1,18 @@
 import helper_methods as helper_methods
 from PyQt6 import QtCore, QtWidgets
 
+MIN_TIMEOUT_MS = 60_000
+
 
 class ScreenSaver(QtCore.QObject):
+    """Screensaver that uses X11 DPMS to blank the display after inactivity."""
+
     timer = QtCore.QTimer()
-    dpms_off_timeout = helper_methods.get_dpms_timeouts().get("off_timeout")
-    dpms_suspend_timeout = helper_methods.get_dpms_timeouts().get("suspend_timeout")
-    dpms_standby_timeout = helper_methods.get_dpms_timeouts().get("standby_timeout")
     touch_blocked: bool = False
-    _TOUCH_INTS: frozenset = frozenset(
-        e.value
-        for e in (
+    _dpms_available: bool = hasattr(helper_methods, "get_dpms_timeouts")
+    # Enum-member frozenset beats both a tuple scan and `.value` ints (measured).
+    _WAKE_EVENTS: frozenset[QtCore.QEvent.Type] = frozenset(
+        (
             QtCore.QEvent.Type.TouchBegin,
             QtCore.QEvent.Type.TouchUpdate,
             QtCore.QEvent.Type.TouchEnd,
@@ -22,48 +24,49 @@ class ScreenSaver(QtCore.QObject):
     def __init__(self, parent) -> None:
         super().__init__()
 
+        dpms_timeouts = (
+            helper_methods.get_dpms_timeouts() if self._dpms_available else {}
+        )
+        self.dpms_off_timeout = dpms_timeouts.get("off_timeout")
+        self.dpms_suspend_timeout = dpms_timeouts.get("suspend_timeout")
+        self.dpms_standby_timeout = dpms_timeouts.get("standby_timeout")
+
         self.screensaver_config = parent.config.get_section(
             "screensaver", fallback=None
         )
         if not self.screensaver_config:
             self.blank_timeout = self.dpms_standby_timeout or 900000
         else:
-            self.blank_timeout = self.screensaver_config.getint(
-                "timeout", default=500000
-            )
+            try:
+                timeout = self.screensaver_config.getint("timeout", default=500000)
+            except ValueError:
+                timeout = 500000
+            # 0 fires at once and keeps the screen blank, so enforce a floor
+            self.blank_timeout = max(timeout, MIN_TIMEOUT_MS)
         QtWidgets.QApplication.instance().installEventFilter(self)
         self.timer.timeout.connect(self.check_dpms)
         self.timer.setInterval(self.blank_timeout)
         self.timer.start()
 
     def eventFilter(self, object, event) -> bool:
-        """Filter touch events considering DPMS Screen state"""
+        """Filter touch events considering DPMS screen state."""
+        if not self._dpms_available:
+            return False
 
-        if event.type().value in self._TOUCH_INTS:
+        if event.type() in self._WAKE_EVENTS:
             if self.touch_blocked:
-                # Screen may be off - query DPMS only in this rare state
-                dpms_info = helper_methods.get_dpms_info()
-                if (
-                    dpms_info.get("state")
-                    in (
-                        helper_methods.DPMSState.OFF,
-                        helper_methods.DPMSState.STANDBY,
-                        helper_methods.DPMSState.SUSPEND,
-                    )
-                    or self.touch_blocked
-                ):
-                    if not self.timer.isActive():
-                        self.touch_blocked = False
-                        helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
-                        self.timer.start()
-                        return True  # filter out the event, block touch events on the application
-            self.timer.stop()
+                # check_dpms blanked us, so no per-touch X11 DPMS query is needed
+                self.touch_blocked = False
+                helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
+                self.timer.start()
+                return True
             self.timer.start()
         return False
 
     @QtCore.pyqtSlot()
     def check_dpms(self) -> None:
-        """Checks the X11 extension dpms for the status of the screen"""
+        """Blank the display via DPMS standby."""
         self.touch_blocked = True
-        helper_methods.set_dpms_mode(helper_methods.DPMSState.STANDBY)
+        if self._dpms_available:
+            helper_methods.set_dpms_mode(helper_methods.DPMSState.STANDBY)
         self.timer.stop()

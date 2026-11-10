@@ -1,7 +1,11 @@
 import typing
+from collections import OrderedDict
 from dataclasses import dataclass, field
 
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
+
+_TEXT_LEFT_PADDING = 10  # gap between the left icon and the text, all list pages
+_RIGHT_TEXT_GAP = 10  # gap between the elided main text and the right text
 
 
 @dataclass(slots=True)
@@ -32,11 +36,8 @@ class ListItem:
     height: int = 60
     notificate: bool = False
 
-    _cache: dict[int, int] = field(default_factory=dict)
-
-    def clear_cache(self):
-        """Call this if text or font size changes dynamically"""
-        self._cache.clear()
+    # per-width height cache; the -1 key holds a notification's display timestamp
+    _cache: dict[int, typing.Any] = field(default_factory=dict)
 
 
 class EntryListModel(QtCore.QAbstractListModel):
@@ -51,44 +52,21 @@ class EntryListModel(QtCore.QAbstractListModel):
         super().__init__()
         self.entries: list[ListItem] = entries or []
 
-    def rowCount(self, parent=QtCore.QModelIndex()) -> int:  # noqa: B008
+    def rowCount(self, parent=QtCore.QModelIndex()) -> int:
         """Gets model row count"""
         return len(self.entries)
 
-    def deleteLater(self) -> None:
-        """subclass for deleting the object"""
-        return super().deleteLater()
-
-    def remove_item(self, item: ListItem) -> None:
-        """Removes one row item from the model"""
-        if item in self.entries:
-            index = self.entries.index(item)
-            self.beginRemoveRows(QtCore.QModelIndex(), index, index)
-            self.entries.pop(index)
-            self.endRemoveRows()
-
-    def delete_duplicates(self) -> None:
-        """
-        Removes items that have identical text, color, and
-        last time entry (get(-1)).
-        """
-        seen_identifiers: set[tuple[str, str, str]] = set()
-        unique_entries: list[ListItem] = []
-
-        for item in self.entries:
-            text_val = item.text
-            color_val = item.color
-            time_val = item._cache.get(-1)
-
-            identifier = (text_val, color_val, time_val)
-
-            if identifier not in seen_identifiers:
-                unique_entries.append(item)
-                seen_identifiers.add(identifier)
-
-        self.beginResetModel()
-        self.entries = unique_entries
-        self.endResetModel()
+    def refresh_last_if_duplicate(self, text: str, color: str) -> bool:
+        """Collapse a repeat of the newest entry instead of inserting a new row."""
+        if not self.entries:
+            return False
+        last = self.entries[0]
+        if last.text != text or last.color != color:
+            return False
+        last._cache[-1] = QtCore.QDateTime.currentDateTime().toString("hh:mm:ss")
+        idx = self.index(0)
+        self.dataChanged.emit(idx, idx)
+        return True
 
     def clear(self) -> None:
         """Clear model rows"""
@@ -103,15 +81,16 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.entries.append(item)
         self.endInsertRows()
 
+    def remove_item(self, item: ListItem) -> None:
+        """Remove *item* by identity."""
+        if item in self.entries:
+            index = self.entries.index(item)
+            self.beginRemoveRows(QtCore.QModelIndex(), index, index)
+            self.entries.pop(index)
+            self.endRemoveRows()
+
     def remove_item_by_text(self, text: str) -> bool:
-        """Remove item from model by its text value.
-
-        Args:
-            text: The text value of the item to remove.
-
-        Returns:
-            True if item was found and removed, False otherwise.
-        """
+        """Remove the item with *text*; True if found."""
         for i, item in enumerate(self.entries):
             if item.text == text:
                 self.beginRemoveRows(QtCore.QModelIndex(), i, i)
@@ -128,11 +107,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.endInsertRows()
 
     def remove_item_at(self, position: int) -> bool:
-        """Remove item at a specific position.
-
-        Returns:
-            True if item was removed, False if position is out of range.
-        """
+        """Remove the item at *position*; True if in range."""
         if position < 0 or position >= len(self.entries):
             return False
         self.beginRemoveRows(QtCore.QModelIndex(), position, position)
@@ -148,14 +123,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         return None
 
     def update_item_at(self, position: int, item: ListItem) -> bool:
-        """Update an existing item's display data in-place.
-
-        Copies visual fields (left_icon, right_text, right_icon) from
-        *item* into the entry at *position* and emits ``dataChanged``.
-
-        Returns:
-            True if updated, False if position is out of range.
-        """
+        """Update an item's icons and right text; emits dataChanged."""
         if position < 0 or position >= len(self.entries):
             return False
         existing = self.entries[position]
@@ -171,10 +139,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         desired: list[ListItem],
         key_fn: typing.Callable[[ListItem], str],
     ) -> None:
-        """Diff current entries against *desired* and apply minimal mutations.
-
-        Uses *key_fn* to derive a unique identity string for each item.
-        """
+        """Minimally edit the model to match *desired*, keyed by key_fn."""
         desired_keys = {key_fn(d) for d in desired}
         self._remove_stale_entries(desired_keys, key_fn)
 
@@ -270,8 +235,12 @@ class EntryListModel(QtCore.QAbstractListModel):
         if role == EntryListModel.ExpandRole:
             item = self.entries[index.row()]
             item.is_expanded = value
-            self.layoutChanged.emit()
-            self.dataChanged.emit(index, index, [EntryListModel.ExpandRole])
+            self.dataChanged.emit(
+                index,
+                index,
+                [EntryListModel.ExpandRole, QtCore.Qt.ItemDataRole.SizeHintRole],
+            )
+            return True
         if role == QtCore.Qt.ItemDataRole.UserRole:
             self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.UserRole])
             return True
@@ -300,48 +269,41 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         ListItem, name="item-selected"
     )
 
+    # Paint-loop colors, built once instead of per row per frame
+    _PRESSED_SELECTED = QtGui.QColor(26, 143, 191, 90)
+    _PRESSED = QtGui.QColor(26, 143, 191, 20)
+    _TEXT = QtGui.QColor(255, 255, 255)
+    _SECONDARY = QtGui.QColor(160, 160, 160)
+    _NOTIFICATION = QtGui.QColor(226, 31, 31)
+
     def __init__(self) -> None:
         """Initialise the delegate with a scaled-pixmap cache and default item height."""
         super().__init__()
         self.prev_index: int = 0
+        self._press_pos: QtCore.QPointF | None = None
         self.height: int = 60
-        self._scaled_cache: dict[tuple[int, int, int], QtGui.QPixmap] = {}
-        self._tinted_cache: dict[tuple[int, str], QtGui.QPixmap] = {}
-        self._font_cache: dict[int, tuple[QtGui.QFont, QtGui.QFontMetrics]] = {}
-        # Base the font cache was built from, a restyle must invalidate it
-        self._font_base: QtGui.QFont | None = None
-        self._path_cache: dict[tuple[int, int], QtGui.QPainterPath] = {}
-        self._geometry_cache: dict[
-            tuple[int, int], tuple[float, float, QtCore.QRectF, QtCore.QRectF]
-        ] = {}
-        # Pre-computed colors - avoids QColor allocation + setAlpha per paint frame
-        self._color_pressed_sel = QtGui.QColor("#1A8FBF")
-        self._color_pressed_sel.setAlpha(90)
-        self._color_pressed_unsel = QtGui.QColor("#1A8FBF")
-        self._color_pressed_unsel.setAlpha(20)
-        self._color_text = QtGui.QColor(255, 255, 255)
-        self._color_secondary = QtGui.QColor(160, 160, 160)
-        self._color_notification = QtGui.QColor(226, 31, 31)
-        # Arrow icons loaded once - avoids QPixmap(resource) parse per paint frame
-        self._arrow_down = QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_down.svg")
-        self._arrow_right = QtGui.QPixmap(
-            ":/arrow_icons/media/btn_icons/arrow_right.svg"
+        self._scaled_cache: OrderedDict[tuple[int, int, int], QtGui.QPixmap] = (
+            OrderedDict()
         )
+        self._tinted_cache: OrderedDict[tuple[int, int, int, str], QtGui.QPixmap] = (
+            OrderedDict()
+        )
+        self._arrow_cache: dict[bool, QtGui.QPixmap] = {}
+        self._font_cache: dict[
+            tuple[QtGui.QFont, int, int],
+            tuple[QtGui.QFont, QtGui.QFont, QtGui.QFontMetrics, QtGui.QFontMetrics],
+        ] = {}
 
     def _get_scaled(
         self,
         pixmap: QtGui.QPixmap,
         size: QtCore.QSize,
     ) -> QtGui.QPixmap:
-        """Return *pixmap* scaled to *size*, using a cache to avoid
-        re-scaling the same icon every paint frame.
-
-        The cache key is (QPixmap.cacheKey(), width, height) which
-        correctly invalidates when the source pixmap changes.
-        """
+        """Scaled pixmap, LRU-cached per (cacheKey, size)."""
         key = (pixmap.cacheKey(), size.width(), size.height())
         cached = self._scaled_cache.get(key)
         if cached is not None:
+            self._scaled_cache.move_to_end(key)
             return cached
         scaled = pixmap.scaled(
             size,
@@ -349,56 +311,47 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
         self._scaled_cache[key] = scaled
-        # Prevent unbounded growth - 64 entries covers all wifi
-        # bar variants × protected/open × left/right icons easily.
+        # 64 covers every wifi/icon variant.
         if len(self._scaled_cache) > 64:
-            keys = list(self._scaled_cache)
-            for k in keys[:32]:
-                del self._scaled_cache[k]
+            self._scaled_cache.popitem(last=False)
         return scaled
 
-    def _get_font_metrics(
-        self, base_font: QtGui.QFont, point_size: int
-    ) -> tuple[QtGui.QFont, QtGui.QFontMetrics]:
-        """Return *base_font* at *point_size* with its metrics, cached per size.
-
-        ``paint`` passes the painter font and ``sizeHint`` the option font, so the
-        cache is keyed on size alone but dropped whenever the base font changes.
-        """
-        if self._font_base != base_font:
-            self._font_cache.clear()
-            self._font_base = QtGui.QFont(base_font)
-        cached = self._font_cache.get(point_size)
-        if cached is None:
-            if point_size != base_font.pointSize():
-                f = QtGui.QFont(base_font)
-                f.setPointSize(point_size)
-            else:
-                f = base_font
-            cached = (f, QtGui.QFontMetrics(f))
-            self._font_cache[point_size] = cached
-        return cached
-
-    def _get_tinted(self, pixmap: QtGui.QPixmap, color: str) -> QtGui.QPixmap:
-        key = (pixmap.cacheKey(), color)
+    def _get_tinted(
+        self,
+        pixmap: QtGui.QPixmap,
+        size: QtCore.QSize,
+        color: str,
+    ) -> QtGui.QPixmap:
+        """*pixmap* scaled to *size* and tinted *color*, LRU-cached."""
+        key = (pixmap.cacheKey(), size.width(), size.height(), color)
         cached = self._tinted_cache.get(key)
-        if cached is None:
-            tinted = QtGui.QPixmap(pixmap.size())
-            tinted.fill(QtCore.Qt.GlobalColor.transparent)
-            p = QtGui.QPainter(tinted)
-            p.drawPixmap(0, 0, pixmap)
-            p.setCompositionMode(
-                QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
+        if cached is not None:
+            self._tinted_cache.move_to_end(key)
+            return cached
+        scaled = self._get_scaled(pixmap, size)
+        tinted = QtGui.QPixmap(scaled.size())
+        tinted.fill(QtCore.Qt.GlobalColor.transparent)
+        p = QtGui.QPainter(tinted)
+        p.drawPixmap(0, 0, scaled)
+        p.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+        p.fillRect(tinted.rect(), QtGui.QColor(color))
+        p.end()
+        self._tinted_cache[key] = tinted
+        if len(self._tinted_cache) > 64:
+            self._tinted_cache.popitem(last=False)
+        return tinted
+
+    def _expand_arrow(self, expanded: bool) -> QtGui.QPixmap:
+        """Arrow pixmap, decoded once rather than per paint."""
+        arrow = self._arrow_cache.get(expanded)
+        if arrow is None:
+            arrow = QtGui.QPixmap(
+                ":/arrow_icons/media/btn_icons/arrow_down.svg"
+                if expanded
+                else ":/arrow_icons/media/btn_icons/arrow_right.svg"
             )
-            p.fillRect(tinted.rect(), QtGui.QColor(color))
-            p.end()
-            cached = tinted
-            self._tinted_cache[key] = cached
-            if len(self._tinted_cache) > 32:
-                keys = list(self._tinted_cache)
-                for k in keys[:16]:
-                    del self._tinted_cache[k]
-        return cached
+            self._arrow_cache[expanded] = arrow
+        return arrow
 
     def clear(self) -> None:
         """Clears delegate indexing"""
@@ -407,54 +360,85 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
     def sizeHint(
         self, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex
     ):
-        """
-        Calculates size AND determines if expansion is needed.
-        """
+        """Calculate size and determine expansion need."""
         item: ListItem = index.data(QtCore.Qt.ItemDataRole.UserRole)
         target_width = option.rect.width()
 
-        base_h = item.height
-        ellipse_size = base_h * 0.8
+        _, _, fm, right_fm = self._fonts(item, option.font)
+        right_text_w = right_fm.horizontalAdvance(item.right_text)
 
-        right_reserved = base_h
+        collapsed_h = int(item.height * 1.1)
+        text_rect = self._text_rect(
+            item,
+            QtCore.QRect(option.rect.x(), option.rect.y(), target_width, collapsed_h),
+            right_text_w,
+        )
+        text_avail_width = max(int(text_rect.width()), 50)
+        lines = item.text.split("\n")
+        max_lines = max(1, int(text_rect.height()) // fm.lineSpacing())
 
-        left_reserved = 10
-        if item.left_icon:
-            left_reserved = (base_h * 0.1) + ellipse_size + 8
-
-        if item._lfontsize > 0 and item._lfontsize != option.font.pointSize():
-            fm = self._get_font_metrics(option.font, item._lfontsize)[1]
-        else:
-            fm = option.fontMetrics
-
-        if item.right_text:
-            if item._rfontsize > 0 and item._rfontsize != option.font.pointSize():
-                fmr = self._get_font_metrics(option.font, item._rfontsize)[1]
-            else:
-                fmr = option.fontMetrics
-            right_reserved += fmr.horizontalAdvance(item.right_text) + 10
-
-        if item.right_icon:
-            right_reserved += ellipse_size
-
-        text_avail_width = target_width - left_reserved - right_reserved
-        text_avail_width = max(text_avail_width, 50)
-
-        single_line_width = fm.horizontalAdvance(item.text)
-
-        item.needs_expansion = single_line_width > text_avail_width
+        item.needs_expansion = len(lines) > max_lines or any(
+            fm.horizontalAdvance(line) > text_avail_width for line in lines
+        )
 
         if not item.is_expanded:
-            return QtCore.QSize(target_width, int(item.height * 1.1))
+            return QtCore.QSize(target_width, collapsed_h)
 
-        text_rect = fm.boundingRect(
-            QtCore.QRect(0, 0, int(text_avail_width), 0),
+        bounds = fm.boundingRect(
+            QtCore.QRect(0, 0, text_avail_width, 0),
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextWordWrap,
             item.text,
         )
 
-        final_height = max(item.height, text_rect.height() - 1)
+        final_height = max(item.height, bounds.height() - 1)
         return QtCore.QSize(target_width, int(final_height * 1.2))
+
+    def _fonts(
+        self, item: ListItem, base: QtGui.QFont
+    ) -> tuple[QtGui.QFont, QtGui.QFont, QtGui.QFontMetrics, QtGui.QFontMetrics]:
+        """Main and right-text fonts plus metrics of *item*, shared by sizeHint and paint."""
+        # QFont hashes by value: a hit costs 0.15us vs 2.55us to rebuild (measured).
+        key = (base, item._lfontsize, item._rfontsize)
+        cached = self._font_cache.get(key)
+        if cached is None:
+            font = QtGui.QFont(base)
+            if item._lfontsize > 0:
+                font.setPointSize(item._lfontsize)
+            right_font = QtGui.QFont(font)
+            if item._rfontsize > 0:
+                right_font.setPointSize(item._rfontsize)
+            cached = (
+                font,
+                right_font,
+                QtGui.QFontMetrics(font),
+                QtGui.QFontMetrics(right_font),
+            )
+            if len(self._font_cache) >= 16:
+                self._font_cache.clear()
+            self._font_cache[(QtGui.QFont(base), *key[1:])] = cached
+        return cached
+
+    @staticmethod
+    def _text_rect(
+        item: ListItem, row: QtCore.QRect, right_text_w: int
+    ) -> QtCore.QRectF:
+        """Main-text area of *row*; shared so overflow matches what paint elides."""
+        rect = row.adjusted(2, 2, -2, -2)
+        icon = item.height * 0.8
+        left = rect.left() + 10 + (icon + _TEXT_LEFT_PADDING if item.left_icon else 0)
+        right = rect.right() - item.height * 0.1 - icon - right_text_w - 10
+        if item.right_text:
+            right -= _RIGHT_TEXT_GAP
+        return QtCore.QRectF(left, rect.top(), right - left, rect.height())
+
+    @staticmethod
+    def _collapsed_lines(text: str, max_lines: int) -> list[str]:
+        """Collapsed-row lines; overflow lines join the last one, blanks dropped."""
+        lines = text.split("\n")
+        if len(lines) > max_lines:
+            tail = [line.strip() for line in lines[max_lines - 1 :] if line.strip()]
+            lines[max_lines - 1 :] = [" ".join(tail)]
+        return lines
 
     def paint(
         self,
@@ -471,55 +455,23 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if item.not_clickable:
             painter.restore()
             return
-
         rect = option.rect.adjusted(2, 2, -2, -2)
-        w, h = rect.width(), rect.height()
-        # Translate so all geometry is relative to (0,0) - enables path cache hits
-        # across items (all rows share the same w/h in a fixed-width list view).
-        painter.translate(rect.x(), rect.y())
-
-        path_key = (w, h)
-        path = self._path_cache.get(path_key)
-        if path is None:
-            path = QtGui.QPainterPath()
-            path.addRoundedRect(QtCore.QRectF(0, 0, w, h), 12, 12)
-            self._path_cache[path_key] = path
-            # Expanded rows produce a new height each time, keep the dict bounded
-            if len(self._path_cache) > 32:
-                for k in list(self._path_cache)[:16]:
-                    del self._path_cache[k]
-
         if item.allow_expand and item.needs_expansion:
-            item.right_icon = (
-                self._arrow_down if item.is_expanded else self._arrow_right
-            )
+            item.right_icon = self._expand_arrow(item.is_expanded)
 
-        # fillPath takes its brush as an argument, the painter pen/brush are unused here
-        painter.fillPath(
-            path,
-            self._color_pressed_sel if item.selected else self._color_pressed_unsel,
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(self._PRESSED_SELECTED if item.selected else self._PRESSED)
+        # Same fill as a QPainterPath + fillPath, without the per-row path object
+        painter.drawRoundedRect(QtCore.QRectF(rect), 12, 12)
+
+        ellipse_size = item.height * 0.8
+        ellipse_margin = (item.height - ellipse_size) / 2
+        ellipse_rect = QtCore.QRectF(
+            rect.right() - ellipse_margin - ellipse_size,
+            rect.top() + ellipse_margin,
+            ellipse_size,
+            ellipse_size,
         )
-
-        geom_key = (w, item.height)
-        geometry = self._geometry_cache.get(geom_key)
-        if geometry is None:
-            ellipse_size = item.height * 0.8
-            ellipse_margin = (item.height - ellipse_size) / 2
-            geometry = (
-                ellipse_size,
-                ellipse_margin,
-                QtCore.QRectF(
-                    w - ellipse_margin - ellipse_size,
-                    ellipse_margin,
-                    ellipse_size,
-                    ellipse_size,
-                ),
-                QtCore.QRectF(
-                    ellipse_margin, ellipse_margin, ellipse_size, ellipse_size
-                ),
-            )
-            self._geometry_cache[geom_key] = geometry
-        ellipse_size, ellipse_margin, ellipse_rect, left_icon_rect = geometry
 
         if item.right_icon:
             icon_scaled = self._get_scaled(
@@ -527,70 +479,59 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             )
             painter.drawPixmap(ellipse_rect.toRect(), icon_scaled)
 
-        left_margin = 10
+        left_icon_rect = QtCore.QRectF(
+            rect.left() + ellipse_margin,
+            rect.top() + ellipse_margin,
+            ellipse_size,
+            ellipse_size,
+        )
 
         if item.left_icon:
-            l_icon_scaled = self._get_scaled(
-                item.left_icon,
-                QtCore.QSize(int(left_icon_rect.width()), int(left_icon_rect.height())),
+            icon_size = QtCore.QSize(
+                int(left_icon_rect.width()), int(left_icon_rect.height())
             )
             if item.color_left_icon:
-                painter.drawPixmap(
-                    left_icon_rect.toRect(),
-                    self._get_tinted(l_icon_scaled, item.color),
-                )
+                left_pixmap = self._get_tinted(item.left_icon, icon_size, item.color)
             else:
-                painter.drawPixmap(left_icon_rect.toRect(), l_icon_scaled)
+                left_pixmap = self._get_scaled(item.left_icon, icon_size)
+            painter.drawPixmap(left_icon_rect.toRect(), left_pixmap)
 
-        text_margin = int(w - ellipse_size - ellipse_margin - h * 0.10)
+        painter.setPen(self._TEXT)
 
-        icon_w = left_icon_rect.width() if item.left_icon else 0
-        text_rect = QtCore.QRectF(
-            left_margin + icon_w,
-            0,
-            text_margin - left_margin - icon_w,
-            h,
+        _font, right_font, metrics, right_metrics = self._fonts(item, painter.font())
+        painter.setFont(_font)
+
+        text_rect = self._text_rect(
+            item, option.rect, right_metrics.horizontalAdvance(item.right_text)
         )
 
-        painter.setPen(self._color_text)
-
-        _font = painter.font()
-        lps = item._lfontsize if item._lfontsize > 0 else _font.pointSize()
-        rps = item._rfontsize if item._rfontsize > 0 else _font.pointSize()
-        font, metrics = self._get_font_metrics(_font, lps)
-        right_font, right_metrics = self._get_font_metrics(_font, rps)
-        painter.setFont(font)
-
-        right_text_x = (
-            ellipse_rect.right()
-            - right_metrics.horizontalAdvance(item.right_text)
-            - left_icon_rect.width()
-            - left_margin
-        )
-
-        text = item.text.replace("\n", "")
         if not item.is_expanded:
-            max_main_text_width = right_text_x - left_margin
-            text = metrics.elidedText(
-                text,
-                QtCore.Qt.TextElideMode.ElideRight,
-                int(max_main_text_width),
+            max_lines = max(1, int(text_rect.height()) // metrics.lineSpacing())
+            text = "\n".join(
+                metrics.elidedText(
+                    line, QtCore.Qt.TextElideMode.ElideRight, int(text_rect.width())
+                )
+                for line in self._collapsed_lines(item.text, max_lines)
             )
-            painter.drawText(text_rect, QtCore.Qt.AlignmentFlag.AlignVCenter, text)
+            painter.drawText(
+                text_rect,
+                QtCore.Qt.AlignmentFlag.AlignVCenter,
+                text,
+            )
         else:
             painter.drawText(
                 text_rect,
                 QtCore.Qt.AlignmentFlag.AlignLeft
                 | QtCore.Qt.AlignmentFlag.AlignVCenter
                 | QtCore.Qt.TextFlag.TextWordWrap,
-                text,
+                item.text,
             )
 
         if item.right_text:
             painter.setFont(right_font)
-            painter.setPen(self._color_secondary)
+            painter.setPen(self._SECONDARY)
             painter.drawText(
-                int(right_text_x),
+                int(text_rect.right() + _RIGHT_TEXT_GAP),
                 int(
                     ellipse_rect.top()
                     + (ellipse_rect.height() + right_metrics.ascent()) / 2
@@ -599,11 +540,12 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             )
 
         if item.notificate:
-            dot_diameter = h * 0.3
-            dot_x = w - dot_diameter - 5
-            painter.setBrush(self._color_notification)
+            dot_diameter = rect.height() * 0.3
+            dot_x = rect.width() - dot_diameter - 5
+            painter.setBrush(self._NOTIFICATION)
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.drawEllipse(QtCore.QRectF(dot_x, 0, dot_diameter, dot_diameter))
+            dot_rect = QtCore.QRectF(dot_x, rect.top(), dot_diameter, dot_diameter)
+            painter.drawEllipse(dot_rect)
 
         painter.restore()
 
@@ -616,42 +558,85 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
     ):
         """Capture view model events"""
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
-        if event.type() == QtCore.QEvent.Type.MouseButtonPress:
-            if item and item.not_clickable:
-                return True
-
-            if item.callback and callable(item.callback):
-                item.callback()
-
-            if self.prev_index is None:
-                return False
-
-            ellipse_size = item.height * 0.8
-            ellipse_margin = (item.height - ellipse_size) / 2
-            ellipse_rect = QtCore.QRectF(
-                option.rect.right() - ellipse_margin - ellipse_size,
-                option.rect.top() + ellipse_margin,
-                ellipse_size,
-                ellipse_size,
-            )
-            pos = event.position()
-
-            if (
-                ellipse_rect.contains(pos)
-                and item.allow_expand
-                and item.needs_expansion
-            ):
-                new_state = not item.is_expanded
-                model.setData(index, new_state, EntryListModel.ExpandRole)
-                return True
-
-            if self.prev_index != index.row():
-                prev_index: QtCore.QModelIndex = model.index(self.prev_index)
-                if prev_index.isValid():
-                    model.setData(prev_index, False, EntryListModel.EnableRole)
-                self.prev_index = index.row()
-
-            model.setData(index, True, EntryListModel.EnableRole)
-            self.item_selected.emit(item)
+        etype = event.type()
+        press = etype == QtCore.QEvent.Type.MouseButtonPress
+        release = etype == QtCore.QEvent.Type.MouseButtonRelease
+        if (press or release) and item and item.not_clickable:
             return True
+        if press:
+            # Press origin, to tell scroll drags from taps.
+            self._press_pos = event.position()
+            return False
+        if release:
+            return self._on_release(event, model, option, index, item)
         return False
+
+    def _on_release(
+        self,
+        event: QtCore.QEvent,
+        model: EntryListModel,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex,
+        item: ListItem,
+    ) -> bool:
+        """Turn a release into a drag, an arrow toggle or a row selection."""
+        if self._is_drag(event):
+            return False
+        # Arrow first, so an arrow tap skips the callback.
+        if self._toggle_expand(event, model, option, index, item):
+            # Also select, or the info panel stays stale after an arrow tap.
+            self._select_row(model, index, item)
+            return True
+        if item.callback and callable(item.callback):
+            item.callback()
+        if self.prev_index is None:
+            return False
+        self._select_row(model, index, item)
+        return True
+
+    def _is_drag(self, event: QtCore.QEvent) -> bool:
+        """True if the release drifted far enough to be a scroll."""
+        press_pos = self._press_pos
+        self._press_pos = None
+        if press_pos is None:
+            return False
+        # Fingers drift more than a mouse.
+        threshold = QtWidgets.QApplication.startDragDistance() * 2
+        delta = event.position() - press_pos
+        return abs(delta.x()) + abs(delta.y()) > threshold
+
+    def _toggle_expand(
+        self,
+        event: QtCore.QEvent,
+        model: EntryListModel,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex,
+        item: ListItem,
+    ) -> bool:
+        """Toggle expansion if the tap hit the arrow; True if it did."""
+        if self.prev_index is None or not item.allow_expand or not item.needs_expansion:
+            return False
+        ellipse_size = item.height * 0.8
+        ellipse_margin = (item.height - ellipse_size) / 2
+        ellipse_rect = QtCore.QRectF(
+            option.rect.right() - ellipse_margin - ellipse_size,
+            option.rect.top() + ellipse_margin,
+            ellipse_size,
+            ellipse_size,
+        )
+        if not ellipse_rect.contains(event.position()):
+            return False
+        model.setData(index, not item.is_expanded, EntryListModel.ExpandRole)
+        return True
+
+    def _select_row(
+        self, model: EntryListModel, index: QtCore.QModelIndex, item: ListItem
+    ) -> None:
+        """Select this row, deselecting the previous one."""
+        if self.prev_index != index.row():
+            prev_index: QtCore.QModelIndex = model.index(self.prev_index)
+            if prev_index.isValid():
+                model.setData(prev_index, False, EntryListModel.EnableRole)
+            self.prev_index = index.row()
+        model.setData(index, True, EntryListModel.EnableRole)
+        self.item_selected.emit(item)

@@ -1,8 +1,8 @@
 """Guard: compiled deps must stay at the field-validated aarch64 known-good pins.
 
 These packages need an aarch64 wheel (or a clean source build) to install on the
-Pi 5 field hardware. Bumping them silently - as automated dependency PRs have
-done before - breaks the on-device ``pip install`` (PyQt6 6.10.0 has no aarch64
+Pi 5 field hardware. Bumping them silently — as automated dependency PRs have
+done before — breaks the on-device ``pip install`` (PyQt6 6.10.0 has no aarch64
 wheel, sdbus 0.14.1's wheel imports broken), which then thrashes the boot and
 post-merge paths. This test fails if any compiled pin drifts away from the
 known-good set, forcing an explicit on-hardware import test before the bump.
@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
+import pytest
 
 _REQS = Path(__file__).resolve().parents[2] / "scripts" / "requirements.txt"
 
@@ -25,11 +27,12 @@ _KNOWN_GOOD = {
     "PyQt6_sip": "13.8.0",
 }
 
-_PIN_RE = re.compile(r"^\s*([A-Za-z0-9_.\-]+)\s*==\s*([^\s#]+)")
+# Version must start with a digit and hold no wildcard: "===x" and "==1.*" are not exact pins.
+_PIN_RE = re.compile(r"^\s*([A-Za-z0-9_.\-]+)\s*==\s*(\d[^\s#*;]*)\s*(#.*)?$")
 
 
 def _normalize(name: str) -> str:
-    """Canonicalize a distribution name (PEP 503 - case/underscore-insensitive)."""
+    """Canonicalize a distribution name (PEP 503 — case/underscore-insensitive)."""
     return name.replace("_", "-").lower()
 
 
@@ -52,3 +55,24 @@ def test_compiled_pins_match_known_good() -> None:
             "Bumping a compiled dep needs an on-hardware aarch64 import test first; "
             "update _KNOWN_GOOD here only after that passes."
         )
+
+
+@pytest.mark.parametrize(
+    "name", ["requirements.txt", "requirements-dev.txt", "requirements-pip.txt"]
+)
+def test_every_requirement_is_exact_pin(name: str) -> None:
+    """A range pin lets each box resolve a different version than staging tested."""
+    text = (_REQS.parent / name).read_text(encoding="utf-8")
+    loose = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip()
+        and not line.lstrip().startswith("#")
+        and not _PIN_RE.match(line)
+    ]
+    assert not loose, f"{name}: pin these with == : {loose}"
+
+
+@pytest.mark.parametrize("line", ["pip===26.2.1", "pip==26.*", "pip==", "pip>=26"])
+def test_pin_regex_rejects_non_exact(line: str) -> None:
+    assert not _PIN_RE.match(line)

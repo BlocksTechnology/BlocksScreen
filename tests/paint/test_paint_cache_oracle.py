@@ -306,7 +306,7 @@ def _build(spec_id: str, bot: _Bot) -> _Spec:
         return apply
 
     return _Spec(
-        factory=lambda: track(cls()),
+        factory=lambda: track(cls(None)),
         states=[
             bstate("Load", red),
             bstate("Unload filament", blue),

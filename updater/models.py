@@ -3,9 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+# Shared with the UI process: imports nothing beyond the stdlib.
+# oneshot has no start timeout: bounds a hung install-updater (first DeviceDiscovery build takes minutes).
+DEPLOY_HOLD_CAP_S = 900.0
+# error() reason for a run refused while Klipper is printing or not answering.
+PRINTER_BUSY = "printer is busy"
+
 
 @dataclass
 class ComponentConfig:
+    """One components.yaml entry; restart_ui/restart_klipper add that restart."""
+
     name: str
     kind: str
     path: Path | None = None
@@ -17,14 +25,15 @@ class ComponentConfig:
     apt_exclude: tuple[str, ...] = ()
     url: str | None = None
     install_if_missing: bool = False
-    # Restart BlocksScreen on update even when the component's service differs.
     restart_ui: bool = False
-    # Restart klipper on update even when the component's own service differs.
     restart_klipper: bool = False
+    health_url: str | None = None
 
 
 @dataclass(frozen=True)
 class ComponentStatus:
+    """Point-in-time update status of one component."""
+
     name: str
     kind: str = "git"
     commits_behind: int = 0
@@ -36,7 +45,17 @@ class ComponentStatus:
     error: str | None = None
     has_local_changes: bool = False
     needs_install: bool = False
-    # Checked-out branch differs from configured branch (switch needed).
     branch_mismatch: bool = False
-    # Actual checked-out branch, surfaced for debugging branch switches.
     current_branch: str = ""
+
+    @property
+    def needs_update(self) -> bool:
+        """Dirty for update_all: errored git repos count (update self-heals them), apt errors don't."""
+        return bool(
+            self.commits_behind
+            or self.packages_upgradable > 0
+            or self.has_local_changes
+            or self.needs_install
+            or self.branch_mismatch
+            or (self.error is not None and self.kind != "apt")
+        )

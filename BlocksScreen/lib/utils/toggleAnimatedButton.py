@@ -34,6 +34,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             - self.handle_radius * 2
         )
 
+        self.trailPath: QtGui.QPainterPath | None = None
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._icon_cache: QtGui.QPixmap = QtGui.QPixmap()
         self._icon_cache_size: QtCore.QSize = QtCore.QSize()
@@ -191,7 +192,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
         """Re-implemented method, handle mouse press events"""
-        if self.trailPath:
+        if self.trailPath is not None:
             if self.trailPath.contains(e.pos().toPointF()) and self.underMouse():
                 if self.slide_animation.state != self.slide_animation.State.Running:
                     self._state = ToggleAnimatedButton.State(not self._state.value)
@@ -219,7 +220,10 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
         min_x = rect_norm.x()
         max_x = rect_norm.x() + rect_norm.width() - rect_norm.height() * 0.80
-        progress = (self._handle_position - min_x) / (max_x - min_x)
+        denominator = max_x - min_x
+        if denominator == 0:
+            return
+        progress = (self._handle_position - min_x) / denominator
         progress = max(0.0, min(1.0, progress))
 
         r = (
@@ -242,6 +246,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         computed_handle_color = QtGui.QColor(int(r), int(g), int(b), int(a))
         self._handleColor = computed_handle_color
 
+        if self.trailPath is None:
+            return
         painter.fillPath(
             self.trailPath,
             bg_color if self.isEnabled() else self.disable_bg_color,

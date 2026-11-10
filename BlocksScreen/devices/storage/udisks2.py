@@ -4,10 +4,11 @@ import os
 import pathlib
 import shutil
 import typing
-from collections.abc import Coroutine
 import unicodedata
+from collections.abc import Coroutine
 
 import sdbus
+from helper_methods import USB_FALLBACK_NAME, USB_LABEL_PREFIX, USB_LINK_PREFIXES
 from PyQt6 import QtCore
 
 from .device import Device
@@ -429,7 +430,10 @@ class UDisksDBusAsync(QtCore.QThread):
                         device: Device = self.controlled_devs.pop(path)
                         device.kill()
                         del device
+                        # Reap first: a refresh now would still list the link.
+                        self._cleanup_broken_symlinks()
                         self.hardware_removed[str].emit(path)
+                        continue
                 self._cleanup_broken_symlinks()
             except sdbus.dbus_exceptions.DbusUnknownMethodError as e:
                 logging.error(
@@ -455,13 +459,22 @@ class UDisksDBusAsync(QtCore.QThread):
         """Mounts the devices mountpoints"""
         for path, filesystem in device.file_systems.items():
             _ = fire_n_forget(
-                coro=self._mount_filesystem(filesystem, label),
+                coro=self._mount_filesystem(filesystem, label, path),
                 name=f"Mount-filesystem-{path}",
                 task_stack=self.task_stack,
             )
 
+    def _announce_mount(self, dev_path: str, symlink: str) -> str:
+        """Announce a new USB folder to the files view."""
+        if symlink:
+            self.device_mounted[str, str].emit(dev_path, symlink)
+        return symlink
+
     async def _mount_filesystem(
-        self, filesystem: UDisks2FileSystemAsyncInterface, label: str = ""
+        self,
+        filesystem: UDisks2FileSystemAsyncInterface,
+        label: str = "",
+        dev_path: str = "",
     ) -> str:
         val_label: str = validate_label(label)
         try:
@@ -472,8 +485,13 @@ class UDisksDBusAsync(QtCore.QThread):
                 "options": ("s", "rw,relatime,sync"),
             }
             mnt_path: str = await filesystem.mount(opts)
-            return self.add_symlink(
-                path=mnt_path, label=val_label, dst_path=self.gcodes_path.as_posix()
+            return self._announce_mount(
+                dev_path,
+                self.add_symlink(
+                    path=mnt_path,
+                    label=val_label,
+                    dst_path=self.gcodes_path.as_posix(),
+                ),
             )
         except sdbus.SdBusUnmappedMessageError as e:
             if AlreadyMountedException in e.args[0]:
@@ -485,12 +503,15 @@ class UDisksDBusAsync(QtCore.QThread):
                 if not mount_points:
                     return ""
                 mpoint: str = mount_points[0].decode("utf-8").strip("\x00")
-                if os.path.exists(mpoint):
+                if not os.path.exists(mpoint):
                     return ""
-                return self.add_symlink(
-                    path=mpoint,
-                    dst_path=self.gcodes_path.as_posix(),
-                    label=val_label,
+                return self._announce_mount(
+                    dev_path,
+                    self.add_symlink(
+                        path=mpoint,
+                        dst_path=self.gcodes_path.as_posix(),
+                        label=val_label,
+                    ),
                 )
         except Exception as e:
             logging.error(
@@ -525,9 +546,9 @@ class UDisksDBusAsync(QtCore.QThread):
         """
         if not _validated and label:
             label = validate_label(label, strict=True)
-            label = "USB-" + label
-        fallback: str = "USB DRIVE" if _index == 0 else str(f"USB DRIVE {_index}")
-        dstb = pathlib.Path(dst_path).joinpath(label or fallback)
+            label = USB_LABEL_PREFIX + label
+        fallback = USB_FALLBACK_NAME if _index == 0 else f"{USB_FALLBACK_NAME} {_index}"
+        dstb = pathlib.Path(dst_path).joinpath(label if label else fallback)
         try:
             if not os.path.islink(dstb):
                 os.symlink(src=path, dst=dstb)
@@ -582,10 +603,22 @@ class UDisksDBusAsync(QtCore.QThread):
             if os.path.islink(dir):
                 _ = self.rem_symlink(dir.as_posix())
 
+    def _is_symlink_live(self, link: pathlib.Path) -> bool:
+        """Live only while the target is still a mountpoint."""
+        if not os.path.exists(link):
+            return False
+        # Never reap links we did not create.
+        if not link.name.startswith(USB_LINK_PREFIXES):
+            return True
+        return os.path.ismount(os.path.realpath(link))
+
     def _cleanup_broken_symlinks(self) -> None:
+        """Remove dead USB symlinks and announce each removal."""
         for dir in self.gcodes_path.rglob("*"):
-            if os.path.islink(dir) and not os.path.exists(dir):
-                _ = self.rem_symlink(dir)
+            if not os.path.islink(dir) or self._is_symlink_live(dir):
+                continue
+            if self.rem_symlink(dir):
+                self.device_unmounted[str].emit(dir.as_posix())
 
     def _resolve_symlinks(
         self, path: str | pathlib.Path, mount_path: str | pathlib.Path

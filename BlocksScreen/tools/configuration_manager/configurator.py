@@ -1,5 +1,7 @@
 #!/usr/bin/python3
+import ast
 import configparser
+import filecmp
 import hashlib
 import logging
 import os
@@ -11,7 +13,8 @@ import threading
 from datetime import datetime
 from typing import Literal
 
-from tools.serial_scanner import SerialScanner
+from devices.discovery.serial_devices import SerialScanner
+from helper_methods import atomic_write_text
 
 HOME = pathlib.Path.home()
 CONFIG_REPO: pathlib.Path = HOME / "RF50-Klipper"
@@ -21,15 +24,20 @@ DETECTION_CACHE: pathlib.Path = HOME / ".rf50_config.json"
 VARIABLES_FILE: pathlib.Path = KLIPPER_CONFIG_DIR / "variables.cfg"
 PRINTER_CONFIG: pathlib.Path = KLIPPER_CONFIG_DIR / "printer.cfg"
 SV_CONFIG_MARKER = "#*# <---------------------- SAVE_CONFIG ---------------------->"
+# Copied only when missing; bs_migrate_moonraker_conf and Mainsail own it after that.
+SEED_ONLY_FILES: frozenset[str] = frozenset({"moonraker.conf"})
 
 _logger = logging.getLogger(__name__)
 
 
-def _timestamp() -> str:
-    """Return the current timestamp in ISO8601 format
+def _opt_line(opt: str, val: str) -> str:
+    """Option line; continuation lines indented so a multi-line value stays one option."""
+    return f"{opt}= " + val.replace("\n", "\n    ")
 
-    Largest unit of time to the smaller one"""
-    return datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+
+def _timestamp() -> str:
+    """Local time in ISO 8601 basic format: no colons, safe over SMB and scp."""
+    return datetime.now().strftime("%Y%m%dT%H%M%S")
 
 
 def is_git_repo(path: pathlib.Path) -> bool:
@@ -48,7 +56,7 @@ def _run_git(path: pathlib.Path, args: list[str]) -> subprocess.CompletedProcess
         raise NotADirectoryError(f"Not a directory: {path}")
     return subprocess.run(
         ["git", "-C", str(path)] + args, capture_output=True, text=True, timeout=2
-    )  # nosec B603 - path validated above, no shell=True
+    )  # nosec B603 — path validated above, no shell=True
 
 
 def is_git_dirty(path: pathlib.Path | str):
@@ -104,13 +112,16 @@ def check_broken_symlinks(dir: pathlib.Path) -> list[pathlib.Path]:
         return []
 
 
-def resolve_symlink(file: pathlib.Path, resolved: set[str]) -> bool:
-    """Check if `file` has a valid symlink on `target` dir
-
-    Returns:
-        bool: whether or not the provided directory has a working symlink pointing to the src file
-    """
-    return file.resolve().as_posix() in resolved
+def _atomic_symlink(src: pathlib.Path, target: pathlib.Path) -> None:
+    """Point `target` at `src` with one rename, so a crash never leaves it missing."""
+    tmp = target.with_name(f".{target.name}.bs-link")
+    tmp.unlink(missing_ok=True)
+    tmp.symlink_to(src)
+    try:
+        tmp.replace(target)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def get_file_checksum(file: pathlib.Path | str) -> str:
@@ -142,9 +153,15 @@ def copy_file_simple(orig: pathlib.Path | str, dest: pathlib.Path | str):
         dest = pathlib.Path(dest)
     if not orig.is_file() or not orig.exists():
         raise FileNotFoundError("File %s not found" % orig.as_posix())
-    res = shutil.copy2(orig, dest, follow_symlinks=False)
+    if dest.is_dir():
+        dest = dest / orig.name
+    existed = dest.exists()
+    # Overwritten in place, a power cut mid-copy leaves Klipper a truncated config.
+    atomic_write_text(dest, orig.read_text(encoding="utf-8"))
+    if not existed:
+        shutil.copymode(orig, dest)
     _logger.info("Copied file %s to destination %s" % (orig.name, dest))
-    return res
+    return str(dest)
 
 
 class ConfigManager:
@@ -224,6 +241,9 @@ class ConfigManager:
         self.config_fi_name, self.config_fi_relpath = self._build_file_index(
             self.config_dir
         )
+        # Set by sync(): a Klipper that refused the old variables.cfg must restart.
+        self.variables_repaired = False
+        self.replaced_files: list[pathlib.PurePath] = []
 
         self.sync()
 
@@ -267,9 +287,13 @@ class ConfigManager:
             if not first.is_dir():
                 break
             second = first / "config"
-            if not second.is_dir():
+            if not second.is_dir() and not second.is_symlink():
                 break
-            shutil.rmtree(second, ignore_errors=True)
+            # is_dir() follows symlinks and rmtree refuses them, so a symlinked nest survives every boot.
+            if second.is_symlink():
+                second.unlink(missing_ok=True)
+            else:
+                shutil.rmtree(second, ignore_errors=True)
             _logger.warning("Removed nested dir: %s", second)
             current = first
 
@@ -284,17 +308,9 @@ class ConfigManager:
         return file_dir.stat(follow_symlinks=False)
 
     def _get_missing_symlinks(
-        self,
-        root: pathlib.Path | str,
-        repo: pathlib.Path | str,
-        mode: Literal[0, 1] = 0,
+        self, root: pathlib.Path | str, repo: pathlib.Path | str
     ) -> list[pathlib.Path]:
-        """Scan the `root` directory for missing symbolic links compared
-        against files on `repo` directory.
-
-        Returns:
-            list: paths for Missing symlinks
-        """
+        """Repo cfg files whose mirrored path under `root` does not resolve to them."""
         _root = pathlib.Path(root)
         _repo = pathlib.Path(repo)
         if not _root.is_dir() or not _root.exists():
@@ -302,29 +318,14 @@ class ConfigManager:
         if not _repo.is_dir() or not _repo.exists():
             raise NotADirectoryError("Provided repo dir missing or does not exist")
 
-        _resolved: set[str] = {
-            f.resolve().as_posix() for f in _root.rglob("*") if f.is_symlink()
-        }
-
-        if mode:
-            for f in list(_root.rglob("*")):
-                if f.is_symlink() and f.is_dir():
-                    resolved_dir = f.resolve()
-                    if resolved_dir.exists():
-                        for sub in resolved_dir.rglob("*"):
-                            _resolved.add(sub.as_posix())
-
-        _missing = []
-        for d in _repo.rglob("*.cfg"):
-            # ignore copy files
-            if d.parts[-1] in self.cpy_files:
-                continue
-            # ignore .git dir files
-            if ".git" in d.parts:
-                continue
-            if d.resolve().as_posix() not in _resolved:
-                _missing.append(d)
-        return _missing
+        # resolve() follows folder links too, so a linked config/ or subfolder counts.
+        return [
+            d
+            for d in _repo.rglob("*.cfg")
+            if d.name not in self.cpy_files
+            and ".git" not in d.parts
+            and (_root / d.relative_to(_repo)).resolve() != d.resolve()
+        ]
 
     def _build_file_index(
         self, root: pathlib.Path
@@ -345,21 +346,21 @@ class ConfigManager:
 
     def _symlink_config(
         self, symlink_list: list[pathlib.Path], mode: Literal[0, 1] = 0
-    ) -> None:
-        """Creates symbolic links for the repo configurations onto
-        the machines printer configuration directory"""
+    ) -> list[pathlib.PurePath]:
+        """Link repo configs into the machine config dir; returns the local files replaced."""
+        replaced: list[pathlib.PurePath] = []
         try:
             # symlinks each file, ensure correct directories
             if not mode:
+                repo_real = self.repo.resolve()
+                config_real = self.config_dir.resolve()
                 for src in symlink_list:
-                    src_rel = src.relative_to(self.repo)
-                    target = self.config_dir / src_rel
-
-                    if target.exists() and target.is_symlink():
-                        continue
-                    ensure_dir(pathlib.Path(*target.parts[:-1]))
-                    target.symlink_to(src)
-                return
+                    try:
+                        if self._link_repo_file(src, repo_real, config_real):
+                            replaced.append(src.relative_to(self.repo))
+                    except (OSError, RuntimeError, ValueError) as e:
+                        _logger.error("Could not symlink %s: %s", src, e)
+                return replaced
             elif mode:
                 for entry in sorted(
                     self.repo.iterdir(), key=lambda p: (not p.is_dir(), p.name)
@@ -370,26 +371,78 @@ class ConfigManager:
                     target = self.config_dir / name
                     if target.exists():
                         continue
-                    ensure_dir(target.parent)
-                    if entry.is_dir():
-                        target.symlink_to(entry.resolve(), target_is_directory=True)
-                        _logger.info("Directory symlink: %s -> %s", target, entry)
-                    elif entry.is_file() and name not in self.cpy_files:
-                        target.symlink_to(entry.resolve())
-                        _logger.info("File symlink %s -> %s", target, entry)
+                    try:
+                        ensure_dir(target.parent)
+                        if entry.is_dir():
+                            target.symlink_to(entry.resolve(), target_is_directory=True)
+                            _logger.info("Directory symlink: %s -> %s", target, entry)
+                        elif entry.is_file() and name not in self.cpy_files:
+                            target.symlink_to(entry.resolve())
+                            _logger.info("File symlink %s -> %s", target, entry)
+                    except OSError as e:
+                        _logger.error("Could not symlink %s: %s", target, e)
 
         except Exception as e:
-            _logger.error(
-                "Caught exception while creating symbolic links for configuration files: %s"
-                % e
-            )
+            _logger.error("Could not create config symlinks: %s", e)
+        return replaced
+
+    def _link_repo_file(
+        self, src: pathlib.Path, repo_real: pathlib.Path, config_real: pathlib.Path
+    ) -> bool:
+        """Link the config copy of repo file `src` to it; True if differing content was replaced."""
+        src_rel = src.relative_to(self.repo)
+        target = self.config_dir / src_rel
+        parent_real = target.parent.resolve()
+        # Behind a folder link into the repo (or config/ itself linked) this is the repo file.
+        if parent_real == repo_real or repo_real in parent_real.parents:
+            return False
+        if parent_real != config_real / src_rel.parent:
+            _logger.warning("Skipping %s: its folder links to %s", target, parent_real)
+            return False
+        replacing = target.is_symlink() or target.is_file()
+        if replacing and target.resolve() == src.resolve():
+            return False
+        # Same bytes (an older clone or a plain copy): nothing Klipper runs changes.
+        if replacing and target.is_file() and filecmp.cmp(target, src, shallow=False):
+            replacing = False
+        if replacing:
+            backup = self._backup_file(target, src_rel)
+            _logger.warning("Replacing local %s, original kept at %s", target, backup)
+        ensure_dir(target.parent)
+        _atomic_symlink(src, target)
+        return replacing
+
+    def replaced_notice(self) -> str:
+        """UI notice for local configs the last sync replaced; empty if none."""
+        if not self.replaced_files:
+            return ""
+        where = (
+            f"~/{self.backup_dir.relative_to(HOME)}"
+            if self.backup_dir.is_relative_to(HOME)
+            else str(self.backup_dir)
+        )
+        if len(self.replaced_files) == 1:
+            what = f"{self.replaced_files[0].name} was reset to the RF50 default."
+        else:
+            what = f"{len(self.replaced_files)} config files were reset to the RF50 defaults."
+        return f"{what}\nYour version is saved in {where}."
+
+    def _backup_file(self, path: pathlib.Path, rel: pathlib.PurePath) -> pathlib.Path:
+        """Copy `path` under backup_dir at `rel`, links kept as links; never overwrites."""
+        base = self.backup_dir / rel.parent / f"{rel.name}.{_timestamp()}"
+        ensure_dir(base.parent)
+        backup, n = base, 1
+        while backup.exists():
+            backup, n = base.with_name(f"{base.name}.{n}"), n + 1
+        shutil.copy2(path, backup, follow_symlinks=False)
+        return backup
 
     def _section_blocks(self, lines):
         blocks = []
         name = None
         block = []
         for line in lines:
-            m = re.match("^\[\s*(.+?)\s*\]\s*$", line)
+            m = re.match(r"^\[\s*(.+?)\s*\]\s*$", line)
             if m:
                 if block:
                     blocks.append((name, block))
@@ -515,9 +568,7 @@ class ConfigManager:
                                     )
                                     for k, v in src_keys.items():
                                         if k not in tgt_keys:
-                                            merged_save_lines.append(
-                                                f"#*# \t{k} = {v}\n"
-                                            )
+                                            merged_save_lines.append(f"#*# {k} = {v}\n")
 
                         # Then: append any sections that exist only in source
                         for name, block in src_sc_sections:
@@ -529,7 +580,7 @@ class ConfigManager:
                         )
 
                     else:
-                        # Target has no SAVE_CONFIG block yet - use source as-is
+                        # Target has no SAVE_CONFIG block yet — use source as-is
                         merged = _sfl
 
                 else:
@@ -540,12 +591,13 @@ class ConfigManager:
                         target_cfg.read_string(_tfl)
 
                     appendix = []
+                    inserts: dict[str, list[tuple[str, str]]] = {}
                     for section in src_cfg.sections():
                         if section.startswith("mcu") or section.startswith("beacon"):
                             continue
                         if not target_cfg.has_section(section):
                             appendix.append(
-                                (section, True, list(src_cfg.items(section, raw=True)))
+                                (section, list(src_cfg.items(section, raw=True)))
                             )
                         else:
                             sec_missing = [
@@ -554,37 +606,52 @@ class ConfigManager:
                                 if not target_cfg.has_option(section, o)
                             ]
                             if sec_missing:
-                                appendix.append((section, False, sec_missing))
+                                inserts[section] = sec_missing
+
+                    base = _tfl
+                    if inserts:
+                        # A repeated header breaks Klipper save_variables' parser.
+                        tlines = _tfl.splitlines(keepends=True)
+                        for i in range(len(tlines) - 1, -1, -1):
+                            m = configparser.ConfigParser.SECTCRE.match(
+                                tlines[i].strip()
+                            )
+                            if m and m.group("header") in inserts:
+                                opts = inserts.pop(m.group("header"))
+                                tlines[i] = tlines[i].rstrip("\n") + "\n"
+                                tlines[i + 1 : i + 1] = [
+                                    _opt_line(o, v) + "\n" for o, v in opts
+                                ]
+                        base = "".join(tlines)
 
                     for opt, val in src_cfg.defaults().items():
                         if not target_cfg.defaults().get(opt):
                             items = (
-                                appendix[-1][2]
+                                appendix[-1][1]
                                 if appendix and appendix[-1][0] == "DEFAULT"
                                 else None
                             )
                             if items is not None:
                                 items.append((opt, val))
                             else:
-                                appendix.append(("DEFAULT", True, [(opt, val)]))
+                                appendix.append(("DEFAULT", [(opt, val)]))
 
                     if appendix:
                         lines = []
-                        for section, is_new, opts in appendix:
-                            if is_new:
-                                lines.append(f"[{section}]")
+                        for section, opts in appendix:
+                            lines.append(f"[{section}]")
                             for opt, val in opts:
-                                lines.append(f"{opt}= {val}")
+                                lines.append(_opt_line(opt, val))
                         text = "\n".join(lines)
-                        if _tfl and not _tfl.endswith("\n"):
-                            _tfl += "\n"
-                        merged = _tfl + text + "\n"
+                        if base and not base.endswith("\n"):
+                            base += "\n"
+                        merged = base + text + "\n"
                     else:
-                        merged = _tfl
+                        merged = base
 
             merged = self._fix_beacon_serial(merged)
             if _tfl != merged:
-                target_file.write_text(merged, encoding="utf-8")
+                atomic_write_text(target_file, merged)
             return True
         except Exception as e:
             _logger.error("Caught exception while merging: %s" % e)
@@ -615,6 +682,8 @@ class ConfigManager:
                     _logger.info("File created")
                     continue
 
+                if f in SEED_ONLY_FILES:
+                    continue
                 target = min(target_files, key=lambda p: len(p.parents))
                 if target.exists():
                     chk_src = get_file_checksum(src_file)
@@ -624,9 +693,13 @@ class ConfigManager:
 
                 # Files are different so they need merging
                 ok = False
+                if f == "variables.cfg":
+                    # Klipper rewrites it from memory: new keys go in via SAVE_VARIABLE
+                    self.variables_repaired = self._repair_variables(target)
+                    continue
                 if f == "printer.cfg":
                     ok = self.merge_cfg(src_file, target, marker=SV_CONFIG_MARKER)
-                elif f == "variables.cfg":
+                elif f == "BlocksScreen.cfg":
                     ok = self.merge_cfg(src_file, target)
                 else:
                     ok = copy_file_simple(src_file, target)
@@ -636,6 +709,69 @@ class ConfigManager:
             _logger.info("Caught exception while trying to create blank file %s" % e)
         except Exception as e:
             _logger.info("Caught exception while cpy files: %s" % e)
+
+    def _repair_variables(self, target: pathlib.Path) -> bool:
+        """Rewrite a variables.cfg save_variables cannot load, in its own format."""
+        strict = configparser.ConfigParser()
+        try:
+            # Same checks as save_variables.loadVariables, which fails Klippy's config
+            strict.read(target, encoding="utf-8")
+            if strict.has_section("Variables"):
+                for _, raw in strict.items("Variables"):
+                    ast.literal_eval(raw)
+            return False
+        except (configparser.Error, ValueError, SyntaxError, TypeError) as e:
+            _logger.warning("variables.cfg unloadable by Klipper, repairing: %s", e)
+        loose = configparser.ConfigParser(strict=False, interpolation=None)
+        try:
+            loose.read(target, encoding="utf-8")
+        except (configparser.Error, ValueError) as e:
+            _logger.error("variables.cfg beyond repair, left as is: %s", e)
+            return False
+        keep = {}
+        for key, raw in (
+            loose.items("Variables") if loose.has_section("Variables") else []
+        ):
+            try:
+                # Loose read skips interpolation: '%%' is Klipper's escaped '%', kept raw
+                if "%" in raw.replace("%%", ""):
+                    raise ValueError("'%' breaks save_variables' parser")
+                ast.literal_eval(raw.replace("%%", "%"))
+            except (ValueError, SyntaxError, TypeError) as e:
+                _logger.warning("Dropping variables.cfg %s = %r: %s", key, raw, e)
+                continue
+            keep[key] = raw
+        backup = self._backup_file(target, pathlib.PurePath(target.name))
+        lines = [f"{k} = {v}\n" for k, v in sorted(keep.items())]
+        atomic_write_text(target, "[Variables]\n" + "".join(lines) + "\n")
+        _logger.info("Repaired variables.cfg, original kept at %s", backup)
+        return True
+
+    def variable_defaults(self) -> dict[str, str]:
+        """Repo variables.cfg keys Klipper's SAVE_VARIABLE can take, as raw literals."""
+        src_files = self.repo_fi_name.get("variables.cfg", [])
+        if not src_files:
+            return {}
+        cfg = configparser.ConfigParser(interpolation=None)
+        try:
+            cfg.read(min(src_files, key=lambda p: len(p.parents)), encoding="utf-8")
+        except configparser.Error as e:
+            _logger.error("Unreadable repo variables.cfg: %s", e)
+            return {}
+        if not cfg.has_section("Variables"):
+            return {}
+        defaults = {}
+        for key, raw in cfg.items("Variables"):
+            # HH owns mmu_*; '%' breaks save_variables' parser, ';' is a gcode comment
+            if key.startswith("mmu_") or "%" in raw or ";" in raw:
+                continue
+            try:
+                ast.literal_eval(raw)
+            except (ValueError, SyntaxError):
+                _logger.warning("variables.cfg %s is not a literal: %r", key, raw)
+                continue
+            defaults[key] = raw
+        return defaults
 
     def cmp_file(self, src, target) -> bool:
         src = pathlib.Path(src)
@@ -725,23 +861,17 @@ class ConfigManager:
         return config_text
 
     def sync(self) -> None:
-        """Synchronizes configuration repo with the
-        machines configuration"""
+        """Synchronizes configuration repo with the machines configuration"""
+        # Every step only writes on a difference, so none is gated.
         try:
-            _missing = self._get_missing_symlinks(self.config_dir, self.repo)
-            _logger.info(_missing)
-            if _missing or any(self.cmp_cpy_files()):
-                if self.check_nested():
-                    self._cleanup_nested()
-
-                self.cleanup_broken_symlinks(self.config_dir)
-                self._symlink_config(_missing)
-                self._cpy_cfg_files()
-            else:
-                _logger.info("Configuration correct, proceding")
-        except NotADirectoryError as e:
-            _logger.error("%s" % e)
-        except FileNotFoundError as e:
-            _logger.error("%s" % e)
+            # A crash mid _atomic_symlink leaves its temp link, which would count as linked.
+            for stale in self.config_dir.rglob(".*.bs-link"):
+                stale.unlink(missing_ok=True)
+            missing = self._get_missing_symlinks(self.config_dir, self.repo)
+            if self.check_nested():
+                self._cleanup_nested()
+            self.cleanup_broken_symlinks(self.config_dir)
+            self.replaced_files = self._symlink_config(missing)
+            self._cpy_cfg_files()
         except Exception as e:
-            _logger.error("Caught exception: %s" % e)
+            _logger.error("Caught exception during sync: %s", e)

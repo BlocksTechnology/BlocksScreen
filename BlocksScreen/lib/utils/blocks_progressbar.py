@@ -203,7 +203,7 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         arc_span = -290 * 16
         painter.setPen(self._bg_pen)
         painter.drawArc(arc_rect, arc_start, arc_span)
-        if self.progress_value is not None:
+        if self.progress_value > 0:
             painter.setPen(self._progress_pen)
             # scale only over arc span
             progress_span = int(arc_span * self.progress_value / 100)

@@ -7,9 +7,6 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
     # Layout constants
     TEXT_MARGIN = 10
     CORNER_RADIUS = 8
-    TEXT_ALIGNMENT = (
-        QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
-    )
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
@@ -23,6 +20,7 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
 
         # Pre-allocated colors (avoid allocation in paint)
         self._bg_color = QtGui.QColor(223, 223, 223)
+        self._disabled_bg_color = QtGui.QColor(169, 169, 169)
         self._bg_pressed_color = QtGui.QColor(200, 200, 200)
         self._text_color = QtGui.QColor(0, 0, 0)
         self._placeholder_color = QtGui.QColor(130, 130, 130)
@@ -101,7 +99,9 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
         # Background
-        painter.setBrush(self._bg_color)
+        painter.setBrush(
+            self._bg_color if self.isEnabled() else self._disabled_bg_color
+        )
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.drawRoundedRect(
             self._widget_rect, self.CORNER_RADIUS, self.CORNER_RADIUS
@@ -115,6 +115,9 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
     def _draw_text(self, painter: QtGui.QPainter) -> None:
         """Draw the text or placeholder."""
         display_text = self.text()
+        align = (
+            self.alignment() & QtCore.Qt.AlignmentFlag.AlignHorizontal_Mask
+        ) | QtCore.Qt.AlignmentFlag.AlignVCenter
 
         # Apply password masking
         if self._secret and display_text:
@@ -125,6 +128,5 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         else:
             display_text = self._placeholder_str
             painter.setPen(self._placeholder_color)
-
         painter.setFont(self.font())
-        painter.drawText(self._text_rect, self.TEXT_ALIGNMENT, display_text)
+        painter.drawText(self._text_rect, align, display_text)
