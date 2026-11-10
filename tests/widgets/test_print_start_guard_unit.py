@@ -181,9 +181,11 @@ class TestUsbImportDone:
         tab._usb_key = tab._usb_local = ""
         tab._usb_created = set()
         tab._usb_settle_timer = MagicMock()
+        tab._cancel_pending = False
+        tab._cancel_timer = tab._cancel_settle = MagicMock()
         tab.gcode_path = "/tmp/gcodes"
         tab.call_load_panel = MagicMock()
-        _bind(tab, "_usb_print_local_copy", "_end_usb_print")
+        _bind(tab, "_usb_print_local_copy", "_end_usb_print", "_clear_cancel")
         tab.remember = MagicMock()
         # printTab was evicted from sys.modules, so patch the function's globals.
         monkeypatch.setitem(

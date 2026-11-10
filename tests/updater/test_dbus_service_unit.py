@@ -828,6 +828,18 @@ class TestLockHeldSurfacesError:
         svc._provision_busy(False)
         assert svc._busy is False
 
+    @pytest.mark.asyncio
+    async def test_printing_refuses_update(self, svc, printing):
+        """A print started while the UI confirm popup was open must not get restarted."""
+        printing.return_value = True
+        with patch("updater.dbus_service.process_lock", lambda: nullcontext(True)):
+            await svc._run_update_all()
+        svc.error.emit.assert_called_once_with(("updater", "printer is busy"))
+        printing.assert_awaited_once_with(unanswered=True)
+        svc._svc.update_all.assert_not_called()
+        svc._svc.background_apt_upgrade.assert_not_called()
+        assert svc._busy is False
+
 
 class TestBootReconcileRetry:
     @pytest.mark.asyncio

@@ -48,6 +48,11 @@ _RESPOND_SAFE = str.maketrans({'"': "'", "\n": " ", "\r": " ", ";": ","})
 
 logger = logging.getLogger(__name__)
 
+# Upper bound for CANCEL_PRINT, including an MMU unload over a long bowden.
+_CANCEL_TIMEOUT_MS = 180_000
+# A Printing update can lag the cancel reply by one 250 ms status push.
+_CANCEL_SETTLE_MS = 1_000
+
 
 class PrintTab(QtWidgets.QStackedWidget):
     """Print tab: files, confirm, job status and tuning pages."""
@@ -98,7 +103,21 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._pending_save_offset: float = 0.0
         self._finish_print_handled: bool = False
         self._cancel_z_snapshot: float = 0.0
+        self._cancel_pending: bool = False
+        self._cancel_saw_busy: bool = False
+        self._cancel_returned: bool = False  # CANCEL_PRINT ran to its end
+        self._cancel_gen: int = 0  # drops a cancel reply that outlived its cancel
+        self._print_state: str = ""
+        self._idle_state: str = ""
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
+        self._cancel_timer = QtCore.QTimer(self)
+        self._cancel_timer.setSingleShot(True)
+        self._cancel_timer.setInterval(_CANCEL_TIMEOUT_MS)
+        self._cancel_timer.timeout.connect(self._on_cancel_timeout)
+        self._cancel_settle = QtCore.QTimer(self)
+        self._cancel_settle.setSingleShot(True)
+        self._cancel_settle.setInterval(_CANCEL_SETTLE_MS)
+        self._cancel_settle.timeout.connect(self._on_cancel_settled)
         # One UI-thread signal object for every import; the token drops stale results.
         self._usb_signals = UsbImportSignals(self)
         self._usb_signals.done.connect(self._on_usb_import_done)
@@ -243,6 +262,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.print_stats_update[str, str].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
+        self.printer.idle_timeout_update[str, str].connect(self.on_idle_timeout_update)
         self.printer.gcode_move_update[str, list].connect(
             self.jobStatusPage_widget.on_gcode_move_update
         )
@@ -333,19 +353,26 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """Track the job file; unblock tabs if on standby."""
+        """Track the job file; unblock tabs on standby, drop the cancel loadscreen."""
         if field == "filename" and isinstance(value, str):
             self._job_file = value
-        if isinstance(value, str) and "state" in field and value == "standby":
-            if not self._usb_pending:  # the USB copy owns the loadscreen until it ends
-                self.call_load_panel.emit(False, "", False)
-            self.on_cancel_print.emit()
-            if not self._finish_print_handled and self._cancel_z_snapshot != 0:
-                self._active_z_offset = self._cancel_z_snapshot
-                self.save_config()
-                self._finish_print_handled = True
-                self.save_config_btn.setVisible(True)
-            self._cancel_z_snapshot = 0.0
+        if not (isinstance(value, str) and "state" in field):
+            return
+        self._print_state = value
+        if value != "standby":
+            self._maybe_finish_cancel()
+            return
+        self._clear_cancel()
+        if not self._usb_pending:  # the USB copy owns the loadscreen until it ends
+            # Unforced: MainWindow's update and restart overlays outrank this release.
+            self.call_load_panel.emit(False, "", False)
+        self.on_cancel_print.emit()
+        if not self._finish_print_handled and self._cancel_z_snapshot != 0:
+            self._active_z_offset = self._cancel_z_snapshot
+            self.save_config()
+            self._finish_print_handled = True
+            self.save_config_btn.setVisible(True)
+        self._cancel_z_snapshot = 0.0
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_numpad_request")
@@ -595,11 +622,71 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.save_config_btn.setVisible(False)
 
+    @QtCore.pyqtSlot(str, str, name="on_idle_timeout_update")
+    def on_idle_timeout_update(self, field: str, value: str) -> None:
+        """Track idle_timeout state to know when the CANCEL_PRINT macro has finished."""
+        if field == "state":
+            self._idle_state = value
+            self._maybe_finish_cancel()
+
+    def _maybe_finish_cancel(self) -> None:
+        """Drop the cancelling loadscreen once the cancel macro and its moves are done."""
+        if not self._cancel_pending:
+            return
+        busy = self._idle_state.lower() == "printing"
+        # idle_timeout is already Ready when paused; require Printing after the cancel starts.
+        self._cancel_saw_busy = self._cancel_saw_busy or busy
+        if busy:
+            return
+        # The macro's return covers a cancel whose Printing phase was never reported.
+        if self._cancel_returned or (
+            self._print_state == "cancelled" and self._cancel_saw_busy
+        ):
+            self._finish_cancel()
+
+    def _finish_cancel(self) -> None:
+        """Forget the pending cancel and release its loadscreen."""
+        self._clear_cancel()
+        # Forced: MainWindow drops unforced hides while printPanel is hidden.
+        self.call_load_panel.emit(False, "", True)
+
+    def _clear_cancel(self) -> None:
+        """Forget the pending cancel and stop its timers."""
+        self._cancel_pending = False
+        self._cancel_timer.stop()
+        self._cancel_settle.stop()
+
+    def _on_cancel_reply(self, gen: int, reply: object) -> None:
+        """Moonraker answers printer.print.cancel only once CANCEL_PRINT has returned."""
+        if gen != self._cancel_gen or not self._cancel_pending:
+            return
+        if isinstance(reply, dict) and "error" in reply:
+            self._finish_cancel()  # Klipper reports the failure itself
+            return
+        self._cancel_settle.start()
+
+    @QtCore.pyqtSlot(name="on_cancel_settled")
+    def _on_cancel_settled(self) -> None:
+        """Count the cancel as returned once a late Printing update had time to land."""
+        self._cancel_returned = True
+        self._maybe_finish_cancel()
+
+    @QtCore.pyqtSlot(name="on_cancel_timeout")
+    def _on_cancel_timeout(self) -> None:
+        """Drop the cancel loadscreen if neither the reply nor the idle update came."""
+        if self._cancel_pending:
+            self._finish_cancel()
+
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
         """Dismiss the Z-offset save popup and reset save state on unexpected shutdown."""
         if state in ("ready", "startup"):
             return
+        if self._cancel_pending:
+            # E-stop during the cancel macro: print_stats never reaches cancelled.
+            self._clear_cancel()
+            # Unforced: MainWindow's update and restart overlays outrank this release.
+            self.call_load_panel.emit(False, "", False)
         if self._usb_pending:  # e.g. FIRMWARE_RESTART or a thermal shutdown mid-copy
             self._usb_from_console = False  # a non-ready Klipper rejects RESPOND
             self._end_usb_print(f"USB print cancelled: Klipper is {state}.")
@@ -636,8 +723,15 @@ class PrintTab(QtWidgets.QStackedWidget):
             and self.babystepPage.baby_stepchange
         ):
             self._cancel_z_snapshot = self._active_z_offset
-        self.ws.api.cancel_print()
+        self._cancel_pending = True
+        self._cancel_returned = False
+        self._cancel_saw_busy = self._idle_state.lower() == "printing"
+        self._cancel_gen += 1
+        self._cancel_timer.start()
         self.call_load_panel.emit(True, "Cancelling print...\nPlease wait", False)
+        on_reply = partial(self._on_cancel_reply, self._cancel_gen)
+        if not self.ws.api.cancel_print(callback=on_reply):
+            on_reply({"error": {"code": -1, "message": "not connected"}})
 
     def change_page(self, index: int) -> None:
         """Request page change to global manager."""
