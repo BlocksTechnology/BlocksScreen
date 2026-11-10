@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from configfile import get_configparser
 from lib.klipper_message_filter import Severity  # noqa: E402
 from lib.panels.mainWindow import MainWindow  # noqa: E402
-from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
+from logger import LogManager, install_crash_handler, setup_logging
 from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
 from tools.configuration_manager import DeviceConfigManager, DeviceConfigWatcher
 
@@ -39,20 +39,6 @@ _LOGO: Path | None = next(
     ),
     None,
 )
-
-
-class BlocksScreenApp(QtWidgets.QApplication):
-    """QApplication subclass that routes unhandled slot exceptions to CrashHandler."""
-
-    def notify(self, a0: QtCore.QObject, a1: QtCore.QEvent) -> bool:  # type: ignore[override]
-        try:
-            return super().notify(a0, a1)
-        except Exception:
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            handler = CrashHandler._instance
-            if handler is not None and exc_type is not None and exc_value is not None:
-                handler._exception_hook(exc_type, exc_value, exc_tb)
-            return False
 
 
 QtGui.QGuiApplication.setAttribute(
@@ -146,7 +132,7 @@ def show_splash() -> QtWidgets.QSplashScreen:
     return splash
 
 
-def _setup_sigterm(app: BlocksScreenApp) -> None:
+def _setup_sigterm(app: QtWidgets.QApplication) -> None:
     def _do_shutdown() -> None:
         logging.getLogger(__name__).info("SIGTERM: showing restart splash before exit")
         # Cover the live UI before the multi-second teardown freezes its last frame.
@@ -338,7 +324,8 @@ if __name__ == "__main__":
     _logger.info("============ BlocksScreen Initializing ============")
 
     initialize_conf_manager()
-    BlocksScreen = BlocksScreenApp([])
+    # No notify() override: PyQt sends handler exceptions to sys.excepthook
+    BlocksScreen = QtWidgets.QApplication([])
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
     BlocksScreen.setDesktopFileName("BlocksScreen")
