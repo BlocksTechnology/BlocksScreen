@@ -82,14 +82,15 @@ class DisplayButton(QtWidgets.QPushButton):
 
     def setText(self, text: str) -> None:
         """Set widget text"""
+        if text == self._text:  # status ticks resend unchanged values at 4 Hz
+            return
         self._text = text
         self.update()
         super().setText(text)
 
     def setSecondaryText(self, text: str) -> None:
         """Set widget secondary text"""
-        self._secondary_text = text
-        self.update()
+        self.secondary_text = text
 
     @property
     def secondary_text(self) -> str:
@@ -99,6 +100,8 @@ class DisplayButton(QtWidgets.QPushButton):
     @secondary_text.setter
     def secondary_text(self, text: str) -> None:
         """Set secondary text"""
+        if text == self._secondary_text:
+            return
         self._secondary_text = text
         self.update()
 

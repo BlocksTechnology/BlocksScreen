@@ -17,6 +17,7 @@ class CustomProgressBar(QtWidgets.QProgressBar):
     thumbnail_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="thumbnail-clicked"
     )
+    _ARC_SPAN = -290 * 16  # sixteenths of a degree, as drawArc takes
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -125,8 +126,15 @@ class CustomProgressBar(QtWidgets.QProgressBar):
 
     def set_progress(self, fraction: float) -> None:
         """Set progress from a 0.0-1.0 fraction (clamped)."""
+        old = self.progress_value
         self.progress_value = max(0.0, min(fraction, 1.0)) * 100
-        self.update()
+        if self._paint_key(old) != self._paint_key(self.progress_value):
+            self.update()
+
+    @staticmethod
+    def _paint_key(value: float) -> tuple[bool, int, int]:
+        """What paint draws from a value: arc on/off, arc span, percent text."""
+        return value > 0, int(CustomProgressBar._ARC_SPAN * value / 100), int(value)
 
     def reset(self) -> None:
         """Clear progress back to 0%."""
@@ -200,7 +208,7 @@ class CustomProgressBar(QtWidgets.QProgressBar):
     ) -> None:
         arc_rect = self._ensure_arc_geometry()
         arc_start = 236 * 16
-        arc_span = -290 * 16
+        arc_span = self._ARC_SPAN
         painter.setPen(self._bg_pen)
         painter.drawArc(arc_rect, arc_start, arc_span)
         if self.progress_value > 0:

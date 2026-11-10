@@ -41,3 +41,28 @@ class TestReset:
         bar.set_progress(0.8)
         bar.reset()
         assert bar.progress_value == 0
+
+
+class TestRepaintGuard:
+    """set_progress repaints only when the drawn arc or percent text changes."""
+
+    def test_subpixel_step_skips_update(self, bar, monkeypatch):
+        bar.set_progress(0.5)
+        calls = []
+        monkeypatch.setattr(bar, "update", lambda: calls.append(1))
+        bar.set_progress(0.50001)
+        assert calls == []
+        assert bar.progress_value == pytest.approx(50.001)
+
+    def test_visible_step_updates(self, bar, monkeypatch):
+        bar.set_progress(0.5)
+        calls = []
+        monkeypatch.setattr(bar, "update", lambda: calls.append(1))
+        bar.set_progress(0.51)
+        assert calls == [1]
+
+    def test_leaving_zero_updates(self, bar, monkeypatch):
+        calls = []
+        monkeypatch.setattr(bar, "update", lambda: calls.append(1))
+        bar.set_progress(0.00001)
+        assert calls == [1]
