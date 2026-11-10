@@ -762,7 +762,8 @@ use_build() {
 }
 
 # Refuse a build that cannot boot, lands at the wrong address, or changes how the
-# host reaches the MCU (chip, clock, CAN/USB pins, bridge mode) versus the running one.
+# host reaches the MCU: chip, CAN/USB/crystal pins and bridge mode versus the running
+# MCU, crystal frequency versus the last flashed .config (the MCU does not report it).
 preflight_firmware() {
     local name="$1" iface="$2" cfg="$3" rc=0 section
     is_linux_config "$cfg" && return 0
@@ -776,18 +777,23 @@ preflight_firmware() {
         err "[$name] built image failed its sanity checks - not flashing"
         return 1
     fi
-    [ "$CONTEXT" = "pi" ] || return 0
+    local flashed="$FW_BUILD_ROOT/$name.flashed.config"
+    if [ -f "$flashed" ]; then
+        python3 "$PREFLIGHT_PY" flashed --new "$FW_BUILD_ROOT/$name/.config" \
+            --flashed "$flashed" || rc=1
+    fi
     section=$(parse_config_metadata "$cfg" | sed -n 's/^klipper_section=//p')
-    [ -n "$section" ] || return 0
-    python3 "$PREFLIGHT_PY" comms --dict "${FW_OUT}klipper.dict" --section "$section" \
-        --url "$MOONRAKER_URL" || rc=$?
-    case "$rc" in
-    0) return 0 ;;
-    3)
-        warn "[$name] no running firmware to compare - comms settings unchecked"
-        return 0
-        ;;
-    esac
+    if [ "$CONTEXT" = "pi" ] && [ -n "$section" ]; then
+        local comms_rc=0
+        python3 "$PREFLIGHT_PY" comms --dict "${FW_OUT}klipper.dict" --section "$section" \
+            --url "$MOONRAKER_URL" || comms_rc=$?
+        case "$comms_rc" in
+        0) ;;
+        3) warn "[$name] no running firmware to compare - comms settings unchecked" ;;
+        *) rc=1 ;;
+        esac
+    fi
+    [ "$rc" -eq 0 ] && return 0
     if $ALLOW_COMMS_CHANGE; then
         warn "[$name] comms settings change accepted (--allow-comms-change)"
         return 0
@@ -852,6 +858,9 @@ bootstrap_katapult() {
         return 1
     fi
 
+    # Build first: a board found in DFU/BOOTSEL is flashed at once, not left waiting.
+    build_katapult_firmware "$name" "$katapult_cfg" || return 1
+
     if [ -n "$katapult_bootsel" ]; then
         info "[$name] waiting for BOOTSEL device ($katapult_bootsel, up to 8s)..."
         local i
@@ -864,7 +873,6 @@ bootstrap_katapult() {
             warn "  Connect a USB cable from [$name] to the Pi and re-run."
             return 1
         fi
-        build_katapult_firmware "$name" "$katapult_cfg" || return 1
         info "Flashing Katapult on [$name] via BOOTSEL..."
         local _kat_tmp _kat_rc
         _kat_tmp=$(mktemp)
@@ -886,6 +894,14 @@ bootstrap_katapult() {
     fi
 
     if [ -n "$katapult_dfu" ]; then
+        local boot_addr
+        boot_addr=$(grep -oP '^CONFIG_FLASH_BOOT_ADDRESS=\K0x[0-9a-fA-F]+' \
+            "$FW_BUILD_ROOT/$name.katapult/.config" || echo 0x08000000)
+        python3 "$PREFLIGHT_PY" image --config "$FW_BUILD_ROOT/$name.katapult/.config" \
+            --image "${FW_OUT}katapult.bin" --at "$boot_addr" --bootloader || {
+            err "[$name] Katapult image failed its sanity checks - not flashing"
+            return 1
+        }
         info "[$name] waiting for DFU device ($katapult_dfu, up to 8s)..."
         local i dfu_result=""
         for ((i = 1; i <= 8; i++)); do
@@ -900,15 +916,6 @@ bootstrap_katapult() {
             return 1
         fi
         local dfu_serial="${dfu_result%%|*}"
-        build_katapult_firmware "$name" "$katapult_cfg" || return 1
-        local boot_addr
-        boot_addr=$(grep -oP '^CONFIG_FLASH_BOOT_ADDRESS=\K0x[0-9a-fA-F]+' \
-            "$FW_BUILD_ROOT/$name.katapult/.config" || echo 0x08000000)
-        python3 "$PREFLIGHT_PY" image --config "$FW_BUILD_ROOT/$name.katapult/.config" \
-            --image "${FW_OUT}katapult.bin" --at "$boot_addr" --bootloader || {
-            err "[$name] Katapult image failed its sanity checks - not flashing"
-            return 1
-        }
         # Mass erase drops the old app, so Katapult stays in its bootloader for the CAN flash.
         local _dfu_rc=0
         flash_dfu "$name Katapult" "$katapult_dfu" "$dfu_serial" 0 "$boot_addr" \
@@ -1585,6 +1592,9 @@ cmd_flash() {
         if [ "$ok_flag" -eq 1 ]; then
             flashed+=("$name ($iface)$_note")
             record_flash "$cfg" "$iface" ok
+            # Baseline for the next run's crystal check (preflight_firmware).
+            is_linux_config "$cfg" ||
+                cp -f "$FW_BUILD_ROOT/$name/.config" "$FW_BUILD_ROOT/$name.flashed.config"
         else
             failed+=("$name ($iface)")
             record_flash "$cfg" "$iface" failed

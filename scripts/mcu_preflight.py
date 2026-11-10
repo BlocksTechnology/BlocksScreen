@@ -4,6 +4,7 @@
 image: vector table, link address and size of a built image (ARM Cortex-M layout).
 pair: a Katapult build must share chip, clock, CAN pins and app address with Klipper.
 comms: constants of the new klipper.dict versus the running MCU's `mcu_constants`.
+flashed: clock Kconfig of the new build versus the last successfully flashed one.
 
 Exit codes: 0 pass, 1 problems found (printed to stderr), 3 no baseline to compare.
 """
@@ -38,6 +39,13 @@ COMMS_KEYS = (
     "RESERVE_PINS_USB",
     "RESERVE_PINS_USB1",
     "RESERVE_PINS_serial",
+    "RESERVE_PINS_crystal",
+)
+# Not exported as MCU constants, so the last flashed .config is the only baseline.
+FLASHED_KEYS = (
+    "CONFIG_MCU",
+    "CONFIG_CLOCK_REF_FREQ",
+    "CONFIG_STM32_CLOCK_REF_INTERNAL",
 )
 # Kconfig symbols Katapult and the Klipper app it launches must agree on.
 PAIR_KEYS = (
@@ -158,6 +166,15 @@ def comms_problems(new: dict, running: dict) -> list[str]:
     ]
 
 
+def flashed_problems(new: dict[str, str], flashed: dict[str, str]) -> list[str]:
+    """Clock Kconfig symbols that differ between the last flashed build and the new one."""
+    return [
+        f"{key}: last flash {flashed.get(key)!r}, new build {new.get(key)!r}"
+        for key in FLASHED_KEYS
+        if flashed.get(key) != new.get(key)
+    ]
+
+
 def running_constants(base_url: str, section: str, timeout: float = 5.0) -> dict:
     """`mcu_constants` of a Klipper MCU section, empty when it never connected."""
     query = f"{urllib.parse.quote(section)}=mcu_constants"
@@ -176,6 +193,9 @@ def _build_parser() -> argparse.ArgumentParser:
     pair = sub.add_parser("pair")
     pair.add_argument("--klipper", type=Path, required=True)
     pair.add_argument("--katapult", type=Path, required=True)
+    flashed = sub.add_parser("flashed")
+    flashed.add_argument("--new", type=Path, required=True)
+    flashed.add_argument("--flashed", type=Path, required=True)
     comms = sub.add_parser("comms")
     comms.add_argument("--dict", type=Path, required=True)
     comms.add_argument("--section", required=True)
@@ -190,6 +210,8 @@ def _run(args: argparse.Namespace) -> list[str] | None:
         )
     if args.cmd == "pair":
         return pair_problems(read_kconfig(args.klipper), read_kconfig(args.katapult))
+    if args.cmd == "flashed":
+        return flashed_problems(read_kconfig(args.new), read_kconfig(args.flashed))
     try:
         running = running_constants(args.url, args.section)
     except (OSError, ValueError, KeyError) as exc:

@@ -119,11 +119,17 @@ def test_comms_ignores_unrelated_constants() -> None:
     running = {
         "MCU": "stm32h723xx",
         "CANBUS_BRIDGE": 1,
-        "RESERVE_PINS_crystal": "PH0,PH1",
+        "STATS_SUMSQ_BASE": 256,
     }
     assert pf.comms_problems({"MCU": "stm32h723xx", "CANBUS_BRIDGE": 1}, running) == []
     problems = pf.comms_problems({"MCU": "stm32h723xx"}, running)
     assert problems == ["CANBUS_BRIDGE: running 1, new build None"]
+
+
+def test_comms_catches_crystal_to_internal_clock() -> None:
+    running = {"MCU": "stm32h723xx", "RESERVE_PINS_crystal": "PH0,PH1"}
+    problems = pf.comms_problems({"MCU": "stm32h723xx"}, running)
+    assert problems == ["RESERVE_PINS_crystal: running 'PH0,PH1', new build None"]
 
 
 _CONSTANTS = {"mcu": {"mcu_constants": {"MCU": "stm32g0b1xx", "CLOCK_FREQ": 64000000}}}
@@ -161,6 +167,20 @@ def test_comms_cli(
     dict_file.write_text(json.dumps({"config": {"MCU": mcu, "CLOCK_FREQ": 64000000}}))
     argv = ["comms", "--dict", str(dict_file), "--section", section]
     assert pf.main(argv + ["--url", moonraker_url]) == rc
+
+
+@pytest.mark.parametrize(
+    ("new_ref", "rc"),
+    [("CONFIG_CLOCK_REF_FREQ=25000000", 0), ("CONFIG_CLOCK_REF_FREQ=8000000", 1)],
+)
+def test_flashed_cli_catches_crystal_change(
+    tmp_path: Path, new_ref: str, rc: int
+) -> None:
+    flashed = tmp_path / "flashed.config"
+    flashed.write_text('CONFIG_MCU="stm32h723xx"\nCONFIG_CLOCK_REF_FREQ=25000000\n')
+    new = tmp_path / "new.config"
+    new.write_text(f'CONFIG_MCU="stm32h723xx"\n{new_ref}\n')
+    assert pf.main(["flashed", "--new", str(new), "--flashed", str(flashed)]) == rc
 
 
 # dfu-util stub: logs calls; the device leaves the --list after :leave unless STUCK=1.
