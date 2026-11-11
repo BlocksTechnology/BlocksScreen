@@ -320,7 +320,7 @@ def test_cancel_page_leaves_loadscreen_alone() -> None:
 
 @pytest.mark.parametrize("state", ["ready", "shutdown", "disconnected"])
 def test_notify_klippy_reaches_klippy_status(state) -> None:
-    # str(...)[0] routed every notify_klippy_* to a missing _handle_n_message
+    # Old route rebound api_reference to a str, so [0] gave "n": _handle_n_message
     win = SimpleNamespace(klippy_status=MagicMock())
     win._handle_notify_klippy_message = MethodType(
         MainWindow._handle_notify_klippy_message, win
