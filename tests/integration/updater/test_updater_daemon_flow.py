@@ -1,7 +1,10 @@
 """UpdaterDbusService end to end: busy/overlay contract, boot pass, deploy hold, cancel."""
 
 import asyncio
+import os
 from unittest.mock import AsyncMock
+
+import pytest
 
 UI_FILES = {
     "updater/dbus_service.py": "# marker\n",
@@ -183,21 +186,8 @@ async def test_boot_provisioning_raises_overlay(harness, daemon, wait_for):
     assert d.statuses()[0]["klipper"]["commits_behind"] == 0
 
 
-def _power_cut(harness) -> str:
-    """Leave klipper pulled to a new commit with its in-flight marker; return the old head."""
-    origin = harness.remote("klipper")
-    harness.install(origin)
-    old = harness.head("klipper")
-    origin.commit({"klippy.py": "v2\n"})
-    harness.git("pull", "-q", cwd=harness.home / "klipper")
-    harness.inflight.parent.mkdir(parents=True, exist_ok=True)
-    harness.inflight.write_text(f'{{"klipper": "{old}"}}')
-    harness.component("klipper", service="klipper.service")
-    return old
-
-
 async def test_boot_reconcile_reverts_power_cut(harness, daemon, wait_for):
-    old = _power_cut(harness)
+    old = harness.power_cut()
 
     await _booted(daemon, wait_for)
 
@@ -207,7 +197,7 @@ async def test_boot_reconcile_reverts_power_cut(harness, daemon, wait_for):
 
 
 async def test_boot_revert_restarts_service_on_reverted_code(harness, daemon, wait_for):
-    old = _power_cut(harness)
+    old = harness.power_cut()
 
     await _booted(daemon, wait_for)
 
@@ -216,7 +206,7 @@ async def test_boot_revert_restarts_service_on_reverted_code(harness, daemon, wa
 
 
 async def test_boot_revert_mid_print_defers_restart(harness, daemon, wait_for):
-    old = _power_cut(harness)
+    old = harness.power_cut()
     harness.printing.return_value = True
 
     await _booted(daemon, wait_for)
@@ -231,14 +221,17 @@ async def test_cancel_mid_hook_reverts_and_releases(harness, daemon, wait_for):
     old = harness.head("klipper")
     origin.commit({"klippy.py": "v2\n"})
     harness.component("klipper", service="klipper.service")
-    harness.hook("klipper", "sleep 20\n")
+    pid_file = harness.state / "hook.pid"
+    harness.hook("klipper", f'echo $$ >"{pid_file}"\nexec sleep 20\n')
     d = await _booted(daemon, wait_for)
 
     assert await d.iface.update_all() is True
-    await wait_for(
-        lambda: ("klipper", 3, 4) in d.signals("step_complete"), what="hook start"
-    )
+    # The step signal fires before the hook spawns; only the pid file proves it runs.
+    await wait_for(lambda: pid_file.exists() and pid_file.read_text(), what="hook")
     await d.iface.cancel()
+
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid_file.read_text()), 0)  # cancel killed and reaped the hook
 
     assert harness.head("klipper") == old
     assert d.signals("rollback") == [("klipper", True)]

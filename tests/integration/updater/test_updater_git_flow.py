@@ -244,13 +244,9 @@ async def test_plain_ui_change_sets_no_deploy_flag(harness):
 
 
 async def test_reconcile_reverts_power_cut_batch(harness):
-    _, old, new = _klipper(harness)
-    path = harness.home / "klipper"
     # Power cut mid-batch: the tree moved, the marker still names the rollback point.
-    harness.git("pull", "-q", cwd=path)
-    assert harness.head("klipper") == new
-    harness.inflight.parent.mkdir(parents=True, exist_ok=True)
-    harness.inflight.write_text(f'{{"klipper": "{old}"}}')
+    old = harness.power_cut()
+    assert harness.head("klipper") != old
     svc, _ = harness.service()
 
     assert await svc.reconcile() is True

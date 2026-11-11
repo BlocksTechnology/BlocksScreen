@@ -251,6 +251,18 @@ class Harness:
 
     # -- hooks, fakes, observations ------------------------------------------
 
+    def power_cut(self, name: str = "klipper") -> str:
+        """Leave *name* pulled to a new commit with its in-flight marker; return the old head."""
+        origin = self.remote(name)
+        self.install(origin)
+        old = self.head(name)
+        origin.commit({"klippy.py": "v2\n"})
+        self.git("pull", "-q", cwd=self.home / name)
+        self.inflight.parent.mkdir(parents=True, exist_ok=True)
+        self.inflight.write_text(json.dumps({name: old}))
+        self.component(name, service=f"{name}.service")
+        return old
+
     def hook(self, name: str, body: str) -> None:
         """Install a post-update hook for a component."""
         _script(self.hooks / f"{name}.sh", body)
@@ -366,6 +378,13 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
     exec_g = svc_g["git_fetch"].__globals__
     lock_g = exec_g["restart_sentinel_path"].__globals__
     comp_g = svc_g["load_components"].__globals__
+    real_load = comp_g["load_components"]
+
+    def _load_components(bundled_text: str | None = None):
+        if bundled_text is not None:  # the follow-up parses an older manifest
+            return real_load(bundled_text)
+        return comp_g["_build_configs"](h.components), 86_400.0
+
     cache = home / ".cache" / "blockscreen"
     deploy_unit = h.etc / "BlocksScreen-deploy.path"
     deploy_unit.touch()
@@ -377,23 +396,22 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
         _INFLIGHT_PATH=cache / "updater_inflight.json",
         _FAULT_MARKER_PATH=cache / "selfheal_fault.json",
         _HISTORY_PATH=cache / "update_history.jsonl",
+        _FOLLOWUP_PATH=cache / "updater_followup",
         _APT_STATUS_CACHE=cache / "apt_status_cache.json",
         _DEPLOY_FLAG=h.deploy_flag,
         _DEPLOY_PATH_UNIT=deploy_unit,
         PIP=str(h.bin / "pip3"),
         SYSTEMCTL=str(h.bin / "systemctl"),
         klipper_printing=h.printing,
-        load_components=lambda: (comp_g["_build_configs"](h.components), 86_400.0),
+        load_components=_load_components,
     )
+    real_remote_url = exec_g["git_remote_url"]
+    real_clean_env = exec_g["_make_clean_env"]
 
-    async def _configured_origin(path: Path) -> str:
-        # get-url expands insteadOf to file://; the raw config keeps the https URL.
-        ok, out = await exec_g["_run"](
-            [exec_g["GIT"], "config", "--get", "remote.origin.url"],
-            cwd=path,
-            timeout=10.0,
-        )
-        return out.strip() if ok else ""
+    async def _remote_url(path: Path) -> str:
+        # Production get-url applies insteadOf; map it back to the URL a box has.
+        url = await real_remote_url(path)
+        return url.replace(f"file://{h.remotes}/", REMOTE_BASE, 1)
 
     _patch(
         monkeypatch,
@@ -405,9 +423,18 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
         DPKG=str(h.bin / "dpkg"),
         APT_HELPER=h.bin / "bs-apt-helper",
         PIP=str(h.bin / "pip3"),
-        KLIPPY_SOCK=root / "no-klippy.sock",
         _HOOKS_DIR=h.hooks,
-        git_remote_url=_configured_origin,
+        git_remote_url=_remote_url,
+        # The clean env passes only PATH/HOME/USER/TMPDIR, so /etc/gitconfig still applies.
+        _make_clean_env=lambda: {**real_clean_env(), "GIT_CONFIG_NOSYSTEM": "1"},
+    )
+    # The socket default is bound at def time, so patching KLIPPY_SOCK reaches nothing.
+    printing_fn = exec_g["klipper_printing"]
+    assert len(printing_fn.__defaults__) == 2, "klipper_printing signature changed"
+    monkeypatch.setattr(
+        printing_fn,
+        "__defaults__",
+        (root / "no-klippy.sock", *printing_fn.__defaults__[1:]),
     )
     _patch(monkeypatch, lock_g, _runtime_dir=lambda: h.run_dir)
     h.dbus_g = dbus_mod.UpdaterDbusService.__init__.__globals__
@@ -415,6 +442,7 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
         monkeypatch,
         h.dbus_g,
         _STATUS_PATH=h.run_dir / "updater_status.json",
+        klipper_printing=h.printing,
         _BOOT_DELAY_S=0.0,
         _DEPLOY_POLL_S=0.05,
     )
