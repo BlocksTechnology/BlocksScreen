@@ -15,12 +15,17 @@ _SizeLike = QtCore.QSize | QtCore.QSizeF | QtCore.QRect | QtCore.QRectF
 
 _MIB = 1024 * 1024
 
+# Largest icon surface (a 300px option card); bigger sources are thumbnails.
+_ICON_SOURCE_COST = 300 * 300 * 4
+
 
 def _as_size(size: _SizeLike) -> QtCore.QSize:
-    """Round any Qt size or rect to a QSize, so a caller passes whatever it already holds."""
+    """Truncate any Qt size or rect to a QSize, so an icon never outgrows its rect."""
     if isinstance(size, (QtCore.QRect, QtCore.QRectF)):
         size = size.size()
-    return size if isinstance(size, QtCore.QSize) else size.toSize()
+    if isinstance(size, QtCore.QSize):
+        return size
+    return QtCore.QSize(int(size.width()), int(size.height()))
 
 
 def _cost(pixmap: QtGui.QPixmap) -> int:
@@ -196,7 +201,7 @@ class Icon(StrEnum):
     @classmethod
     def wifi(cls, bars: int, protected: bool = False) -> "Icon":
         """Return the signal-strength icon for *bars*, clamped to the 0..4 assets."""
-        bars = min(max(bars, 0), 4)
+        bars = min(max(int(bars), 0), 4)
         return cls[f"WIFI_{bars}BAR{'_PROTECTED' if protected else ''}"]
 
 
@@ -212,6 +217,8 @@ class BlocksPixmap:
     # Derived from a surface, keyed by cacheKey; separate so thumbnail churn spares the icons.
     _scaled = _PixmapCache(8 * _MIB)
     _tints = _PixmapCache(8 * _MIB)
+    # Thumbnails are big and shown once per file, so browsing must not evict icons.
+    _thumbnails = _PixmapCache(4 * _MIB)
 
     @classmethod
     def icon(cls, icon: Icon | str) -> QtGui.QIcon:
@@ -230,12 +237,14 @@ class BlocksPixmap:
         size: _SizeLike | None = None,
         aspect: QtCore.Qt.AspectRatioMode = _KEEP_ASPECT,
     ) -> QtGui.QPixmap:
-        """Return *source* at *size* (default 128x128), cached; a surface can only resample."""
+        """Return *source* at *size*, cached; an Icon defaults to 128x128, a surface to itself."""
+        if isinstance(source, QtGui.QPixmap):
+            if size is None:
+                return source
+            return cls._resampled(source, _as_size(size), aspect)
         target = (
             QtCore.QSize(_ICON_EDGE, _ICON_EDGE) if size is None else _as_size(size)
         )
-        if isinstance(source, QtGui.QPixmap):
-            return cls._resampled(source, target, aspect)
         return cls._rendered(source, target, aspect)
 
     @classmethod
@@ -250,8 +259,10 @@ class BlocksPixmap:
             return cached
         pixmap = cls.icon(path).pixmap(size)
         # QIcon.pixmap always fits inside, so a distorting mode needs a second pass.
-        if aspect != _KEEP_ASPECT and pixmap.size() != size:
-            pixmap = pixmap.scaled(size, aspect, _SMOOTH)
+        dpr = pixmap.devicePixelRatio()
+        if aspect != _KEEP_ASPECT and pixmap.deviceIndependentSize().toSize() != size:
+            pixmap = pixmap.scaled(size * dpr, aspect, _SMOOTH)
+            pixmap.setDevicePixelRatio(dpr)
         return cls._pixmaps.put(key, pixmap)
 
     @classmethod
@@ -264,11 +275,15 @@ class BlocksPixmap:
         """Resample an existing surface, the only option when no resource path is in hand."""
         if pixmap.isNull():
             return pixmap
+        cache = cls._scaled if _cost(pixmap) <= _ICON_SOURCE_COST else cls._thumbnails
         key = (pixmap.cacheKey(), size.width(), size.height(), aspect)
-        cached = cls._scaled.get(key)
+        cached = cache.get(key)
         if cached is not None:
             return cached
-        return cls._scaled.put(key, pixmap.scaled(size, aspect, _SMOOTH))
+        dpr = pixmap.devicePixelRatio()
+        scaled = pixmap.scaled(size * dpr, aspect, _SMOOTH)
+        scaled.setDevicePixelRatio(dpr)
+        return cache.put(key, scaled)
 
     @classmethod
     def tinted(
@@ -285,6 +300,8 @@ class BlocksPixmap:
         if cached is not None:
             return cached
         result = QtGui.QPixmap(pixmap.size())
+        # Same device pixels and ratio, or a HiDPI icon draws at half size.
+        result.setDevicePixelRatio(pixmap.devicePixelRatio())
         result.fill(QtCore.Qt.GlobalColor.transparent)
         painter = QtGui.QPainter(result)
         painter.drawPixmap(0, 0, pixmap)
@@ -301,5 +318,11 @@ class BlocksPixmap:
     @classmethod
     def clear(cls) -> None:
         """Drop every cached icon and pixmap, called from on_quit while qApp is alive."""
-        for cache in (cls._icons, cls._pixmaps, cls._scaled, cls._tints):
+        for cache in (
+            cls._icons,
+            cls._pixmaps,
+            cls._scaled,
+            cls._tints,
+            cls._thumbnails,
+        ):
             cache.clear()
