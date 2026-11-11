@@ -60,16 +60,23 @@ run: ## Launch the BlocksScreen application
 ##@ Code Generation
 # ─────────────────────────────────────────────────────────────────────────────
 
-rcc: ## Compile git-modified .qrc files to PyQt6 Python modules (_rc.py)
-	@files=$$(git diff --name-only HEAD -- '$(QRC_DIR)/*.qrc' 2>/dev/null; \
-	          git ls-files --others --exclude-standard -- '$(QRC_DIR)/*.qrc' 2>/dev/null); \
-	 if [ -z "$$files" ]; then echo "  No modified .qrc files."; exit 0; fi; \
-	 for qrc in $$files; do \
-	     out="$${qrc%.qrc}_rc.py"; \
+rcc: ## Compile .qrc files whose .qrc or listed assets changed vs HEAD (_rc.py)
+	@changed=$$(git diff --name-only --relative=$(QRC_DIR) HEAD -- '$(QRC_DIR)' 2>/dev/null; \
+	            git ls-files --others --exclude-standard -- '$(QRC_DIR)' 2>/dev/null \
+	                | sed 's|^$(QRC_DIR)/||'); \
+	 built=0; \
+	 for qrc in $(QRC_DIR)/*.qrc; do \
+	     hit=$$(printf '%s\n' "$$changed" | grep -v '_rc\.py$$' | while IFS= read -r f; do \
+	         [ -n "$$f" ] || continue; \
+	         if [ "$$f" = "$${qrc##*/}" ] || grep -qF ">$$f</file>" "$$qrc"; then echo y; break; fi; \
+	     done); \
+	     [ -n "$$hit" ] || continue; \
+	     out="$${qrc%.qrc}_rc.py"; built=1; \
 	     echo "  $$qrc → $$out"; \
 	     $(PYRCC5) "$$qrc" -o "$$out"; \
 	     sed -i 's/from PyQt5 import QtCore/from PyQt6 import QtCore/' "$$out"; \
-	 done
+	 done; \
+	 [ "$$built" = 1 ] || echo "  No modified .qrc files or assets."
 
 rcc-all: ## Force recompile all .qrc files
 	@for qrc in $(QRC_DIR)/*.qrc; do \

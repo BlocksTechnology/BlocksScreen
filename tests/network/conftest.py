@@ -15,7 +15,6 @@ as its base: ``MagicMock`` triggers ``TypeError: metaclass conflict``.)
 
 import asyncio
 import enum
-import importlib
 import sys
 import types
 from dataclasses import dataclass
@@ -289,11 +288,6 @@ for _mod_name, _attrs in _STUB_MODULES.items():
     # Register under BOTH short (lib.*) and long (BlocksScreen.lib.*) paths.
     sys.modules[_mod_name] = _stub
     sys.modules["BlocksScreen." + _mod_name] = _stub
-
-# Real module, not a stub: the identity asserts must compare real cache entries.
-sys.modules["lib.utils.blocks_pixmap"] = importlib.import_module(
-    "BlocksScreen.lib.utils.blocks_pixmap"
-)
 
 
 # Mock lib.qrcode_gen (short path only): networkWindow.py imports it as
