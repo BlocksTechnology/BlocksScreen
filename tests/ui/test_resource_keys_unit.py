@@ -14,8 +14,11 @@ RC_PACKAGE = "BlocksScreen.lib.ui.resources"
 XFAIL_KEYS: dict[str, str] = {}
 
 # Text scan, not AST: AST misses f-strings; '/?' also matches ':ui/...'.
-# Spaces admit keys like 'fonts for text/...'; the required '/' rejects ': %s'.
-_LITERAL = re.compile(r'["\'](:/?[^"\'\s][^"\']*/[^"\']*)["\']')
+# Spaces admit 'fonts for text/...'; a folder-less key needs an extension, and
+# a ':' or '%' after the prefix rejects '::1/128', ':%s/%s' and ': %s'.
+_LITERAL = re.compile(
+    r'["\'](:/?(?:[^"\'\s:%][^"\']*/[^"\']*|[\w.-]+\.[A-Za-z]{2,4}))["\']'
+)
 
 # Stylesheet keys carry no quote next to the ':', so _LITERAL misses them.
 _CSS_URL = re.compile(r"url\((:/?[^)\s][^)]*/[^)]*)\)")
@@ -34,7 +37,9 @@ def _qrc_entries() -> list[tuple[str, Path]]:
             prefix = (qresource.get("prefix") or "").strip("/")
             for element in qresource.findall("file"):
                 path = (element.text or "").strip()
-                key = f":/{prefix}/{element.get('alias') or path}"
+                name = element.get("alias") or path
+                # A prefix-less <qresource> roots its files at ':/' itself.
+                key = f":/{prefix}/{name}" if prefix else f":/{name}"
                 entries.append((key, qrc.parent / path))
     return entries
 
@@ -196,8 +201,29 @@ def test_compiled_blobs_match_the_asset_bytes():
             continue
         compiled = bytes(handle.readAll())
         handle.close()
-        if compiled != path.read_bytes():
+        # A missing file is test_qrc_declared_files_exist_on_disk's to report.
+        if path.is_file() and compiled != path.read_bytes():
             stale[key] = [
                 f"{path.relative_to(REPO_ROOT)} changed after the blob was built"
             ]
     assert not stale, _report("assets edited without recompiling the blob:", stale)
+
+
+def test_no_duplicate_qrc_keys():
+    """No key is declared twice, since Qt then serves one file and hides the other."""
+    seen: dict[str, list[str]] = {}
+    for key, path in _qrc_entries():
+        seen.setdefault(key, []).append(str(path.relative_to(REPO_ROOT)))
+    dupes = {key: paths for key, paths in seen.items() if len(paths) > 1}
+    assert not dupes, _report("resource keys declared more than once:", dupes)
+
+
+def test_literal_scanner_shapes():
+    """The scanner keeps folder-less keys and drops IPv6 and format-string lookalikes."""
+    found = [
+        m.group(1)
+        for m in _LITERAL.finditer(
+            "\":/logo.svg\" ':/a b/c.svg' \"::1/128\" ':%s/%s' \": %s\" ':ui/x.png'"
+        )
+    ]
+    assert found == [":/logo.svg", ":/a b/c.svg", ":ui/x.png"]

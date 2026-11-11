@@ -32,9 +32,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._setup_ui()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.thumbnail: QtGui.QImage = self._blocksthumbnail
-        self._thumbnail_key: int = 0
-        self._thumbnail_cache: QtGui.QPixmap = QtGui.QPixmap()
+        self.thumbnail = self._blocksthumbnail
         self._thumbnails: list = []
         self._current_gcode: str = ""
         self._loader_connected: bool = False
@@ -135,12 +133,16 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.filename = ""
         return super().hide()
 
-    def _thumbnail_as_pixmap(self) -> QtGui.QPixmap:
-        """Convert the thumbnail QImage once per image, not once per paint."""
-        if self.thumbnail.cacheKey() != self._thumbnail_key:
-            self._thumbnail_key = self.thumbnail.cacheKey()
-            self._thumbnail_cache = QtGui.QPixmap.fromImage(self.thumbnail)
-        return self._thumbnail_cache
+    @property
+    def thumbnail(self) -> QtGui.QImage:
+        """The shown file's thumbnail image."""
+        return self._thumbnail
+
+    @thumbnail.setter
+    def thumbnail(self, image: QtGui.QImage) -> None:
+        """Convert to a QPixmap once here, not on every paint."""
+        self._thumbnail = image
+        self._thumbnail_pixmap = QtGui.QPixmap.fromImage(image)
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
@@ -154,7 +156,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         # Scene rectangle (available display area)
         graphics_rect = self.cf_thumbnail.rect().toRectF()
 
-        pixmap = BlocksPixmap.get(self._thumbnail_as_pixmap(), graphics_rect)
+        pixmap = BlocksPixmap.get(self._thumbnail_pixmap, graphics_rect)
 
         # Centering offsets
         adjusted_x = (graphics_rect.width() - pixmap.width()) / 2.0

@@ -318,3 +318,39 @@ def test_cancel_page_leaves_loadscreen_alone() -> None:
 
     win.loadscreen.hide.assert_not_called()
     win.cancelpage.show.assert_called_once()
+
+
+class TestBootIntro:
+    @pytest.mark.parametrize(
+        ("state", "dismissed"),
+        [("ready", True), ("error", True), ("shutdown", True), ("startup", False)],
+    )
+    def test_intro_drops_once_klippy_settles(self, state, dismissed) -> None:
+        # Error and shutdown need ConnectionPage's buttons, so the gif must not cover them.
+        fake_window = _make_fake_window()
+
+        MainWindow._on_klippy_state(fake_window, state)
+
+        assert fake_window._dismiss_intro.called is dismissed
+
+    def test_dismiss_frees_the_popup_once(self) -> None:
+        popup = MagicMock()
+        win = SimpleNamespace(
+            _intro_timeout=MagicMock(), introscreen=popup, introwidget=MagicMock()
+        )
+
+        MainWindow._dismiss_intro(win)
+        MainWindow._dismiss_intro(win)
+
+        popup.deleteLater.assert_called_once()
+        assert win.introscreen is None and win.introwidget is None
+
+    def test_restart_ready_leaves_another_panels_overlay(self) -> None:
+        # The restart flow no longer shows loadscreen, so it must not hide one it does not own.
+        fake_window = _make_fake_window()
+        fake_window._klipper_auto_restart_pending = True
+
+        MainWindow._on_klippy_state(fake_window, "ready")
+
+        fake_window.loadscreen.hide.assert_not_called()
+        assert fake_window._klipper_auto_restart_pending is False

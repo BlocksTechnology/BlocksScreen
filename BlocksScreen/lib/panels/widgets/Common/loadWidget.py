@@ -35,7 +35,6 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
 
         self._setup_ui()
 
-        self.anim_type = LoadingOverlayWidget.AnimationGIF.DEFAULT
         self.movie: QtGui.QMovie | None = None
         self._movie_size = QtCore.QSize()
         # Started by showEvent: five overlays ticking at 60 Hz while hidden cost the Pi idle CPU.
@@ -54,7 +53,6 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
             return
         self.movie = movie
         self._movie_size = QtGui.QImageReader(gif).size()
-        self.anim_type = LoadingOverlayWidget.AnimationGIF.PLACEHOLDER
         self.timer.stop()
         self.gifshow.setMovie(movie)
         self.gifshow.show()
@@ -104,7 +102,7 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
         """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
-        if self.anim_type == LoadingOverlayWidget.AnimationGIF.DEFAULT:
+        if self.movie is None:
             painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
             painter.setRenderHint(
                 QtGui.QPainter.RenderHint.LosslessImageRendering, True
@@ -145,7 +143,11 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
     def _fit_movie(self) -> None:
         """Decode frames at the on-screen size; QMovie scales once per frame, not per paint."""
         # An empty scaled size stops the QMovie for good, so skip until laid out.
-        if self.movie is not None and not self.gifshow.size().isEmpty():
+        if (
+            self.movie is not None
+            and not self._movie_size.isEmpty()
+            and not self.gifshow.size().isEmpty()
+        ):
             self.movie.setScaledSize(
                 self._movie_size.scaled(
                     self.gifshow.size(), QtCore.Qt.AspectRatioMode.KeepAspectRatio
