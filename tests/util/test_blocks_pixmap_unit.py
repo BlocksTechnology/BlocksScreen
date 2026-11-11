@@ -77,6 +77,8 @@ def test_get_costs_far_less_than_source():
         (4, False, Icon.WIFI_4BAR),
         (-1, False, Icon.WIFI_0BAR),
         (9, True, Icon.WIFI_4BAR_PROTECTED),
+        (2.0, False, Icon.WIFI_2BAR),
+        (True, False, Icon.WIFI_1BAR),
     ],
 )
 def test_wifi_clamps_to_the_declared_assets(bars, protected, expected):
