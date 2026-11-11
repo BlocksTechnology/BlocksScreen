@@ -1,6 +1,7 @@
 """PrintTab.start_print blocks a print PRINT_START would refuse as unloaded."""
 
 import sys
+import threading
 import types
 from types import MethodType, SimpleNamespace
 from unittest.mock import MagicMock
@@ -50,6 +51,7 @@ def _tab(amu_manager: object, printing_state: str = "standby") -> SimpleNamespac
         printer=SimpleNamespace(printing_state=printing_state),
         _usb_pending=False,
         _usb_from_console=False,
+        _cancel_pending=False,
         notify=MagicMock(),
         jobStatusPage_widget=MagicMock(),
         run_gcode_signal=MagicMock(),
@@ -84,11 +86,13 @@ class TestStartPrint:
             ("printing", False, "A print is already running."),
             ("paused", False, "A print is already running."),
             ("standby", True, "A USB file is still being prepared for printing."),
+            ("standby", None, "The last print is still being cancelled."),
         ],
     )
     def test_busy_printer_blocks(self, state, pending, reason) -> None:
         tab = _tab(None, state)
-        tab._usb_pending = pending
+        tab._usb_pending = bool(pending)
+        tab._cancel_pending = pending is None  # cancel sent, state still printing
         tab._start_usb_import = MagicMock()
         assert tab._begin_print("USB-STICK/cube.gcode") == reason
         tab._start_usb_import.assert_not_called()
@@ -180,6 +184,8 @@ class TestUsbImportDone:
         tab._usb_token = 1
         tab._usb_key = tab._usb_local = ""
         tab._usb_created = set()
+        tab._usb_cancel = threading.Event()
+        tab._usb_unindexed = {}
         tab._usb_settle_timer = MagicMock()
         tab._cancel_pending = False
         tab._cancel_timer = tab._cancel_settle = MagicMock()
@@ -295,6 +301,33 @@ class TestUsbImportDone:
         tab._usb_pending = False
         PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
         assert tab._usb_created == set()
+        tab.remember.assert_not_called()
+
+    def test_abort_stops_the_running_copy(self, tab) -> None:
+        tab._end_usb_print("cancelled")
+        assert tab._usb_cancel.is_set()
+
+    def test_copy_committed_after_abort_is_indexed_once_announced(self, tab) -> None:
+        tab._end_usb_print("cancelled")
+        self._done(tab, token=1)
+        tab.remember.assert_not_called()  # Moonraker has not processed it yet
+        PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
+        assert tab.remember.call_args.args[1:] == ("k", "cube.gcode")
+        assert tab._usb_unindexed == {}
+
+    def test_copy_announced_before_abort_is_indexed_at_once(self, tab) -> None:
+        PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
+        tab._end_usb_print("cancelled")
+        self._done(tab, token=1)
+        assert tab.remember.call_args.args[1:] == ("k", "cube.gcode")
+
+    def test_copy_announced_after_settle_timeout_is_indexed(self, tab) -> None:
+        self._done(tab)
+        self._timeout(tab, sent=False)
+        tab.remember.assert_not_called()
+        PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
+        assert tab.remember.call_args.args[1:] == ("k", "cube.gcode")
+        tab.jobStatusPage_widget.on_print_start.assert_not_called()
 
     def test_error_notifies_and_does_not_print(self, tab) -> None:
         self._done(tab, local="", error="Bad")
@@ -375,4 +408,4 @@ def test_import_spares_the_current_job_file(monkeypatch) -> None:
     )
     PrintTab.on_print_stats_update(tab, "filename", "usb_copies/a.gcode")
     PrintTab._start_usb_import(tab, "USB-STICK/b.gcode")
-    assert task_cls.call_args.args[-1] == "usb_copies/a.gcode"
+    assert task_cls.call_args.args[-2] == "usb_copies/a.gcode"

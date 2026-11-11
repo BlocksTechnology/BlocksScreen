@@ -1,5 +1,7 @@
 """Copies USB gcode files into local storage so prints survive drive removal."""
 
+import ctypes
+import errno
 import functools
 import hashlib
 import json
@@ -28,6 +30,11 @@ MAX_COPIES = 20  # least recently used beyond this are deleted, never the curren
 _INDEX_LOCK = threading.Lock()  # the index is written from pool threads
 _COMMIT_LOCK = threading.Lock()  # name pick + rename, so two copies never pick one name
 _SWEPT: set[pathlib.Path] = set()  # temp dirs already cleaned in this process
+_AT_FDCWD = -100
+_RENAME_NOREPLACE = 1  # linux/fs.h
+_renameat2 = getattr(ctypes.CDLL(None, use_errno=True), "renameat2", None)
+if _renameat2 is not None:
+    _renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p] * 2 + [ctypes.c_uint]
 
 
 class UsbImportError(Exception):
@@ -96,9 +103,9 @@ def remember_import(gcode_root: pathlib.Path, key: str, local_name: str) -> None
         }
         state = _state_dir(root)
         state.mkdir(exist_ok=True)
-        tmp = state / f".{INDEX_NAME}.part"
-        tmp.write_text(json.dumps(index, indent=1))
-        os.replace(tmp, state / INDEX_NAME)
+        helper_methods.atomic_write_text(
+            state / INDEX_NAME, json.dumps(index, indent=1)
+        )
 
 
 def _remember_logged(gcode_root: pathlib.Path, key: str, local_name: str) -> None:
@@ -138,6 +145,21 @@ def _free_name(src: pathlib.Path, dest_dir: pathlib.Path) -> pathlib.Path:
         if not cand.exists() and not cand.is_symlink():
             return cand
         n += 1
+
+
+def _rename_noreplace(src: pathlib.Path, dst: pathlib.Path) -> None:
+    """Rename *src* to *dst*; FileExistsError instead of overwriting *dst*."""
+    # The name check and the rename are two steps; only the kernel closes the gap.
+    if _renameat2 is not None:
+        if not _renameat2(
+            _AT_FDCWD, os.fsencode(src), _AT_FDCWD, os.fsencode(dst), _RENAME_NOREPLACE
+        ):
+            return
+        err = ctypes.get_errno()
+        if err not in (errno.EINVAL, errno.ENOSYS):
+            raise OSError(err, os.strerror(err), str(dst))  # EEXIST: FileExistsError
+    # Old glibc or a filesystem without the flag: _COMMIT_LOCK still covers this app.
+    os.replace(src, dst)
 
 
 def ensure_copies_dir(gcode_root: pathlib.Path) -> None:
@@ -204,6 +226,7 @@ def _copy_atomic(
     src_st: os.stat_result,
     dest_dir: pathlib.Path,
     tmp_dir: pathlib.Path,
+    cancelled: threading.Event | None = None,
 ) -> pathlib.Path:
     """Copy *src* into *dest_dir* via a synced temp file; returns the final path."""
     _sweep_stale_parts(tmp_dir)  # tmp_dir may be the copies dir itself
@@ -223,8 +246,16 @@ def _copy_atomic(
             raise UsbImportError("Copy incomplete")
         _fsync(tmp)
         with _COMMIT_LOCK:
-            final = _free_name(src, dest_dir)
-            os.replace(tmp, final)
+            # An aborted import must not commit: a retry would copy it again as _1.
+            if cancelled is not None and cancelled.is_set():
+                raise UsbImportError("Cancelled")
+            while True:
+                final = _free_name(src, dest_dir)
+                try:
+                    _rename_noreplace(tmp, final)
+                    break
+                except FileExistsError:
+                    continue  # another process took the name after the check
         try:
             _fsync(dest_dir)  # persist the rename itself across power loss
         except OSError as e:
@@ -235,7 +266,10 @@ def _copy_atomic(
 
 
 def import_usb_gcode(
-    gcode_root: pathlib.Path, filename: str, job_file: str = ""
+    gcode_root: pathlib.Path,
+    filename: str,
+    job_file: str = "",
+    cancelled: threading.Event | None = None,
 ) -> tuple[str, bool, str]:
     """Copy USB *filename* into the copies dir; returns (gcodes-relative path, reused, key)."""
     root = gcode_root.resolve()
@@ -266,7 +300,7 @@ def import_usb_gcode(
             except FileExistsError:
                 pass
             _prune_copies(root, MAX_COPIES - 1, job_file)
-            final = _copy_atomic(src, src_st, copies, _tmp_dir(root, copies))
+            final = _copy_atomic(src, src_st, copies, _tmp_dir(root, copies), cancelled)
     except OSError as e:
         raise UsbImportError(
             f"Copy failed, was the USB drive removed? ({e.strerror})"
@@ -293,6 +327,7 @@ class UsbImportTask(QtCore.QRunnable):
         gcode_root: pathlib.Path,
         filename: str,
         job_file: str = "",
+        cancelled: threading.Event | None = None,
     ) -> None:
         super().__init__()
         # Pool-owned and QObject-free, so no cross-thread delete.
@@ -302,6 +337,7 @@ class UsbImportTask(QtCore.QRunnable):
         self._gcode_root = gcode_root
         self._filename = filename
         self._job_file = job_file
+        self._cancelled = cancelled
 
     def _report(self, local: str, key: str, reused: bool, error: str) -> None:
         """Emit done; the receiver drops it if the token is stale."""
@@ -317,7 +353,7 @@ class UsbImportTask(QtCore.QRunnable):
         """Copy, then report the local copy or the error text."""
         try:
             local, reused, key = import_usb_gcode(
-                self._gcode_root, self._filename, self._job_file
+                self._gcode_root, self._filename, self._job_file, self._cancelled
             )
         except UsbImportError as e:
             logger.warning("USB import of %s failed: %s", self._filename, e)

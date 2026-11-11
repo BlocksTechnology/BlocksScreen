@@ -4,6 +4,7 @@ import importlib.util
 import os
 import pathlib
 import sys
+import threading
 from collections import namedtuple
 
 import pytest
@@ -190,6 +191,44 @@ def test_name_taken_during_copy_gets_suffix(layout, monkeypatch) -> None:
     assert (gcodes / COPIES / "cube.gcode").read_bytes() == b"other"
     assert (gcodes / name).read_bytes() == b"G28\n"
     assert oct((gcodes / name).stat().st_mode & 0o777) == "0o644"
+
+
+def test_name_taken_between_check_and_rename_gets_suffix(layout, monkeypatch) -> None:
+    # Another process (scp, Moonraker upload) may create the name after the check.
+    gcodes, drive, _ = layout
+    (drive / "cube.gcode").write_bytes(b"G28\n")
+    real_free = usb_import._free_name
+
+    def free_then_race(src, dest_dir):
+        cand = real_free(src, dest_dir)
+        if cand.name == "cube.gcode":
+            cand.write_bytes(b"other")
+        return cand
+
+    monkeypatch.setattr(usb_import, "_free_name", free_then_race)
+    name, _, _ = import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
+    assert name == f"{COPIES}/cube_1.gcode"
+    assert (gcodes / COPIES / "cube.gcode").read_bytes() == b"other"
+
+
+def test_rename_noreplace_keeps_existing_file(tmp_path) -> None:
+    src, dst = tmp_path / "a", tmp_path / "b"
+    src.write_text("new")
+    dst.write_text("old")
+    with pytest.raises(FileExistsError):
+        usb_import._rename_noreplace(src, dst)
+    assert (src.read_text(), dst.read_text()) == ("new", "old")
+
+
+def test_cancelled_import_commits_nothing(layout) -> None:
+    gcodes, drive, _ = layout
+    (drive / "cube.gcode").write_bytes(b"G28\n")
+    cancelled = threading.Event()
+    cancelled.set()
+    with pytest.raises(UsbImportError, match="Cancelled"):
+        import_usb_gcode(gcodes, "USB-STICK/cube.gcode", cancelled=cancelled)
+    assert not list((gcodes / COPIES).glob("*.gcode"))
+    assert not list(_state(gcodes).glob("*.part"))
 
 
 @pytest.mark.parametrize(

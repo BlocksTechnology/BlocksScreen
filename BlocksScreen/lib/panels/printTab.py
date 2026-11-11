@@ -1,6 +1,7 @@
 import logging
 import os
 import pathlib
+import threading
 import typing
 from functools import partial
 
@@ -126,6 +127,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._usb_key: str = ""
         self._usb_local: str = ""
         self._usb_created: set[str] = set()
+        self._usb_cancel = threading.Event()  # tells the running copy not to commit
+        # Copies Moonraker had not announced when their import ended, path -> key.
+        self._usb_unindexed: dict[str, str] = {}
         self._usb_from_console: bool = False  # started by another client via Klipper
         self._job_file: str = ""  # print_stats.filename, never pruned from the copies
         # Moonraker announces a new gcode only once its pre-processing is done.
@@ -428,6 +432,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Why no print may start now, or ""."""
         if self._usb_pending:
             return "A USB file is still being prepared for printing."
+        if self._cancel_pending:
+            return "The last print is still being cancelled."
         if self.printer.printing_state in ("printing", "paused"):
             return "A print is already running."
         # A refused PRINT_START runs on_error CANCEL_PRINT, which HH v3 reopens as a job.
@@ -484,12 +490,14 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._usb_pending = True
         self._usb_key = self._usb_local = ""
         self._usb_created.clear()
+        self._usb_cancel = threading.Event()
         task = UsbImportTask(
             self._usb_signals,
             self._usb_token,
             pathlib.Path(self.gcode_path),
             file,
             self._job_file,
+            self._usb_cancel,
         )
         self.call_load_panel.emit(True, "Copying file from USB...\nPlease wait", False)
         QtCore.QThreadPool.globalInstance().start(task)
@@ -498,9 +506,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Drop the pending USB print, release the loadscreen, show *message*."""
         self._usb_settle_timer.stop()
         self._usb_token += 1  # a copy still running reports to nobody
+        self._usb_cancel.set()
         self._usb_pending = False
         self._usb_key = self._usb_local = ""
-        self._usb_created.clear()
+        # _usb_created survives: the aborted import's late result still checks it.
         self.call_load_panel.emit(False, "", False)
         if message:
             self.notify.emit("PrintTab", message, 2, True)
@@ -521,6 +530,13 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Print a reused copy now, a new one once Moonraker has processed it."""
         if token != self._usb_token:
             logger.info("Dropping result of aborted USB import %s", usb_file)
+            if local_file and not reused:  # committed just before the abort
+                if local_file in self._usb_created:  # Moonraker announced it already
+                    remember_import_async(
+                        pathlib.Path(self.gcode_path), key, local_file
+                    )
+                else:
+                    self._usb_unindexed[local_file] = key
             return
         if error:
             self._end_usb_print(f"USB print failed: {error}")
@@ -537,9 +553,12 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(dict, name="on_usb_file_added")
     def _on_usb_file_added(self, item: dict) -> None:
         """Release a waiting USB print when Moonraker announces its local copy."""
+        name = str(item.get("path", "")).removeprefix("/")
+        if (key := self._usb_unindexed.pop(name, None)) is not None:
+            # Processed now, so a retry of the same USB file can reuse it.
+            remember_import_async(pathlib.Path(self.gcode_path), key, name)
         if not self._usb_pending:
             return
-        name = str(item.get("path", "")).removeprefix("/")
         self._usb_created.add(name)  # may beat the worker's done signal
         if name == self._usb_local:
             self._usb_print_local_copy()
@@ -547,7 +566,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(name="on_usb_settle_timeout")
     def _on_usb_settle_timeout(self) -> None:
         """Ask Moonraker for the copy's metadata: the notification may have been lost."""
-        token, local = self._usb_token, self._usb_local
+        token, local, key = self._usb_token, self._usb_local, self._usb_key
 
         def on_reply(reply: object) -> None:
             if token != self._usb_token:
@@ -556,6 +575,7 @@ class PrintTab(QtWidgets.QStackedWidget):
                 self._usb_print_local_copy()
                 return
             logger.warning("No metadata for %s after the settle timeout", local)
+            self._usb_unindexed[local] = key  # indexed if Moonraker announces it later
             self._end_usb_print(
                 f"{local} is still being processed.\nStart it from the file list."
             )
