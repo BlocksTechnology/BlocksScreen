@@ -61,6 +61,7 @@
     <file>media/btn_icons/spoolman.svg</file>
     <file>media/btn_icons/base dados spool 1.svg</file>
     <file>media/btn_icons/check gate 1.svg</file>
+    <file>media/btn_icons/edit.svg</file>
     <file>media/btn_icons/eject.svg</file>
     <file>media/btn_icons/change_filament.svg</file>
     <file>media/btn_icons/filament_sensor.svg</file>
@@ -110,6 +111,8 @@
     <file>media/btn_icons/extrude.svg</file>
     <file>media/btn_icons/nozzle.svg</file>
     <file>media/btn_icons/nozzle_topbar.svg</file>
+    <file>media/btn_icons/no_material_topbar.svg</file>
+    <file>media/btn_icons/no_printcore_available.svg</file>
     <file>media/btn_icons/switch_print_core.svg</file>
     <file>media/btn_icons/switch_zoom.svg</file>
   </qresource>

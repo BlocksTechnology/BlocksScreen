@@ -137,7 +137,7 @@ class Icon(StrEnum):
     @classmethod
     def wifi(cls, bars: int, protected: bool = False) -> "Icon":
         """Return the signal-strength icon for *bars*, clamped to the 0..4 assets."""
-        bars = min(max(bars, 0), 4)
+        bars = min(max(int(bars), 0), 4)
         return cls[f"WIFI_{bars}BAR{'_PROTECTED' if protected else ''}"]
 
 
