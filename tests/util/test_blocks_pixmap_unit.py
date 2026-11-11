@@ -27,11 +27,6 @@ def _resources(qapp):
     BlocksPixmap.clear()
 
 
-def _bytes(pixmap: QtGui.QPixmap) -> int:
-    """Return the pixmap's buffer size in bytes."""
-    return pixmap.width() * pixmap.height() * pixmap.depth() // 8
-
-
 @pytest.mark.parametrize("icon", list(Icon), ids=lambda i: i.name)
 def test_every_icon_member_resolves(icon):
     """Each Icon value names a real resource, so nothing paints blank."""
@@ -101,6 +96,37 @@ def test_derived_cache_is_bounded():
     for edge in range(16, 400):
         BlocksPixmap.get(source, QtCore.QSize(edge, edge))
     assert BlocksPixmap._scaled._bytes <= BlocksPixmap._scaled._budget
+
+
+def test_fractional_size_truncates_so_an_icon_fits_its_rect():
+    """Rounding 40.6 up gives a 41px icon that overflows a 40.6px rect."""
+    pixmap = BlocksPixmap.get(Icon.BACK, QtCore.QSizeF(40.6, 40.6))
+    assert pixmap.width() <= 40 and pixmap.height() <= 40
+
+
+def test_get_without_size_returns_a_surface_unchanged():
+    """No size means no resample; only an Icon has a 128px default."""
+    source = BlocksPixmap.get(Icon.BACK, QtCore.QSize(300, 300))
+    assert BlocksPixmap.get(source).cacheKey() == source.cacheKey()
+
+
+def test_thumbnail_resample_spares_the_icon_cache():
+    """A 400x300 thumbnail lands in its own budget, not the icon rescale one."""
+    thumbnail = QtGui.QPixmap(400, 300)
+    thumbnail.fill(QtCore.Qt.GlobalColor.red)
+    BlocksPixmap.get(thumbnail, QtCore.QSize(200, 150))
+    assert not BlocksPixmap._scaled
+    assert len(BlocksPixmap._thumbnails) == 1
+
+
+def test_tint_keeps_the_source_device_pixel_ratio():
+    """A 2x icon tinted onto a 1x surface would paint at double its logical size."""
+    source = QtGui.QPixmap(64, 64)
+    source.setDevicePixelRatio(2.0)
+    source.fill(QtCore.Qt.GlobalColor.black)
+    tinted = BlocksPixmap.tinted(source, "#ffffff")
+    assert tinted.devicePixelRatio() == 2.0
+    assert tinted.deviceIndependentSize() == source.deviceIndependentSize()
 
 
 def test_eviction_drops_the_least_recently_used():
@@ -173,9 +199,9 @@ def test_tinted_keys_on_the_colour():
 
 def test_get_costs_far_less_than_source():
     """The whole point: rendering at 64px must beat the intrinsic buffers 5x over."""
-    scaled = sum(_bytes(BlocksPixmap.get(i, QtCore.QSize(64, 64))) for i in Icon)
+    scaled = sum(_cost(BlocksPixmap.get(i, QtCore.QSize(64, 64))) for i in Icon)
     BlocksPixmap.clear()
-    intrinsic = sum(_bytes(BlocksPixmap.source(i)) for i in Icon)
+    intrinsic = sum(_cost(BlocksPixmap.source(i)) for i in Icon)
     assert scaled * 5 < intrinsic, f"{scaled} B scaled vs {intrinsic} B intrinsic"
 
 
