@@ -20,6 +20,7 @@ def page(qtbot):
     p = AxisMaintPage(None)
     p.gcode_runner = run_gcode
     qtbot.addWidget(p)
+    p.show()
     p.am_x.setChecked(True)
     p.answerPage.show = MagicMock()
     p.calls = calls
@@ -69,5 +70,34 @@ def test_safety_timeout_drops_loading_and_ignores_late_reply(page, qtbot):
         pass
     assert blocker.args == [False, "", False]
 
+    assert not page.am_execute.isEnabled()  # the macro still runs in Klipper
+
+    with qtbot.waitSignal(page.call_load_panel) as late:
+        page.calls[0][1]("ok")
+    assert late.args == [False, "", False]
+    page.answerPage.show.assert_not_called()
+    assert page.am_execute.isEnabled()
+
+
+def test_execute_disabled_until_reply(page):
+    page.axis_maintenance()
+    assert not page.am_execute.isEnabled()
+
+    page.calls[0][1]("ok")
+    assert page.am_execute.isEnabled()
+
+
+def test_hidden_page_skips_oil_prompt(page):
+    page.axis_maintenance()
+    page.hide()
+
     page.calls[0][1]("ok")
     page.answerPage.show.assert_not_called()
+
+
+def test_hidden_page_timeout_leaves_overlay(page, qtbot):
+    page._safety.setInterval(20)
+    page.axis_maintenance()
+    page.hide()
+    with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
+        pass
