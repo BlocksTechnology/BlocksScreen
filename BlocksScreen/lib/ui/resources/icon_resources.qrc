@@ -61,6 +61,7 @@
     <file>media/btn_icons/filament_related/spoolman.svg</file>
     <file>media/btn_icons/filament_related/spool_database_1.svg</file>
     <file>media/btn_icons/filament_related/check_gate_1.svg</file>
+    <file>media/btn_icons/filament_related/edit.svg</file>
     <file>media/btn_icons/filament_related/eject.svg</file>
     <file>media/btn_icons/filament_related/change_filament.svg</file>
     <file>media/btn_icons/filament_related/filament_sensor.svg</file>
@@ -109,6 +110,8 @@
     <file>media/btn_icons/extruder_related/extrude.svg</file>
     <file>media/btn_icons/extruder_related/nozzle.svg</file>
     <file>media/btn_icons/extruder_related/nozzle_topbar.svg</file>
+    <file>media/btn_icons/extruder_related/no_material_topbar.svg</file>
+    <file>media/btn_icons/extruder_related/no_printcore_available.svg</file>
     <file>media/btn_icons/extruder_related/switch_print_core.svg</file>
     <file>media/btn_icons/extruder_related/switch_zoom.svg</file>
   </qresource>

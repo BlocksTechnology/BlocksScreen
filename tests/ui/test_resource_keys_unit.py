@@ -140,17 +140,29 @@ def test_qrc_declared_files_exist_on_disk():
     assert not missing, _report("declared in a .qrc but absent from disk:", missing)
 
 
-def test_no_orphan_assets_on_disk():
-    """Every .svg under resources/media is declared by some .qrc, the reverse check."""
-    declared = {path for _, path in _qrc_entries()}
-    orphans = sorted(
-        str(svg.relative_to(REPO_ROOT))
-        for svg in (RESOURCES / "media").rglob("*.svg")
-        if svg not in declared
+# Fonts are loaded from disk by path, so only images must sit in a .qrc.
+_IMAGE_SUFFIXES = {".svg", ".png", ".gif"}
+# Read by path: the logos by the splash screens, scroll_list_window by older branches.
+_LOADED_BY_PATH = {
+    RESOURCES / "media" / name
+    for name in (
+        "logoblocks.png",
+        "graphics/logo_blocks.png",
+        "graphics/scroll_list_window.png",
     )
-    assert not orphans, (
-        "on-disk .svg files no .qrc declares (dead weight):\n"
-        + "\n".join(f"  {path}" for path in orphans)
+}
+
+
+def test_no_orphan_assets_on_disk():
+    """Every image under resources/media is declared by some .qrc, the reverse check."""
+    declared = {path for _, path in _qrc_entries()} | _LOADED_BY_PATH
+    orphans = sorted(
+        str(image.relative_to(REPO_ROOT))
+        for image in (RESOURCES / "media").rglob("*")
+        if image.suffix in _IMAGE_SUFFIXES and image not in declared
+    )
+    assert not orphans, "on-disk images no .qrc declares (dead weight):\n" + "\n".join(
+        f"  {path}" for path in orphans
     )
 
 

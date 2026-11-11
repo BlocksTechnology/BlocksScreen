@@ -67,7 +67,7 @@ class _PixmapCache:
 
 
 class Icon(StrEnum):
-    """Every resource key the handwritten panels draw, one member per asset."""
+    """Every resource key the handwritten panels draw, not every compiled asset."""
 
     ABS_FILAMENT_TOPBAR = ":/top_bar_icons/media/topbar/abs_filament_topbar.svg"
     ADD_FILAMENT = (
@@ -83,9 +83,6 @@ class Icon(StrEnum):
     BACK = ":/ui/media/btn_icons/ui/back.svg"
     BACKGROUND_1ST = ":/background/media/1st_background.png"
     BACK_FOLDER = ":/ui/media/btn_icons/ui/back_folder.svg"
-    SPOOL_DATABASE_1 = (
-        ":/filament_related/media/btn_icons/filament_related/spool_database_1.svg"
-    )
     BED_LEVELLING = ":/z_levelling/media/btn_icons/z_levelling/bed_levelling.svg"
     BLOWER = ":/fan_related/media/btn_icons/fan_related/blower.svg"
     BLTOUCH = ":/z_levelling/media/btn_icons/z_levelling/bltouch.svg"
@@ -184,6 +181,9 @@ class Icon(StrEnum):
     SORT_ASC = ":/arrow_icons/media/btn_icons/arrow_icons/sort_asc.svg"
     SORT_DESC = ":/arrow_icons/media/btn_icons/arrow_icons/sort_desc.svg"
     SPEED = ":/motion/media/btn_icons/motion/speed.svg"
+    SPOOL_DATABASE_1 = (
+        ":/filament_related/media/btn_icons/filament_related/spool_database_1.svg"
+    )
     STANDARD_TEMPERATURE = ":/temperature_related/media/btn_icons/temperature_related/standard_temperature.svg"
     STATIC_IP = ":/network/media/btn_icons/network/static_ip.svg"
     STOP = ":/ui/media/btn_icons/ui/stop.svg"
