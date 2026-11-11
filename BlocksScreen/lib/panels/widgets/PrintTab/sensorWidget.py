@@ -63,9 +63,7 @@ class SensorWidget(QtWidgets.QWidget):
         self.icon_pixmap_fp: QtGui.QPixmap = BlocksPixmap.get(
             Icon.FILAMENT_SENSOR_TURN_ON
         )
-        self.icon_pixmap_fnp: QtGui.QPixmap = BlocksPixmap.get(
-            Icon.FILAMENT_SENSOR_OFF
-        )
+        self.icon_pixmap_fnp: QtGui.QPixmap = BlocksPixmap.get(Icon.FILAMENT_SENSOR_OFF)
         self._setup_ui()
         self.toggle_button.stateChange.connect(self.toggle_sensor_state)
 
