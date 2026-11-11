@@ -601,17 +601,30 @@ _dfu_readback_matches() {
     cmp -s "$image" "$readback"
 }
 
-# Return 0 once <serial> drops off the DFU list, 1 if it is still there after the wait.
+# Return 0 if <serial> is on the DFU list, 1 if it is not, 2 if dfu-util --list failed.
+_dfu_listed() {
+    local serial="$1" list="$2" rc=0
+    # Direct redirect, not $(): sudo USB access breaks in nested subshells.
+    # shellcheck disable=SC2024 # root runs dfu-util only, the file is ours
+    sudo dfu-util --list >"$list" 2>&1 || rc=2
+    [ "$rc" -eq 0 ] && { grep -qF "serial=\"$serial\"" "$list" || rc=1; }
+    rm -f "$list"
+    return "$rc"
+}
+
+# Return 0 once <serial> drops off the DFU list, 1 if it is still there after the
+# wait, 2 if dfu-util --list never answered (absence of the serial proves nothing).
 _dfu_left() {
-    local serial="$1" list="$2" _i
+    local serial="$1" list="$2" _i _rc _seen=false
     for ((_i = 0; _i < ${DFU_LEAVE_WAIT:-5}; _i++)); do
         sleep 1
-        # Direct redirect, not $(): sudo USB access breaks in nested subshells.
-        # shellcheck disable=SC2024 # root runs dfu-util only, the file is ours
-        sudo dfu-util --list >"$list" 2>&1 || true
-        grep -qF "serial=\"$serial\"" "$list" || return 0
+        _rc=0
+        _dfu_listed "$serial" "$list" || _rc=$?
+        [ "$_rc" -eq 1 ] && return 0
+        [ "$_rc" -eq 0 ] && _seen=true
     done
-    return 1
+    $_seen && return 1
+    return 2
 }
 
 # Write <image> at <addr>, read it back, and leave DFU only once it matches.
@@ -622,7 +635,8 @@ flash_dfu() {
     local name="$1" vidpid="$2" serial="$3" alt="${4:-0}" addr="${5:-0x08000000}"
     local image="${6:-$FW_BIN}" opts="${7:-}"
     local -a dev=(-d "$vidpid" -S "$serial" -a "$alt")
-    local readback="${image%.bin}.readback.bin" output rc attempt verify
+    local readback="${image%.bin}.readback.bin" list="${image%.bin}.dfu-list.txt"
+    local output rc attempt verify try left
     for attempt in 1 2; do
         info "Flashing [$name] via DFU (serial: $serial, addr: $addr, attempt $attempt/2)..."
         rc=0
@@ -630,29 +644,49 @@ flash_dfu() {
         echo "$output" | _indent >&2
         if echo "$output" | grep -qiE "No DFU capable USB device|Cannot open DFU device|unable to open"; then
             err "[$name] DFU device not found (serial: $serial) - board not in DFU mode or disconnected"
+            [ "$attempt" -gt 1 ] &&
+                warn "  The first write may have left a partial image: power-cycle it into DFU mode and re-run."
             return 1
         fi
         if [ "$rc" -ne 0 ]; then
             warn "[$name] DFU write failed (exit $rc)"
+            if ! _dfu_listed "$serial" "$list"; then
+                err "[$name] MCU disconnected during the flash - reconnect and retry"
+                warn "  The board may be in an unknown state. Power-cycle it and re-enter DFU mode before retrying."
+                return 1
+            fi
             continue
         fi
         info "Reading back [$name] to verify..."
-        verify=0
-        _dfu_readback_matches "$readback" "$image" "$addr" "${dev[@]}" || verify=$?
-        if [ "$verify" -eq 2 ]; then
-            warn "[$name] readback failed - retrying it once"
+        for try in 1 2; do
             verify=0
             _dfu_readback_matches "$readback" "$image" "$addr" "${dev[@]}" || verify=$?
-        fi
+            [ "$verify" -ne 2 ] && break
+            [ "$try" -eq 1 ] && warn "[$name] readback failed - retrying it once"
+        done
         [ "$verify" -eq 1 ] && {
             warn "[$name] readback does not match the image"
             continue
         }
+        # Read protection keeps the board listed; a board gone from USB never booted our leave.
+        if [ "$verify" -eq 2 ] && ! _dfu_listed "$serial" "$list"; then
+            rm -f "$readback"
+            err "[$name] board dropped off USB after the write - the image in flash is unverified"
+            warn "  Power-cycle it into DFU mode and re-run."
+            return 1
+        fi
         [ "$verify" -eq 2 ] && warn "[$name] flash readback unavailable - leaving DFU with the write unverified"
         # Exit status is not checked: the ROM often resets before answering the request.
         sudo dfu-util "${dev[@]}" -s "${addr}:leave" 2>&1 | tail -n 2 | _indent >&2
         rm -f "$readback"
-        if ! _dfu_left "$serial" "${image%.bin}.dfu-list.txt"; then
+        left=0
+        _dfu_left "$serial" "$list" || left=$?
+        if [ "$left" -eq 2 ]; then
+            warn "[$name] dfu-util --list failed - cannot confirm the board left DFU"
+            warn "[$name] flashed via DFU, boot unconfirmed - the post-flash version check decides"
+            return 3
+        fi
+        if [ "$left" -eq 1 ]; then
             err "[$name] still in DFU mode after the leave request"
             if [ "$verify" -eq 0 ]; then
                 warn "  The image is verified - power-cycle the board to boot it."
@@ -772,15 +806,23 @@ preflight_firmware() {
         dfu_params "$cfg"
         at=(--at "$DFU_ADDR")
     fi
-    if ! python3 "$PREFLIGHT_PY" image --config "$FW_BUILD_ROOT/$name/.config" \
-        --image "$FW_BIN" "${at[@]}"; then
-        err "[$name] built image failed its sanity checks - not flashing"
-        return 1
-    fi
+    local check_rc=0
+    python3 "$PREFLIGHT_PY" image --config "$FW_BUILD_ROOT/$name/.config" \
+        --image "$FW_BIN" "${at[@]}" || check_rc=$?
+    case "$check_rc" in
+    0) ;;
+    4) err "[$name] image check could not run - not flashing"; return 1 ;;
+    *) err "[$name] built image failed its sanity checks - not flashing"; return 1 ;;
+    esac
     local flashed="$FW_BUILD_ROOT/$name.flashed.config"
     if [ -f "$flashed" ]; then
         python3 "$PREFLIGHT_PY" flashed --new "$FW_BUILD_ROOT/$name/.config" \
-            --flashed "$flashed" || rc=1
+            --flashed "$flashed" || check_rc=$?
+        case "$check_rc" in
+        0) ;;
+        4) err "[$name] crystal check could not run - not flashing"; return 1 ;;
+        *) rc=1 ;;
+        esac
     fi
     section=$(parse_config_metadata "$cfg" | sed -n 's/^klipper_section=//p')
     if [ "$CONTEXT" = "pi" ] && [ -n "$section" ]; then
@@ -790,6 +832,8 @@ preflight_firmware() {
         case "$comms_rc" in
         0) ;;
         3) warn "[$name] no running firmware to compare - comms settings unchecked" ;;
+        # An internal error is no comms change, so --allow-comms-change must not cover it.
+        4) err "[$name] comms check could not run - not flashing"; return 1 ;;
         *) rc=1 ;;
         esac
     fi
@@ -1466,6 +1510,7 @@ cmd_flash() {
             _ready+=("$entry")
         else
             failed+=("$name ($iface) - not flashed")
+            record_flash "$cfg" "$iface" failed
         fi
     done
     to_flash=("${_ready[@]}")

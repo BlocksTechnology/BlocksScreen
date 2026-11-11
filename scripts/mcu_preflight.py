@@ -6,7 +6,8 @@ pair: a Katapult build must share chip, clock, CAN pins and app address with Kli
 comms: constants of the new klipper.dict versus the running MCU's `mcu_constants`.
 flashed: clock Kconfig of the new build versus the last successfully flashed one.
 
-Exit codes: 0 pass, 1 problems found (printed to stderr), 3 no baseline to compare.
+Exit codes: 0 pass, 1 problems found (printed to stderr), 3 no baseline to compare,
+4 the check itself could not run (missing or unreadable input).
 """
 
 from __future__ import annotations
@@ -231,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
         problems = _run(args)
     except (OSError, ValueError) as exc:
         _LOG.error("%s", exc)
-        return 1
+        return 4
     if problems is None:
         return 3
     for problem in problems:

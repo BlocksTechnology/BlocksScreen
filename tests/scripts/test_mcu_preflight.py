@@ -183,13 +183,21 @@ def test_flashed_cli_catches_crystal_change(
     assert pf.main(["flashed", "--new", str(new), "--flashed", str(flashed)]) == rc
 
 
-# dfu-util stub: logs calls; the device leaves the --list after :leave unless STUCK=1.
+def test_unreadable_input_is_not_a_comms_change(tmp_path: Path) -> None:
+    missing = str(tmp_path / "missing.config")
+    assert pf.main(["flashed", "--new", missing, "--flashed", missing]) == 4
+
+
+# dfu-util stub: logs calls; the device leaves the --list after :leave unless STUCK=1,
+# GONE=1 drops it from the list at once, LIST=fail makes --list itself error out.
 # -U writes the image back (READBACK=bad corrupts it, READBACK=fail errors out).
 _DFU_STUB = r"""
 sudo() { "$@"; }
 dfu-util() {
     echo "dfu-util $*" >>"$LOG"
     if [[ "$*" == *--list* ]]; then
+        [ "${LIST:-}" = fail ] && return 74
+        [ "${GONE:-}" = 1 ] && return 0
         if [ ! -f "$LOG.left" ] || [ "${STUCK:-}" = 1 ]; then
             echo 'Found DFU: [0483:df11] alt=0, serial="SER"'
         fi
@@ -262,6 +270,20 @@ def test_dfu_still_listed_after_leave_is_a_failure(tmp_path: Path) -> None:
     assert sum(c.endswith("--list") for c in calls) == 2
 
 
+def test_dfu_unlistable_after_leave_is_unverified(tmp_path: Path) -> None:
+    rc, calls = _run_flash_dfu(tmp_path, LIST="fail")
+    assert rc == 3
+    assert not list(tmp_path.glob("*.dfu-list.txt"))
+
+
+@pytest.mark.parametrize("env", [{"READBACK": "fail"}, {"WRITE": "fail"}])
+def test_dfu_board_gone_from_usb_is_a_failure(tmp_path: Path, env: dict) -> None:
+    rc, calls = _run_flash_dfu(tmp_path, GONE="1", **env)
+    assert rc == 1
+    assert sum(" -D " in c for c in calls) == 1  # no rewrite to an absent board
+    assert not any(":leave" in c for c in calls)
+
+
 @pytest.mark.parametrize("env", [{"READBACK": "bad"}, {"WRITE": "fail"}])
 def test_dfu_never_leaves_after_a_bad_write(tmp_path: Path, env: dict) -> None:
     rc, calls = _run_flash_dfu(tmp_path, **env)
@@ -281,7 +303,7 @@ flash_dfu() { echo "flash_dfu $1" >>"$LOG"; return 0; }
 bootloader_uuids() { echo "${IN_KATAPULT:-}"; }
 _summary_box() { printf 'failed: %s\n' "${failed[@]}" >>"$LOG"; }
 save_uuid_cache() { :; }
-record_flash() { :; }
+record_flash() { echo "record_flash $3" >>"$LOG"; }
 check_host_power() { :; }
 release_klipper() { :; }
 ensure_can_up() { :; }
@@ -319,6 +341,7 @@ def test_failed_preflight_never_stops_klipper(tmp_path: Path) -> None:
     rc, _, calls = _run_cmd_flash(tmp_path, BAD="toolhead octopus")
     assert rc == 1
     assert not any("systemctl stop" in c or c.startswith("flash_") for c in calls)
+    assert calls.count("record_flash failed") == 2
 
 
 def test_failed_can_node_retries_in_katapult_and_skips_bridge(tmp_path: Path) -> None:
