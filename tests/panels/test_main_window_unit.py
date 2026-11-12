@@ -1,5 +1,6 @@
 """Unit test for MainWindow._on_klippy_state auto-restart guard"""
 
+from collections import deque
 from types import MethodType, SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -363,3 +364,16 @@ def test_klippy_status_error_does_not_escape_the_event() -> None:
     win.klippy_status.on_klippy_notify.side_effect = RuntimeError("render")
     event = SimpleNamespace(method="notify_klippy_shutdown", data={}, metadata=None)
     MainWindow.messageReceivedEvent(win, event)
+
+
+def test_forget_pages_drops_only_that_tabs_entries() -> None:
+    win = SimpleNamespace(index_stack=deque([[0, 1], [2, 3], [0, 3], [0, 4]], maxlen=4))
+    MainWindow.forget_pages(win, 0, [3, 4])
+    assert list(win.index_stack) == [[0, 1], [2, 3]]
+    assert win.index_stack.maxlen == 4
+
+
+def test_forget_pages_collapses_back_to_the_same_page() -> None:
+    win = SimpleNamespace(index_stack=deque([[0, 1], [0, 3], [0, 1], [2, 0]], maxlen=4))
+    MainWindow.forget_pages(win, 0, [3])
+    assert list(win.index_stack) == [[0, 1], [2, 0]]
