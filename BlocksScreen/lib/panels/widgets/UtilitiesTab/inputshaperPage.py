@@ -28,7 +28,7 @@ _GCODE_AXIS = re.compile(r"AXIS=(\w+)", re.IGNORECASE)
 _IS_TEXT = CalibrationText(
     title="input shaper",
     homing="Calibrating input shaper\nHoming the printer",
-    running="Measuring resonances\nThis takes a few minutes",
+    running="Measuring Resonances\nThis takes a few minutes",
     failed="Input shaper calibration failed.\nCheck the accelerometer and try again.",
 )
 
@@ -218,10 +218,10 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         """Return overlay text for a sweep or fitting progress line, else None."""
         if match := _TESTING_AXIS.search(message):
             self._sweep_axis = match[1].upper()
-            return f"Measuring resonances\n{self._sweep_axis} axis"
+            return f"Measuring Resonances\n{self._sweep_axis} axis"
         if match := _TESTING_FREQ.search(message):
             axis = f"{self._sweep_axis} axis: " if self._sweep_axis else ""
-            return f"Measuring resonances\n{axis}{match[1]} Hz"
+            return f"Measuring Resonances\n{axis}{match[1]} Hz"
         if match := _CALCULATING.search(message):
             return f"Calculating the best input shaper\n{match[1].upper()} axis"
         return None

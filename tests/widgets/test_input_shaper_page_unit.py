@@ -238,7 +238,7 @@ def test_sweep_progress_reaches_overlay(page):
     _start(p, sent)
     p.handle_gcode_response(["// Testing axis x"])
     p.handle_gcode_response(["// Testing frequency 62 Hz"])
-    assert loads[-1] == (True, "Measuring resonances\nX axis: 62 Hz")
+    assert loads[-1] == (True, "Measuring Resonances\nX axis: 62 Hz")
     p.handle_gcode_response(
         ["// Calculating the best input shaper parameters for y axis"]
     )
@@ -249,7 +249,7 @@ def test_sweep_progress_reaches_overlay(page):
     sent.clear()
     _start(p, sent, "SHAPER_CALIBRATE AXIS=Y")
     p.handle_gcode_response(["// Testing frequency 40 Hz"])
-    assert loads[-1][1] == "Measuring resonances\nY axis: 40 Hz"
+    assert loads[-1][1] == "Measuring Resonances\nY axis: 40 Hz"
 
 
 def test_klipper_busy_blocks_new_run(page):
