@@ -734,6 +734,8 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.call_load_panel.emit(False, "", False)
         if self._usb_pending:  # e.g. FIRMWARE_RESTART or a thermal shutdown mid-copy
             self._usb_from_console = False  # a non-ready Klipper rejects RESPOND
+            if self._usb_local:  # copy done, Moonraker still processing it
+                self._mark_unindexed(self._usb_local, self._usb_key)
             self._end_usb_print(f"USB print cancelled: Klipper is {state}.")
         self.BasePopup_z_offset.reject()
         self.save_config_btn.setVisible(False)

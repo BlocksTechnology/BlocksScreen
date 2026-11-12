@@ -196,7 +196,8 @@ def _reserve_space(dest_dir: pathlib.Path, size: int):
     # Each copy checked free space before the others' temp files grew.
     with _RESERVE_LOCK:
         free = shutil.disk_usage(dest_dir).free - sum(_reserved.values())
-        if free < size + MIN_FREE_MARGIN:
+        # Happy Hare and Moonraker then rewrite it via a temp copy on this disk.
+        if free < 2 * size + MIN_FREE_MARGIN:
             raise UsbImportError(
                 f"Not enough free space ({max(free, 0) // MB} MB free)"
             )

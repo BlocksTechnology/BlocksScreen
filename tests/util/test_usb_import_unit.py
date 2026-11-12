@@ -266,6 +266,16 @@ def test_low_disk_space_is_rejected(layout, monkeypatch) -> None:
     assert not (gcodes / "cube.gcode").exists()
 
 
+def test_space_check_leaves_room_for_the_rewrite_copy(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(usb_import, "MIN_FREE_MARGIN", 0)
+    monkeypatch.setattr(usb_import.shutil, "disk_usage", lambda _p: _Usage(0, 0, 100))
+    with pytest.raises(UsbImportError, match="Not enough free space"):
+        with usb_import._reserve_space(tmp_path, 60):
+            pass
+    with usb_import._reserve_space(tmp_path, 50):
+        pass
+
+
 def test_fsync_error_leaves_no_partial_file(layout, monkeypatch) -> None:
     gcodes, drive, _ = layout
     (drive / "cube.gcode").write_bytes(b"G28\n")
@@ -372,9 +382,9 @@ def test_cancel_stops_a_running_copy(tmp_path, monkeypatch) -> None:
 def test_running_copies_reserve_their_space(tmp_path, monkeypatch) -> None:
     # Two imports both passed the free-space check before either temp file grew
     monkeypatch.setattr(usb_import, "MIN_FREE_MARGIN", 0)
-    monkeypatch.setattr(usb_import.shutil, "disk_usage", lambda _p: _Usage(0, 0, 100))
+    monkeypatch.setattr(usb_import.shutil, "disk_usage", lambda _p: _Usage(0, 0, 150))
     with usb_import._reserve_space(tmp_path, 60):
-        with pytest.raises(UsbImportError, match="40 MB|0 MB"):
+        with pytest.raises(UsbImportError, match="Not enough free space"):
             with usb_import._reserve_space(tmp_path, 60):
                 pass
     with usb_import._reserve_space(tmp_path, 60):

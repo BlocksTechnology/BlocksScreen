@@ -252,6 +252,16 @@ class TestUsbImportDone:
         PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
         self._printed(tab)
 
+    def test_klipper_drop_while_processing_still_indexes_the_copy(self, tab) -> None:
+        self._done(tab)
+        tab.BasePopup_z_offset = MagicMock()
+        tab.save_config_btn = tab.babystepPage = MagicMock()
+        PrintTab.on_klippy_state(tab, "shutdown")
+        assert tab._usb_pending is False
+        PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
+        tab.jobStatusPage_widget.on_print_start.assert_not_called()
+        assert tab.remember.call_args.args[1:] == ("k", "cube.gcode")
+
     def test_create_before_done_prints_at_once(self, tab) -> None:
         PrintTab._on_usb_file_added(tab, {"path": "/cube.gcode"})
         self._done(tab)
