@@ -61,6 +61,13 @@ class TestKlippyNotifications:
         _notify(ws, "notify_klippy_ready")
         assert queries == []
 
+    def test_ready_while_polling_queries_at_once(self, ws):
+        ws.query_klippy_status_timer.running = True
+        queries = []
+        ws.query_server_info_signal.connect(lambda: queries.append(1))
+        _notify(ws, "notify_klippy_ready")
+        assert queries == [1]
+
     @pytest.mark.parametrize(
         "method", ["notify_klippy_disconnected", "notify_klippy_shutdown"]
     )
