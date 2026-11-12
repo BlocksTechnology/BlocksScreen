@@ -121,6 +121,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
         self._update_in_progress: bool = False
+        # The update page's overlay outlives its batch; only then may it drop other hides.
+        self._update_owns_overlay: bool = False
         self._post_update_reconnect: bool = False
         self._reconnect_retries: int = 0
         self._reconnect_timer = QtCore.QTimer(self)
@@ -338,10 +340,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.introscreen: BasePopup | None = BasePopup(
             self, floating=False, dialog=False
         )
-        self.introwidget: LoadingOverlayWidget | None = LoadingOverlayWidget(
-            self, LoadingOverlayWidget.AnimationGIF.PLACEHOLDER
+        self.introscreen.add_widget(
+            LoadingOverlayWidget(self, LoadingOverlayWidget.AnimationGIF.PLACEHOLDER)
         )
-        self.introscreen.add_widget(self.introwidget)
         self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
         self.cancelpage = CancelPage(self)
         self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
@@ -405,7 +406,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.introscreen.hide()
         self.introscreen.deleteLater()
         self.introscreen = None
-        self.introwidget = None
 
     @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
@@ -443,9 +443,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
-            # Restart and reconnect flows no longer own the overlay, so only an update
-            # in flight may keep it up against another panel's hide.
-            if not show and self._update_in_progress:
+                self._update_owns_overlay = show
+            # Only the update page's own overlay may outlive another panel's hide.
+            if not show and self._update_owns_overlay:
                 return
 
             if _sender == self.filamentPanel:
@@ -465,7 +465,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if show:
             self.loadscreen.show()
         else:
+            self._update_owns_overlay = False
             self.loadscreen.hide()
+
+    def _drop_update_overlay(self) -> None:
+        """Hide the overlay only while the update page owns it, never another panel's."""
+        if self._update_owns_overlay:
+            self.show_loadscreen(False, "", force=True)
 
     @QtCore.pyqtSlot(bool, name="show-update-page")
     def show_update_page(self, fullscreen: bool):
@@ -588,6 +594,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self._post_update_reconnect = False
         self._update_in_progress = False
+        self._update_owns_overlay = False
         self._reconnect_timer.stop()
         # update_page.handle_daemon_unavailable (connected to the same signal)
         # resets the page; routing through handle_busy_changed here would issue
@@ -608,7 +615,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._post_update_reconnect = True
         self._reconnect_retries = 0
-        self.loadscreen.hide()
+        self._drop_update_overlay()
         self.ws.retry_wb_conn()
         self._reconnect_timer.start()
 
@@ -625,7 +632,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._update_in_progress = False
             self._reconnect_retries = 0
             self._reconnect_timer.stop()
-            self.loadscreen.hide()
+            self._drop_update_overlay()
             return
         self._reconnect_retries += 1
         if self._reconnect_retries >= self._MAX_RECONNECT_RETRIES:
@@ -636,7 +643,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._post_update_reconnect = False
             self._update_in_progress = False
             self._reconnect_timer.stop()
-            self.loadscreen.hide()
+            self._drop_update_overlay()
             return
         _logger.info(
             "post-update reconnect retry %d/%d",
@@ -653,7 +660,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._update_in_progress = False
             self._reconnect_retries = 0
             self._reconnect_timer.stop()
-            self.loadscreen.hide()
+            self._drop_update_overlay()
 
     @QtCore.pyqtSlot(bool, name="update-available")
     def on_update_available(self, state: bool = False):
@@ -1566,7 +1573,9 @@ class MainWindow(QtWidgets.QMainWindow):
         tab.setObjectName(name)
         tab.setMinimumSize(QtCore.QSize(720, 420))
         tab.setMaximumSize(QtCore.QSize(1024, 720))
-        size = self.main_content_widget.iconSize()
+        # Device pixels, or the menu blurs on a HiDPI screen.
+        dpr = QtGui.QGuiApplication.instance().devicePixelRatio()
+        size = self.main_content_widget.iconSize() * dpr
         icon = QtGui.QIcon()
         for art, mode, state in (
             (normal, QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off),
@@ -1574,15 +1583,13 @@ class MainWindow(QtWidgets.QMainWindow):
             (blocked, QtGui.QIcon.Mode.Disabled, QtGui.QIcon.State.On),
         ):
             # A PNG QIcon keeps its 402x366 decode alive, so hand Qt the scaled copy only.
-            icon.addPixmap(
-                BlocksPixmap.source(art).scaled(
-                    size,
-                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                    QtCore.Qt.TransformationMode.SmoothTransformation,
-                ),
-                mode,
-                state,
+            scaled = BlocksPixmap.source(art).scaled(
+                size,
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
             )
+            scaled.setDevicePixelRatio(dpr)
+            icon.addPixmap(scaled, mode, state)
         self.main_content_widget.addTab(tab, icon, "")
         return tab
 

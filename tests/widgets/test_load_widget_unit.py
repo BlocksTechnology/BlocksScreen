@@ -3,7 +3,7 @@
 import importlib.util
 from pathlib import Path
 
-from PyQt6 import QtGui, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 # tests/panels/conftest.py stubs this module, so load the real one under another name
 _spec = importlib.util.spec_from_file_location(
@@ -70,3 +70,11 @@ def test_missing_gif_keeps_the_spinner(qapp, tmp_path):
     assert overlay.movie is None
     parent.show()
     assert overlay.timer.isActive()
+
+
+def test_unknown_gif_size_stretches_instead_of_cropping(qapp):
+    """Without a frame size QMovie plays at native size, cropped by the label."""
+    parent, overlay = _overlay(qapp, _GIF.PLACEHOLDER)
+    overlay._movie_size = QtCore.QSize()
+    overlay._fit_movie()
+    assert overlay.gifshow.hasScaledContents()

@@ -78,7 +78,8 @@ class CancelPage(QtWidgets.QWidget):
         # Scene rectangle (available display area)
         graphics_rect = self.cf_thumbnail.rect().toRectF()
 
-        pixmap = BlocksPixmap.get(pixmap, graphics_rect)
+        # One-off per job, so it skips the shared cache it could never hit again.
+        pixmap = BlocksPixmap.scaled(pixmap, graphics_rect)
 
         adjusted_x = (graphics_rect.width() - pixmap.width()) / 2.0
         adjusted_y = (graphics_rect.height() - pixmap.height()) / 2.0

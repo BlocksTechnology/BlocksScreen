@@ -43,7 +43,8 @@ class CustomProgressBar(QtWidgets.QProgressBar):
 
     def _scale_pixmap(self) -> None:
         self._inner_rect = self._calculate_inner_geometry()
-        self._pixmap_cached = BlocksPixmap.get(self._pixmap, self._inner_rect)
+        # A job thumbnail is shown once and held here, so it stays out of the shared cache.
+        self._pixmap_cached = BlocksPixmap.scaled(self._pixmap, self._inner_rect)
 
     def set_inner_pixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set the inner icon pixmap on the progress bar

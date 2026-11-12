@@ -335,15 +335,13 @@ class TestBootIntro:
 
     def test_dismiss_frees_the_popup_once(self) -> None:
         popup = MagicMock()
-        win = SimpleNamespace(
-            _intro_timeout=MagicMock(), introscreen=popup, introwidget=MagicMock()
-        )
+        win = SimpleNamespace(_intro_timeout=MagicMock(), introscreen=popup)
 
         MainWindow._dismiss_intro(win)
         MainWindow._dismiss_intro(win)
 
         popup.deleteLater.assert_called_once()
-        assert win.introscreen is None and win.introwidget is None
+        assert win.introscreen is None
 
     def test_restart_ready_leaves_another_panels_overlay(self) -> None:
         # The restart flow no longer shows loadscreen, so it must not hide one it does not own.
@@ -354,3 +352,45 @@ class TestBootIntro:
 
         fake_window.loadscreen.hide.assert_not_called()
         assert fake_window._klipper_auto_restart_pending is False
+
+
+class TestPostUpdateOverlay:
+    def _win(self, *, owns: bool) -> SimpleNamespace:
+        panel = MagicMock(**{"isVisible.return_value": True})
+        win = _make_fake_window(ws_connected=False)
+        win.__dict__.update(
+            _update_owns_overlay=owns,
+            _update_in_progress=True,
+            _reconnect_retries=0,
+            _reconnect_timer=MagicMock(),
+            update_page=MagicMock(),
+            filamentPanel=MagicMock(),
+            controlPanel=panel,
+            printPanel=MagicMock(),
+            utilitiesPanel=MagicMock(),
+            sender=lambda: panel,
+        )
+        for name in ("show_loadscreen", "_drop_update_overlay"):
+            setattr(win, name, MethodType(getattr(MainWindow, name), win))
+        return win
+
+    def test_reconnect_releases_the_hide_guard(self) -> None:
+        win = self._win(owns=True)
+        MainWindow._on_post_update_reconnect(win)
+        win.loadscreen.hide.assert_called_once()
+        win.loadscreen.reset_mock()
+
+        win.show_loadscreen(False, "")  # another panel's hide, update still settling
+
+        win.loadscreen.hide.assert_called_once()
+
+    def test_reconnect_success_leaves_another_panels_overlay(self) -> None:
+        win = self._win(owns=False)
+        win._post_update_reconnect = True
+        win.ws.connected = True
+
+        MainWindow._on_moonraker_connected_post_update(win)
+        MainWindow._on_reconnect_timer(win)
+
+        win.loadscreen.hide.assert_not_called()
+        assert win._update_in_progress is False

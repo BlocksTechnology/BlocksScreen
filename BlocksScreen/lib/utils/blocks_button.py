@@ -193,8 +193,10 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             icon_size,
         )
         _icon_scaled = BlocksPixmap.get(self.icon_pixmap, _icon_rect)
-        scaled_width = _icon_scaled.width()
-        scaled_height = _icon_scaled.height()
+        # Logical size: width() counts device pixels, which doubles at DPR 2.
+        logical = _icon_scaled.deviceIndependentSize()
+        scaled_width = logical.width()
+        scaled_height = logical.height()
         adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
         adjusted_y = (_icon_rect.height() - scaled_height) / 2.0
         adjusted_icon_rect = QtCore.QRectF(

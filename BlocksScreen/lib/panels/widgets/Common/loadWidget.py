@@ -52,7 +52,10 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         if not movie.isValid():
             return
         self.movie = movie
+        # Header-only read; QMovie reports no size until a frame is decoded.
         self._movie_size = QtGui.QImageReader(gif).size()
+        if self._movie_size.isEmpty() and movie.jumpToFrame(0):
+            self._movie_size = movie.frameRect().size()
         self.timer.stop()
         self.gifshow.setMovie(movie)
         self.gifshow.show()
@@ -86,6 +89,7 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
             self.movie.stop()
 
     def _update_animation(self) -> None:
+        """Advance the spinner one 16 ms step: rotate and breathe the arc length."""
         self._angle = (self._angle + 5) % 360
         if self._is_span_growing:
             self._span_angle += self.length_step
@@ -143,18 +147,20 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
     def _fit_movie(self) -> None:
         """Decode frames at the on-screen size; QMovie scales once per frame, not per paint."""
         # An empty scaled size stops the QMovie for good, so skip until laid out.
-        if (
-            self.movie is not None
-            and not self._movie_size.isEmpty()
-            and not self.gifshow.size().isEmpty()
-        ):
-            self.movie.setScaledSize(
-                self._movie_size.scaled(
-                    self.gifshow.size(), QtCore.Qt.AspectRatioMode.KeepAspectRatio
-                )
+        if self.movie is None or self.gifshow.size().isEmpty():
+            return
+        if self._movie_size.isEmpty():
+            # Unknown frame size: let QLabel stretch it rather than crop at native size.
+            self.gifshow.setScaledContents(True)
+            return
+        self.movie.setScaledSize(
+            self._movie_size.scaled(
+                self.gifshow.size(), QtCore.Qt.AspectRatioMode.KeepAspectRatio
             )
+        )
 
     def _setup_ui(self) -> None:
+        """Build the gif label and the status text label."""
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.gifshow = QtWidgets.QLabel("", self)
         self.gifshow.setObjectName("gifshow")
