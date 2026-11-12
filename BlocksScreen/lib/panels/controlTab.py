@@ -19,7 +19,7 @@ from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.icon_button import IconButton
 from lib.utils.menu_grid import fixed_menu_grid
-from lib.utils.moonraker_reply import GcodeRun, is_disconnect_error, reply_error
+from lib.utils.moonraker_reply import CalibrationText, HomedCalibration
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
@@ -30,6 +30,14 @@ _ZTILT_PROGRESS = re.compile(
 # The homing override before RF50-Klipper#7 runs M84, which disables every motor.
 # TODO: drop with _home_keeps_tilt once #7 is on every box; misses M84 in called macros.
 _LEGACY_HOME_M84 = re.compile(r"^\s*M84\b", re.MULTILINE | re.IGNORECASE)
+_ZTILT_TEXT = CalibrationText(
+    title="Z-Tilt",
+    homing="Calibrating Z-Tilt\nHoming the printer",
+    running="Calibrating Z-Tilt\nProbing the bed",
+    failed="Z-Tilt calibration failed.\nCheck the bed and try again.",
+    done="Z-Tilt calibration complete.",
+    rehoming="Homing Z axis",
+)
 
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -68,13 +76,16 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._true_zero_state: bool | None = None
         self._motion_active: bool = False
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self._ztilt_failed: bool = False
-        self._ztilt_rehome: bool = True
         # Silence limit; every probing pass reports well within it
-        self._ztilt = GcodeRun(180_000, self)
-        self._ztilt.runner = self.ws.api.run_gcode
-        self._ztilt.klippy_busy = lambda: self.printer.printer_busy
-        self._ztilt.timed_out.connect(self._on_ztilt_timeout)
+        self._ztilt = HomedCalibration(
+            _ZTILT_TEXT,
+            180_000,
+            self,
+            runner=self.ws.api.run_gcode,
+            klippy_busy=lambda: self.printer.printer_busy,
+        )
+        self._ztilt.overlay.connect(self.call_load_panel)
+        self._ztilt.finished.connect(self._on_ztilt_finished)
         self.ztilt_result_screen = BasePopup(self, False, False)
         self.ztilt_result_screen_timer = QtCore.QTimer()
         self.ztilt_result_screen_timer.setSingleShot(True)
@@ -309,111 +320,35 @@ class ControlTab(QtWidgets.QStackedWidget):
             match = _ZTILT_PROGRESS.search(message or "")
             if match:
                 self._ztilt.feed()
-                self.call_load_panel.emit(
-                    True,
+                self._ztilt.show(
                     f"Calibrating Z-Tilt\nDeviation {float(match[1]):.3f} mm,"
-                    f" target {float(match[2]):.3f} mm",
-                    False,
+                    f" target {float(match[2]):.3f} mm"
                 )
 
     def handle_ztilt(self) -> None:
         """Home, run Z_TILT_ADJUST, home Z again; the overlay stays up until the end."""
-        if self._ztilt.busy:
-            # A lost link or timeout can leave Klipper busy; a new run would queue
-            if not self._ztilt.active:
-                self._ztilt_report(
-                    "The printer is still running a command.\n"
-                    "Wait for it to finish, then try again."
-                )
+        if self._ztilt.refused():
             return
-        self._ztilt_failed = False
-        self._ztilt.start()
-        self.call_load_panel.emit(True, "Calibrating Z-Tilt\nHoming the printer", False)
-        if not self._ztilt.send("G28\nM400", self._on_ztilt_first_home):
-            _logger.warning("Z-Tilt: request not sent, Moonraker unreachable")
-            self._ztilt_stop()
+        # Z only: XY stay homed through the tilt, so the override skips them (~10 s)
+        self._ztilt.run(
+            "Z_TILT_ADJUST", rehome="G28 Z" if self._home_keeps_tilt() else ""
+        )
 
     def _home_keeps_tilt(self) -> bool:
         """False on the legacy homing override, whose M84 undoes the tilt."""
         override = self.printer.get_config("homing_override").get("gcode", "")
         return not _LEGACY_HOME_M84.search(override)
 
+    def _on_ztilt_finished(self, _ok: bool, message: str) -> None:
+        """Show the run's result, if it has one."""
+        if message:
+            self._ztilt_report(message)
+
     def _ztilt_report(self, message: str) -> None:
         """Show ``message`` in the auto-hiding result popup."""
         self.ztilt_result_screen.set_message(message)
         self.ztilt_result_screen.show()
         self.ztilt_result_screen_timer.start()
-
-    def _ztilt_stop(self, message: str = "", force: bool = False) -> None:
-        """End the Z-Tilt run, closing the overlay and showing ``message`` if any."""
-        self._ztilt.stop()
-        self.call_load_panel.emit(False, "", force)
-        if message:
-            self._ztilt_report(message)
-
-    def _on_ztilt_timeout(self) -> None:
-        _logger.warning("Z-Tilt: no progress for 180 s, closing the overlay")
-        self._ztilt_stop(
-            "Z-Tilt calibration timed out.\nCheck the printer and try again."
-        )
-
-    def _on_ztilt_first_home(self, reply: object) -> None:
-        """Queue Z_TILT_ADJUST and, when safe, the final home once homed."""
-        error = reply_error(reply)
-        if is_disconnect_error(error):
-            self._ztilt_stop()
-            return  # Connection lost; ConnectionPage takes over
-        if error is not None:
-            self._ztilt_stop("Homing failed.\nCheck the printer and try again.")
-            return
-        self._ztilt_rehome = self._home_keeps_tilt()
-        # Separate scripts so the final home runs even if Z_TILT_ADJUST errors out
-        # Z only: XY stay homed through the tilt, so the override skips them (~10 s)
-        if not (
-            self._ztilt.send("Z_TILT_ADJUST", self._on_ztilt_done)
-            and (
-                not self._ztilt_rehome
-                or self._ztilt.send("G28 Z", self._on_ztilt_homed)
-            )
-        ):
-            self._ztilt_stop()
-
-    def _on_ztilt_done(self, reply: object) -> None:
-        """Move the overlay on to the final home, or finish when there is none."""
-        error = reply_error(reply)
-        if is_disconnect_error(error):
-            self._ztilt_stop()
-            return  # Connection lost; ConnectionPage takes over
-        self._ztilt_failed = error is not None
-        if not self._ztilt_rehome:
-            self._ztilt_finish()
-            return
-        status = (
-            "Z-Tilt calibration failed" if self._ztilt_failed else "Z-Tilt complete"
-        )
-        self.call_load_panel.emit(True, f"{status}\nHoming Z axis", False)
-
-    def _on_ztilt_homed(self, reply: object) -> None:
-        """Finish the run once the final G28 Z returns."""
-        error = reply_error(reply)
-        if is_disconnect_error(error):
-            self._ztilt_stop()
-            return  # Connection lost; ConnectionPage takes over
-        self._ztilt_finish(home_failed=error is not None)
-
-    def _ztilt_finish(self, home_failed: bool = False) -> None:
-        """Close the overlay and report the run's result."""
-        if self._ztilt_failed:
-            message = "Z-Tilt calibration failed.\nCheck the bed and try again."
-        elif home_failed:
-            message = (
-                "Homing failed after Z-Tilt calibration.\n"
-                "Home the printer before printing."
-            )
-        else:
-            message = "Z-Tilt calibration complete."
-        # Forced: MainWindow drops unforced hides while its restart guards are set
-        self._ztilt_stop(message, force=True)
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
     def on_klippy_status(self, state: str):

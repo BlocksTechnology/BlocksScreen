@@ -21,48 +21,52 @@ sys.modules.pop("lib.ui", None)
 for _stubbed in [_m for _m in sys.modules if _m.startswith("lib.panels.widgets")]:
     sys.modules.pop(_stubbed, None)
 
-from lib.panels.controlTab import ControlTab  # noqa: E402
-from lib.utils.moonraker_reply import GcodeRun  # noqa: E402
+from lib.panels.controlTab import _ZTILT_TEXT, ControlTab  # noqa: E402
+from lib.utils.moonraker_reply import (  # noqa: E402
+    FIRST_HOME_TIMEOUT_MS,
+    GcodeRun,
+    HomedCalibration,
+)
 
 _PASS = "// Retries: 0/6 Probed points range: 0.012700 tolerance: 0.050000"
 _LEGACY_OVERRIDE = "SET_KINEMATIC_POSITION Z=0\nG0 Z10\nM84 Z\nG28 Y\nG28 X"
 
 
-def _make_tab(override: str = ""):
+def _make_tab(override: str = "", unsent: tuple[str, ...] = ()):
     loads: list[tuple[bool, str]] = []
     callbacks: dict[str, object] = {}
 
     def run_gcode(gcode, callback=None):
+        if gcode in unsent:
+            return False
         callbacks[gcode] = callback
         return True
 
-    run = GcodeRun(180_000)
-    run.runner = run_gcode
+    run = HomedCalibration(_ZTILT_TEXT, 180_000, runner=run_gcode)
     t = SimpleNamespace(
         _ztilt=run,
-        _ztilt_failed=False,
-        _ztilt_rehome=True,
+        hides=[],
         printer=SimpleNamespace(
             get_config=lambda _s: {"gcode": override} if override else {}
         ),
-        call_load_panel=SimpleNamespace(emit=lambda s, m, _f: loads.append((s, m))),
         ztilt_result_screen=MagicMock(),
         ztilt_result_screen_timer=MagicMock(),
     )
+
+    def on_overlay(show, msg, force):
+        loads.append((show, msg))
+        t.hides.append((show, force))
+
     for name in (
         "_home_keeps_tilt",
         "_ztilt_report",
-        "_ztilt_stop",
-        "_ztilt_finish",
-        "_on_ztilt_timeout",
-        "_on_ztilt_first_home",
-        "_on_ztilt_done",
-        "_on_ztilt_homed",
+        "_on_ztilt_finished",
         "_handle_gcode_response",
     ):
         setattr(t, name, getattr(ControlTab, name).__get__(t))
     # PyQt cannot weakref a SimpleNamespace-bound method
-    run.timed_out.connect(lambda: t._on_ztilt_timeout())
+    run.overlay.connect(on_overlay)
+    run.finished.connect(lambda ok, msg: t._on_ztilt_finished(ok, msg))
     ControlTab.handle_ztilt(t)
     assert list(callbacks) == ["G28\nM400"]
     return t, loads, callbacks
@@ -163,7 +167,7 @@ def test_stale_reply_does_not_reach_new_run(tab):
 def test_timeout_blocks_new_run_until_klipper_answers(tab, qtbot):
     t, loads, callbacks = tab
     _home(callbacks)
-    t._ztilt._watchdog.setInterval(50)
+    t._ztilt.timeout_ms = 50
     t._handle_gcode_response([_PASS])
     qtbot.waitUntil(lambda: loads[-1][0] is False, timeout=2000)
     t.ztilt_result_screen.set_message.assert_called_once_with(
@@ -225,27 +229,49 @@ def test_forgotten_reply_does_not_clear_a_newer_send(qtbot):
     assert not run.busy
 
 
-def _record_hides(t) -> list[tuple[bool, bool]]:
-    hides: list[tuple[bool, bool]] = []
-    t.call_load_panel = SimpleNamespace(emit=lambda s, _m, f: hides.append((s, f)))
-    return hides
-
-
 def test_finished_run_forces_the_overlay_closed(tab):
     t, _loads, callbacks = tab
-    hides = _record_hides(t)
     _home(callbacks)
     callbacks["Z_TILT_ADJUST"]("ok")
     callbacks["G28 Z"]("ok")
-    assert hides[-1] == (False, True)
+    assert t.hides[-1] == (False, True)
+
+
+def test_failure_and_timeout_close_forced(tab, qtbot):
+    t, _loads, callbacks = tab
+    callbacks["G28\nM400"]({"error": {"code": 400, "message": "Endstop x still"}})
+    assert t.hides[-1] == (False, True)
+    ControlTab.handle_ztilt(t)
+    callbacks["G28\nM400"]("ok")
+    t._ztilt.timeout_ms = 50
+    t._ztilt.feed()
+    qtbot.waitUntil(lambda: t.hides[-1][0] is False, timeout=2000)
+    assert t.hides[-1] == (False, True)
 
 
 def test_disconnect_close_stays_unforced(tab):
     # Forcing it would also hide MainWindow's Klipper restart overlay
     t, _loads, callbacks = tab
-    hides = _record_hides(t)
     callbacks["G28\nM400"]({"error": {"code": 503, "message": "Klippy Disconnected"}})
-    assert hides[-1] == (False, False)
+    assert t.hides[-1] == (False, False)
+
+
+def test_first_home_gets_the_long_timeout(tab):
+    # The first G28 from the top runs BEACON_AUTO_CALIBRATE at 3 mm/s
+    t, _loads, callbacks = tab
+    assert t._ztilt._watchdog.interval() == FIRST_HOME_TIMEOUT_MS
+    callbacks["G28\nM400"]("ok")
+    assert t._ztilt._watchdog.interval() == 180_000
+
+
+def test_unsent_final_home_waits_for_the_tilt(qtbot):
+    t, loads, callbacks = _make_tab(unsent=("G28 Z",))
+    callbacks["G28\nM400"]("ok")
+    assert "Z_TILT_ADJUST" in callbacks and "G28 Z" not in callbacks
+    assert loads[-1][0] is True  # The gantry is still probing
+    callbacks["Z_TILT_ADJUST"]("ok")
+    assert loads[-1][0] is False
+    assert "not re-homed" in t.ztilt_result_screen.set_message.call_args.args[0]
 
 
 def test_lost_link_blocks_retap_while_klipper_busy(tab):

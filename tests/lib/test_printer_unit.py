@@ -60,3 +60,17 @@ class TestPrinterBusy:
         assert printer.printer_busy
         printer._idle_timeout_object_updated({"state": "Ready"})
         assert not printer.printer_busy
+
+    def test_not_stuck_busy_after_a_print(self, printer) -> None:
+        # Ready can arrive before print_stats leaves "printing"; busy must not latch
+        printer._print_stats_object_updated({"state": "printing"})
+        printer._idle_timeout_object_updated({"state": "Ready"})
+        assert printer.printer_busy
+        printer._print_stats_object_updated({"state": "complete"})
+        assert not printer.printer_busy
+
+    def test_paused_print_counts_as_busy(self, printer) -> None:
+        # Homing for a calibration during a pause would ruin the print
+        printer._idle_timeout_object_updated({"state": "Ready"})
+        printer._print_stats_object_updated({"state": "paused"})
+        assert printer.printer_busy

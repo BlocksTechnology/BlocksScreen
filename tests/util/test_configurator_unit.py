@@ -751,6 +751,20 @@ class TestMergeCfgMarker:
         result.read_string(tgt.read_text())
         assert result.get("section", "opt") == "from_repo"
 
+    def test_target_no_marker_strips_keys_the_source_block_owns(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(
+            tmp_path / "src_printer.cfg",
+            "[probe]\nz_offset: 2.0\nspeed: 5\n"
+            + SV_CONFIG_MARKER
+            + "\n#*# [probe]\n#*# z_offset = 1.0\n",
+        )
+        tgt = _write(tmp_path / "tgt_printer.cfg", "[probe]\nspeed: 5\n")
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
+        lines = tgt.read_text().splitlines()
+        assert "#z_offset: 2.0" in lines and "speed: 5" in lines
+        assert "#*# z_offset = 1.0" in lines
+
     def test_src_with_marker_target_also_with_marker(self, tmp_path):
         mgr = _make_manager(tmp_path)
         src = _write(

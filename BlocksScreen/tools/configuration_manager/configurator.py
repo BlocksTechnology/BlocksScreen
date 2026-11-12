@@ -634,8 +634,20 @@ class ConfigManager:
                             merged_save_lines
                         )
 
+                    elif marker in _sfl:
+                        # Target has no block yet: the source's still owns its keys
+                        sfl_lines = _sfl.splitlines(keepends=True)
+                        src_idx = next(
+                            i for i, line in enumerate(sfl_lines) if marker in line
+                        )
+                        src_save = sfl_lines[src_idx:]
+                        merged = "".join(
+                            self._strip_duplicates(
+                                sfl_lines[:src_idx], self._save_config_fields(src_save)
+                            )
+                            + src_save
+                        )
                     else:
-                        # Target has no SAVE_CONFIG block yet — use source as-is
                         merged = _sfl
 
                 else:

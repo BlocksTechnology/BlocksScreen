@@ -48,7 +48,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.troubleshoot_page: TroubleshootPage = TroubleshootPage(self)
 
         # currently using the logic only so theres no duplicate (logic flag disables render/update Ui)
-        self.is_page: InputShaperPage = InputShaperPage(self, logic=True)
+        self.is_page: InputShaperPage = InputShaperPage(
+            self,
+            logic=True,
+            gcode_runner=ws.api.run_gcode,
+            klippy_busy=lambda: printer.printer_busy,
+        )
         self.is_page.hide()
 
         self._setup_ui()
@@ -121,8 +126,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.is_popup.cancel_button_text("No")
         self.is_popup.confirm_button.clicked.connect(self.run_input_shaper)
         self.is_page.run_gcode_signal.connect(self.run_gcode_signal)
-        self.is_page.gcode_runner = self.ws.api.run_gcode
-        self.is_page.klippy_busy = lambda: self.printer.printer_busy
         self.ws.klippy_state_signal.connect(self.is_page.on_klippy_state)
         self.is_page.call_load_panel.connect(self.call_load_panel)
         self.printer.gcode_response.connect(self.is_page.handle_gcode_response)
@@ -131,7 +134,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.is_result_timer.setSingleShot(True)
         self.is_result_timer.setInterval(5000)
         self.is_result_timer.timeout.connect(self.is_result_popup.hide)
-        self.is_page.run_failed.connect(self.show_is_result)
+        self.is_page.run_finished.connect(self.show_is_result)
 
         # --- Websocket/Printer Signals ---
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
@@ -151,7 +154,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.is_page.handle_is("SHAPER_CALIBRATE")
 
     def show_is_result(self, message: str) -> None:
-        """Show why an input shaper run did not finish."""
+        """Show an input shaper run's result."""
         self.is_result_popup.set_message(message)
         self.is_result_popup.show()
         self.is_result_timer.start()

@@ -14,8 +14,6 @@ def page(qtbot):
         InputShaperPage,
     )
 
-    p = InputShaperPage(logic=True)
-    qtbot.addWidget(p)
     loads: list[tuple[bool, str]] = []
     fails: list[str] = []
     sent: dict[str, object] = {}
@@ -24,9 +22,10 @@ def page(qtbot):
         sent[gcode] = callback
         return True
 
-    p.gcode_runner = runner
+    p = InputShaperPage(logic=True, gcode_runner=runner)
+    qtbot.addWidget(p)
     p.call_load_panel.connect(lambda show, msg, _force: loads.append((show, msg)))
-    p.run_failed.connect(fails.append)
+    p.run_finished.connect(fails.append)
     return p, loads, sent, fails
 
 
@@ -137,7 +136,7 @@ def test_second_start_ignored_while_running(page):
 
 def test_unsent_request_closes_overlay(page):
     p, loads, _, _ = page
-    p.gcode_runner = lambda _gcode, callback=None: False
+    p._run.runner = lambda _gcode, callback=None: False
     p.handle_is("SHAPER_CALIBRATE")
     assert loads[-1][0] is False
     assert not p._run.busy and not p._run._watchdog.isActive()
@@ -145,7 +144,7 @@ def test_unsent_request_closes_overlay(page):
 
 def test_timeout_blocks_new_run_until_klipper_answers(page, qtbot):
     p, loads, sent, fails = page
-    p._run._watchdog.setInterval(50)
+    p._run.timeout_ms = 50
     _start(p, sent)
     old = dict(sent)
     qtbot.waitUntil(lambda: loads[-1][0] is False, timeout=2000)
@@ -155,7 +154,7 @@ def test_timeout_blocks_new_run_until_klipper_answers(page, qtbot):
     ]
 
     # Klipper still runs the old sweep: a re-tap must not queue a second one
-    p._run._watchdog.setInterval(120_000)
+    p._run.timeout_ms = 120_000
     sent.clear()
     p.handle_is("SHAPER_CALIBRATE")
     assert sent == {}
@@ -207,13 +206,13 @@ def test_single_axis_final_home_failure_is_reported(page):
     assert loads[-1][0] is False
     assert fails == [
         "Homing failed after input shaper calibration.\n"
-        "Check the printer and try again."
+        "Home the printer before printing."
     ]
 
 
 def test_progress_lines_restart_the_watchdog(page, qtbot):
     p, loads, sent, _ = page
-    p._run._watchdog.setInterval(300)
+    p._run.timeout_ms = 300
     _start(p, sent)
     for _ in range(5):
         qtbot.wait(100)
@@ -225,7 +224,7 @@ def test_progress_lines_restart_the_watchdog(page, qtbot):
 
 def test_unrelated_output_does_not_feed_the_watchdog(page, qtbot):
     p, loads, sent, _ = page
-    p._run._watchdog.setInterval(300)
+    p._run.timeout_ms = 300
     _start(p, sent)
     for _ in range(5):
         qtbot.wait(100)
@@ -256,9 +255,68 @@ def test_sweep_progress_reaches_overlay(page):
 def test_klipper_busy_blocks_new_run(page):
     # After a websocket drop the replies are gone but Klipper may still sweep
     p, _loads, sent, fails = page
-    p.klippy_busy = lambda: True
+    p._run.klippy_busy = lambda: True
     p.handle_is("SHAPER_CALIBRATE")
     assert sent == {}
     assert "still running" in fails[-1]
-    p.klippy_busy = lambda: False
+    p._run.klippy_busy = lambda: False
     _start(p, sent)
+
+
+def _saved(p, sent, reply="ok"):
+    _start(p, sent)
+    _sweep_both_axes(p)
+    sent["SHAPER_CALIBRATE"]("ok")
+    sent["SAVE_CONFIG"](reply)
+
+
+@pytest.mark.parametrize(
+    ("reply", "state", "expected"),
+    [
+        ("ok", "ready", "Input shaper settings saved."),
+        (_GONE, "ready", "Input shaper settings saved."),
+        ({"error": {"code": -1, "message": "closed"}}, "ready", "connection dropped"),
+        ("ok", "error", "did not restart cleanly"),
+        ("ok", "shutdown", "did not restart cleanly"),
+    ],
+)
+def test_save_restart_reports_once_klipper_is_back(page, reply, state, expected):
+    # Moonraker fails SAVE_CONFIG with 503 when the restart drops Klippy: that is success
+    p, loads, sent, fails = page
+    _saved(p, sent, reply)
+    assert loads[-1][0] is True and fails == []
+    p.on_klippy_state("startup")
+    assert fails == []
+    p.on_klippy_state(state)
+    assert loads[-1] == (False, "")
+    assert len(fails) == 1 and expected in fails[0]
+    p.on_klippy_state("ready")
+    assert len(fails) == 1
+
+
+def test_new_run_clears_previous_results(page):
+    p, _loads, sent, _ = page
+    _start(p, sent)
+    _sweep_both_axes(p)
+    assert p.is_types
+    sent["SHAPER_CALIBRATE"](_FAIL)
+    sent.clear()
+    _start(p, sent)
+    assert p.is_types == {} and p.type_dict == {}
+
+
+def test_manual_apply_goes_through_the_runner(page, monkeypatch):
+    # The list page needs the real icon widgets, which the test stubs replace
+    p, loads, sent, _ = page
+    monkeypatch.setattr(p, "logic", False)
+    monkeypatch.setattr(p, "reset_view_model", lambda: None)
+    monkeypatch.setattr(p, "setCurrentIndex", lambda _i: None)
+    monkeypatch.setattr(p, "is_page", None, raising=False)
+    p.type_dict = {"Axis": "x", "mzv": {"frequency": 41.0}}
+    p.currentItem = type("Item", (), {"text": "mzv"})()
+    p.handle_ism_confirm()
+    script = "SET_INPUT_SHAPER SHAPER_TYPE_X=mzv SHAPER_FREQ_X=41.0"
+    assert list(sent) == [script]
+    assert loads[-1] == (True, "Applying input shaper")
+    sent[script]("ok")
+    assert "SAVE_CONFIG" in sent
