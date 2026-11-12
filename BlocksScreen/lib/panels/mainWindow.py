@@ -316,6 +316,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.request_cancel.connect(self.updater_worker.trigger_cancel)
         self.update_page.update_available.connect(self.on_update_available)
         self.update_page.call_load_panel.connect(self.show_loadscreen)
+        # Connect-time busy=False may beat this wiring; deferred until loadwidget exists.
+        QtCore.QTimer.singleShot(0, self.update_page.hold_for_deploy)
         self.update_page.disable_popups.connect(self.popup_toggle)
         self.update_page.update_back_btn.clicked.connect(self.update_page.hide)
         self.updater_worker.step_complete.connect(self.update_page.handle_step_complete)
