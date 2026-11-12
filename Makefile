@@ -60,22 +60,30 @@ run: ## Launch the BlocksScreen application
 ##@ Code Generation
 # ─────────────────────────────────────────────────────────────────────────────
 
-rcc: ## Compile git-modified .qrc files to PyQt6 Python modules (_rc.py)
-	@files=$$(git diff --name-only HEAD -- '$(QRC_DIR)/*.qrc' 2>/dev/null; \
-	          git ls-files --others --exclude-standard -- '$(QRC_DIR)/*.qrc' 2>/dev/null); \
-	 if [ -z "$$files" ]; then echo "  No modified .qrc files."; exit 0; fi; \
-	 for qrc in $$files; do \
-	     out="$${qrc%.qrc}_rc.py"; \
+# git diff, not make prerequisites: asset paths hold spaces ('fonts for text/'), which make cannot.
+rcc: ## Compile .qrc files whose .qrc or listed assets changed vs HEAD (_rc.py)
+	@changed=$$(git -c core.quotePath=false diff --name-only --relative=$(QRC_DIR) HEAD -- '$(QRC_DIR)' 2>/dev/null; \
+	            git -c core.quotePath=false ls-files --others --exclude-standard -- '$(QRC_DIR)' 2>/dev/null \
+	                | sed 's|^$(QRC_DIR)/||'); \
+	 built=0; \
+	 for qrc in $(QRC_DIR)/*.qrc; do \
+	     hit=$$(printf '%s\n' "$$changed" | grep -v '_rc\.py$$' | while IFS= read -r f; do \
+	         [ -n "$$f" ] || continue; \
+	         if [ "$$f" = "$${qrc##*/}" ] || sed -n 's|.*<file[^>]*>[[:space:]]*\([^<]*[^<[:space:]]\)[[:space:]]*</file>.*|\1|p' "$$qrc" | grep -qxF "$$f"; then echo y; break; fi; \
+	     done); \
+	     [ -n "$$hit" ] || continue; \
+	     out="$${qrc%.qrc}_rc.py"; built=1; \
 	     echo "  $$qrc → $$out"; \
-	     $(PYRCC5) "$$qrc" -o "$$out"; \
+	     $(PYRCC5) "$$qrc" -o "$$out" || exit 1; \
 	     sed -i 's/from PyQt5 import QtCore/from PyQt6 import QtCore/' "$$out"; \
-	 done
+	 done; \
+	 [ "$$built" = 1 ] || echo "  No modified .qrc files or assets."
 
 rcc-all: ## Force recompile all .qrc files
 	@for qrc in $(QRC_DIR)/*.qrc; do \
 	     out="$${qrc%.qrc}_rc.py"; \
 	     echo "  $$qrc → $$out"; \
-	     $(PYRCC5) "$$qrc" -o "$$out"; \
+	     $(PYRCC5) "$$qrc" -o "$$out" || exit 1; \
 	     sed -i 's/from PyQt5 import QtCore/from PyQt6 import QtCore/' "$$out"; \
 	 done
 
