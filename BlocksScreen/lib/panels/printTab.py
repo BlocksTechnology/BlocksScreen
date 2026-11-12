@@ -789,6 +789,30 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Goes back to the previous page"""
         self.request_back.emit()
 
+    @QtCore.pyqtSlot(str, name="on_usb_removed")
+    def on_usb_removed(self, symlink: str = "") -> None:
+        """Leave the confirm or metadata page of a file on the removed USB drive."""
+        gone = helper_methods.get_file_name(symlink)
+
+        def on_gone_drive(path: str) -> bool:
+            drive = path.strip("/").split("/", 1)[0]
+            return helper_methods.is_usb_mount(drive) and gone in ("", drive)
+
+        confirm, meta = self.confirmPage_widget, self.metadataPage_widget
+        stale_confirm = on_gone_drive(confirm.directory)
+        page = self.currentWidget()
+        if not (
+            (page is confirm and stale_confirm)
+            or (page is meta and on_gone_drive(meta.shown_path))
+        ):
+            return
+        if not self.isVisible():  # another tab is up; global_back would switch to it
+            self.setCurrentIndex(self.indexOf(self.filesPage_widget))
+            return
+        self.back_button()
+        if self.currentWidget() is confirm and stale_confirm:  # metadata was over it
+            self.back_button()
+
     @QtCore.pyqtSlot(name="klipper_ready_signal")
     def klipper_ready_signal(self) -> None:
         """React to klipper ready signal"""

@@ -435,3 +435,60 @@ class TestUsbImportDone:
         tab._cancel_z_snapshot = 0.0
         PrintTab.on_print_stats_update(tab, "state", "standby")
         tab.call_load_panel.emit.assert_not_called()
+
+
+class TestUsbRemovedLeavesStalePages:
+    """Pulling the stick backs out of pages showing a file that is now gone."""
+
+    def _tab(self, stack: list[str], confirm_dir: str, meta_path: str = ""):
+        pages = {n: SimpleNamespace(name=n) for n in ("files", "confirm", "meta")}
+        pages["confirm"].directory = confirm_dir
+        pages["meta"].shown_path = meta_path
+        tab = SimpleNamespace(
+            confirmPage_widget=pages["confirm"],
+            metadataPage_widget=pages["meta"],
+            filesPage_widget=pages["files"],
+            stack=[pages[n] for n in stack],
+            isVisible=lambda: True,
+        )
+        tab.currentWidget = lambda: tab.stack[-1]
+        tab.back_button = lambda: tab.stack.pop()
+        tab.indexOf = lambda page: page.name
+        tab.setCurrentIndex = MagicMock()
+        return tab
+
+    def _top(self, tab: SimpleNamespace) -> str:
+        return tab.currentWidget().name
+
+    def test_confirm_of_usb_file_goes_back(self) -> None:
+        tab = self._tab(["files", "confirm"], "USB-BLOCKS")
+        PrintTab.on_usb_removed(tab, "/home/blocks/printer_data/gcodes/USB-BLOCKS")
+        assert self._top(tab) == "files"
+
+    def test_metadata_over_usb_confirm_goes_back_twice(self) -> None:
+        tab = self._tab(
+            ["files", "confirm", "meta"], "USB-BLOCKS/sub", "USB-BLOCKS/sub/a.gcode"
+        )
+        PrintTab.on_usb_removed(tab, "")
+        assert self._top(tab) == "files"
+
+    @pytest.mark.parametrize(
+        ("confirm_dir", "symlink"),
+        [("", "USB-BLOCKS"), ("cubes", "USB-BLOCKS"), ("USB-OTHER", "USB-BLOCKS")],
+    )
+    def test_other_files_stay(self, confirm_dir, symlink) -> None:
+        tab = self._tab(["files", "confirm"], confirm_dir)
+        PrintTab.on_usb_removed(tab, symlink)
+        assert self._top(tab) == "confirm"
+
+    def test_job_metadata_stays_over_stale_confirm(self) -> None:
+        tab = self._tab(["files", "confirm", "meta"], "USB-BLOCKS", "cube.gcode")
+        PrintTab.on_usb_removed(tab, "USB-BLOCKS")
+        assert self._top(tab) == "meta"
+
+    def test_hidden_tab_resets_without_global_back(self) -> None:
+        tab = self._tab(["files", "confirm"], "USB-BLOCKS")
+        tab.isVisible = lambda: False
+        PrintTab.on_usb_removed(tab, "USB-BLOCKS")
+        tab.setCurrentIndex.assert_called_once_with("files")
+        assert self._top(tab) == "confirm"
