@@ -123,13 +123,13 @@ def test_comms_ignores_unrelated_constants() -> None:
     }
     assert pf.comms_problems({"MCU": "stm32h723xx", "CANBUS_BRIDGE": 1}, running) == []
     problems = pf.comms_problems({"MCU": "stm32h723xx"}, running)
-    assert problems == ["CANBUS_BRIDGE: running 1, new build None"]
+    assert problems == ["CANBUS_BRIDGE: running 1, new build absent"]
 
 
 def test_comms_catches_crystal_to_internal_clock() -> None:
     running = {"MCU": "stm32h723xx", "RESERVE_PINS_crystal": "PH0,PH1"}
     problems = pf.comms_problems({"MCU": "stm32h723xx"}, running)
-    assert problems == ["RESERVE_PINS_crystal: running 'PH0,PH1', new build None"]
+    assert problems == ["RESERVE_PINS_crystal: running 'PH0,PH1', new build absent"]
 
 
 _CONSTANTS = {"mcu": {"mcu_constants": {"MCU": "stm32g0b1xx", "CLOCK_FREQ": 64000000}}}
@@ -186,6 +186,26 @@ def test_flashed_cli_catches_crystal_change(
 def test_unreadable_input_is_not_a_comms_change(tmp_path: Path) -> None:
     missing = str(tmp_path / "missing.config")
     assert pf.main(["flashed", "--new", missing, "--flashed", missing]) == 4
+
+
+def test_a_crash_in_a_check_is_never_a_comms_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _crash(*_args: object) -> list[str]:
+        raise AttributeError("boom")
+
+    monkeypatch.setattr(pf, "comms_problems", _crash)
+    dict_file = tmp_path / "klipper.dict"
+    dict_file.write_text("{}")
+    monkeypatch.setattr(pf, "running_constants", lambda *_a: {"MCU": "x"})
+    assert pf.main(["comms", "--dict", str(dict_file), "--section", "mcu"]) == 4
+
+
+def test_unreachable_moonraker_is_not_a_missing_baseline(tmp_path: Path) -> None:
+    dict_file = tmp_path / "klipper.dict"
+    dict_file.write_text("{}")
+    argv = ["comms", "--dict", str(dict_file), "--section", "mcu"]
+    assert pf.main(argv + ["--url", "http://127.0.0.1:9"]) == 5
 
 
 # dfu-util stub: logs calls; the device leaves the --list after :leave unless STUCK=1,
@@ -270,10 +290,22 @@ def test_dfu_still_listed_after_leave_is_a_failure(tmp_path: Path) -> None:
     assert sum(c.endswith("--list") for c in calls) == 2
 
 
-def test_dfu_unlistable_after_leave_is_unverified(tmp_path: Path) -> None:
+def test_dfu_unlistable_after_verified_leave_is_ok(tmp_path: Path) -> None:
     rc, calls = _run_flash_dfu(tmp_path, LIST="fail")
-    assert rc == 3
+    assert rc == 0
     assert not list(tmp_path.glob("*.dfu-list.txt"))
+
+
+def test_dfu_unlistable_without_readback_is_unverified(tmp_path: Path) -> None:
+    rc, calls = _run_flash_dfu(tmp_path, LIST="fail", READBACK="fail")
+    assert rc == 3
+    assert _targets(calls)[-1] == "0x08000000:leave"
+
+
+def test_dfu_list_error_after_a_failed_write_still_retries(tmp_path: Path) -> None:
+    rc, calls = _run_flash_dfu(tmp_path, LIST="fail", WRITE="fail")
+    assert rc == 1
+    assert sum(" -D " in c for c in calls) == 2
 
 
 @pytest.mark.parametrize("env", [{"READBACK": "fail"}, {"WRITE": "fail"}])
@@ -356,3 +388,39 @@ def test_vanished_can_node_gets_reset_instructions(tmp_path: Path) -> None:
     _, out, calls = _run_cmd_flash(tmp_path)
     assert calls.count("flash_can toolhead") == 1
     assert "double-press its reset" in out
+
+
+def _run_snippet(body: str, **env: str) -> subprocess.CompletedProcess:
+    script = f'. "{_SCRIPTS / "flash_mcus.sh"}"\n{body}'
+    return subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={"PATH": "/usr/bin:/bin", **env},
+    )
+
+
+def test_flash_can_reports_a_failed_flashtool(tmp_path: Path) -> None:
+    tool = tmp_path / "flashtool.py"
+    tool.write_text("import sys\nprint('Flash Failed')\nsys.exit(1)\n")
+    res = _run_snippet(
+        'KATAPULT_SCRIPT="$TOOL"; flash_can toolhead aaa; echo "rc=$?"',
+        HOME=str(tmp_path),
+        TOOL=str(tool),
+    )
+    assert "rc=1" in res.stdout
+
+
+def test_bootloader_uuids_lists_katapult_nodes_only(tmp_path: Path) -> None:
+    tool = tmp_path / "flashtool.py"
+    tool.write_text(
+        "print('Detected UUID: aaa, Application: Katapult')\n"
+        "print('Detected UUID: bbb, Application: Klipper')\n"
+    )
+    res = _run_snippet(
+        'KATAPULT_SCRIPT="$TOOL"; KATAPULT_OK=true; bootloader_uuids',
+        HOME=str(tmp_path),
+        TOOL=str(tool),
+    )
+    assert res.stdout.split() == ["aaa"]

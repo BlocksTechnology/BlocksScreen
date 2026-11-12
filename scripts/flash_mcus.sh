@@ -342,10 +342,8 @@ write_versions_file() {
 
 # Append a flash result to the versions file, keyed by klipper_section.
 record_flash() {
-    local cfg="$1" iface="$2" result="$3" section=""
-    while IFS='=' read -r key val; do
-        [ "$key" = "klipper_section" ] && section="$val"
-    done < <(parse_config_metadata "$cfg")
+    local cfg="$1" iface="$2" result="$3" section
+    section=$(config_meta "$cfg" klipper_section)
     [ -z "$section" ] && return 0
     python3 "$VERSIONS_PY" record --state-file "$MCU_VERSIONS_FILE" --section "$section" \
         --version "$SRC_VERSION" --interface "$iface" --result "$result" || true
@@ -395,7 +393,7 @@ ensure_can_up() {
 bootloader_uuids() {
     $KATAPULT_OK || return
     python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" -q 2>&1 |
-        awk '/Detected UUID/ { gsub(/,/, "", $3); print $3 }'
+        awk '/Detected UUID/ && /Application: Katapult/ { gsub(/,/, "", $3); print $3 }'
 }
 
 # Query ALL CAN UUIDs (running Klipper + Katapult bootloader) via Klipper's
@@ -650,7 +648,10 @@ flash_dfu() {
         fi
         if [ "$rc" -ne 0 ]; then
             warn "[$name] DFU write failed (exit $rc)"
-            if ! _dfu_listed "$serial" "$list"; then
+            local listed=0
+            _dfu_listed "$serial" "$list" || listed=$?
+            [ "$listed" -eq 2 ] && warn "[$name] dfu-util --list failed - retrying the write"
+            if [ "$listed" -eq 1 ]; then
                 err "[$name] MCU disconnected during the flash - reconnect and retry"
                 warn "  The board may be in an unknown state. Power-cycle it and re-enter DFU mode before retrying."
                 return 1
@@ -669,7 +670,9 @@ flash_dfu() {
             continue
         }
         # Read protection keeps the board listed; a board gone from USB never booted our leave.
-        if [ "$verify" -eq 2 ] && ! _dfu_listed "$serial" "$list"; then
+        local listed=0
+        [ "$verify" -eq 2 ] && { _dfu_listed "$serial" "$list" || listed=$?; }
+        if [ "$listed" -eq 1 ]; then
             rm -f "$readback"
             err "[$name] board dropped off USB after the write - the image in flash is unverified"
             warn "  Power-cycle it into DFU mode and re-run."
@@ -683,6 +686,10 @@ flash_dfu() {
         _dfu_left "$serial" "$list" || left=$?
         if [ "$left" -eq 2 ]; then
             warn "[$name] dfu-util --list failed - cannot confirm the board left DFU"
+            if [ "$verify" -eq 0 ]; then
+                ok "[$name] flashed via DFU, readback verified - boot unconfirmed"
+                return 0
+            fi
             warn "[$name] flashed via DFU, boot unconfirmed - the post-flash version check decides"
             return 3
         fi
@@ -732,6 +739,9 @@ dfu_params() {
     fi
     return 0
 }
+
+# Value of one metadata header key of <cfg>, empty when absent.
+config_meta() { parse_config_metadata "$1" | sed -n "s/^$2=//p"; }
 
 parse_config_metadata() {
     local cfg="$1"
@@ -814,6 +824,19 @@ preflight_firmware() {
     4) err "[$name] image check could not run - not flashing"; return 1 ;;
     *) err "[$name] built image failed its sanity checks - not flashing"; return 1 ;;
     esac
+    # Katapult writes at its own LAUNCH_APP_ADDRESS, so the app must be linked there.
+    if [ "$iface" = "can" ] || [ "$iface" = "usb" ]; then
+        local katapult_cfg="$MCU_CONFIG_DIR/${name}.katapult.config"
+        if [ -f "$katapult_cfg" ]; then
+            python3 "$PREFLIGHT_PY" pair --klipper "$FW_BUILD_ROOT/$name/.config" \
+                --katapult "$katapult_cfg" || {
+                err "[$name] build does not match its Katapult (address/pins/clock) - not flashing"
+                return 1
+            }
+        else
+            warn "[$name] no $katapult_cfg - app address against Katapult unchecked"
+        fi
+    fi
     local flashed="$FW_BUILD_ROOT/$name.flashed.config"
     if [ -f "$flashed" ]; then
         python3 "$PREFLIGHT_PY" flashed --new "$FW_BUILD_ROOT/$name/.config" \
@@ -824,7 +847,7 @@ preflight_firmware() {
         *) rc=1 ;;
         esac
     fi
-    section=$(parse_config_metadata "$cfg" | sed -n 's/^klipper_section=//p')
+    section=$(config_meta "$cfg" klipper_section)
     if [ "$CONTEXT" = "pi" ] && [ -n "$section" ]; then
         local comms_rc=0
         python3 "$PREFLIGHT_PY" comms --dict "${FW_OUT}klipper.dict" --section "$section" \
@@ -832,6 +855,14 @@ preflight_firmware() {
         case "$comms_rc" in
         0) ;;
         3) warn "[$name] no running firmware to compare - comms settings unchecked" ;;
+        5)
+            if ! $ALLOW_COMMS_CHANGE; then
+                err "[$name] Moonraker has no running constants to compare - not flashing"
+                err "  Start Klipper and Moonraker, or re-run with --allow-comms-change."
+                return 1
+            fi
+            warn "[$name] comms settings unchecked (--allow-comms-change)"
+            ;;
         # An internal error is no comms change, so --allow-comms-change must not cover it.
         4) err "[$name] comms check could not run - not flashing"; return 1 ;;
         *) rc=1 ;;
@@ -882,14 +913,10 @@ wait_for_katapult_node() {
 # Requires a USB cable from the MCU to the Pi; if absent, prints instructions.
 bootstrap_katapult() {
     local name="$1" cfg="$2"
-    local katapult_bootsel="" katapult_dfu="" katapult_dfu_mem=""
-    while IFS='=' read -r _k _v; do
-        case "$_k" in
-        katapult_bootsel) katapult_bootsel="$_v" ;;
-        katapult_dfu) katapult_dfu="$_v" ;;
-        katapult_dfu_mem) katapult_dfu_mem="$_v" ;;
-        esac
-    done < <(parse_config_metadata "$cfg")
+    local katapult_bootsel katapult_dfu katapult_dfu_mem
+    katapult_bootsel=$(config_meta "$cfg" katapult_bootsel)
+    katapult_dfu=$(config_meta "$cfg" katapult_dfu)
+    katapult_dfu_mem=$(config_meta "$cfg" katapult_dfu_mem)
 
     local katapult_cfg="$MCU_CONFIG_DIR/${name}.katapult.config"
     if [ ! -f "$katapult_cfg" ]; then
@@ -979,9 +1006,12 @@ flash_can() {
     local name="$1" uuid="$2"
     info "Flashing [$name] via CAN (UUID: $uuid)..."
     local _output _rc=0
-    _output=$(python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" -u "$uuid" \
-        -f "$FW_BIN" 2>&1 | tr -d '\0')
-    _rc=${PIPESTATUS[0]}
+    # PIPESTATUS after $(...) is the assignment's, so pipefail carries flashtool's exit.
+    _output=$(
+        set -o pipefail
+        python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" -u "$uuid" -f "$FW_BIN" 2>&1 |
+            tr -d '\0'
+    ) || _rc=$?
     echo "$_output" | _indent >&2
     if [ "$_rc" -eq 0 ]; then
         ok "[$name] flashed via CAN"
@@ -1397,7 +1427,8 @@ check_host_power() {
     [[ "$throttled" =~ ^0x[0-9a-fA-F]+$ ]] || return 0
     # Bit 0 = under-voltage now (Raspberry Pi vcgencmd get_throttled docs).
     if ((throttled & 0x1)); then
-        warn "Host is under-voltage now (get_throttled=$throttled) - check the PSU before flashing"
+        err "Host is under-voltage now (get_throttled=$throttled) - check the PSU before flashing"
+        return 1
     fi
     return 0
 }
@@ -1519,7 +1550,14 @@ cmd_flash() {
         _summary_box "Flash Summary"
         return 1
     fi
-    check_host_power
+    if ! check_host_power; then
+        if ! $FORCE; then
+            err "Not flashing on an under-volted host - fix the PSU, or re-run with --force"
+            save_uuid_cache
+            return 1
+        fi
+        warn "Flashing on an under-volted host (--force)"
+    fi
 
     # Interrupts (incl. SSH hangup) finish the current step, then Klipper is restarted.
     local _flash_aborted=false _saved_traps
@@ -1541,12 +1579,14 @@ cmd_flash() {
         IFS='|' read -r name iface id cfg fw_ver detected <<<"$entry"
         if $_flash_aborted; then
             failed+=("$name ($iface) - interrupted")
+            record_flash "$cfg" "$iface" failed
             continue
         fi
         # A failed CAN node is only reachable for a retry through the bridge it sits behind.
         if $_can_failed && ! $FLASH_ORDER_LOCKED && is_canbus_bridge "$cfg"; then
             warn "[$name] skipped: a CAN node behind this bridge failed - fix it first"
             failed+=("$name ($iface) - skipped, CAN node failed")
+            record_flash "$cfg" "$iface" failed
             continue
         fi
         ((_flash_idx++))

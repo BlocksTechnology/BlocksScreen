@@ -6,8 +6,8 @@ pair: a Katapult build must share chip, clock, CAN pins and app address with Kli
 comms: constants of the new klipper.dict versus the running MCU's `mcu_constants`.
 flashed: clock Kconfig of the new build versus the last successfully flashed one.
 
-Exit codes: 0 pass, 1 problems found (printed to stderr), 3 no baseline to compare,
-4 the check itself could not run (missing or unreadable input).
+Exit codes: 0 pass, 1 problems found (printed to stderr), 3 the MCU never connected
+(no baseline), 4 the check itself could not run, 5 Moonraker gave no answer to compare.
 """
 
 from __future__ import annotations
@@ -158,10 +158,15 @@ def pair_problems(klipper: dict[str, str], katapult: dict[str, str]) -> list[str
     return problems
 
 
+def _shown(value: object) -> str:
+    return "absent" if value is None else repr(value)
+
+
 def comms_problems(new: dict, running: dict) -> list[str]:
     """Comms constants that differ between the running MCU and the new build."""
+    # Presence is the setting: Klipper emits RESERVE_PINS_* per choice (9bc3a29e).
     return [
-        f"{key}: running {running.get(key)!r}, new build {new.get(key)!r}"
+        f"{key}: running {_shown(running.get(key))}, new build {_shown(new.get(key))}"
         for key in COMMS_KEYS
         if str(running.get(key)) != str(new.get(key))
     ]
@@ -204,6 +209,10 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+class NoBaselineError(Exception):
+    """Moonraker did not answer, so the running constants are unknown."""
+
+
 def _run(args: argparse.Namespace) -> list[str] | None:
     if args.cmd == "image":
         return image_problems(
@@ -215,9 +224,9 @@ def _run(args: argparse.Namespace) -> list[str] | None:
         return flashed_problems(read_kconfig(args.new), read_kconfig(args.flashed))
     try:
         running = running_constants(args.url, args.section)
-    except (OSError, ValueError, KeyError) as exc:
-        _LOG.warning("no running baseline for [%s]: %s", args.section, exc)
-        return None
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        msg = f"Moonraker gave no constants for [{args.section}]: {exc}"
+        raise NoBaselineError(msg) from exc
     if not running:
         _LOG.warning("no running baseline for [%s]: never connected", args.section)
         return None
@@ -230,8 +239,12 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
         problems = _run(args)
-    except (OSError, ValueError) as exc:
+    except NoBaselineError as exc:
         _LOG.error("%s", exc)
+        return 5
+    # Any crash must stay 4: exit 1 is a comms change, which --allow-comms-change passes.
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        _LOG.error("check failed: %r", exc)
         return 4
     if problems is None:
         return 3
