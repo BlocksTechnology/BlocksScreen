@@ -40,10 +40,9 @@ USB_PRINT_ACTION = "// action:blocks_usb_print "
 # The override hands USB files over only once this is True; older pairs print directly.
 USB_PRINT_FLAG = "blocksscreen_usb"
 # Clears the override's fallback; sent even when the print is refused (see _on_gcode_response).
+USB_PENDING_VAR = "usb_pending"
 # Klipper reads VALUE as a Python literal, so '""' stores the empty string.
-USB_PRINT_ACK = (
-    "SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE VARIABLE=usb_pending VALUE='\"\"'"
-)
+USB_PRINT_ACK = f"SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE VARIABLE={USB_PENDING_VAR} VALUE='\"\"'"
 # Klipper splits a script on newlines and cuts a line at ';' even inside quotes.
 _RESPOND_SAFE = str.maketrans({'"': "'", "\n": " ", "\r": " ", ";": ","})
 
@@ -135,6 +134,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         # Copies Moonraker had not announced when their import ended, path -> key.
         self._usb_unindexed: dict[str, str] = {}
         self._usb_from_console: bool = False  # started by another client via Klipper
+        # Overrides older than the fallback lack usb_pending; acking them is an "!!" error.
+        self._usb_ack_supported: bool = False
         # Moonraker announces a new gcode only once its pre-processing is done.
         self._usb_settle_timer = QtCore.QTimer(self)
         self._usb_settle_timer.setSingleShot(True)
@@ -467,7 +468,8 @@ class PrintTab(QtWidgets.QStackedWidget):
             if file == text or not helper_methods.is_usb_path(file):
                 continue
             # Ack even a refusal: the fallback would print from USB past the same checks.
-            self.run_gcode_signal.emit(USB_PRINT_ACK)
+            if self._usb_ack_supported:
+                self.run_gcode_signal.emit(USB_PRINT_ACK)
             if reason := self._begin_print(file, from_console=True):
                 self._console_error(f"USB print refused: {reason}")
 
@@ -479,8 +481,13 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, dict, name="on_gcode_macro_update")
     def _on_gcode_macro_update(self, name: str, values: dict) -> None:
         """Tell the RF50-Klipper USB override that BlocksScreen handles its files."""
+        if name.upper() != "SDCARD_PRINT_FILE":
+            return
+        # Status updates are deltas; only the full status after ready lists every variable.
+        if USB_PENDING_VAR in values:
+            self._usb_ack_supported = True
         # False only on the override that knows the flag; Klipper resets it on restart.
-        if name.upper() == "SDCARD_PRINT_FILE" and values.get(USB_PRINT_FLAG) is False:
+        if values.get(USB_PRINT_FLAG) is False:
             self.run_gcode_signal.emit(
                 f"SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE VARIABLE={USB_PRINT_FLAG}"
                 " VALUE=True"
@@ -730,6 +737,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._print_state = (
             ""  # printer.clear_printer_objs drops it too; ready re-queries
         )
+        self._usb_ack_supported = False  # the restarted config may ship an older macro
         if self._cancel_pending:
             # E-stop during the cancel macro: print_stats never reaches cancelled.
             self._clear_cancel()
