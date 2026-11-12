@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from configfile import get_configparser
 from lib.klipper_message_filter import Severity  # noqa: E402
 from lib.panels.mainWindow import MainWindow  # noqa: E402
+from lib.utils.blocks_pixmap import BlocksPixmap  # noqa: E402
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
 from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
 from tools.configuration_manager import DeviceConfigManager, DeviceConfigWatcher
@@ -168,6 +169,8 @@ def on_quit() -> None:
     # Daemon threads alive here can emit into widgets sip destroys at exit (the stop SEGV).
     _alive = [t.name for t in threading.enumerate() if t is not threading.main_thread()]
     logging.info("Final exit cleanup, threads still alive: %s", _alive)
+    # aboutToQuit still has a live qApp, which QPixmap destruction requires.
+    BlocksPixmap.clear()
     LogManager.shutdown()
 
 
