@@ -1,7 +1,11 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
 import enum
-import os
-from configfile import BlocksScreenConfig, get_configparser
+from pathlib import Path
+
+from PyQt6 import QtCore, QtGui, QtWidgets
+
+_INTRO_GIF = (
+    Path(__file__).resolve().parents[3] / "ui" / "resources" / "intro_blocks.gif"
+)
 
 
 class LoadingOverlayWidget(QtWidgets.QLabel):
@@ -31,86 +35,61 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
 
         self._setup_ui()
 
-        config: BlocksScreenConfig = get_configparser()
-        animation_path = None
-
-        if initial_anim_type == LoadingOverlayWidget.AnimationGIF.PLACEHOLDER:
-            animation_path = (
-                "~/BlocksScreen/BlocksScreen/lib/ui/resources/intro_blocks.gif"
-            )
-            self.anim_type = initial_anim_type
-
-        else:
-            try:
-                loading_config = config["loading"]
-                if loading_config is None:
-                    raise KeyError("missing [loading] section")
-                animation_path = loading_config.get(
-                    str(initial_anim_type.name),
-                )
-                self.anim_type = initial_anim_type
-            except Exception:
-                self.anim_type = LoadingOverlayWidget.AnimationGIF.DEFAULT
-
-        if (
-            self.anim_type != LoadingOverlayWidget.AnimationGIF.DEFAULT
-            and animation_path
-        ):
-            abs_animation_path = os.path.expanduser(animation_path)
-
-            self.movie = QtGui.QMovie(abs_animation_path)
-
-            if self.movie.isValid():
-                self.gifshow.setMovie(self.movie)
-                self.gifshow.setScaledContents(True)
-                self.movie.start()
-                self.gifshow.show()
-            else:
-                self.anim_type = LoadingOverlayWidget.AnimationGIF.DEFAULT
-                self.gifshow.hide()
-
+        self.movie: QtGui.QMovie | None = None
+        self._movie_size = QtCore.QSize()
+        # Started by showEvent: five overlays ticking at 60 Hz while hidden cost the Pi idle CPU.
         self.timer = QtCore.QTimer(self)
+        self.timer.setInterval(16)
         self.timer.timeout.connect(self._update_animation)
-
-        if self.anim_type == LoadingOverlayWidget.AnimationGIF.DEFAULT:
-            self.timer.start(16)
-            self.gifshow.hide()
-
+        if initial_anim_type == LoadingOverlayWidget.AnimationGIF.PLACEHOLDER:
+            self.set_animation_path(_INTRO_GIF)
         self.label.setText("Loading...")
-        self.repaint()
 
-    def set_animation_path(self, path: str) -> None:
-        """Set widget animation path"""
-        abs_animation_path = os.path.expanduser(path)
-        if os.path.isfile(abs_animation_path):
-            self.movie = QtGui.QMovie(abs_animation_path)
-            if self.movie.isValid():
-                self.gifshow.setMovie(self.movie)
-                self.gifshow.setScaledContents(True)
-                self.movie.start()
-                self.gifshow.show()
-                self.anim_type = LoadingOverlayWidget.AnimationGIF.PLACEHOLDER
-                if self.timer.isActive():
-                    self.timer.stop()
+    def set_animation_path(self, path: str | Path) -> None:
+        """Swap the spinner for the gif at *path*; a missing or corrupt file keeps the spinner."""
+        gif = str(Path(path).expanduser())
+        movie = QtGui.QMovie(gif)
+        if not movie.isValid():
+            return
+        self.movie = movie
+        # Header-only read; QMovie reports no size until a frame is decoded.
+        self._movie_size = QtGui.QImageReader(gif).size()
+        if self._movie_size.isEmpty() and movie.jumpToFrame(0):
+            self._movie_size = movie.frameRect().size()
+        self.timer.stop()
+        self.gifshow.setMovie(movie)
+        self.gifshow.show()
+        self._fit_movie()
+        if self.isVisible():
+            movie.start()
 
     def set_status_message(self, message: str) -> None:
         """Set widget message"""
         self.label.setText(message)
 
     def close(self) -> bool:
-        """Re-implemented method, close widget"""
-        self.timer.stop()
+        """Re-implemented method; hideEvent stops the animation, this resets its state."""
         self.label.setText("Loading...")
         self._angle = 0
-        if (
-            self.anim_type != LoadingOverlayWidget.AnimationGIF.DEFAULT
-            and hasattr(self, "movie")
-            and self.movie.isValid()
-        ):
-            self.movie.stop()
         return super().close()
 
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
+        """Run the animation only while on screen; a hidden QMovie keeps decoding frames."""
+        super().showEvent(a0)
+        if self.movie is not None:
+            self.movie.start()
+        else:
+            self.timer.start()
+
+    def hideEvent(self, a0: QtGui.QHideEvent | None) -> None:
+        """Stop the animation as soon as the overlay, or any ancestor, is hidden."""
+        super().hideEvent(a0)
+        self.timer.stop()
+        if self.movie is not None:
+            self.movie.stop()
+
     def _update_animation(self) -> None:
+        """Advance the spinner one 16 ms step: rotate and breathe the arc length."""
         self._angle = (self._angle + 5) % 360
         if self._is_span_growing:
             self._span_angle += self.length_step
@@ -127,7 +106,7 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
         """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
-        if self.anim_type == LoadingOverlayWidget.AnimationGIF.DEFAULT:
+        if self.movie is None:
             painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
             painter.setRenderHint(
                 QtGui.QPainter.RenderHint.LosslessImageRendering, True
@@ -162,20 +141,26 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         label_y = int(self.height() * 0.65)
         margin = 20
         self.label.setGeometry(label_x, label_y, label_width, label_height)
-        gifshow_max_height = label_y - margin
-        size = min(self.width() - margin * 2, gifshow_max_height)
+        self.gifshow.setGeometry(margin, 0, self.width() - margin * 2, label_y - margin)
+        self._fit_movie()
 
-        gifshow_x = (self.width() - size) // 2
-        gifshow_y = (gifshow_max_height - size) // 2
-
-        self.gifshow.setGeometry(gifshow_x, gifshow_y, size, size)
-
-    def show(self) -> None:
-        """Re-implemented method, show widget"""
-        self.repaint()
-        return super().show()
+    def _fit_movie(self) -> None:
+        """Decode frames at the on-screen size; QMovie scales once per frame, not per paint."""
+        # An empty scaled size stops the QMovie for good, so skip until laid out.
+        if self.movie is None or self.gifshow.size().isEmpty():
+            return
+        if self._movie_size.isEmpty():
+            # Unknown frame size: let QLabel stretch it rather than crop at native size.
+            self.gifshow.setScaledContents(True)
+            return
+        self.movie.setScaledSize(
+            self._movie_size.scaled(
+                self.gifshow.size(), QtCore.Qt.AspectRatioMode.KeepAspectRatio
+            )
+        )
 
     def _setup_ui(self) -> None:
+        """Build the gif label and the status text label."""
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.gifshow = QtWidgets.QLabel("", self)
         self.gifshow.setObjectName("gifshow")

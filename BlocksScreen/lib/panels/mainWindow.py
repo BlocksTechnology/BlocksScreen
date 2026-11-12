@@ -121,6 +121,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
         self._update_in_progress: bool = False
+        # The update page's overlay outlives its batch; only then may it drop other hides.
+        self._update_owns_overlay: bool = False
         self._post_update_reconnect: bool = False
         self._reconnect_retries: int = 0
         self._reconnect_timer = QtCore.QTimer(self)
@@ -139,6 +141,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._klipper_disconnect_grace.setSingleShot(True)
         self._klipper_disconnect_grace.setInterval(15_000)
         self._klipper_disconnect_grace.timeout.connect(self._auto_restart_klipper)
+        # Bounds the boot gif so a stalled boot cannot hide ConnectionPage.
+        self._intro_timeout = QtCore.QTimer(self)
+        self._intro_timeout.setSingleShot(True)
+        self._intro_timeout.setInterval(15_000)
 
         usb_config = self.config.get_section("usb_manager", fallback=None)
         gdir = None
@@ -331,6 +337,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         self.loadscreen.add_widget(self.loadwidget)
+        self.introscreen: BasePopup | None = BasePopup(
+            self, floating=False, dialog=False
+        )
+        self.introscreen.add_widget(
+            LoadingOverlayWidget(self, LoadingOverlayWidget.AnimationGIF.PLACEHOLDER)
+        )
         self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
         self.cancelpage = CancelPage(self)
         self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
@@ -371,6 +383,30 @@ class MainWindow(QtWidgets.QMainWindow):
         self.reset_tab_indexes()
         self.conn_window.show()
 
+        self._intro_timeout.timeout.connect(self._dismiss_intro)
+        # Deferred to the event loop: with no window manager the last window mapped
+        # stacks on top, so the intro must map after main_window.show().
+        QtCore.QTimer.singleShot(0, self._show_intro)
+
+    @QtCore.pyqtSlot(name="show-intro")
+    def _show_intro(self) -> None:
+        """Show the boot gif on top of everything and start its display ceiling."""
+        if self.introscreen is None:
+            return
+        self.introscreen.show()
+        self.introscreen.raise_()
+        self._intro_timeout.start()
+
+    @QtCore.pyqtSlot(name="dismiss-intro")
+    def _dismiss_intro(self) -> None:
+        """Drop the boot gif for good; it never shows again, so free its QMovie."""
+        self._intro_timeout.stop()
+        if self.introscreen is None:
+            return
+        self.introscreen.hide()
+        self.introscreen.deleteLater()
+        self.introscreen = None
+
     @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
     def _handle_display_status(self, name, value: str | float) -> None:
@@ -407,11 +443,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
-            if not show and (
-                self._post_update_reconnect
-                or self._update_in_progress
-                or self._klipper_auto_restart_pending
-            ):
+                self._update_owns_overlay = show
+            # Only the update page's own overlay may outlive another panel's hide.
+            if not show and self._update_owns_overlay:
                 return
 
             if _sender == self.filamentPanel:
@@ -431,7 +465,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if show:
             self.loadscreen.show()
         else:
+            self._update_owns_overlay = False
             self.loadscreen.hide()
+
+    def _drop_update_overlay(self) -> None:
+        """Hide the overlay only while the update page owns it, never another panel's."""
+        if self._update_owns_overlay:
+            self.show_loadscreen(False, "", force=True)
 
     @QtCore.pyqtSlot(bool, name="show-update-page")
     def show_update_page(self, fullscreen: bool):
@@ -457,6 +497,9 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str, name="on-klippy-state")
     def _on_klippy_state(self, state: str) -> None:
         self._klippy_ready = state == "ready"
+        if state in ("ready", "error", "shutdown"):
+            # Error and shutdown need ConnectionPage's buttons, not 15 s of gif.
+            self._dismiss_intro()
         self._klippy_state = state
         if state != "ready":
             # print_stats is re-reported once Klipper is ready again.
@@ -473,8 +516,6 @@ class MainWindow(QtWidgets.QMainWindow):
             _logger.info("Klipper back online after auto-restart")
             self._klipper_auto_restart_pending = False
             self._klipper_restart_timeout.stop()
-            if not self._post_update_reconnect:
-                self.loadscreen.hide()
         self._try_device_config_restart()
         self._prompt_device_confirmation()
 
@@ -495,8 +536,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def _begin_klipper_restart(self) -> None:
         """Mark a Klipper restart in flight so "disconnected" won't restart it again"""
         self._klipper_auto_restart_pending = True
-        self.loadwidget.set_status_message("Restarting Klipper...")
-        self.loadscreen.show()
         self._klipper_restart_timeout.start()
 
     @QtCore.pyqtSlot(name="arm-health-bless")
@@ -522,7 +561,6 @@ class MainWindow(QtWidgets.QMainWindow):
             "Klipper auto-restart timed out after 30 s — showing connection page"
         )
         self._klipper_auto_restart_pending = False
-        self.loadscreen.hide()
 
     @QtCore.pyqtSlot(name="on-cancel-print")
     def on_cancel_print(self):
@@ -556,6 +594,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self._post_update_reconnect = False
         self._update_in_progress = False
+        self._update_owns_overlay = False
         self._reconnect_timer.stop()
         # update_page.handle_daemon_unavailable (connected to the same signal)
         # resets the page; routing through handle_busy_changed here would issue
@@ -564,7 +603,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot(name="on-post-update-reconnect")
     def _on_post_update_reconnect(self) -> None:
-        """Called when an update finishes: hold the loading screen and retry Moonraker until it's up."""
+        """Called when an update finishes: drop the overlay and retry Moonraker until it's up."""
         _logger.debug(
             "_on_post_update_reconnect: ws.connected=%s update_in_progress=%s",
             self.ws.connected,
@@ -576,7 +615,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._post_update_reconnect = True
         self._reconnect_retries = 0
-        self.loadwidget.set_status_message("Reconnecting...")
+        self._drop_update_overlay()
         self.ws.retry_wb_conn()
         self._reconnect_timer.start()
 
@@ -593,7 +632,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._update_in_progress = False
             self._reconnect_retries = 0
             self._reconnect_timer.stop()
-            self.loadscreen.hide()
+            self._drop_update_overlay()
             return
         self._reconnect_retries += 1
         if self._reconnect_retries >= self._MAX_RECONNECT_RETRIES:
@@ -604,7 +643,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._post_update_reconnect = False
             self._update_in_progress = False
             self._reconnect_timer.stop()
-            self.loadscreen.hide()
+            self._drop_update_overlay()
             return
         _logger.info(
             "post-update reconnect retry %d/%d",
@@ -621,7 +660,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._update_in_progress = False
             self._reconnect_retries = 0
             self._reconnect_timer.stop()
-            self.loadscreen.hide()
+            self._drop_update_overlay()
 
     @QtCore.pyqtSlot(bool, name="update-available")
     def on_update_available(self, state: bool = False):
