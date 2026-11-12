@@ -122,10 +122,15 @@ async def test_deploy_hold_is_capped(harness, daemon, wait_for):
 
     await wait_for(lambda: d.busy_trace() == [False], timeout=5.0, what="cap")
     assert harness.deploy_flag.exists()
+    await wait_for(lambda: d.statuses(), what="boot status")
 
+    # A long cap now, so a wrongful re-hold misses the deadline instead of expiring.
+    harness.patch_daemon(_DEPLOY_HOLD_CAP_S=60)
     assert await d.iface.update_all() is True
     # The same stuck flag must not re-hold at the end of every update.
-    await wait_for(lambda: d.busy_trace() == [False, True, False], what="no re-hold")
+    await wait_for(
+        lambda: d.busy_trace() == [False, True, False], timeout=5.0, what="no re-hold"
+    )
     assert harness.head("klipper") == new
     assert d.iface._deploy_hold is None
 
