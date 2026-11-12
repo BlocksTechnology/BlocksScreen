@@ -147,28 +147,40 @@ def test_qrc_declared_files_exist_on_disk():
 
 # Fonts are loaded from disk by path, so only images must sit in a .qrc.
 _IMAGE_SUFFIXES = {".svg", ".png", ".gif"}
-# Read by path: the logos by the splash screens, scroll_list_window by older branches.
+# Read by path: splash logos, loadWidget's gif, scroll_list_window on bugfix/* branches.
 _LOADED_BY_PATH = {
-    RESOURCES / "media" / name
+    RESOURCES / name
     for name in (
-        "logoblocks.png",
-        "graphics/logo_blocks.png",
-        "graphics/scroll_list_window.png",
+        "intro_blocks.gif",
+        "media/logoblocks.png",
+        "media/graphics/logo_blocks.png",
+        "media/graphics/scroll_list_window.png",
     )
 }
 
 
 def test_no_orphan_assets_on_disk():
-    """Every image under resources/media is declared by some .qrc, the reverse check."""
+    """Every image under resources/ is declared by some .qrc, the reverse check."""
     declared = {path for _, path in _qrc_entries()} | _LOADED_BY_PATH
     orphans = sorted(
         str(image.relative_to(REPO_ROOT))
-        for image in (RESOURCES / "media").rglob("*")
-        if image.suffix in _IMAGE_SUFFIXES and image not in declared
+        for image in RESOURCES.rglob("*")
+        if image.suffix.lower() in _IMAGE_SUFFIXES and image not in declared
     )
     assert not orphans, "on-disk images no .qrc declares (dead weight):\n" + "\n".join(
         f"  {path}" for path in orphans
     )
+
+
+def test_every_qrc_key_is_referenced():
+    """Every .qrc key is named by an Icon member or a literal, else it is dead weight."""
+    named = {_canonical(key) for key in _literal_sites()}
+    unused = {
+        key: ["no Icon member, literal or generated _ui.py names it"]
+        for key in _qrc_keys()
+        if key not in named
+    }
+    assert not unused, _report("compiled resources nothing references:", unused)
 
 
 def test_compiled_blobs_match_the_qrc_xml():

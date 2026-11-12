@@ -72,8 +72,10 @@ class _PixmapCache:
 
 
 class Icon(StrEnum):
-    """Every resource key the handwritten panels draw, not every compiled asset."""
+    """Code-side resource keys; with .ui and literal sites they name every .qrc key."""
 
+    # Keys stay whole on one line, so the resource-literal scanner sees each one.
+    # pylint: disable=line-too-long
     ABS_FILAMENT_TOPBAR = ":/top_bar_icons/media/topbar/abs_filament_topbar.svg"
     ADD_FILAMENT = (
         ":/filament_related/media/btn_icons/filament_related/add_filament.svg"
@@ -100,9 +102,11 @@ class Icon(StrEnum):
         ":/filament_related/media/btn_icons/filament_related/check_gate_1.svg"
     )
     COOLDOWN = ":/temperature_related/media/btn_icons/temperature_related/cooldown.svg"
+    CUSTOM_FILAMENT_TOPBAR = ":/top_bar_icons/media/topbar/custom_filament_topbar.svg"
     DISABLE_STEPPERS = ":/motion/media/btn_icons/motion/disable_steppers.svg"
     DOWN_ARROW = ":/arrow_icons/media/btn_icons/arrow_icons/down_arrow.svg"
     EDDY_MECH = ":/z_levelling/media/btn_icons/z_levelling/eddy_mech.svg"
+    EDIT = ":/filament_related/media/btn_icons/filament_related/edit.svg"
     EJECT = ":/filament_related/media/btn_icons/filament_related/eject.svg"
     ERROR = ":/ui/media/btn_icons/ui/error.svg"
     ETHERNET_CONNECTED = ":/network/media/btn_icons/network/ethernet_connected.svg"
@@ -121,6 +125,8 @@ class Icon(StrEnum):
     GARBAGE = ":/ui/media/btn_icons/ui/garbage.svg"
     HALF_SPOOL = ":/filament_related/media/btn_icons/filament_related/half_spool.svg"
     HEATSOAK = ":/temperature_related/media/btn_icons/temperature_related/heatsoak.svg"
+    HIGH_TEMP_PRINTCORE = ":/top_bar_icons/media/topbar/high_temp_printcore.svg"
+    HIPS_FILAMENT_TOPBAR = ":/top_bar_icons/media/topbar/hips_filament_topbar.svg"
     HOME_ALL = ":/motion/media/btn_icons/motion/home_all.svg"
     HOME_X = ":/motion/media/btn_icons/motion/home_x.svg"
     HOME_Y = ":/motion/media/btn_icons/motion/home_y.svg"
@@ -163,9 +169,22 @@ class Icon(StrEnum):
     MOVE_NOZZLE_CLOSE = ":/baby_step/media/btn_icons/baby_step/move_nozzle_close.svg"
     NO = ":/dialog/media/btn_icons/dialog/no.svg"
     NOTIFICATION = ":/ui/media/btn_icons/ui/notification.svg"
+    NOT_AVAILABLE_FILAMENT_TOPBAR = (
+        ":/top_bar_icons/media/topbar/not_available_filament_topbar.svg"
+    )
+    NOT_AVAILABLE_PRINTCORE = ":/top_bar_icons/media/topbar/not_avaible_printcore.svg"
     NOZZLE = ":/extruder_related/media/btn_icons/extruder_related/nozzle.svg"
+    NOZZLE1_TEMPERATURE = ":/top_bar_icons/media/topbar/nozzle1_temperature.svg"
+    NOZZLE2_TEMPERATURE = ":/top_bar_icons/media/topbar/nozzle2_temperature.svg"
+    NOZZLE_TEMP_TOPBAR = ":/top_bar_icons/media/topbar/nozzle_temp_topbar.svg"
     NOZZLE_TOPBAR = (
         ":/extruder_related/media/btn_icons/extruder_related/nozzle_topbar.svg"
+    )
+    NO_MATERIAL_TOPBAR = (
+        ":/extruder_related/media/btn_icons/extruder_related/no_material_topbar.svg"
+    )
+    NO_PRINTCORE_AVAILABLE = (
+        ":/extruder_related/media/btn_icons/extruder_related/no_printcore_available.svg"
     )
     NYLON_FILAMENT_TOPBAR = ":/top_bar_icons/media/topbar/nylon_filament_topbar.svg"
     PAUSE = ":/ui/media/btn_icons/ui/pause.svg"
@@ -178,7 +197,9 @@ class Icon(StrEnum):
     PRINTER_SETTINGS = ":/ui/media/btn_icons/ui/printer_settings.svg"
     REBOOT = ":/system/media/btn_icons/system/reboot.svg"
     REFRESH = ":/ui/media/btn_icons/ui/refresh.svg"
+    RESTART_FIRMWARE = ":/system/media/btn_icons/system/restart_firmware.svg"
     RESTART_KLIPPER = ":/system/media/btn_icons/system/restart_klipper.svg"
+    RESTART_PRINTER = ":/system/media/btn_icons/system/restart_printer.svg"
     RIGHT_ARROW = ":/arrow_icons/media/btn_icons/arrow_icons/right_arrow.svg"
     ROUTINE = ":/ui/media/btn_icons/ui/routine.svg"
     SAVE = ":/ui/media/btn_icons/ui/save.svg"
@@ -186,18 +207,24 @@ class Icon(StrEnum):
     SORT_ASC = ":/arrow_icons/media/btn_icons/arrow_icons/sort_asc.svg"
     SORT_DESC = ":/arrow_icons/media/btn_icons/arrow_icons/sort_desc.svg"
     SPEED = ":/motion/media/btn_icons/motion/speed.svg"
+    SPOOLMAN = ":/filament_related/media/btn_icons/filament_related/spoolman.svg"
     SPOOL_DATABASE_1 = (
         ":/filament_related/media/btn_icons/filament_related/spool_database_1.svg"
     )
     STANDARD_TEMPERATURE = ":/temperature_related/media/btn_icons/temperature_related/standard_temperature.svg"
+    STANDARD_TEMP_PRINTCORE = ":/top_bar_icons/media/topbar/standard_temp_printcore.svg"
     STATIC_IP = ":/network/media/btn_icons/network/static_ip.svg"
     STOP = ":/ui/media/btn_icons/ui/stop.svg"
+    SWITCH_PRINT_CORE = (
+        ":/extruder_related/media/btn_icons/extruder_related/switch_print_core.svg"
+    )
     SWITCH_ZOOM = ":/extruder_related/media/btn_icons/extruder_related/switch_zoom.svg"
     TEMPERATURE = (
         ":/temperature_related/media/btn_icons/temperature_related/temperature.svg"
     )
     TEMPERATURE_PLATE = ":/temperature_related/media/btn_icons/temperature_related/temperature_plate.svg"
     TIME = ":/ui/media/btn_icons/ui/time.svg"
+    TPU_FILAMENT_TOPBAR = ":/top_bar_icons/media/topbar/tpu_filament_topbar.svg"
     TROUBLESHOOT = ":/ui/media/btn_icons/ui/troubleshoot.svg"
     TUNE = ":/ui/media/btn_icons/ui/tune.svg"
     UNLOAD_FILAMENT = (
