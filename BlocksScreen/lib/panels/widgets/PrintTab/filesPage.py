@@ -2,6 +2,7 @@ import logging
 
 import helper_methods
 from lib.utils.blocks_combobox import BlocksComboBox
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
@@ -35,18 +36,6 @@ class FilesPage(QtWidgets.QWidget):
         "Import Order",
     )
 
-    # Icon paths
-    ICON_PATHS = {
-        "back_folder": ":/ui/media/btn_icons/back_folder.svg",
-        "folder": ":/ui/media/btn_icons/folderIcon.svg",
-        "right_arrow": ":/arrow_icons/media/btn_icons/arrow_right.svg",
-        "usb": ":/ui/media/btn_icons/usb_icon.svg",
-        "back": ":/ui/media/btn_icons/back.svg",
-        "refresh": ":/ui/media/btn_icons/refresh.svg",
-        "sort_desc": ":/arrow_icons/media/btn_icons/sort_desc.svg",
-        "sort_asc": ":/arrow_icons/media/btn_icons/sort_asc.svg",
-    }
-
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
 
@@ -58,7 +47,6 @@ class FilesPage(QtWidgets.QWidget):
         self._rebuild_pending: bool = False
         self._sort_key: str = self.SORTING_TYPES[0]
         self._sort_descending: bool = True
-        self._icons: dict[str, QtGui.QPixmap] = {}
 
         self._model = EntryListModel()
         self._entry_delegate = EntryDelegate()
@@ -68,7 +56,6 @@ class FilesPage(QtWidgets.QWidget):
         self._model.modelReset.connect(self._delayed_scrollbar_update)
 
         self._setup_ui()
-        self._load_icons()
         self._connect_signals()
 
         self.setMouseTracking(True)
@@ -394,22 +381,20 @@ class FilesPage(QtWidgets.QWidget):
 
     def _update_sort_order_icon(self) -> None:
         """Match the toggle icon to the sort direction."""
-        key = "sort_desc" if self._sort_descending else "sort_asc"
-        self._sort_order_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(self.ICON_PATHS[key])
-        )
+        icon = Icon.SORT_DESC if self._sort_descending else Icon.SORT_ASC
+        self._sort_order_btn.setProperty("icon_pixmap", BlocksPixmap.get(icon))
         self._sort_order_btn.update()
 
     def _make_back_folder_item(self) -> ListItem:
         """The Go Back row."""
-        return self._row("Go Back", "", self._icons.get("back_folder"), None)
+        return self._row("Go Back", "", BlocksPixmap.get(Icon.BACK_FOLDER), None)
 
     def _make_directory_item(self, dir_data: dict) -> ListItem:
         """Dir row; root USB mounts get the USB icon."""
         name = str(dir_data.get("dirname", ""))
-        icon = self._icons.get("folder")
+        icon = BlocksPixmap.get(Icon.FOLDERICON)
         if not self._curr_dir and helper_methods.is_usb_mount(name):
-            icon = self._icons.get("usb")
+            icon = BlocksPixmap.get(Icon.USB_ICON)
         return self._row(name, "", icon, None)
 
     def _make_file_item(self, filename: str, meta: dict | None = None) -> ListItem:
@@ -424,7 +409,7 @@ class FilesPage(QtWidgets.QWidget):
             self._get_display_name(filename),
             right,
             None,
-            self._icons.get("right_arrow"),
+            BlocksPixmap.get(Icon.ARROW_RIGHT),
         )
 
     def _row(
@@ -551,15 +536,6 @@ class FilesPage(QtWidgets.QWidget):
 
         return name
 
-    def _load_icons(self) -> None:
-        """Load all icons into cache."""
-        self._icons = {
-            "back_folder": QtGui.QPixmap(self.ICON_PATHS["back_folder"]),
-            "folder": QtGui.QPixmap(self.ICON_PATHS["folder"]),
-            "right_arrow": QtGui.QPixmap(self.ICON_PATHS["right_arrow"]),
-            "usb": QtGui.QPixmap(self.ICON_PATHS["usb"]),
-        }
-
     def _connect_signals(self) -> None:
         """Connect internal signals."""
         # Button connections
@@ -630,7 +606,7 @@ class FilesPage(QtWidgets.QWidget):
         self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.back_btn.setFlat(True)
-        self.back_btn.setProperty("icon_pixmap", QtGui.QPixmap(self.ICON_PATHS["back"]))
+        self.back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.back_btn.setObjectName("back_btn")
         layout.addWidget(self.back_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
 
@@ -659,9 +635,7 @@ class FilesPage(QtWidgets.QWidget):
         self._reload_button.setMinimumSize(QtCore.QSize(60, 60))
         self._reload_button.setMaximumSize(QtCore.QSize(60, 60))
         self._reload_button.setFlat(True)
-        self._reload_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(self.ICON_PATHS["refresh"])
-        )
+        self._reload_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.REFRESH))
         self._reload_button.setObjectName("reload_button")
         layout.addWidget(self._reload_button, 0, QtCore.Qt.AlignmentFlag.AlignRight)
 

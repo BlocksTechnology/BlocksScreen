@@ -20,7 +20,7 @@ from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
-from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
+from lib.panels.networkWindow import NetworkControlWindow
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
 from lib.panels.widgets.Common.basePopup import BasePopup
@@ -37,6 +37,7 @@ from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
 from lib.updater_worker import UpdaterWorker
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.blocks_tabwidget import NotificationQTabWidget
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
@@ -68,29 +69,15 @@ def api_handler(func):
 class HeaderWifiIconProvider:
     """Resolves WifiIconKey integer values to cached QPixmaps for the header bar."""
 
-    _WIFI_PATHS: dict[tuple[int, bool], str] = {
-        (
-            b,
-            p,
-        ): f":/network/media/btn_icons/network/{b}bar_wifi{'_protected' if p else ''}.svg"
-        for b in range(5)
-        for p in (False, True)
-    }
-    _ETHERNET_PATH = ":/network/media/btn_icons/network/ethernet_connected.svg"
-    _HOTSPOT_PATH = ":/network/media/btn_icons/hotspot.svg"
-
     @classmethod
     def get_pixmap(cls, icon_key: int) -> QtGui.QPixmap:
-        """Resolve an icon key to a QPixmap (cached via PixmapCache)."""
+        """Resolve an icon key to a QPixmap (cached via BlocksPixmap)."""
         key = WifiIconKey(icon_key)
         if key is WifiIconKey.ETHERNET:
-            return PixmapCache.get(cls._ETHERNET_PATH)
+            return BlocksPixmap.get(Icon.ETHERNET_CONNECTED)
         if key is WifiIconKey.HOTSPOT:
-            return PixmapCache.get(cls._HOTSPOT_PATH)
-        path = cls._WIFI_PATHS.get(
-            (key.bars, key.is_protected), cls._WIFI_PATHS[(0, False)]
-        )
-        return PixmapCache.get(path)
+            return BlocksPixmap.get(Icon.HOTSPOT)
+        return BlocksPixmap.get(Icon.wifi(key.bars, key.is_protected))
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -420,13 +407,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
-            if (
-                not show
-                and self._post_update_reconnect
-                or not show
-                and self._update_in_progress
-                or not show
-                and self._klipper_auto_restart_pending
+            if not show and (
+                self._post_update_reconnect
+                or self._update_in_progress
+                or self._klipper_auto_restart_pending
             ):
                 return
 
@@ -1627,7 +1611,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notification_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.notification_btn.setIconSize(QtCore.QSize(60, 60))
         self.notification_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/notification.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.NOTIFICATION)
         )
         self.notification_btn.setProperty("button_type", "icon_text")
         self.header_main_layout.addWidget(
@@ -1635,31 +1619,27 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
         self.extruder_temp_display = self._make_temp_display(
-            "extruder", ":/extruder_related/media/btn_icons/nozzle_topbar.svg"
+            "extruder", Icon.NOZZLE_TOPBAR
         )
         self.extruder_temp_display.setProperty("button_type", "secondary_display")
         self.extruder_temp_display.setProperty("name", "extruder_temperature_display")
 
-        self.bed_temp_display = self._make_temp_display(
-            "bed", ":/temperature_related/media/btn_icons/temperature_plate.svg"
-        )
+        self.bed_temp_display = self._make_temp_display("bed", Icon.TEMPERATURE_PLATE)
         self.bed_temp_display.setProperty("button_type", "secondary_display")
 
         self.chamber_temp_display = self._make_temp_display(
-            "chamber", ":/top_bar_icons/media/topbar/chamber_temp_topbar.svg"
+            "chamber", Icon.CHAMBER_TEMP_TOPBAR
         )
         self.chamber_temp_display.setProperty(
             "secondary_pixmap",
-            QtGui.QPixmap(":/temperature_related/media/btn_icons/humidity.svg"),
+            BlocksPixmap.get(Icon.HUMIDITY),
         )
         self.chamber_temp_display.setProperty("display_format", "dual")
         self.chamber_temp_display.setProperty("button_type", "display_secondary")
 
-        self.filament_type_icon = self._make_header_icon(
-            "PLA", ":/filament_related/media/btn_icons/load_filament.svg"
-        )
+        self.filament_type_icon = self._make_header_icon("PLA", Icon.LOAD_FILAMENT)
         self.nozzle_size_icon = self._make_header_icon(
-            "0.4mm", ":/temperature_related/media/btn_icons/standart_temperature.svg"
+            "0.4mm", Icon.STANDART_TEMPERATURE
         )
 
         self.wifi_button = IconButton(parent=self.main_header_layout)
@@ -1668,7 +1648,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.wifi_button.setIconSize(QtCore.QSize(16, 16))
         self.wifi_button.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/network/media/btn_icons/network/3bar_wifi.svg"),
+            BlocksPixmap.get(Icon.WIFI_3BAR),
         )
         self.wifi_button.setProperty("button_type", "icon")
         self.header_main_layout.addWidget(
@@ -1680,22 +1660,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.header_main_layout.setStretch(2, 1)
         self.header_main_layout.setStretch(3, 1)
 
-    def _make_temp_display(self, text: str, icon: str) -> DisplayButton:
+    def _make_temp_display(self, text: str, icon: Icon) -> DisplayButton:
         display = DisplayButton(parent=self.main_header_layout)
         display.setMinimumSize(QtCore.QSize(140, 60))
         display.setMaximumSize(QtCore.QSize(160, 60))
-        display.setProperty("icon_pixmap", QtGui.QPixmap(icon))
+        display.setProperty("icon_pixmap", BlocksPixmap.get(icon))
         display.setText(text)
         self.header_main_layout.addWidget(
             display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
         return display
 
-    def _make_header_icon(self, text: str, icon: str) -> IconButton:
+    def _make_header_icon(self, text: str, icon: Icon) -> IconButton:
         btn = IconButton(parent=self.main_header_layout)
         btn.setMinimumSize(QtCore.QSize(60, 60))
         btn.setMaximumSize(QtCore.QSize(60, 60))
-        btn.setProperty("icon_pixmap", QtGui.QPixmap(icon))
+        btn.setProperty("icon_pixmap", BlocksPixmap.get(icon))
         btn.setProperty("button_type", "icon_text")
         btn.setText(text)
         self.header_main_layout.addWidget(btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
