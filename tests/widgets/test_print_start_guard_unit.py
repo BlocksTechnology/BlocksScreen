@@ -28,6 +28,7 @@ for _name in [
     sys.modules.pop(_name)
 
 from lib.panels.printTab import PrintTab  # noqa: E402
+from lib.utils.usb_import import MAX_COPIES  # noqa: E402
 
 # Put the stand-ins back so this import leaves sys.modules as found.
 for _name in [
@@ -48,7 +49,8 @@ def _bind(tab: SimpleNamespace, *names: str) -> SimpleNamespace:
 def _tab(amu_manager: object, printing_state: str = "standby") -> SimpleNamespace:
     tab = SimpleNamespace(
         amu_manager=amu_manager,
-        printer=SimpleNamespace(printing_state=printing_state),
+        _print_state=printing_state,
+        _klippy_state="",
         _usb_pending=False,
         _usb_from_console=False,
         _cancel_pending=False,
@@ -97,6 +99,14 @@ class TestStartPrint:
         assert tab._begin_print("USB-STICK/cube.gcode") == reason
         tab._start_usb_import.assert_not_called()
         tab.notify.emit.assert_called_once_with("PrintTab", reason, 2, True)
+
+    @pytest.mark.parametrize("state", ["shutdown", "error", "startup"])
+    def test_klipper_not_ready_blocks_before_the_copy(self, state) -> None:
+        tab = _tab(None)
+        tab._klippy_state = state
+        tab._start_usb_import = MagicMock()
+        assert tab._begin_print("USB-STICK/cube.gcode") == "Klipper is not ready."
+        tab._start_usb_import.assert_not_called()
 
     def test_usb_file_is_imported_not_printed(self) -> None:
         tab = _tab(None)
@@ -191,7 +201,15 @@ class TestUsbImportDone:
         tab._cancel_timer = tab._cancel_settle = MagicMock()
         tab.gcode_path = "/tmp/gcodes"
         tab.call_load_panel = MagicMock()
-        _bind(tab, "_usb_print_local_copy", "_end_usb_print", "_clear_cancel")
+        tab.ws = MagicMock()
+        _bind(
+            tab,
+            "_usb_print_local_copy",
+            "_end_usb_print",
+            "_clear_cancel",
+            "_mark_unindexed",
+            "_index_when_processed",
+        )
         tab.remember = MagicMock()
         # printTab was evicted from sys.modules, so patch the function's globals.
         monkeypatch.setitem(
@@ -284,7 +302,7 @@ class TestUsbImportDone:
 
     def test_job_started_meanwhile_blocks_the_copy(self, tab) -> None:
         self._done(tab)
-        tab.printer.printing_state = "printing"  # another client, during the wait
+        tab._print_state = "printing"  # another client, during the wait
         PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
         tab.jobStatusPage_widget.on_print_start.assert_not_called()
         tab.notify.emit.assert_called_once_with(
@@ -320,6 +338,23 @@ class TestUsbImportDone:
         tab._end_usb_print("cancelled")
         self._done(tab, token=1)
         assert tab.remember.call_args.args[1:] == ("k", "cube.gcode")
+
+    def test_copy_processed_before_a_late_abort_result_is_indexed(self, tab) -> None:
+        # Moonraker announced it while nothing was pending, so only metadata knows
+        tab._end_usb_print("cancelled")
+        self._done(tab, token=1)
+        method, params = tab.ws.send_request.call_args.args
+        assert (method, params) == ("server.files.metadata", {"filename": "cube.gcode"})
+        tab.ws.send_request.call_args.kwargs["callback"]({"filename": "cube.gcode"})
+        assert tab.remember.call_args.args[1:] == ("k", "cube.gcode")
+        PrintTab._on_usb_file_added(tab, {"path": "cube.gcode"})
+        tab.remember.assert_called_once()
+
+    def test_unindexed_copies_stay_bounded(self, tab) -> None:
+        for n in range(MAX_COPIES + 5):
+            tab._mark_unindexed(f"usb_copies/c{n}.gcode", "k")
+        assert len(tab._usb_unindexed) == MAX_COPIES
+        assert "usb_copies/c0.gcode" not in tab._usb_unindexed
 
     def test_copy_announced_after_settle_timeout_is_indexed(self, tab) -> None:
         self._done(tab)
@@ -358,7 +393,7 @@ class TestUsbImportDone:
 
     def test_refusal_after_copy_reaches_console(self, tab) -> None:
         tab._usb_from_console = True
-        tab.printer.printing_state = "printing"
+        tab._print_state = "printing"
         self._done(tab, reused=True)
         assert self._responds(tab) == [
             'RESPOND TYPE=error MSG="USB print refused: A print is already running."'

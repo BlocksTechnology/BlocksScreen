@@ -24,6 +24,7 @@ from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from lib.utils.usb_import import (
+    MAX_COPIES,
     UsbImportSignals,
     UsbImportTask,
     ensure_copies_dir,
@@ -110,6 +111,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._cancel_gen: int = 0  # drops a cancel reply that outlived its cancel
         self._print_state: str = ""
         self._idle_state: str = ""
+        self._klippy_state: str = ""  # "" until the first report, which never refuses
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
         self._cancel_timer = QtCore.QTimer(self)
         self._cancel_timer.setSingleShot(True)
@@ -434,7 +436,10 @@ class PrintTab(QtWidgets.QStackedWidget):
             return "A USB file is still being prepared for printing."
         if self._cancel_pending:
             return "The last print is still being cancelled."
-        if self.printer.printing_state in ("printing", "paused"):
+        if self._klippy_state not in ("", "ready"):
+            # Else the copy and settle wait run first, then PRINT_START is rejected
+            return "Klipper is not ready."
+        if self._print_state in ("printing", "paused"):
             return "A print is already running."
         # A refused PRINT_START runs on_error CANCEL_PRINT, which HH v3 reopens as a job.
         if self.amu_manager is not None:
@@ -536,7 +541,7 @@ class PrintTab(QtWidgets.QStackedWidget):
                         pathlib.Path(self.gcode_path), key, local_file
                     )
                 else:
-                    self._usb_unindexed[local_file] = key
+                    self._index_when_processed(local_file, key)
             return
         if error:
             self._end_usb_print(f"USB print failed: {error}")
@@ -575,7 +580,7 @@ class PrintTab(QtWidgets.QStackedWidget):
                 self._usb_print_local_copy()
                 return
             logger.warning("No metadata for %s after the settle timeout", local)
-            self._usb_unindexed[local] = key  # indexed if Moonraker announces it later
+            self._mark_unindexed(local, key)
             self._end_usb_print(
                 f"{local} is still being processed.\nStart it from the file list."
             )
@@ -584,6 +589,28 @@ class PrintTab(QtWidgets.QStackedWidget):
             "server.files.metadata", {"filename": local}, callback=on_reply
         ):
             on_reply({"error": {"code": -1, "message": "not connected"}})
+
+    def _mark_unindexed(self, local: str, key: str) -> None:
+        """Index *local* once Moonraker announces it; only the newest few are kept."""
+        self._usb_unindexed.pop(local, None)
+        self._usb_unindexed[local] = key
+        while len(self._usb_unindexed) > MAX_COPIES:  # older ones were pruned anyway
+            self._usb_unindexed.pop(next(iter(self._usb_unindexed)))
+
+    def _index_when_processed(self, local: str, key: str) -> None:
+        """Index an aborted import's copy now if processed, else once announced."""
+        # Its announcement may have come while no import was pending, so ask Moonraker.
+        self._mark_unindexed(local, key)
+        root = pathlib.Path(self.gcode_path)
+
+        def on_reply(reply: object) -> None:
+            processed = isinstance(reply, dict) and "error" not in reply
+            if processed and self._usb_unindexed.pop(local, None) is not None:
+                remember_import_async(root, key, local)
+
+        self.ws.send_request(
+            "server.files.metadata", {"filename": local}, callback=on_reply
+        )
 
     def _usb_print_local_copy(self) -> None:
         """Index the settled local copy and start printing it."""
@@ -700,8 +727,12 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
         """Dismiss the Z-offset save popup and reset save state on unexpected shutdown."""
+        self._klippy_state = state
         if state in ("ready", "startup"):
             return
+        self._print_state = (
+            ""  # printer.clear_printer_objs drops it too; ready re-queries
+        )
         if self._cancel_pending:
             # E-stop during the cancel macro: print_stats never reaches cancelled.
             self._clear_cancel()

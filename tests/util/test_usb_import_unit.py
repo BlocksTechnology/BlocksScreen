@@ -179,13 +179,13 @@ def test_name_taken_during_copy_gets_suffix(layout, monkeypatch) -> None:
     # A concurrent import committing the same name first must not be overwritten.
     gcodes, drive, _ = layout
     (drive / "cube.gcode").write_bytes(b"G28\n")
-    real_copy = usb_import.shutil.copyfile
+    real_copy = usb_import._copy_file
 
-    def copy_then_race(src, dst):
-        real_copy(src, dst)
+    def copy_then_race(src, dst, cancelled):
+        real_copy(src, dst, cancelled)
         (gcodes / COPIES / "cube.gcode").write_bytes(b"other")
 
-    monkeypatch.setattr(usb_import.shutil, "copyfile", copy_then_race)
+    monkeypatch.setattr(usb_import, "_copy_file", copy_then_race)
     name, _, _ = import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
     assert name == f"{COPIES}/cube_1.gcode"
     assert (gcodes / COPIES / "cube.gcode").read_bytes() == b"other"
@@ -386,3 +386,57 @@ def test_task_reports_error(layout, qtbot) -> None:
 def test_background_remember_logs_index_errors(tmp_path, caplog) -> None:
     usb_import._remember_logged(tmp_path, "k", "missing.gcode")
     assert "Could not index USB copy missing.gcode" in caplog.text
+
+
+def test_upper_case_copies_are_pruned(layout, monkeypatch) -> None:
+    gcodes, drive, _ = layout
+    monkeypatch.setattr(usb_import, "MAX_COPIES", 2)
+    copies = _aged_copies(gcodes, ())
+    for age, n in enumerate(("OLD.GCODE", "Mid.Gcode")):
+        (copies / n).write_bytes(b"x")
+        os.utime(copies / n, ns=(age * 10**9, age * 10**9))
+    (drive / "cube.gcode").write_bytes(b"G28\n")
+    import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
+    assert sorted(p.name for p in copies.iterdir()) == [
+        "Mid.Gcode",
+        "cube.gcode",
+        "notes.txt",
+    ]
+
+
+def test_failed_import_prunes_nothing(layout, monkeypatch) -> None:
+    gcodes, drive, _ = layout
+    monkeypatch.setattr(usb_import, "MAX_COPIES", 1)
+    copies = _aged_copies(gcodes, ("old",))
+    (drive / "cube.gcode").write_bytes(b"G28\n")
+    monkeypatch.setattr(usb_import.shutil, "disk_usage", lambda _p: _Usage(0, 0, 10))
+    with pytest.raises(UsbImportError, match="Not enough free space"):
+        import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
+    assert (copies / "old.gcode").exists()
+
+
+def test_cancel_stops_a_running_copy(tmp_path, monkeypatch) -> None:
+    # Klipper shut down mid-copy: the copy stops within one chunk, not at the end
+    monkeypatch.setattr(usb_import, "CHUNK", 4)
+    src, dst = tmp_path / "big.gcode", tmp_path / "big.part"
+    src.write_bytes(b"G1 X1\n" * 64)
+    usb_import._copy_file(src, dst, None)
+    assert dst.read_bytes() == src.read_bytes()
+    cancelled = threading.Event()
+    cancelled.set()
+    with pytest.raises(UsbImportError, match="Cancelled"):
+        usb_import._copy_file(src, dst, cancelled)
+    assert dst.stat().st_size == 0
+
+
+def test_running_copies_reserve_their_space(tmp_path, monkeypatch) -> None:
+    # Two imports both passed the free-space check before either temp file grew
+    monkeypatch.setattr(usb_import, "MIN_FREE_MARGIN", 0)
+    monkeypatch.setattr(usb_import.shutil, "disk_usage", lambda _p: _Usage(0, 0, 100))
+    with usb_import._reserve_space(tmp_path, 60):
+        with pytest.raises(UsbImportError, match="40 MB|0 MB"):
+            with usb_import._reserve_space(tmp_path, 60):
+                pass
+    with usb_import._reserve_space(tmp_path, 60):
+        assert usb_import._reserved
+    assert not usb_import._reserved

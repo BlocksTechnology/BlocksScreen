@@ -1,9 +1,11 @@
 """Copies USB gcode files into local storage so prints survive drive removal."""
 
+import contextlib
 import ctypes
 import errno
 import functools
 import hashlib
+import itertools
 import json
 import logging
 import os
@@ -22,6 +24,7 @@ MB = 1024 * 1024
 ALLOWED_EXT = ".gcode"  # the only extension lib.files lists and notifies
 MIN_FREE_MARGIN = 64 * MB  # free space left on the SD card after the copy
 SAMPLE = 64 * 1024
+CHUNK = 1 * MB  # cancel granularity of a running copy
 STATE_DIR_NAME = ".usb_import"
 INDEX_NAME = "index.json"
 PART_PREFIX = ".bs-usb-"  # scopes the stale-temp sweep to our own files
@@ -30,6 +33,9 @@ MAX_COPIES = 20  # least recently used beyond this are deleted, never the curren
 _INDEX_LOCK = threading.Lock()  # the index is written from pool threads
 _COMMIT_LOCK = threading.Lock()  # name pick + rename, so two copies never pick one name
 _SWEPT: set[pathlib.Path] = set()  # temp dirs already cleaned in this process
+_RESERVE_LOCK = threading.Lock()
+_reserved: dict[int, int] = {}  # copy id -> bytes, for copies still running
+_copy_ids = itertools.count()
 _AT_FDCWD = -100
 _RENAME_NOREPLACE = 1  # linux/fs.h
 _renameat2 = getattr(ctypes.CDLL(None, use_errno=True), "renameat2", None)
@@ -171,7 +177,7 @@ def ensure_copies_dir(gcode_root: pathlib.Path) -> None:
         logger.warning("Could not create %s: %s", COPIES_DIR_NAME, e)
 
 
-def _prune_copies(root: pathlib.Path, keep: int, job_file: str) -> None:
+def _prune_copies(root: pathlib.Path, keep: int, spare: set[str]) -> None:
     """Delete the least recently used copies until at most *keep* remain."""
     # mtime is only the copy time; a reprinted copy's last use lives in the index.
     with _INDEX_LOCK:
@@ -183,7 +189,13 @@ def _prune_copies(root: pathlib.Path, keep: int, job_file: str) -> None:
             and isinstance(v.get("used_ns"), int)
         }
     aged: list[tuple[int, str]] = []
-    for f in (root / COPIES_DIR_NAME).glob(f"*{ALLOWED_EXT}"):
+    try:
+        entries = list((root / COPIES_DIR_NAME).iterdir())
+    except OSError:
+        return
+    for f in entries:
+        if f.suffix.lower() != ALLOWED_EXT:  # imports accept any case: PART.GCODE
+            continue
         name = f.relative_to(root).as_posix()
         try:
             if f.is_file():
@@ -195,8 +207,8 @@ def _prune_copies(root: pathlib.Path, keep: int, job_file: str) -> None:
     for _, name in aged:
         if excess <= 0:
             break
-        if name == job_file:
-            continue  # Moonraker would drop the running job's metadata and history file
+        if name in spare:
+            continue  # the running job: Moonraker would drop its metadata and history
         (root / name).unlink(missing_ok=True)
         excess -= 1
 
@@ -221,6 +233,39 @@ def _sweep_stale_parts(tmp_dir: pathlib.Path) -> None:
             stale.unlink(missing_ok=True)
 
 
+@contextlib.contextmanager
+def _reserve_space(dest_dir: pathlib.Path, size: int):
+    """Hold *size* bytes of free space against the other copies still running."""
+    # Each copy checked free space before the others' temp files grew.
+    with _RESERVE_LOCK:
+        free = shutil.disk_usage(dest_dir).free - sum(_reserved.values())
+        if free < size + MIN_FREE_MARGIN:
+            raise UsbImportError(
+                f"Not enough free space ({max(free, 0) // MB} MB free)"
+            )
+        token = next(_copy_ids)
+        _reserved[token] = size
+    try:
+        yield
+    finally:
+        with _RESERVE_LOCK:
+            del _reserved[token]
+
+
+def _copy_file(
+    src: pathlib.Path, dst: pathlib.Path, cancelled: threading.Event | None
+) -> None:
+    """Copy *src* to *dst* in chunks; an abort stops it within one chunk."""
+    # shutil.copyfile has no cancel point, so a 500 MB copy outlived its import.
+    buf = bytearray(CHUNK)
+    view = memoryview(buf)
+    with src.open("rb") as fsrc, dst.open("wb") as fdst:
+        while n := fsrc.readinto(buf):
+            if cancelled is not None and cancelled.is_set():
+                raise UsbImportError("Cancelled")
+            fdst.write(view[:n])
+
+
 def _copy_atomic(
     src: pathlib.Path,
     src_st: os.stat_result,
@@ -230,15 +275,24 @@ def _copy_atomic(
 ) -> pathlib.Path:
     """Copy *src* into *dest_dir* via a synced temp file; returns the final path."""
     _sweep_stale_parts(tmp_dir)  # tmp_dir may be the copies dir itself
-    free = shutil.disk_usage(dest_dir).free
-    if free < src_st.st_size + MIN_FREE_MARGIN:
-        raise UsbImportError(f"Not enough free space ({free // MB} MB free)")
+    with _reserve_space(dest_dir, src_st.st_size):
+        return _copy_reserved(src, src_st, dest_dir, tmp_dir, cancelled)
+
+
+def _copy_reserved(
+    src: pathlib.Path,
+    src_st: os.stat_result,
+    dest_dir: pathlib.Path,
+    tmp_dir: pathlib.Path,
+    cancelled: threading.Event | None,
+) -> pathlib.Path:
+    """_copy_atomic's body, run while the space is reserved."""
     fd, tmp_name = tempfile.mkstemp(suffix=".part", prefix=PART_PREFIX, dir=tmp_dir)
     os.close(fd)
     tmp = pathlib.Path(tmp_name)
     try:
         os.chmod(tmp, 0o644)  # mkstemp's 0600 would carry over to the gcode
-        shutil.copyfile(src, tmp)  # kernel-side copy on Linux
+        _copy_file(src, tmp, cancelled)
         now = src.stat()
         if (now.st_size, now.st_mtime_ns) != (src_st.st_size, src_st.st_mtime_ns):
             raise UsbImportError("The file changed during the copy")
@@ -299,8 +353,13 @@ def import_usb_gcode(
                 )
             except FileExistsError:
                 pass
-            _prune_copies(root, MAX_COPIES - 1, job_file)
             final = _copy_atomic(src, src_st, copies, _tmp_dir(root, copies), cancelled)
+            # Only after a commit: a failed import must not cost a cached copy.
+            spare = {job_file, final.relative_to(root).as_posix()}
+            try:
+                _prune_copies(root, MAX_COPIES, spare)
+            except OSError as e:
+                logger.warning("Could not prune %s: %s", COPIES_DIR_NAME, e)
     except OSError as e:
         raise UsbImportError(
             f"Copy failed, was the USB drive removed? ({e.strerror})"
