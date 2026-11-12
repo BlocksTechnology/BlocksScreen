@@ -55,9 +55,9 @@ def test_cycle_shows_and_drops_its_overlay(page, qtbot):
     assert hidden.args == [False, "", False]
 
 
-def test_homing_step_has_its_own_shorter_timeout(page):
+def test_homing_step_outlasts_a_probe_from_the_top(page):
     page.axis_maintenance()
-    assert page._safety.interval() == 300_000
+    assert page._safety.interval() == 600_000
 
 
 def test_homing_error_skips_oil_prompt(page, qtbot):
@@ -76,6 +76,7 @@ def test_moonraker_level_error_gets_a_popup(page):
 
     page.error_popup.show.assert_called_once()
     page.answerPage.show.assert_not_called()
+    assert page._error_hide.isActive()  # no buttons, so it must hide itself
 
 
 def test_offline_send_drops_loading_without_prompt(page, qtbot):

@@ -12,8 +12,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
 
-# Prep: G28 from any Z + Z_TILT_ADJUST + a 450 mm Z move at the 10 mm/s cap.
-_PREP_TIMEOUT_MS = 300_000
+# Prep: G28 probes down at 3 mm/s from Z<=506 (~170 s), Z_TILT retries, Z climb.
+_PREP_TIMEOUT_MS = 600_000
 # FINISH_Z: max_z_velocity 10 caps its F1200, so 6 x 449 mm = 270 s, then G28 from the top.
 _CYCLE_TIMEOUT_MS = 600_000
 # Klipper errors are broadcast as "!!" (MainWindow popup); -1/503 show ConnectionPage.
@@ -45,6 +45,11 @@ class AxisMaintPage(QtWidgets.QWidget):
         self.answerPage = BasePopup(self, False, True)
         self.answerPage.accepted.connect(self._run_AXIS_MAINTENANCE_gcode)
         self.error_popup = BasePopup(self, False, False)
+        # No buttons on a non-dialog popup, so it must hide itself.
+        self._error_hide = QtCore.QTimer(self)
+        self._error_hide.setSingleShot(True)
+        self._error_hide.setInterval(5000)
+        self._error_hide.timeout.connect(self.error_popup.hide)
 
         self._setup_ui()
         self.axes_back_btn.clicked.connect(self.request_back.emit)
@@ -131,6 +136,7 @@ class AxisMaintPage(QtWidgets.QWidget):
         message = error.get("message") if isinstance(error, dict) else error
         self.error_popup.set_message(f"Axis maintenance failed: {message}")
         self.error_popup.show()
+        self._error_hide.start()
 
     def _on_homed(self, result: object) -> None:
         """Drop the loading screen and show the oil prompt once homing succeeded."""
