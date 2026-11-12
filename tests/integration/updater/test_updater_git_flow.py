@@ -6,16 +6,6 @@ UI_FILES = {
 }
 
 
-def _klipper(harness, **fields: object):
-    """Installed klipper one commit behind its origin; returns (origin, old, new)."""
-    origin = harness.remote("klipper")
-    harness.install(origin)
-    old = harness.head("klipper")
-    new = origin.commit({"klippy.py": "v2\n"})
-    harness.component("klipper", service="klipper.service", **fields)
-    return origin, old, new
-
-
 def _rollbacks(harness, name: str) -> list[dict]:
     return [
         e
@@ -25,7 +15,7 @@ def _rollbacks(harness, name: str) -> list[dict]:
 
 
 async def test_update_moves_to_origin_tip_and_restarts(harness):
-    _, old, new = _klipper(harness)
+    _, old, new = harness.klipper_behind()
     harness.venv_pip("klipper")
     svc, rec = harness.service()
 
@@ -45,7 +35,7 @@ async def test_update_moves_to_origin_tip_and_restarts(harness):
 
 
 async def test_deps_install_runs_component_venv_pip(harness):
-    origin, _, _ = _klipper(harness)
+    origin, _, _ = harness.klipper_behind()
     req = origin.commit({"requirements.txt": "pyserial\n"})
     harness.venv_pip("klipper")
     svc, _ = harness.service()
@@ -58,7 +48,7 @@ async def test_deps_install_runs_component_venv_pip(harness):
 
 
 async def test_hook_failure_reverts(harness):
-    _, old, _ = _klipper(harness)
+    _, old, _ = harness.klipper_behind()
     harness.hook("klipper", "exit 3\n")
     svc, rec = harness.service()
 
@@ -74,7 +64,7 @@ async def test_hook_failure_reverts(harness):
 
 
 async def test_hook_receives_hashes(harness):
-    _, old, new = _klipper(harness)
+    _, old, new = harness.klipper_behind()
     out = harness.root / "hook.env"
     harness.hook(
         "klipper",
@@ -93,7 +83,7 @@ async def test_hook_receives_hashes(harness):
 
 
 async def test_restart_failure_reverts(harness):
-    _, old, _ = _klipper(harness)
+    _, old, _ = harness.klipper_behind()
     harness.fail_restart("klipper.service")
     svc, rec = harness.service()
 
@@ -105,7 +95,7 @@ async def test_restart_failure_reverts(harness):
 
 
 async def test_deps_failure_reverts(harness):
-    origin, old, _ = _klipper(harness)
+    origin, old, _ = harness.klipper_behind()
     origin.commit({"requirements.txt": "broken-dep\n"})
     harness.venv_pip("klipper", 'case "$*" in *"-r "*) exit 1 ;; esac\nexit 0\n')
     svc, _ = harness.service()
@@ -117,7 +107,7 @@ async def test_deps_failure_reverts(harness):
 
 
 async def test_one_failure_does_not_block_the_rest(harness):
-    _, k_old, _ = _klipper(harness)
+    _, k_old, _ = harness.klipper_behind()
     moon = harness.remote("moonraker")
     harness.install(moon)
     m_new = moon.commit({"moonraker.py": "v2\n"})
@@ -166,7 +156,7 @@ async def test_branch_switch_follows_components_yaml(harness):
 
 
 async def test_hard_reset_discards_local_edits(harness):
-    _, _, new = _klipper(harness)
+    _, _, new = harness.klipper_behind()
     (harness.home / "klipper" / "README").write_text("edited on the printer\n")
     svc, _ = harness.service()
 
@@ -180,7 +170,7 @@ async def test_hard_reset_discards_local_edits(harness):
 
 
 async def test_non_https_remote_is_refused(harness):
-    origin, old, _ = _klipper(harness)
+    origin, old, _ = harness.klipper_behind()
     harness.git(
         "remote", "set-url", "origin", str(origin.bare), cwd=harness.home / "klipper"
     )
@@ -257,7 +247,7 @@ async def test_reconcile_reverts_power_cut_batch(harness):
 
 
 async def test_recover_returns_to_prev_hash(harness):
-    _, old, new = _klipper(harness)
+    _, old, new = harness.klipper_behind()
     svc, rec = harness.service()
     assert await svc.update_all({"klipper"}) is True
     assert harness.head("klipper") == new
@@ -274,7 +264,7 @@ async def test_recover_returns_to_prev_hash(harness):
 
 
 async def test_single_component_update_and_rollback(harness):
-    _, old, new = _klipper(harness)
+    _, old, new = harness.klipper_behind()
     svc, _ = harness.service()
     assert await svc.update_component("klipper") is True
     assert harness.head("klipper") == new

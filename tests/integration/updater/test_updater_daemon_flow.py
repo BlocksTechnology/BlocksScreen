@@ -28,10 +28,7 @@ async def _booted(daemon, wait_for):
 
 
 async def test_update_all_round_trip(harness, daemon, wait_for):
-    origin = harness.remote("klipper")
-    harness.install(origin)
-    new = origin.commit({"klippy.py": "v2\n"})
-    harness.component("klipper", service="klipper.service")
+    _, _, new = harness.klipper_behind()
     d = await _booted(daemon, wait_for)
     assert d.statuses()[0]["klipper"]["commits_behind"] == 1
 
@@ -62,18 +59,10 @@ async def test_nothing_dirty_still_releases_busy(harness, daemon, wait_for):
     assert d.signals("step_complete") == []
 
 
-async def test_print_started_after_confirm_refuses_update(
-    harness, daemon, wait_for, monkeypatch
-):
-    origin = harness.remote("klipper")
-    harness.install(origin)
-    old = harness.head("klipper")
-    origin.commit({"klippy.py": "v2\n"})
-    harness.component("klipper", service="klipper.service")
+async def test_print_started_after_confirm_refuses_update(harness, daemon, wait_for):
+    _, old, _ = harness.klipper_behind()
     d = await _booted(daemon, wait_for)
-    monkeypatch.setitem(
-        harness.dbus_g, "klipper_printing", AsyncMock(return_value=True)
-    )
+    harness.patch_daemon(klipper_printing=AsyncMock(return_value=True))
 
     assert await d.iface.update_all() is True
     await wait_for(lambda: d.busy_trace() == [True, False], what="busy release")
@@ -84,11 +73,7 @@ async def test_print_started_after_confirm_refuses_update(
 
 
 async def test_failed_update_releases_busy_and_reports(harness, daemon, wait_for):
-    origin = harness.remote("klipper")
-    harness.install(origin)
-    old = harness.head("klipper")
-    origin.commit({"klippy.py": "v2\n"})
-    harness.component("klipper", service="klipper.service")
+    _, old, _ = harness.klipper_behind()
     harness.hook("klipper", "exit 1\n")
     d = await _booted(daemon, wait_for)
 
@@ -127,9 +112,10 @@ async def test_install_update_holds_overlay_until_deploy_finishes(
 
 
 async def test_deploy_hold_is_capped(harness, daemon, wait_for):
-    harness.mp.setitem(harness.dbus_g, "_DEPLOY_HOLD_CAP_S", 0.3)
+    harness.patch_daemon(_DEPLOY_HOLD_CAP_S=0.3)
     harness.deploy_flag.parent.mkdir(parents=True)
     harness.deploy_flag.touch()  # a hung install-updater never clears it
+    _, _, new = harness.klipper_behind()  # components load only at daemon init
 
     d = daemon()
     assert await d.iface.get_busy() is True
@@ -137,13 +123,10 @@ async def test_deploy_hold_is_capped(harness, daemon, wait_for):
     await wait_for(lambda: d.busy_trace() == [False], timeout=5.0, what="cap")
     assert harness.deploy_flag.exists()
 
-    origin = harness.remote("klipper")
-    harness.install(origin)
-    origin.commit({"klippy.py": "v2\n"})
-    harness.component("klipper", service="klipper.service")
     assert await d.iface.update_all() is True
     # The same stuck flag must not re-hold at the end of every update.
     await wait_for(lambda: d.busy_trace() == [False, True, False], what="no re-hold")
+    assert harness.head("klipper") == new
     assert d.iface._deploy_hold is None
 
 
@@ -216,11 +199,7 @@ async def test_boot_revert_mid_print_defers_restart(harness, daemon, wait_for):
 
 
 async def test_cancel_mid_hook_reverts_and_releases(harness, daemon, wait_for):
-    origin = harness.remote("klipper")
-    harness.install(origin)
-    old = harness.head("klipper")
-    origin.commit({"klippy.py": "v2\n"})
-    harness.component("klipper", service="klipper.service")
+    _, old, _ = harness.klipper_behind()
     pid_file = harness.state / "hook.pid"
     harness.hook("klipper", f'echo $$ >"{pid_file}"\nexec sleep 20\n')
     d = await _booted(daemon, wait_for)

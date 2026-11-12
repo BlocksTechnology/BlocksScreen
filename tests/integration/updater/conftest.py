@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REMOTE_BASE = "https://git.test/"
@@ -208,9 +209,9 @@ class Harness:
 
     def git(self, *args: str, cwd: Path | None = None) -> str:
         """Run git as the test author; return stripped stdout."""
-        out = subprocess.run(
-            ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
-        )
+        out = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+        if out.returncode:
+            pytest.fail(f"git {' '.join(args)} exited {out.returncode}: {out.stderr}")
         return out.stdout.strip()
 
     def remote(self, name: str, files: dict[str, str] | None = None) -> Remote:
@@ -248,6 +249,19 @@ class Harness:
         } | fields
         self.components.append(entry)
         return entry
+
+    def klipper_behind(self, **fields: object) -> tuple[Remote, str, str]:
+        """Installed klipper one commit behind its origin; returns (origin, old, new)."""
+        origin = self.remote("klipper")
+        self.install(origin)
+        old = self.head("klipper")
+        new = origin.commit({"klippy.py": "v2\n"})
+        self.component("klipper", service="klipper.service", **fields)
+        return origin, old, new
+
+    def patch_daemon(self, **values: object) -> None:
+        """Patch dbus_service globals through the rename guard."""
+        _patch(self.mp, self.dbus_g, **values)
 
     # -- hooks, fakes, observations ------------------------------------------
 
@@ -360,7 +374,8 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
     h = Harness(root, home, monkeypatch)
     _write_fakes(h)
 
-    for var in ("XDG_CONFIG_HOME", "GIT_DIR", "GIT_WORK_TREE", "GIT_CONFIG_GLOBAL"):
+    # A git hook exports GIT_INDEX_FILE and friends; any of them retargets our repos.
+    for var in [v for v in os.environ if v.startswith("GIT_")] + ["XDG_CONFIG_HOME"]:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
@@ -379,11 +394,13 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
     lock_g = exec_g["restart_sentinel_path"].__globals__
     comp_g = svc_g["load_components"].__globals__
     real_load = comp_g["load_components"]
+    _patch(monkeypatch, comp_g, OVERRIDE_PATH=root / "blockscreen_updater.yaml")
 
     def _load_components(bundled_text: str | None = None):
-        if bundled_text is not None:  # the follow-up parses an older manifest
-            return real_load(bundled_text)
-        return comp_g["_build_configs"](h.components), 86_400.0
+        # Production parse, merge and sort; only the manifest source differs.
+        if bundled_text is None:
+            bundled_text = yaml.safe_dump({"components": h.components})
+        return real_load(bundled_text)
 
     cache = home / ".cache" / "blockscreen"
     deploy_unit = h.etc / "BlocksScreen-deploy.path"
