@@ -95,18 +95,21 @@ def test_no_runner_drops_loading_without_prompt(page, qtbot):
     page.answerPage.show.assert_not_called()
 
 
-def test_safety_timeout_frees_execute_and_ignores_late_reply(page, qtbot):
+def test_safety_timeout_locks_execute_until_late_reply(page, qtbot):
     page.axis_maintenance()
     page._safety.start(20)
     with qtbot.waitSignal(page.call_load_panel, timeout=2000) as blocker:
         pass
     assert blocker.args == [False, "", False]
-    assert page.am_execute.isEnabled()
+    # Klipper still runs the old script; a second Execute would queue behind it.
+    assert not page.am_execute.isEnabled()
+    page.error_popup.show.assert_called_once()
 
     # A late reply must not hide an overlay another flow may own by now.
     with qtbot.assertNotEmitted(page.call_load_panel, wait=50):
         page.calls[0][1]("ok")
     page.answerPage.show.assert_not_called()
+    assert page.am_execute.isEnabled()
 
 
 def test_execute_disabled_until_reply(page):

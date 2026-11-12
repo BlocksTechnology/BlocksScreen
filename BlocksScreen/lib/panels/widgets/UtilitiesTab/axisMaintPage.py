@@ -93,6 +93,9 @@ class AxisMaintPage(QtWidgets.QWidget):
 
         def on_reply(reply: object) -> None:
             if run_id != self._run_id:
+                if not self._safety.isActive():  # Klipper finished the timed-out run
+                    _logger.info("Axis maintenance: late reply, Execute unlocked")
+                    self.am_execute.setEnabled(True)
                 return
             self._safety.stop()
             self.am_execute.setEnabled(True)
@@ -114,14 +117,17 @@ class AxisMaintPage(QtWidgets.QWidget):
             on_reply({"error": {"code": -1, "message": "not connected"}})
 
     def _on_safety_timeout(self) -> None:
-        """Abandon the run when Klipper never replied, and free Execute again."""
+        """Close the loading screen; Execute stays locked until the late reply."""
+        # Klipper still holds the gcode mutex, so a new run would queue and move later.
         self._run_id += 1
-        self.am_execute.setEnabled(True)
         _logger.warning(
             "Axis maintenance: no reply in %d s, closing the loading screen",
             self._safety.interval() // 1000,
         )
         self._hide_overlay()
+        self._report_error(
+            {"message": "Klipper is still busy.\nExecute unlocks once it finishes."}
+        )
 
     def _hide_overlay(self) -> None:
         # Hidden page: the overlay now belongs to whichever flow moved the user away.
