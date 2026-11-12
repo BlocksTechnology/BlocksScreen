@@ -24,10 +24,8 @@ from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from lib.utils.usb_import import (
-    MAX_COPIES,
     UsbImportSignals,
     UsbImportTask,
-    ensure_copies_dir,
     remember_import_async,
 )
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -36,6 +34,7 @@ if typing.TYPE_CHECKING:
     from devices.amu import AMUManager
 
 USB_SETTLE_TIMEOUT_MS = 120_000  # Happy Hare pre-processing of a large file
+USB_UNINDEXED_MAX = 20  # imports awaiting their Moonraker announce, oldest dropped
 # RF50-Klipper's SDCARD_PRINT_FILE override emits this for USB files (Mainsail starts).
 USB_PRINT_ACTION = "// action:blocks_usb_print "
 # The override hands USB files over only once this is True; older pairs print directly.
@@ -133,7 +132,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         # Copies Moonraker had not announced when their import ended, path -> key.
         self._usb_unindexed: dict[str, str] = {}
         self._usb_from_console: bool = False  # started by another client via Klipper
-        self._job_file: str = ""  # print_stats.filename, never pruned from the copies
         # Moonraker announces a new gcode only once its pre-processing is done.
         self._usb_settle_timer = QtCore.QTimer(self)
         self._usb_settle_timer.setSingleShot(True)
@@ -148,7 +146,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.config: BlocksScreenConfig = get_configparser()
         # TODO: Get the gcode path from the configfile by asking the websocket first
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
-        ensure_copies_dir(pathlib.Path(self.gcode_path))
         self.setMouseTracking(True)
 
         self.sliderPage = SliderPage(self)
@@ -359,9 +356,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """Track the job file; unblock tabs on standby, drop the cancel loadscreen."""
-        if field == "filename" and isinstance(value, str):
-            self._job_file = value
+        """Unblock tabs on standby and drop the cancel loadscreen once cancelled."""
         if not (isinstance(value, str) and "state" in field):
             return
         self._print_state = value
@@ -501,7 +496,6 @@ class PrintTab(QtWidgets.QStackedWidget):
             self._usb_token,
             pathlib.Path(self.gcode_path),
             file,
-            self._job_file,
             self._usb_cancel,
         )
         self.call_load_panel.emit(True, "Copying file from USB...\nPlease wait", False)
@@ -594,7 +588,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Index *local* once Moonraker announces it; only the newest few are kept."""
         self._usb_unindexed.pop(local, None)
         self._usb_unindexed[local] = key
-        while len(self._usb_unindexed) > MAX_COPIES:  # older ones were pruned anyway
+        while len(self._usb_unindexed) > USB_UNINDEXED_MAX:
             self._usb_unindexed.pop(next(iter(self._usb_unindexed)))
 
     def _index_when_processed(self, local: str, key: str) -> None:

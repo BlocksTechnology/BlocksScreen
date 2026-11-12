@@ -21,7 +21,6 @@ _spec.loader.exec_module(usb_import)
 UsbImportError = usb_import.UsbImportError
 import_usb_gcode = usb_import.import_usb_gcode
 remember_import = usb_import.remember_import
-COPIES = usb_import.COPIES_DIR_NAME
 
 _Usage = namedtuple("_Usage", "total used free")
 
@@ -45,12 +44,12 @@ def _state(gcodes: pathlib.Path) -> pathlib.Path:
     return gcodes.parent / usb_import.STATE_DIR_NAME
 
 
-def test_copies_into_copies_dir(layout) -> None:
+def test_copies_into_gcodes_root(layout) -> None:
     gcodes, drive, _ = layout
     (drive / "sub").mkdir()
     (drive / "sub" / "cube.gcode").write_bytes(b"G28\n" * 1000)
     name, reused, key = import_usb_gcode(gcodes, "USB-STICK/sub/cube.gcode")
-    assert (name, reused) == (f"{COPIES}/cube.gcode", False)
+    assert (name, reused) == ("cube.gcode", False)
     assert len(key) == 64
     assert (gcodes / name).read_bytes() == b"G28\n" * 1000
     assert not list(_state(gcodes).glob("*.part"))
@@ -60,16 +59,14 @@ def test_copies_into_copies_dir(layout) -> None:
 def test_unindexed_same_name_file_gets_suffix(layout, local: bytes) -> None:
     # Even an equal file: it may never have gone through Moonraker's processing.
     gcodes, drive, _ = layout
-    copies = gcodes / COPIES
-    copies.mkdir()
     (drive / "cube.gcode").write_bytes(b"G28\n")
-    (copies / "cube.gcode").write_bytes(local)
+    (gcodes / "cube.gcode").write_bytes(local)
     assert import_usb_gcode(gcodes, "/USB-STICK/cube.gcode")[:2] == (
-        f"{COPIES}/cube_1.gcode",
+        "cube_1.gcode",
         False,
     )
-    assert (copies / "cube.gcode").read_bytes() == local
-    assert (copies / "cube_1.gcode").read_bytes() == b"G28\n"
+    assert (gcodes / "cube.gcode").read_bytes() == local
+    assert (gcodes / "cube_1.gcode").read_bytes() == b"G28\n"
 
 
 def test_processed_copy_is_reused_through_index(layout) -> None:
@@ -80,7 +77,7 @@ def test_processed_copy_is_reused_through_index(layout) -> None:
     (gcodes / name).write_bytes(b"; processed by HappyHare\nMMU_CHANGE_TOOL TOOL=0\n")
     remember_import(gcodes, key, name)
     assert import_usb_gcode(gcodes, "USB-STICK/cube.gcode") == (name, True, key)
-    assert sorted(p.name for p in (gcodes / COPIES).iterdir()) == ["cube.gcode"]
+    assert sorted(p.name for p in gcodes.iterdir()) == ["USB-STICK", "cube.gcode"]
 
 
 def test_edited_indexed_copy_is_not_reused(layout) -> None:
@@ -90,7 +87,7 @@ def test_edited_indexed_copy_is_not_reused(layout) -> None:
     remember_import(gcodes, key, name)
     (gcodes / name).write_bytes(b"G1 X10\n")  # replaced after indexing
     assert import_usb_gcode(gcodes, "USB-STICK/cube.gcode")[:2] == (
-        f"{COPIES}/cube_1.gcode",
+        "cube_1.gcode",
         False,
     )
 
@@ -107,7 +104,7 @@ def test_same_size_usb_edit_is_not_reused(layout) -> None:
     st = src.stat()
     os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
     assert import_usb_gcode(gcodes, "USB-STICK/cube.gcode")[:2] == (
-        f"{COPIES}/cube_1.gcode",
+        "cube_1.gcode",
         False,
     )
 
@@ -118,12 +115,12 @@ def test_index_drops_deleted_copies(layout) -> None:
         (drive / f"{n}.gcode").write_bytes(n.encode())
         name, _, key = import_usb_gcode(gcodes, f"USB-STICK/{n}.gcode")
         remember_import(gcodes, key, name)
-    (gcodes / COPIES / "a.gcode").unlink()
+    (gcodes / "a.gcode").unlink()
     (drive / "c.gcode").write_bytes(b"c")
     name, _, key = import_usb_gcode(gcodes, "USB-STICK/c.gcode")
     remember_import(gcodes, key, name)
     files = {v["file"] for v in usb_import._load_index(gcodes).values()}
-    assert files == {f"{COPIES}/b.gcode", f"{COPIES}/c.gcode"}
+    assert files == {"b.gcode", "c.gcode"}
 
 
 def test_corrupt_index_falls_back_to_copy(layout) -> None:
@@ -132,7 +129,7 @@ def test_corrupt_index_falls_back_to_copy(layout) -> None:
     (_state(gcodes) / usb_import.INDEX_NAME).write_text("{not json")
     (drive / "cube.gcode").write_bytes(b"G28\n")
     assert import_usb_gcode(gcodes, "USB-STICK/cube.gcode")[:2] == (
-        f"{COPIES}/cube.gcode",
+        "cube.gcode",
         False,
     )
 
@@ -151,16 +148,14 @@ def test_key_differs_by_tail(layout) -> None:
 
 def test_only_own_stale_part_files_are_cleaned(layout, monkeypatch) -> None:
     gcodes, drive, _ = layout
-    # State dir on another fs: the temp file lands in the copies dir.
+    # State dir on another fs: the temp file lands in the gcodes root.
     monkeypatch.setattr(usb_import, "_tmp_dir", lambda _root, dest: dest)
-    copies = gcodes / COPIES
-    copies.mkdir()
-    (copies / ".bs-usb-old.gcode.part").write_bytes(b"x")
-    (copies / ".other-tool.gcode.part").write_bytes(b"x")
+    (gcodes / ".bs-usb-old.gcode.part").write_bytes(b"x")
+    (gcodes / ".other-tool.gcode.part").write_bytes(b"x")
     (drive / "cube.gcode").write_bytes(b"G28\n")
     import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert not (copies / ".bs-usb-old.gcode.part").exists()
-    assert (copies / ".other-tool.gcode.part").exists()
+    assert not (gcodes / ".bs-usb-old.gcode.part").exists()
+    assert (gcodes / ".other-tool.gcode.part").exists()
 
 
 def test_later_imports_keep_running_copies_temp(layout) -> None:
@@ -183,12 +178,12 @@ def test_name_taken_during_copy_gets_suffix(layout, monkeypatch) -> None:
 
     def copy_then_race(src, dst, cancelled):
         real_copy(src, dst, cancelled)
-        (gcodes / COPIES / "cube.gcode").write_bytes(b"other")
+        (gcodes / "cube.gcode").write_bytes(b"other")
 
     monkeypatch.setattr(usb_import, "_copy_file", copy_then_race)
     name, _, _ = import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert name == f"{COPIES}/cube_1.gcode"
-    assert (gcodes / COPIES / "cube.gcode").read_bytes() == b"other"
+    assert name == "cube_1.gcode"
+    assert (gcodes / "cube.gcode").read_bytes() == b"other"
     assert (gcodes / name).read_bytes() == b"G28\n"
     assert oct((gcodes / name).stat().st_mode & 0o777) == "0o644"
 
@@ -207,8 +202,8 @@ def test_name_taken_between_check_and_rename_gets_suffix(layout, monkeypatch) ->
 
     monkeypatch.setattr(usb_import, "_free_name", free_then_race)
     name, _, _ = import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert name == f"{COPIES}/cube_1.gcode"
-    assert (gcodes / COPIES / "cube.gcode").read_bytes() == b"other"
+    assert name == "cube_1.gcode"
+    assert (gcodes / "cube.gcode").read_bytes() == b"other"
 
 
 def test_rename_noreplace_keeps_existing_file(tmp_path) -> None:
@@ -227,7 +222,7 @@ def test_cancelled_import_commits_nothing(layout) -> None:
     cancelled.set()
     with pytest.raises(UsbImportError, match="Cancelled"):
         import_usb_gcode(gcodes, "USB-STICK/cube.gcode", cancelled=cancelled)
-    assert not list((gcodes / COPIES).glob("*.gcode"))
+    assert not list((gcodes).glob("*.gcode"))
     assert not list(_state(gcodes).glob("*.part"))
 
 
@@ -268,7 +263,7 @@ def test_low_disk_space_is_rejected(layout, monkeypatch) -> None:
     monkeypatch.setattr(usb_import.shutil, "disk_usage", lambda _p: _Usage(0, 0, 10))
     with pytest.raises(UsbImportError, match="Not enough free space"):
         import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert not (gcodes / COPIES / "cube.gcode").exists()
+    assert not (gcodes / "cube.gcode").exists()
 
 
 def test_fsync_error_leaves_no_partial_file(layout, monkeypatch) -> None:
@@ -281,7 +276,7 @@ def test_fsync_error_leaves_no_partial_file(layout, monkeypatch) -> None:
     monkeypatch.setattr(usb_import.os, "fsync", _fail)
     with pytest.raises(UsbImportError, match="Copy failed"):
         import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert not list((gcodes / COPIES).iterdir())
+    assert sorted(p.name for p in gcodes.iterdir()) == ["USB-STICK"]
     assert not list(_state(gcodes).glob("*.part"))
 
 
@@ -302,56 +297,28 @@ def test_dir_sync_error_keeps_committed_copy(layout, monkeypatch, caplog) -> Non
     assert "Could not sync" in caplog.text
 
 
-def _aged_copies(gcodes: pathlib.Path, names: tuple[str, ...]) -> pathlib.Path:
-    """Copies dir holding *names*, oldest mtime first."""
-    copies = gcodes / COPIES
-    copies.mkdir()
-    for age, n in enumerate(names):
-        f = copies / f"{n}.gcode"
-        f.write_bytes(b"x")
-        os.utime(f, ns=(age * 10**9, age * 10**9))
-    (copies / "notes.txt").write_bytes(b"x")  # never ours to delete
-    return copies
-
-
-@pytest.mark.parametrize(
-    ("job_file", "survivors"),
-    [("", ["mid", "new"]), (f"{COPIES}/old.gcode", ["new", "old"])],
-)
-def test_oldest_copies_are_pruned(layout, monkeypatch, job_file, survivors) -> None:
+def test_no_folder_created_and_nothing_pruned(layout) -> None:
     gcodes, drive, _ = layout
-    monkeypatch.setattr(usb_import, "MAX_COPIES", 3)
-    copies = _aged_copies(gcodes, ("old", "mid", "new"))
-    (drive / "cube.gcode").write_bytes(b"G28\n")
-    import_usb_gcode(gcodes, "USB-STICK/cube.gcode", job_file)
-    left = sorted(p.stem for p in copies.glob("*.gcode"))
-    assert left == sorted(["cube", *survivors])
-    assert (copies / "notes.txt").exists()
-
-
-def test_reprinted_copy_outlives_newer_copies(layout, monkeypatch) -> None:
-    gcodes, drive, _ = layout
-    monkeypatch.setattr(usb_import, "MAX_COPIES", 3)
-    copies = _aged_copies(gcodes, ("old", "mid", "new"))
-    remember_import(gcodes, "k", f"{COPIES}/old.gcode")  # printed again just now
+    for n in range(3):
+        (gcodes / f"mine{n}.gcode").write_bytes(b"x")
     (drive / "cube.gcode").write_bytes(b"G28\n")
     import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert sorted(p.stem for p in copies.glob("*.gcode")) == ["cube", "new", "old"]
+    assert sorted(p.name for p in gcodes.iterdir()) == [
+        "USB-STICK",
+        "cube.gcode",
+        "mine0.gcode",
+        "mine1.gcode",
+        "mine2.gcode",
+    ]
 
 
-def test_deleted_copies_dir_is_recreated(layout, caplog) -> None:
+@pytest.mark.parametrize("src", ["USB-part.gcode", "USB DRIVE.gcode"])
+def test_usb_like_name_gets_local_prefix(layout, src: str) -> None:
+    # A root "USB-part.gcode" would be listed and re-imported as a drive.
     gcodes, drive, _ = layout
-    (drive / "cube.gcode").write_bytes(b"G28\n")
-    name, _, _ = import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert name == f"{COPIES}/cube.gcode"
-    assert f"Recreated {COPIES}" in caplog.text
-
-
-def test_ensure_copies_dir(tmp_path, caplog) -> None:
-    usb_import.ensure_copies_dir(tmp_path)
-    assert (tmp_path / COPIES).is_dir()
-    usb_import.ensure_copies_dir(tmp_path / "missing")
-    assert f"Could not create {COPIES}" in caplog.text
+    (drive / src).write_bytes(b"G28\n")
+    name, _, _ = import_usb_gcode(gcodes, f"USB-STICK/{src}")
+    assert name == f"local_{src}"
 
 
 def test_task_reports_copy(layout, qtbot) -> None:
@@ -366,7 +333,7 @@ def test_task_reports_copy(layout, qtbot) -> None:
     assert (token, usb_file, local, reused, error) == (
         7,
         "USB-STICK/cube.gcode",
-        f"{COPIES}/cube.gcode",
+        "cube.gcode",
         False,
         "",
     )
@@ -386,33 +353,6 @@ def test_task_reports_error(layout, qtbot) -> None:
 def test_background_remember_logs_index_errors(tmp_path, caplog) -> None:
     usb_import._remember_logged(tmp_path, "k", "missing.gcode")
     assert "Could not index USB copy missing.gcode" in caplog.text
-
-
-def test_upper_case_copies_are_pruned(layout, monkeypatch) -> None:
-    gcodes, drive, _ = layout
-    monkeypatch.setattr(usb_import, "MAX_COPIES", 2)
-    copies = _aged_copies(gcodes, ())
-    for age, n in enumerate(("OLD.GCODE", "Mid.Gcode")):
-        (copies / n).write_bytes(b"x")
-        os.utime(copies / n, ns=(age * 10**9, age * 10**9))
-    (drive / "cube.gcode").write_bytes(b"G28\n")
-    import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert sorted(p.name for p in copies.iterdir()) == [
-        "Mid.Gcode",
-        "cube.gcode",
-        "notes.txt",
-    ]
-
-
-def test_failed_import_prunes_nothing(layout, monkeypatch) -> None:
-    gcodes, drive, _ = layout
-    monkeypatch.setattr(usb_import, "MAX_COPIES", 1)
-    copies = _aged_copies(gcodes, ("old",))
-    (drive / "cube.gcode").write_bytes(b"G28\n")
-    monkeypatch.setattr(usb_import.shutil, "disk_usage", lambda _p: _Usage(0, 0, 10))
-    with pytest.raises(UsbImportError, match="Not enough free space"):
-        import_usb_gcode(gcodes, "USB-STICK/cube.gcode")
-    assert (copies / "old.gcode").exists()
 
 
 def test_cancel_stops_a_running_copy(tmp_path, monkeypatch) -> None:

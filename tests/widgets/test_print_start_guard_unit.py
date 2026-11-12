@@ -27,8 +27,7 @@ for _name in [
 ]:
     sys.modules.pop(_name)
 
-from lib.panels.printTab import PrintTab  # noqa: E402
-from lib.utils.usb_import import MAX_COPIES  # noqa: E402
+from lib.panels.printTab import USB_UNINDEXED_MAX, PrintTab  # noqa: E402
 
 # Put the stand-ins back so this import leaves sys.modules as found.
 for _name in [
@@ -351,10 +350,10 @@ class TestUsbImportDone:
         tab.remember.assert_called_once()
 
     def test_unindexed_copies_stay_bounded(self, tab) -> None:
-        for n in range(MAX_COPIES + 5):
-            tab._mark_unindexed(f"usb_copies/c{n}.gcode", "k")
-        assert len(tab._usb_unindexed) == MAX_COPIES
-        assert "usb_copies/c0.gcode" not in tab._usb_unindexed
+        for n in range(USB_UNINDEXED_MAX + 5):
+            tab._mark_unindexed(f"c{n}.gcode", "k")
+        assert len(tab._usb_unindexed) == USB_UNINDEXED_MAX
+        assert "c0.gcode" not in tab._usb_unindexed
 
     def test_copy_announced_after_settle_timeout_is_indexed(self, tab) -> None:
         self._done(tab)
@@ -426,21 +425,3 @@ class TestUsbImportDone:
         tab._cancel_z_snapshot = 0.0
         PrintTab.on_print_stats_update(tab, "state", "standby")
         tab.call_load_panel.emit.assert_not_called()
-
-
-def test_import_spares_the_current_job_file(monkeypatch) -> None:
-    module = PrintTab._start_usb_import.__globals__  # the evicted module's namespace
-    task_cls = MagicMock()
-    monkeypatch.setitem(module, "UsbImportTask", task_cls)
-    monkeypatch.setattr(module["QtCore"].QThreadPool, "globalInstance", MagicMock())
-    tab = SimpleNamespace(
-        _usb_token=0,
-        _usb_created=set(),
-        _usb_signals=object(),
-        _job_file="",
-        gcode_path="/gcodes",
-        call_load_panel=MagicMock(),
-    )
-    PrintTab.on_print_stats_update(tab, "filename", "usb_copies/a.gcode")
-    PrintTab._start_usb_import(tab, "USB-STICK/b.gcode")
-    assert task_cls.call_args.args[-2] == "usb_copies/a.gcode"

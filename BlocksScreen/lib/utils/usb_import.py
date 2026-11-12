@@ -28,8 +28,7 @@ CHUNK = 1 * MB  # cancel granularity of a running copy
 STATE_DIR_NAME = ".usb_import"
 INDEX_NAME = "index.json"
 PART_PREFIX = ".bs-usb-"  # scopes the stale-temp sweep to our own files
-COPIES_DIR_NAME = "usb_copies"  # must not match helper_methods.USB_LINK_PREFIXES
-MAX_COPIES = 20  # least recently used beyond this are deleted, never the current job
+LOCAL_PREFIX = "local_"  # renames a copy whose name would read as a USB mount
 _INDEX_LOCK = threading.Lock()  # the index is written from pool threads
 _COMMIT_LOCK = threading.Lock()  # name pick + rename, so two copies never pick one name
 _SWEPT: set[pathlib.Path] = set()  # temp dirs already cleaned in this process
@@ -145,9 +144,12 @@ def _tmp_dir(gcode_root: pathlib.Path, dest_dir: pathlib.Path) -> pathlib.Path:
 def _free_name(src: pathlib.Path, dest_dir: pathlib.Path) -> pathlib.Path:
     """First unused name for *src* in *dest_dir*; never overwrites a local file."""
     # No content match: only the index knows a local copy went through Moonraker.
+    name = src
+    if helper_methods.is_usb_mount(src.name):  # a root "USB-x.gcode" reads as a drive
+        name = pathlib.Path(LOCAL_PREFIX + src.name)
     n = 0
     while True:
-        cand = dest_dir / (src.name if n == 0 else f"{src.stem}_{n}{src.suffix}")
+        cand = dest_dir / (name.name if n == 0 else f"{name.stem}_{n}{name.suffix}")
         if not cand.exists() and not cand.is_symlink():
             return cand
         n += 1
@@ -166,51 +168,6 @@ def _rename_noreplace(src: pathlib.Path, dst: pathlib.Path) -> None:
             raise OSError(err, os.strerror(err), str(dst))  # EEXIST: FileExistsError
     # Old glibc or a filesystem without the flag: _COMMIT_LOCK still covers this app.
     os.replace(src, dst)
-
-
-def ensure_copies_dir(gcode_root: pathlib.Path) -> None:
-    """Create the copies dir ahead of any import."""
-    # Moonraker reports files landing in a just-created dir only via its create_dir.
-    try:
-        (gcode_root / COPIES_DIR_NAME).mkdir(exist_ok=True)
-    except OSError as e:
-        logger.warning("Could not create %s: %s", COPIES_DIR_NAME, e)
-
-
-def _prune_copies(root: pathlib.Path, keep: int, spare: set[str]) -> None:
-    """Delete the least recently used copies until at most *keep* remain."""
-    # mtime is only the copy time; a reprinted copy's last use lives in the index.
-    with _INDEX_LOCK:
-        used = {
-            v["file"]: v["used_ns"]
-            for v in _load_index(root).values()
-            if isinstance(v, dict)
-            and isinstance(v.get("file"), str)
-            and isinstance(v.get("used_ns"), int)
-        }
-    aged: list[tuple[int, str]] = []
-    try:
-        entries = list((root / COPIES_DIR_NAME).iterdir())
-    except OSError:
-        return
-    for f in entries:
-        if f.suffix.lower() != ALLOWED_EXT:  # imports accept any case: PART.GCODE
-            continue
-        name = f.relative_to(root).as_posix()
-        try:
-            if f.is_file():
-                aged.append((max(f.stat().st_mtime_ns, used.get(name, 0)), name))
-        except OSError:
-            continue  # deleted meanwhile
-    aged.sort()
-    excess = len(aged) - keep
-    for _, name in aged:
-        if excess <= 0:
-            break
-        if name in spare:
-            continue  # the running job: Moonraker would drop its metadata and history
-        (root / name).unlink(missing_ok=True)
-        excess -= 1
 
 
 def _fsync(path: pathlib.Path) -> None:
@@ -274,7 +231,7 @@ def _copy_atomic(
     cancelled: threading.Event | None = None,
 ) -> pathlib.Path:
     """Copy *src* into *dest_dir* via a synced temp file; returns the final path."""
-    _sweep_stale_parts(tmp_dir)  # tmp_dir may be the copies dir itself
+    _sweep_stale_parts(tmp_dir)  # tmp_dir may be the gcodes root itself
     with _reserve_space(dest_dir, src_st.st_size):
         return _copy_reserved(src, src_st, dest_dir, tmp_dir, cancelled)
 
@@ -322,10 +279,9 @@ def _copy_reserved(
 def import_usb_gcode(
     gcode_root: pathlib.Path,
     filename: str,
-    job_file: str = "",
     cancelled: threading.Event | None = None,
 ) -> tuple[str, bool, str]:
-    """Copy USB *filename* into the copies dir; returns (gcodes-relative path, reused, key)."""
+    """Copy USB *filename* into the gcodes root; returns (local name, reused, key)."""
     root = gcode_root.resolve()
     rel = filename.strip("/")
     if not helper_methods.is_usb_path(rel):
@@ -344,22 +300,8 @@ def import_usb_gcode(
         final = _indexed_copy(root, key)
         reused = final is not None
         if final is None:
-            copies = root / COPIES_DIR_NAME
-            try:
-                copies.mkdir()
-                logger.warning(
-                    "Recreated %s, its new copy waits for the settle check",
-                    COPIES_DIR_NAME,
-                )
-            except FileExistsError:
-                pass
-            final = _copy_atomic(src, src_st, copies, _tmp_dir(root, copies), cancelled)
-            # Only after a commit: a failed import must not cost a cached copy.
-            spare = {job_file, final.relative_to(root).as_posix()}
-            try:
-                _prune_copies(root, MAX_COPIES, spare)
-            except OSError as e:
-                logger.warning("Could not prune %s: %s", COPIES_DIR_NAME, e)
+            # Never pruned: root gcodes are the user's files once imported.
+            final = _copy_atomic(src, src_st, root, _tmp_dir(root, root), cancelled)
     except OSError as e:
         raise UsbImportError(
             f"Copy failed, was the USB drive removed? ({e.strerror})"
@@ -385,7 +327,6 @@ class UsbImportTask(QtCore.QRunnable):
         token: int,
         gcode_root: pathlib.Path,
         filename: str,
-        job_file: str = "",
         cancelled: threading.Event | None = None,
     ) -> None:
         super().__init__()
@@ -395,7 +336,6 @@ class UsbImportTask(QtCore.QRunnable):
         self._token = token
         self._gcode_root = gcode_root
         self._filename = filename
-        self._job_file = job_file
         self._cancelled = cancelled
 
     def _report(self, local: str, key: str, reused: bool, error: str) -> None:
@@ -412,7 +352,7 @@ class UsbImportTask(QtCore.QRunnable):
         """Copy, then report the local copy or the error text."""
         try:
             local, reused, key = import_usb_gcode(
-                self._gcode_root, self._filename, self._job_file, self._cancelled
+                self._gcode_root, self._filename, self._cancelled
             )
         except UsbImportError as e:
             logger.warning("USB import of %s failed: %s", self._filename, e)
