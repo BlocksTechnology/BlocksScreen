@@ -32,6 +32,9 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._setup_ui()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self._thumbnail = QtGui.QImage()
+        self._thumbnail_pixmap = QtGui.QPixmap()
+        self._shown_key: tuple = ()
         self.thumbnail = self._blocksthumbnail
         self._thumbnails: list = []
         self._current_gcode: str = ""
@@ -141,6 +144,9 @@ class ConfirmWidget(QtWidgets.QWidget):
     @thumbnail.setter
     def thumbnail(self, image: QtGui.QImage) -> None:
         """Convert to a QPixmap once here, not on every paint."""
+        # The placeholder is re-set per file; reconverting it mints a new cacheKey.
+        if not image.isNull() and image.cacheKey() == self._thumbnail.cacheKey():
+            return
         self._thumbnail = image
         self._thumbnail_pixmap = QtGui.QPixmap.fromImage(image)
 
@@ -155,8 +161,13 @@ class ConfirmWidget(QtWidgets.QWidget):
 
         # Scene rectangle (available display area)
         graphics_rect = self.cf_thumbnail.rect().toRectF()
+        # Paints far outnumber thumbnail or size changes; rescale only on a change.
+        shown_key = (self._thumbnail_pixmap.cacheKey(), graphics_rect.size())
+        if shown_key == self._shown_key:
+            return
+        self._shown_key = shown_key
 
-        pixmap = BlocksPixmap.get(self._thumbnail_pixmap, graphics_rect)
+        pixmap = BlocksPixmap.scaled(self._thumbnail_pixmap, graphics_rect)
 
         # Centering offsets
         adjusted_x = (graphics_rect.width() - pixmap.width()) / 2.0

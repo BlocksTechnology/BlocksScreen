@@ -1573,7 +1573,9 @@ class MainWindow(QtWidgets.QMainWindow):
         tab.setObjectName(name)
         tab.setMinimumSize(QtCore.QSize(720, 420))
         tab.setMaximumSize(QtCore.QSize(1024, 720))
-        size = self.main_content_widget.iconSize()
+        # Device pixels, or the menu blurs on a HiDPI screen.
+        dpr = QtGui.QGuiApplication.instance().devicePixelRatio()
+        size = self.main_content_widget.iconSize() * dpr
         icon = QtGui.QIcon()
         for art, mode, state in (
             (normal, QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off),
@@ -1581,15 +1583,13 @@ class MainWindow(QtWidgets.QMainWindow):
             (blocked, QtGui.QIcon.Mode.Disabled, QtGui.QIcon.State.On),
         ):
             # A PNG QIcon keeps its 402x366 decode alive, so hand Qt the scaled copy only.
-            icon.addPixmap(
-                BlocksPixmap.source(art).scaled(
-                    size,
-                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                    QtCore.Qt.TransformationMode.SmoothTransformation,
-                ),
-                mode,
-                state,
+            scaled = BlocksPixmap.source(art).scaled(
+                size,
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
             )
+            scaled.setDevicePixelRatio(dpr)
+            icon.addPixmap(scaled, mode, state)
         self.main_content_widget.addTab(tab, icon, "")
         return tab
 

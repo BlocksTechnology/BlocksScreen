@@ -409,7 +409,7 @@ class FilesPage(QtWidgets.QWidget):
             self._get_display_name(filename),
             right,
             None,
-            BlocksPixmap.get(Icon.ARROW_RIGHT),
+            Icon.ARROW_RIGHT,
         )
 
     def _row(
@@ -417,7 +417,7 @@ class FilesPage(QtWidgets.QWidget):
         text: str,
         right_text: str,
         left_icon: QtGui.QPixmap | None,
-        right_icon: QtGui.QPixmap | None,
+        right_icon: QtGui.QPixmap | Icon | None,
     ) -> ListItem:
         """ListItem with this page's sizing and flags."""
         return ListItem(

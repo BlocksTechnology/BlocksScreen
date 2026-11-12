@@ -21,7 +21,8 @@ class ListItem:
 
     color: str = "#dfdfdf"
     color_left_icon: bool = False
-    right_icon: QtGui.QPixmap | None = None
+    # An Icon renders straight at the row's size; a QPixmap is resampled.
+    right_icon: QtGui.QPixmap | Icon | None = None
     left_icon: QtGui.QPixmap | None = None
 
     selected: bool = False
@@ -370,10 +371,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if item.not_clickable:
             painter.restore()
             return
+        right_icon = item.right_icon
         if item.allow_expand and item.needs_expansion:
-            item.right_icon = BlocksPixmap.get(
-                Icon.ARROW_DOWN if item.is_expanded else Icon.ARROW_RIGHT
-            )
+            right_icon = Icon.ARROW_DOWN if item.is_expanded else Icon.ARROW_RIGHT
 
         pressed_color = QtGui.QColor("#1A8FBF")
         pressed_color.setAlpha(90 if item.selected else 20)
@@ -391,9 +391,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             ellipse_size,
         )
 
-        if item.right_icon:
+        if right_icon:
             painter.drawPixmap(
-                ellipse_rect.toRect(), BlocksPixmap.get(item.right_icon, ellipse_rect)
+                ellipse_rect.toRect(), BlocksPixmap.get(right_icon, ellipse_rect)
             )
 
         left_icon_rect = QtCore.QRectF(
