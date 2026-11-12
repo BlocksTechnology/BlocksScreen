@@ -1007,9 +1007,9 @@ class MainWindow(QtWidgets.QMainWindow):
         _logger.debug("Successfully went back a page.")
 
     @QtCore.pyqtSlot(int, list, name="forget-pages")
-    def forget_pages(self, tab_index: int, panels: list) -> None:
+    def forget_pages(self, tab_index: int, panels: list[int]) -> None:
         """Drop back-history entries of pages whose content is gone."""
-        kept: list = []
+        kept: list[list[int]] = []
         for entry in self.index_stack:
             gone = entry[0] == tab_index and entry[1] in panels
             if not gone and (not kept or kept[-1] != entry):  # no Back to the same page

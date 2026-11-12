@@ -451,7 +451,7 @@ class TestUsbRemovedLeavesStalePages:
             stack=[pages[n] for n in stack],
             isVisible=lambda: True,
             request_forget_pages=MagicMock(),
-            _on_gone_drive=PrintTab._on_gone_drive,
+            _is_on_removed_drive=PrintTab._is_on_removed_drive,
         )
         tab.currentWidget = lambda: tab.stack[-1]
         tab.back_button = lambda: tab.stack.pop()
