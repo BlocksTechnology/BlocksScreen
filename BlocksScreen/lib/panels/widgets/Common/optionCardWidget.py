@@ -1,5 +1,6 @@
 import typing
 
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -268,7 +269,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.continue_button.setFlat(True)
         self.continue_button.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
+            BlocksPixmap.get(Icon.RIGHT_ARROW),
         )
         self.continue_button.setObjectName("continue_button")
 

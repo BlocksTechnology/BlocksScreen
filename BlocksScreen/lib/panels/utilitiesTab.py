@@ -12,6 +12,7 @@ from lib.panels.widgets.UtilitiesTab.routinePage import RoutineCheckPage
 from lib.panels.widgets.UtilitiesTab.troubleshootPage import TroubleshootPage
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -212,7 +213,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_config_btn.setMaximumSize(QtCore.QSize(250, 80))
         self.up_config_btn.setFont(font)
         self.up_config_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/printer_settings.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.PRINTER_SETTINGS)
         )
         self.up_config_btn.setObjectName("up_config_btn")
         self.up_content_layout.addWidget(self.up_config_btn, 0, 0, 1, 1)
@@ -222,9 +223,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_leds_btn.setMinimumSize(QtCore.QSize(250, 80))
         self.up_leds_btn.setMaximumSize(QtCore.QSize(250, 80))
         self.up_leds_btn.setFont(font)
-        self.up_leds_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
-        )
+        self.up_leds_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.LEDS))
         self.up_leds_btn.setObjectName("up_leds_btn")
         self.up_content_layout.addWidget(self.up_leds_btn, 0, 1, 1, 1)
 
@@ -234,7 +233,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_routine_check_btn.setMaximumSize(QtCore.QSize(250, 80))
         self.up_routine_check_btn.setFont(font)
         self.up_routine_check_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/routine.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.ROUTINE)
         )
         self.up_routine_check_btn.setObjectName("up_routine_check_btn")
         self.up_content_layout.addWidget(self.up_routine_check_btn, 1, 0, 1, 1)
@@ -246,7 +245,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_axes_btn.setFont(font)
         self.up_axes_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
+            BlocksPixmap.get(Icon.AXIS_MAINTENANCE),
         )
         self.up_axes_btn.setObjectName("up_axes_btn")
         self.up_content_layout.addWidget(self.up_axes_btn, 1, 1, 1, 1)
@@ -258,7 +257,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_update_btn.setFont(font)
         self.up_update_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg"),
+            BlocksPixmap.get(Icon.UPDATE_SOFTWARE_ICON),
         )
         self.up_update_btn.setObjectName("up_update_btn")
         self.up_content_layout.addWidget(self.up_update_btn, 2, 0, 1, 1)
@@ -270,7 +269,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_input_shaper_btn.setFont(font)
         self.up_input_shaper_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper.svg"),
+            BlocksPixmap.get(Icon.INPUT_SHAPER),
         )
         self.up_input_shaper_btn.setObjectName("up_input_shaper_btn")
         self.up_content_layout.addWidget(self.up_input_shaper_btn, 2, 1, 1, 1)

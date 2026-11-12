@@ -22,6 +22,9 @@ _LITERAL = re.compile(
     r'|[\w.-][\w .-]*\.[A-Za-z][A-Za-z0-9]{1,4}))["\']'
 )
 
+# Stylesheet keys carry no quote next to the ':', so _LITERAL misses them.
+_CSS_URL = re.compile(r"url\((:/?[^)\s][^)]*/[^)]*)\)")
+
 
 def _canonical(key: str) -> str:
     """Normalize a bare ':' prefix to ':/', the two forms Qt treats as equivalent."""
@@ -49,16 +52,17 @@ def _qrc_keys() -> set[str]:
 
 
 def _literal_sites() -> dict[str, list[str]]:
-    """Map every ':/' literal under BlocksScreen/lib to its 'file:line' call sites."""
+    """Map every ':/' literal and stylesheet url() under BlocksScreen/lib to its sites."""
     sites: dict[str, list[str]] = {}
     for module in sorted((PKG_ROOT / "lib").rglob("*.py")):
         if module.name.endswith("_rc.py"):
             continue
         text = module.read_text(encoding="utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), 1):
-            for match in _LITERAL.finditer(line):
-                where = f"{module.relative_to(REPO_ROOT)}:{number}"
-                sites.setdefault(match.group(1), []).append(where)
+            for pattern in (_LITERAL, _CSS_URL):
+                for match in pattern.finditer(line):
+                    where = f"{module.relative_to(REPO_ROOT)}:{number}"
+                    sites.setdefault(match.group(1), []).append(where)
     return sites
 
 

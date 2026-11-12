@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from functools import partial
 
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.blocks_slider import BlocksSlider
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -52,7 +53,7 @@ class LedsPage(QtWidgets.QStackedWidget):
         self.leds: dict[str, LedState] = {}
         self.current_led: str | None = None
 
-        self._led_pixmap = QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
+        self._led_pixmap = BlocksPixmap.get(Icon.LEDS)
 
         self._setup_ui()
         self.leds_back_btn.clicked.connect(self.request_back_button.emit)
@@ -228,9 +229,7 @@ class LedsPage(QtWidgets.QStackedWidget):
         self.leds_back_btn.setSizePolicy(sizePolicy)
         self.leds_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.leds_back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.leds_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.leds_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.leds_header_layout.addWidget(self.leds_back_btn)
 
         self.verticalLayout_4.addLayout(self.leds_header_layout)
@@ -298,7 +297,7 @@ class LedsPage(QtWidgets.QStackedWidget):
         self.leds_slider_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.leds_slider_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.leds_slider_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.BACK)
         )
         self.leds_slider_back_btn.setObjectName("leds_slider_back_btn")
         self.leds_slider_header_layout.addWidget(self.leds_slider_back_btn)
@@ -354,7 +353,7 @@ class LedsPage(QtWidgets.QStackedWidget):
         self.leds_off_btn.setFixedSize(QtCore.QSize(250, 80))
         self.leds_off_btn.setFont(font)
         self.leds_off_btn.setProperty("class", "menu_btn")
-        self.leds_off_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LEDs_off.svg"))
+        self.leds_off_btn.setPixmap(BlocksPixmap.get(Icon.LEDS_OFF))
         self.leds_off_btn.setObjectName("leds_off_btn")
         self.leds_off_btn.setText("OFF")
         self.leds_buttons_layout.addWidget(self.leds_off_btn)

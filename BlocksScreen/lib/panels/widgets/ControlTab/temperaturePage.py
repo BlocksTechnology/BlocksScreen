@@ -4,6 +4,7 @@ import contextlib
 import typing
 
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -170,9 +171,7 @@ class TemperaturePage(QtWidgets.QWidget):
         self.temp_back_button.setSizePolicy(sizePolicy)
         self.temp_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.temp_back_button.setMaximumSize(QtCore.QSize(60, 60))
-        self.temp_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.temp_back_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.temp_back_button.setObjectName("temp_back_button")
 
         self.horizontalLayout.addWidget(self.temp_back_button)
@@ -215,7 +214,7 @@ class TemperaturePage(QtWidgets.QWidget):
         self.extruder_temp_display.setFont(font)
         self.extruder_temp_display.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"),
+            BlocksPixmap.get(Icon.NOZZLE),
         )
         self.extruder_temp_display.setObjectName("extruder_temp_display")
         self.tp_content_horizontal_layout.addWidget(self.extruder_temp_display)
@@ -227,9 +226,7 @@ class TemperaturePage(QtWidgets.QWidget):
         self.bed_temp_display.setFont(font)
         self.bed_temp_display.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(
-                ":/temperature_related/media/btn_icons/temperature_plate.svg"
-            ),
+            BlocksPixmap.get(Icon.TEMPERATURE_PLATE),
         )
         self.bed_temp_display.setObjectName("bed_temp_display")
 
@@ -256,7 +253,7 @@ class TemperaturePage(QtWidgets.QWidget):
         self.cooldown_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.cooldown_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/temperature_related/media/btn_icons/cooldown.svg"),
+            BlocksPixmap.get(Icon.COOLDOWN),
         )
         self.cooldown_btn.setObjectName("cooldown_btn")
 
@@ -279,7 +276,7 @@ class TemperaturePage(QtWidgets.QWidget):
         )
         self.temperature_cooldown_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/temperature_related/media/btn_icons/heatsoak_icon.svg"),
+            BlocksPixmap.get(Icon.HEATSOAK_ICON),
         )
         self.temperature_cooldown_btn.setObjectName("temperature_cooldown_btn")
         self.gridLayout.addWidget(self.temperature_cooldown_btn, 2, 0, 1, 1)

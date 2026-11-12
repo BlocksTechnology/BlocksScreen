@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -384,7 +385,7 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.rp_header_layout.addWidget(self.rp_header_title)
 
         self.back_button = IconButton(parent=self)
-        self.back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.back_button.setPixmap(BlocksPixmap.get(Icon.BACK))
         self.back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.rp_header_layout.addWidget(self.back_button)
@@ -410,7 +411,7 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.rp_button_1.setFont(font)
         self.rp_button_1.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg"),
+            BlocksPixmap.get(Icon.FAN_CAGE),
         )
         self.rp_content_layout.addWidget(self.rp_button_1, 0, 0, 1, 1)
 
@@ -421,7 +422,7 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.rp_button_2.setFont(font)
         self.rp_button_2.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
+            BlocksPixmap.get(Icon.AXIS_MAINTENANCE),
         )
         self.rp_content_layout.addWidget(self.rp_button_2, 0, 1, 1, 1)
 
@@ -432,7 +433,7 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.rp_button_3.setFont(font)
         self.rp_button_3.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"),
+            BlocksPixmap.get(Icon.NOZZLE),
         )
         self.rp_content_layout.addWidget(self.rp_button_3, 1, 0, 1, 1)
 
@@ -443,9 +444,7 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.rp_button_4.setFont(font)
         self.rp_button_4.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(
-                ":/temperature_related/media/btn_icons/temperature_plate.svg"
-            ),
+            BlocksPixmap.get(Icon.TEMPERATURE_PLATE),
         )
         self.rp_content_layout.addWidget(self.rp_button_4, 1, 1, 1, 1)
 

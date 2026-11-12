@@ -7,6 +7,7 @@ import helper_methods
 
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_Scrollbar import CustomScrollBar
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -293,9 +294,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.back_btn.setFlat(True)
-        self.back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.back_btn.setObjectName("md_back_btn")
         header.addWidget(self.back_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight)
         outer.addLayout(header)

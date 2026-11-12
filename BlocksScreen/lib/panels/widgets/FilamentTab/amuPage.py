@@ -6,6 +6,7 @@ from devices.amu import AMUManager, FilamentPos, MMUState
 from lib.panels.widgets.FilamentTab.amuWidgets import SpoolCarousel, SpoolInfoPanel
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -218,9 +219,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.main_back_button.setSizePolicy(sizePolicy)
         self.main_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.main_back_button.setMaximumSize(QtCore.QSize(60, 60))
-        self.main_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.main_back_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.main_back_button.setObjectName("main_back_button")
         self.filament_page_header_layout.addWidget(self.main_back_button)
 

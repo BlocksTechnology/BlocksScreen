@@ -4,6 +4,7 @@ import re
 import typing
 
 from lib.panels.widgets.Common.optionCardWidget import OptionCard
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.gcode import fan_speed_gcode
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -33,9 +34,9 @@ class FansPage(QtWidgets.QWidget):
         self.fans_back_btn.clicked.connect(self.request_back.emit)
 
         self.path = {
-            "fan_cage": QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg"),
-            "blower": QtGui.QPixmap(":/fan_related/media/btn_icons/blower.svg"),
-            "fan": QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg"),
+            "fan_cage": BlocksPixmap.get(Icon.FAN_CAGE),
+            "blower": BlocksPixmap.get(Icon.BLOWER),
+            "fan": BlocksPixmap.get(Icon.FAN),
         }
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
@@ -165,9 +166,7 @@ class FansPage(QtWidgets.QWidget):
         self.fans_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.fans_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.fans_back_btn.setFont(font)
-        self.fans_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.fans_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.fans_back_btn.setObjectName("fans_back_btn")
 
         self.fans_header_layout.addWidget(self.fans_back_btn)

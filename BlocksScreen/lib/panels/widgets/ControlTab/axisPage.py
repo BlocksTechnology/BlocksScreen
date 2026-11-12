@@ -2,6 +2,7 @@
 
 import typing
 
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -169,9 +170,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.mva_back_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.mva_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.mva_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.mva_back_btn.setObjectName("mva_back_btn")
         self.mva_header_layout.addWidget(
             self.mva_back_btn,
@@ -198,9 +197,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_home_x_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_home_x_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.mva_home_x_btn.setObjectName("mva_home_x_btn")
-        self.mva_home_x_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_x.svg")
-        )
+        self.mva_home_x_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.HOME_X))
         self.mva_home_axis_layout.addWidget(
             self.mva_home_x_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
@@ -210,9 +207,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_home_y_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_home_y_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.mva_home_y_btn.setObjectName("mva_home_y_btn")
-        self.mva_home_y_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_y.svg")
-        )
+        self.mva_home_y_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.HOME_Y))
         self.mva_home_axis_layout.addWidget(
             self.mva_home_y_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
@@ -222,9 +217,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_home_z_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_home_z_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.mva_home_z_btn.setObjectName("mva_home_z_btn")
-        self.mva_home_z_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_z.svg")
-        )
+        self.mva_home_z_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.HOME_Z))
         self.mva_home_axis_layout.addWidget(
             self.mva_home_z_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
@@ -235,7 +228,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_home_all_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.mva_home_all_btn.setObjectName("mva_home_all_btn")
         self.mva_home_all_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.HOME_ALL)
         )
         self.mva_home_axis_layout.addWidget(
             self.mva_home_all_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -359,9 +352,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_left_btn.setSizePolicy(sizePolicy)
         self.mva_left_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_left_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.mva_left_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/left_arrow.svg")
-        )
+        self.mva_left_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.LEFT_ARROW))
         self.mva_left_btn.setObjectName("mva_left_btn")
         self.gridLayout_2.addWidget(
             self.mva_left_btn, 1, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
@@ -373,7 +364,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_right_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.mva_right_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
+            BlocksPixmap.get(Icon.RIGHT_ARROW),
         )
         self.mva_right_btn.setObjectName("mva_right_btn")
         self.gridLayout_2.addWidget(
@@ -384,9 +375,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_down_btn.setSizePolicy(sizePolicy)
         self.mva_down_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_down_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.mva_down_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
-        )
+        self.mva_down_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.DOWN_ARROW))
         self.mva_down_btn.setObjectName("mva_down_btn")
         self.gridLayout_2.addWidget(
             self.mva_down_btn, 2, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignTop
@@ -396,9 +385,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_up_btn.setSizePolicy(sizePolicy)
         self.mva_up_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_up_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.mva_up_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
-        )
+        self.mva_up_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.UP_ARROW))
         self.mva_up_btn.setObjectName("mva_up_btn")
         self.gridLayout_2.addWidget(
             self.mva_up_btn, 0, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignBottom
@@ -408,9 +395,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_middle.setSizePolicy(sizePolicy)
         self.mva_middle.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_middle.setMaximumSize(QtCore.QSize(60, 60))
-        self.mva_middle.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/center_arrows.svg")
-        )
+        self.mva_middle.setProperty("icon_pixmap", BlocksPixmap.get(Icon.CENTER_ARROWS))
         self.mva_middle.setObjectName("mva_middle")
 
         self.gridLayout_2.addWidget(self.mva_middle, 1, 1, 1, 1)
@@ -431,9 +416,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_z_up.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_z_up.setMaximumSize(QtCore.QSize(60, 60))
         self.mva_z_up.setIconSize(QtCore.QSize(16, 16))
-        self.mva_z_up.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
-        )
+        self.mva_z_up.setProperty("icon_pixmap", BlocksPixmap.get(Icon.UP_ARROW))
         self.mva_z_up.setObjectName("mva_z_up")
         self.mva_z_layout.addWidget(
             self.mva_z_up, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -443,9 +426,7 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_z_down.setSizePolicy(sizePolicy)
         self.mva_z_down.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_z_down.setMaximumSize(QtCore.QSize(60, 60))
-        self.mva_z_down.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
-        )
+        self.mva_z_down.setProperty("icon_pixmap", BlocksPixmap.get(Icon.DOWN_ARROW))
         self.mva_z_down.setObjectName("mva_z_down")
         self.mva_z_layout.addWidget(
             self.mva_z_down, 0, QtCore.Qt.AlignmentFlag.AlignHCenter

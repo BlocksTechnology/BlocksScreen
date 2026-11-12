@@ -12,6 +12,7 @@ from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_Scrollbar import CustomScrollBar
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from updater.models import PRINTER_BUSY, ComponentStatus
 
@@ -608,7 +609,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.update_back_btn = IconButton(self)
         self.update_back_btn.setFixedSize(QtCore.QSize(66, 66))
         self.update_back_btn.setFlat(True)
-        self.update_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.update_back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         header.addWidget(self.update_back_btn)
 
         title = QtWidgets.QLabel("Update Manager", self)
@@ -632,7 +633,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.reload_btn = IconButton(self)
         self.reload_btn.setFixedSize(QtCore.QSize(66, 66))
         self.reload_btn.setFlat(True)
-        self.reload_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg"))
+        self.reload_btn.setPixmap(BlocksPixmap.get(Icon.REFRESH))
         header.addWidget(self.reload_btn)
 
         content.addLayout(header, 0)
@@ -695,9 +696,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.update_all_btn.setMaximumSize(QtCore.QSize(360, 70))
         self.update_all_btn.setFont(QtGui.QFont(self._font_family, 22))
         self.update_all_btn.setText("Update")
-        self.update_all_btn.setPixmap(
-            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
-        )
+        self.update_all_btn.setPixmap(BlocksPixmap.get(Icon.UPDATE_SOFTWARE_ICON))
         content.addWidget(self.update_all_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
         self.update_all_btn.hide()
 
@@ -713,7 +712,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._toast_timer.setInterval(12000)
         self._toast_timer.timeout.connect(self._toast.hide)
 
-        _arrow = QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg")
+        _arrow = BlocksPixmap.get(Icon.ARROW_RIGHT)
         self._chevron_right: QtGui.QPixmap = _arrow
         self._chevron_down: QtGui.QPixmap = _arrow.transformed(
             QtGui.QTransform().rotate(90),

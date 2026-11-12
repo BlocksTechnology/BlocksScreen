@@ -3,6 +3,7 @@ from typing import ClassVar
 from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -17,9 +18,9 @@ class NotificationPage(QtWidgets.QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._ICON_INFO = QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
-        self._ICON_WARN = QtGui.QPixmap(":/ui/media/btn_icons/troubleshoot.svg")
-        self._ICON_ERROR = QtGui.QPixmap(":/ui/media/btn_icons/error.svg")
+        self._ICON_INFO = BlocksPixmap.get(Icon.INFO)
+        self._ICON_WARN = BlocksPixmap.get(Icon.TROUBLESHOOT)
+        self._ICON_ERROR = BlocksPixmap.get(Icon.ERROR)
         self._setup_ui()
         self.selected_item: ListItem | None = None
         self.popup = Popup(self)
@@ -264,7 +265,7 @@ class NotificationPage(QtWidgets.QWidget):
         self.back_btn = IconButton(self)
         self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         self.header_content_layout.addWidget(
             self.back_btn
         )  # alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -411,9 +412,7 @@ class NotificationPage(QtWidgets.QWidget):
         self.delete_btn.setSizePolicy(sizePolicy)
         self.delete_btn.setText("Delete")
         self.delete_btn.setEnabled(False)
-        self.delete_btn.setPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
-        )
+        self.delete_btn.setPixmap(BlocksPixmap.get(Icon.GARBAGE_ICON))
         self.button_box.addWidget(
             self.delete_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
@@ -426,9 +425,7 @@ class NotificationPage(QtWidgets.QWidget):
         self.delete_all_btn.setPalette(palette)
         self.delete_all_btn.setSizePolicy(sizePolicy)
         self.delete_all_btn.setText("Delete all")
-        self.delete_all_btn.setPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
-        )
+        self.delete_all_btn.setPixmap(BlocksPixmap.get(Icon.GARBAGE_ICON))
         self.button_box.addWidget(
             self.delete_all_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )

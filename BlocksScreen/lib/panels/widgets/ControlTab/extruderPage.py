@@ -5,6 +5,7 @@ import typing
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -182,9 +183,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.exp_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.exp_back_btn.setFont(font)
-        self.exp_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.exp_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.exp_back_btn.setObjectName("exp_back_btn")
 
         self.exp_header_layout.addWidget(
@@ -375,7 +374,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_unextrude_btn.setFont(font)
         self.exp_unextrude_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"),
+            BlocksPixmap.get(Icon.EXTRUDE),
         )
         self.exp_unextrude_btn.setObjectName("exp_unextrude_btn")
 
@@ -391,7 +390,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_nozzle_icon_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.exp_nozzle_icon_label.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"),
+            BlocksPixmap.get(Icon.NOZZLE),
         )
         self.exp_nozzle_icon_label.setObjectName("exp_nozzle_icon_label")
         self.exp_buttons_layout.addWidget(self.exp_nozzle_icon_label)
@@ -409,7 +408,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_extrude_btn.setFont(font)
         self.exp_extrude_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"),
+            BlocksPixmap.get(Icon.EXTRUDE),
         )
         self.exp_extrude_btn.setObjectName("exp_extrude_btn")
 

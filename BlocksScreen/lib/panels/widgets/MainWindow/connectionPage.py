@@ -7,6 +7,7 @@ import typing
 
 from lib.moonrakerComm import MoonWebSocket
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -376,7 +377,7 @@ class ConnectionPage(QtWidgets.QFrame):
         )
         self.reboot_system_button.setFlat(True)
         self.reboot_system_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/system/media/btn_icons/reboot.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.REBOOT)
         )
         self.reboot_system_button.setProperty("has_text", True)
         self.reboot_system_button.setProperty("text_formatting", "bottom")
@@ -401,7 +402,7 @@ class ConnectionPage(QtWidgets.QFrame):
         )
         self.restart_klipper_button.setFlat(True)
         self.restart_klipper_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/system/media/btn_icons/restart_klipper.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.RESTART_KLIPPER)
         )
         self.restart_klipper_button.setProperty("has_text", True)
         self.restart_klipper_button.setProperty("text_formatting", "bottom")
@@ -420,7 +421,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.notification_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.notification_button.setFlat(True)
         self.notification_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/notification.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.NOTIFICATION)
         )
         self.notification_button.setProperty("has_text", True)
         self.notification_button.setProperty("text_formatting", "bottom")
@@ -446,7 +447,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.update_page_button.setFlat(True)
         self.update_page_button.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg"),
+            BlocksPixmap.get(Icon.UPDATE_SOFTWARE_ICON),
         )
         self.update_page_button.setProperty("has_text", True)
         self.update_page_button.setProperty("text_formatting", "bottom")
@@ -465,9 +466,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.wifi_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.wifi_button.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
         self.wifi_button.setFlat(True)
-        self.wifi_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/network/media/btn_icons/wifi_config.svg")
-        )
+        self.wifi_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.WIFI_CONFIG))
         self.wifi_button.setProperty("has_text", True)
         self.wifi_button.setProperty("text_formatting", "bottom")
         self.wifi_button.setProperty("class", "system_control_btn")

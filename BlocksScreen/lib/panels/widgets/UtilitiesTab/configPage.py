@@ -8,6 +8,7 @@ from lib.panels.widgets.Common.numpadPage import CustomNumpad
 from lib.utils.blocks_field import BlocksField
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_Scrollbar import CustomScrollBar
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -321,9 +322,7 @@ class ConfigPage(QtWidgets.QWidget):
         self.config_back_btn.setSizePolicy(sizePolicy)
         self.config_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.config_back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.config_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.config_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.config_header_layout.addWidget(self.config_back_btn)
         self.verticalLayout_2.addLayout(self.config_header_layout)
 

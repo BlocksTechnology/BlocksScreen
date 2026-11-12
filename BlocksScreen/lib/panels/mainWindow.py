@@ -1503,53 +1503,54 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.printTab = self._make_tab(
             "printTab",
-            ":/icons/media/main_menu/ICON_home.png",
-            ":/icons/media/main_menu/ICON_home_pressed.png",
-            ":/icons/media/main_menu/ICON_home_blocked.png",
+            Icon.MENU_HOME,
+            Icon.MENU_HOME_PRESSED,
+            Icon.MENU_HOME_BLOCKED,
         )
         self.filamentTab = self._make_tab(
             "filamentTab",
-            ":/icons/media/main_menu/ICON_filament.png",
-            ":/icons/media/main_menu/ICON_filament_pressed.png",
-            ":/icons/media/main_menu/ICON_filamente_blocked.png",
+            Icon.MENU_FILAMENT,
+            Icon.MENU_FILAMENT_PRESSED,
+            Icon.MENU_FILAMENT_BLOCKED,
         )
         self.controlTab = self._make_tab(
             "controlTab",
-            ":/icons/media/main_menu/ICON_control.png",
-            ":/icons/media/main_menu/ICON_control_pressed.png",
-            ":/icons/media/main_menu/ICON_control_blocked.png",
+            Icon.MENU_CONTROL,
+            Icon.MENU_CONTROL_PRESSED,
+            Icon.MENU_CONTROL_BLOCKED,
         )
         self.utilitiesTab = self._make_tab(
             "utilitiesTab",
-            ":/icons/media/main_menu/ICON_utilities.png",
-            ":/icons/media/main_menu/ICON_utilities_pressed.png",
-            ":/icons/media/main_menu/ICON_utilities_blocked.png",
+            Icon.MENU_UTILITIES,
+            Icon.MENU_UTILITIES_PRESSED,
+            Icon.MENU_UTILITIES_BLOCKED,
         )
         self.main_content_widget.setCurrentIndex(0)
 
     def _make_tab(
-        self, name: str, normal: str, pressed: str, blocked: str
+        self, name: str, normal: Icon, pressed: Icon, blocked: Icon
     ) -> QtWidgets.QWidget:
         tab = QtWidgets.QWidget()
         tab.setObjectName(name)
         tab.setMinimumSize(QtCore.QSize(720, 420))
         tab.setMaximumSize(QtCore.QSize(1024, 720))
+        # Device pixels, or the menu blurs on a HiDPI screen.
+        dpr = QtGui.QGuiApplication.instance().devicePixelRatio()
+        size = self.main_content_widget.iconSize() * dpr
         icon = QtGui.QIcon()
-        icon.addPixmap(
-            QtGui.QPixmap(normal),
-            QtGui.QIcon.Mode.Normal,
-            QtGui.QIcon.State.Off,
-        )
-        icon.addPixmap(
-            QtGui.QPixmap(pressed),
-            QtGui.QIcon.Mode.Normal,
-            QtGui.QIcon.State.On,
-        )
-        icon.addPixmap(
-            QtGui.QPixmap(blocked),
-            QtGui.QIcon.Mode.Disabled,
-            QtGui.QIcon.State.On,
-        )
+        for art, mode, state in (
+            (normal, QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off),
+            (pressed, QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.On),
+            (blocked, QtGui.QIcon.Mode.Disabled, QtGui.QIcon.State.On),
+        ):
+            # A PNG QIcon keeps its 402x366 decode alive, so hand Qt the scaled copy only.
+            scaled = BlocksPixmap.source(art).scaled(
+                size,
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
+            scaled.setDevicePixelRatio(dpr)
+            icon.addPixmap(scaled, mode, state)
         self.main_content_widget.addTab(tab, icon, "")
         return tab
 

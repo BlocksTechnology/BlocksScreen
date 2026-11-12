@@ -23,6 +23,7 @@ def _resources(qapp):
 
 
 def _bytes(pixmap: QtGui.QPixmap) -> int:
+    """Return the pixmap's buffer size in bytes."""
     return pixmap.width() * pixmap.height() * pixmap.depth() // 8
 
 

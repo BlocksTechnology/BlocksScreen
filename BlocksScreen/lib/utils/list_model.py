@@ -2,6 +2,7 @@ import typing
 from collections import OrderedDict
 from dataclasses import dataclass, field
 
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
 _TEXT_LEFT_PADDING = 10  # gap between the left icon and the text, all list pages
@@ -281,7 +282,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         self._tinted_cache: OrderedDict[tuple[int, int, int, str], QtGui.QPixmap] = (
             OrderedDict()
         )
-        self._arrow_cache: dict[bool, QtGui.QPixmap] = {}
 
     def _get_scaled(
         self,
@@ -329,18 +329,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if len(self._tinted_cache) > 64:
             self._tinted_cache.popitem(last=False)
         return tinted
-
-    def _expand_arrow(self, expanded: bool) -> QtGui.QPixmap:
-        """Arrow pixmap, decoded once rather than per paint."""
-        arrow = self._arrow_cache.get(expanded)
-        if arrow is None:
-            arrow = QtGui.QPixmap(
-                ":/arrow_icons/media/btn_icons/arrow_down.svg"
-                if expanded
-                else ":/arrow_icons/media/btn_icons/arrow_right.svg"
-            )
-            self._arrow_cache[expanded] = arrow
-        return arrow
 
     def clear(self) -> None:
         """Clears delegate indexing"""
@@ -437,7 +425,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.restore()
             return
         if item.allow_expand and item.needs_expansion:
-            item.right_icon = self._expand_arrow(item.is_expanded)
+            item.right_icon = BlocksPixmap.get(
+                Icon.ARROW_DOWN if item.is_expanded else Icon.ARROW_RIGHT
+            )
 
         pressed_color = QtGui.QColor("#1A8FBF")
         pressed_color.setAlpha(90 if item.selected else 20)

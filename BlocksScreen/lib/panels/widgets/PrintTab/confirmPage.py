@@ -6,6 +6,7 @@ from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -211,9 +212,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.file_info_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.file_info_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.file_info_btn.setFlat(True)
-        self.file_info_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg")
-        )
+        self.file_info_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.FILE_ICON))
         self.file_info_btn.setObjectName("file_info_btn")
         self.cf_header_title.insertWidget(
             0, self.file_info_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
@@ -223,9 +222,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.back_btn.setFlat(True)
-        self.back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.cf_header_title.addWidget(
             self.back_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
         )
@@ -277,9 +274,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         font = QtGui.QFont("Momcake", 18)
         self.confirm_button.setFont(font)
         self.confirm_button.setFlat(True)
-        self.confirm_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
-        )
+        self.confirm_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.YES))
         self.confirm_button.setText("Print")
         self.cf_confirm_layout.addWidget(
             self.confirm_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
@@ -291,7 +286,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.delete_file_button.setFont(font)
         self.delete_file_button.setFlat(True)
         self.delete_file_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE_ICON)
         )
         self.delete_file_button.setText("Delete")
         self.cf_confirm_layout.addWidget(

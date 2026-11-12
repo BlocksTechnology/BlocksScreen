@@ -3,6 +3,7 @@ import typing
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.blocks_slider import BlocksSlider
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -224,7 +225,7 @@ class ColorWheelWidget(QtWidgets.QWidget):
         back_btn = IconButton(self)
         back_btn.setFixedSize(60, 60)
         back_btn.setFlat(True)
-        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         back_btn.clicked.connect(self.request_back)
         header.addWidget(back_btn)
         root.addLayout(header)
@@ -269,7 +270,7 @@ class ColorWheelWidget(QtWidgets.QWidget):
         f.setPointSize(16)
         select_btn.setFont(f)
         select_btn.setText("Select")
-        select_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        select_btn.setPixmap(BlocksPixmap.get(Icon.YES))
         select_btn.clicked.connect(self._on_select)
         card_lay.addWidget(select_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
 

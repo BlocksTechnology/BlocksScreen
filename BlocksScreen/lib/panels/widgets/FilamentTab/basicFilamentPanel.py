@@ -11,6 +11,7 @@ from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_field import BlocksField
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -538,9 +539,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.main_back_button.setSizePolicy(sizePolicy)
         self.main_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.main_back_button.setMaximumSize(QtCore.QSize(60, 60))
-        self.main_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.main_back_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.main_back_button.setObjectName("main_back_button")
         self.Basic_fp_header_layout.addWidget(self.main_back_button)
 
@@ -579,7 +578,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.Basic_fp_load_btn.setFont(font)
         self.Basic_fp_load_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"),
+            BlocksPixmap.get(Icon.LOAD_FILAMENT),
         )
         self.Basic_fp_load_btn.setObjectName("Basic_fp_load_btn")
         self.Vlayout.addWidget(self.Basic_fp_load_btn)
@@ -590,7 +589,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.Basic_fp_unload_btn.setFont(font)
         self.Basic_fp_unload_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/filament_related/media/btn_icons/unload_filament.svg"),
+            BlocksPixmap.get(Icon.UNLOAD_FILAMENT),
         )
         self.Basic_fp_unload_btn.setObjectName("Basic_fp_unload_btn")
         self.Vlayout.addWidget(self.Basic_fp_unload_btn)
@@ -601,7 +600,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.Basic_fp_check_btn.setFont(font)
         self.Basic_fp_check_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/filament_related/media/btn_icons/check gate 1.svg"),
+            BlocksPixmap.get(Icon.CHECK_GATE_1),
         )
         self.Basic_fp_check_btn.setObjectName("Basic_fp_check_btn")
         self.Vlayout.addWidget(self.Basic_fp_check_btn)
@@ -667,9 +666,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.fcp_back_button.setSizePolicy(sizePolicy)
         self.fcp_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.fcp_back_button.setMaximumSize(QtCore.QSize(60, 60))
-        self.fcp_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.fcp_back_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.fcp_back_button.setObjectName("fcp_back_button")
         self.fcp_header_layout.addWidget(self.fcp_back_button)
 
@@ -698,7 +695,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             (
                 "load_pla_btn",
                 "PLA",
-                ":/top_bar_icons/media/topbar/pla_filament_topbar.svg",
+                Icon.PLA_FILAMENT_TOPBAR,
                 0,
                 0,
                 FilamentTypes.PLA,
@@ -706,7 +703,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             (
                 "load_petg_btn",
                 "PETG",
-                ":/top_bar_icons/media/topbar/petg_filament_topbar.svg",
+                Icon.PETG_FILAMENT_TOPBAR,
                 0,
                 1,
                 FilamentTypes.PETG,
@@ -714,7 +711,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             (
                 "load_abs_btn",
                 "ABS",
-                ":/top_bar_icons/media/topbar/abs_filament_topbar.svg",
+                Icon.ABS_FILAMENT_TOPBAR,
                 1,
                 0,
                 FilamentTypes.ABS,
@@ -722,7 +719,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             (
                 "load_PP_btn",
                 "PP",
-                ":/top_bar_icons/media/topbar/pp_filament_topbar.svg",
+                Icon.PP_FILAMENT_TOPBAR,
                 1,
                 1,
                 FilamentTypes.PP,
@@ -730,7 +727,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             (
                 "load_nylon_btn",
                 "NYLON",
-                ":/top_bar_icons/media/topbar/nylon_filament_topbar.svg",
+                Icon.NYLON_FILAMENT_TOPBAR,
                 2,
                 0,
                 FilamentTypes.NYLON,
@@ -738,7 +735,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             (
                 "load_PC_btn",
                 "PC",
-                ":/top_bar_icons/media/topbar/pc_filament_topbar.svg",
+                Icon.PC_FILAMENT_TOPBAR,
                 2,
                 1,
                 FilamentTypes.PC,
@@ -750,7 +747,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         font.setPointSize(19)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
 
-        for obj_name, text, pixmap_path, row, col, _filament_type in filament_buttons:
+        for obj_name, text, icon, row, col, _filament_type in filament_buttons:
             btn = BlocksCustomButton(parent=self.fcp)
             btn.setMinimumSize(QtCore.QSize(200, 80))
             btn.setMaximumSize(QtCore.QSize(200, 80))
@@ -760,7 +757,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             btn.clicked.connect(
                 partial(self.change_page, self.indexOf(self.filament_control_page))
             )
-            btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap_path))
+            btn.setProperty("icon_pixmap", BlocksPixmap.get(icon))
             btn.setObjectName(obj_name)
             self.fcp_content_layout.addWidget(btn, row, col, 1, 1)
             self.filament_buttons_list.append((btn, _filament_type))

@@ -6,6 +6,7 @@ from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.Common.optionCardWidget import OptionCard
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -70,7 +71,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self,
             "Automatic\nInput Shaper",
             "Automatic Input Shaper",
-            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_auto.svg"),
+            BlocksPixmap.get(Icon.INPUT_SHAPER_AUTO),
         )  # type: ignore
         self.automatic_card_is.setObjectName("Automatic_IS_Card")
         self.is_content_layout.addWidget(
@@ -84,7 +85,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self,
             "Manual\nInput Shaper",
             "Manual Input Shaper",
-            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_manual.svg"),
+            BlocksPixmap.get(Icon.INPUT_SHAPER_MANUAL),
         )  # type: ignore
         self.manual__card_is.setObjectName("Manual_IS_Card")
         self.is_content_layout.addWidget(
@@ -305,7 +306,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         item = ListItem(
             text=cli_name,
             right_text=recommended,
-            right_icon=QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
+            right_icon=BlocksPixmap.get(Icon.RIGHT_ARROW),
             selected=False,
             _lfontsize=17,
             _rfontsize=9,
@@ -368,9 +369,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.is_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.is_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.is_back_btn.setStyleSheet("")
-        self.is_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.is_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.is_header_layout.addWidget(self.is_back_btn)
 
         self.verticalLayout_13.addLayout(self.is_header_layout)
@@ -419,7 +418,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.update_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.update_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.update_back_btn.setFlat(True)
-        self.update_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.update_back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
 
         self.header_content_layout.addWidget(self.update_back_btn, 0)
         self.update_page_content_layout.addLayout(self.header_content_layout, 0)
@@ -554,7 +553,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.action_btn.setFont(font)
         self.action_btn.setSizePolicy(sizePolicy)
         self.action_btn.setText("Confirm")
-        self.action_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        self.action_btn.setPixmap(BlocksPixmap.get(Icon.YES))
         self.action_btn.hide()
         self.button_box.addWidget(
             self.action_btn,

@@ -19,6 +19,7 @@ from lib.panels.widgets.Common.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -640,9 +641,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.main_print_btn.setStyleSheet("")
         self.main_print_btn.setAutoDefault(False)
         self.main_print_btn.setFlat(True)
-        self.main_print_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/print.svg")
-        )
+        self.main_print_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.PRINT))
         self.main_print_btn.setObjectName("main_print_btn")
         self.save_config_btn = DisplayButton(parent=self.print_page)
         self.save_config_btn.setGeometry(QtCore.QRect(540, 20, 170, 50))
@@ -654,9 +653,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.save_config_btn.setContextMenuPolicy(
             QtCore.Qt.ContextMenuPolicy.NoContextMenu
         )
-        self.save_config_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/save.svg")
-        )
+        self.save_config_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.SAVE))
         self.save_config_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.save_config_btn.setStyleSheet("")
         self.save_config_btn.setAutoDefault(False)

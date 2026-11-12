@@ -1,3 +1,4 @@
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -99,9 +100,7 @@ class TroubleshootPage(QtWidgets.QDialog):
         self.tb_back_btn.setSizePolicy(sizePolicy)
         self.tb_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.tb_back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.tb_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.tb_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
 
         self.leds_slider_header_layout_2.addWidget(self.tb_back_btn)
 

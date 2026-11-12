@@ -2,6 +2,7 @@
 
 import typing
 
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from lib.utils.numpad_button import NumpadButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -383,7 +384,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         btn.setObjectName(name)
         return btn
 
-    def _create_numpad_icon(self, name: str, pixmap: str) -> IconButton:
+    def _create_numpad_icon(self, name: str, icon: Icon) -> IconButton:
         """Create a 60x60 icon key for the numpad enter/clear actions."""
         btn = IconButton(parent=self._numpad_widget)
         btn.setSizePolicy(
@@ -392,7 +393,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         btn.setMinimumSize(QtCore.QSize(60, 60))
         btn.setMaximumSize(QtCore.QSize(60, 60))
         btn.setFlat(True)
-        btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap))
+        btn.setProperty("icon_pixmap", BlocksPixmap.get(icon))
         btn.setProperty("button_type", "icon")
         btn.setObjectName(name)
         return btn
@@ -423,12 +424,8 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self.np_dot.setProperty("position", "left")
         grid.addWidget(self.np_dot, 3, 0)
 
-        self.np_delete = self._create_numpad_icon(
-            "np_delete", ":/dialog/media/btn_icons/no.svg"
-        )
-        self.np_enter = self._create_numpad_icon(
-            "np_enter", ":/dialog/media/btn_icons/yes.svg"
-        )
+        self.np_delete = self._create_numpad_icon("np_delete", Icon.NO)
+        self.np_enter = self._create_numpad_icon("np_enter", Icon.YES)
         grid.addWidget(self.np_delete, 0, 3, 2, 1, QtCore.Qt.AlignmentFlag.AlignCenter)
         grid.addWidget(self.np_enter, 2, 3, 2, 1, QtCore.Qt.AlignmentFlag.AlignCenter)
 
@@ -550,9 +547,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self.numpad_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.numpad_back_btn.setIconSize(QtCore.QSize(16, 16))
         self.numpad_back_btn.setFlat(True)
-        self.numpad_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.numpad_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.numpad_back_btn.setProperty("button_type", "icon")
         self.numpad_back_btn.setObjectName("numpad_back_btn")
 

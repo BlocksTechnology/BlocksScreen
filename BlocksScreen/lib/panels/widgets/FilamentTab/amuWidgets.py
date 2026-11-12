@@ -4,6 +4,7 @@ from devices.amu.models import FilamentPos, GateInfo, GateStatus
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -31,12 +32,8 @@ class Spoll_button(QtWidgets.QAbstractButton):
 
         white = QtGui.QColor(255, 255, 255)
         self._icons = {
-            "loaded": self._make_tinted_icon(
-                ":/filament_related/media/btn_icons/loaded_spool.svg", white
-            ),
-            "unloaded": self._make_tinted_icon(
-                ":/filament_related/media/btn_icons/half_spoll.svg", white
-            ),
+            "loaded": self._make_tinted_icon(Icon.LOADED_SPOOL, white),
+            "unloaded": self._make_tinted_icon(Icon.HALF_SPOLL, white),
         }
 
         self._label_pen = QtGui.QPen(white)
@@ -60,13 +57,9 @@ class Spoll_button(QtWidgets.QAbstractButton):
             self._GRID_GRAY.lighter(140), QtCore.Qt.BrushStyle.DiagCrossPattern
         )
 
-    def _make_tinted_icon(self, resource: str, tint: QtGui.QColor) -> QtGui.QPixmap:
-        scaled = QtGui.QPixmap(resource).scaled(
-            self._ICON_SIZE,
-            self._ICON_SIZE,
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
+    def _make_tinted_icon(self, icon: Icon, tint: QtGui.QColor) -> QtGui.QPixmap:
+        """Return *icon* rendered at the slot icon size and filled with *tint*."""
+        scaled = BlocksPixmap.get(icon, QtCore.QSize(self._ICON_SIZE, self._ICON_SIZE))
         tinted = QtGui.QPixmap(scaled.size())
         tinted.fill(QtCore.Qt.GlobalColor.transparent)
         p = QtGui.QPainter(tinted)
@@ -181,13 +174,9 @@ class SpoolCarousel(QtWidgets.QWidget):
         root = QtWidgets.QHBoxLayout(self)
 
         self.left_arrow = IconButton(self)
-        self.left_arrow.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_left.svg")
-        )
+        self.left_arrow.setPixmap(BlocksPixmap.get(Icon.ARROW_LEFT))
         self.right_arrow = IconButton(self)
-        self.right_arrow.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg")
-        )
+        self.right_arrow.setPixmap(BlocksPixmap.get(Icon.ARROW_RIGHT))
 
         self.right_arrow.setFixedSize(60, 100)
         self.left_arrow.setFixedSize(60, 100)
@@ -408,33 +397,33 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         div.setStyleSheet("color: white;")
         root.addWidget(div)
 
-        def _make_btn(text: str, icon_path: str, signal) -> BlocksCustomButton:
+        def _make_btn(text: str, icon: Icon, signal) -> BlocksCustomButton:
             btn = BlocksCustomButton(self)
             btn.setText(text)
             btn.setFont(font)
-            btn.setPixmap(QtGui.QPixmap(icon_path))
+            btn.setPixmap(BlocksPixmap.get(icon))
             btn.setFixedSize(150, 70)
             btn.clicked.connect(signal.emit)
             return btn
 
         self._btn_load = _make_btn(
             "Load",
-            ":/filament_related/media/btn_icons/load_filament.svg",
+            Icon.LOAD_FILAMENT,
             self.loadRequested,
         )
         self._btn_unload = _make_btn(
             "Unload",
-            ":/filament_related/media/btn_icons/unload_filament.svg",
+            Icon.UNLOAD_FILAMENT,
             self.unloadRequested,
         )
         self._btn_eject = _make_btn(
             "Eject",
-            ":/filament_related/media/btn_icons/eject.svg",
+            Icon.EJECT,
             self.ejectRequested,
         )
         self._btn_check = _make_btn(
             "Check\nGate",
-            ":/filament_related/media/btn_icons/check gate 1.svg",
+            Icon.CHECK_GATE_1,
             self.checkRequested,
         )
 

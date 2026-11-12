@@ -3,6 +3,7 @@ import typing
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -119,9 +120,7 @@ class AxisMaintPage(QtWidgets.QWidget):
         self.axes_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.axes_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.axes_back_btn.setFont(font)
-        self.axes_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.axes_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.axes_back_btn.setObjectName("axes_back_btn")
 
         self.lcd_settings_header_layout.addWidget(self.axes_back_btn)
@@ -158,9 +157,7 @@ class AxisMaintPage(QtWidgets.QWidget):
         self.am_execute.setMinimumSize(QtCore.QSize(250, 80))
         self.am_execute.setMaximumSize(QtCore.QSize(250, 80))
         self.am_execute.setFont(font)
-        self.am_execute.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
-        )
+        self.am_execute.setProperty("icon_pixmap", BlocksPixmap.get(Icon.YES))
         self.am_execute.setObjectName("am_execute")
         self.gridLayout.addWidget(self.am_execute, 2, 1, 1, 1)
 

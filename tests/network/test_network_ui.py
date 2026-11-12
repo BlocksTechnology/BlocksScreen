@@ -1057,6 +1057,7 @@ class TestSetupUIRunsWithoutError:
 @pytest.mark.unit
 class TestHelperClasses:
     def test_wifi_icon_provider_picks_the_asset_for_the_signal(self, qapp):
+        """75% signal picks the 4-bar protected asset."""
         from BlocksScreen.lib.panels.networkWindow import WifiIconProvider
         from BlocksScreen.lib.utils.blocks_pixmap import BlocksPixmap, Icon
 

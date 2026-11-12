@@ -1,5 +1,6 @@
 import typing
 
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.blocks_slider import BlocksSlider
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -21,13 +22,9 @@ class SliderPage(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.name: str = ""
-        self.increase_button_icon = QtGui.QPixmap(
-            ":/arrow_icons/media/btn_icons/right_arrow.svg"
-        )
-        self.decrease_button_icon = QtGui.QPixmap(
-            ":/arrow_icons/media/btn_icons/left_arrow.svg"
-        )
-        self.background = QtGui.QPixmap(":/background/media/1st_background.png")
+        self.increase_button_icon = BlocksPixmap.get(Icon.RIGHT_ARROW)
+        self.decrease_button_icon = BlocksPixmap.get(Icon.LEFT_ARROW)
+        self.background = BlocksPixmap.source(Icon.BACKGROUND_1ST)
         self.setStyleSheet(
             "#SliderPage{background-image: url(:/background/media/1st_background.png);}\n"
         )
@@ -128,7 +125,7 @@ class SliderPage(QtWidgets.QWidget):
         )
 
         self.back_button = IconButton(self)
-        self.back_button.setPixmap(QtGui.QPixmap(":ui/media/btn_icons/back.svg"))
+        self.back_button.setPixmap(BlocksPixmap.get(Icon.BACK))
         self.back_button.has_text = False
         self.back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.back_button.setMaximumSize(QtCore.QSize(60, 60))

@@ -8,6 +8,7 @@ from lib.panels.widgets.Common.numpadPage import CustomNumpad
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.blocks_label import BlocksLabel
@@ -267,7 +268,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         back_btn = IconButton(self)
         back_btn.setFixedSize(QtCore.QSize(60, 60))
         back_btn.setFlat(True)
-        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         back_btn.clicked.connect(self.cancelled)
         hdr.addWidget(back_btn)
         root.addLayout(hdr)
@@ -403,8 +404,6 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._submit_btn.setFixedSize(400, 80)
         self._submit_btn.setFont(_f(16))
         self._submit_btn.setText("New Filament")
-        self._submit_btn.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/add filament.svg")
-        )
+        self._submit_btn.setPixmap(BlocksPixmap.get(Icon.ADD_FILAMENT))
         self._submit_btn.clicked.connect(self._on_submit)
         root.addWidget(self._submit_btn, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)

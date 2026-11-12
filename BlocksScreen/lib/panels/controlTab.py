@@ -17,6 +17,7 @@ from lib.panels.widgets.Common.numpadPage import CustomNumpad
 from lib.panels.widgets.Common.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from lib.utils.menu_grid import fixed_menu_grid
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -170,60 +171,60 @@ class ControlTab(QtWidgets.QStackedWidget):
         )
         self._button_change(False)
 
-    def _menu(self, active: bool) -> list[tuple[str, str, typing.Callable]]:
+    def _menu(self, active: bool) -> list[tuple[str, Icon, typing.Callable]]:
         # (text, icon, slot) for each grid button, in grid order
         if active:
             return [
                 (
                     "Auto Home",
-                    ":/motion/media/btn_icons/home_all.svg",
+                    Icon.HOME_ALL,
                     lambda: self.run_gcode_signal.emit("G28\nM400"),
                 ),
                 (
                     "Disable\nSteppers",
-                    ":/motion/media/btn_icons/disable_steppers.svg",
+                    Icon.DISABLE_STEPPERS,
                     lambda: self.run_gcode_signal.emit("M84\nM400"),
                 ),
                 (
                     "Axis",
-                    ":/motion/media/btn_icons/axis_maintenance.svg",
+                    Icon.AXIS_MAINTENANCE,
                     lambda: self.change_page(self.indexOf(self.axis_page)),
                 ),
                 (
                     "Extruder",
-                    ":/extruder_related/media/btn_icons/extrude.svg",
+                    Icon.EXTRUDE,
                     lambda: self.change_page(self.indexOf(self.extruder_page)),
                 ),
             ]
         return [
             (
                 "Motion\nControl",
-                ":/motion/media/btn_icons/axis_maintenance.svg",
+                Icon.AXIS_MAINTENANCE,
                 lambda: self._button_change(True),
             ),
             (
                 "Temp.\nControl",
-                ":/temperature_related/media/btn_icons/temperature.svg",
+                Icon.TEMPERATURE,
                 lambda: self.change_page(self.indexOf(self.temperature_page)),
             ),
             (
                 "Nozzle\nCalibration",
-                ":/z_levelling/media/btn_icons/bed_levelling.svg",
+                Icon.BED_LEVELLING,
                 lambda: self.change_page(self.indexOf(self.probe_helper_page)),
             ),
             (
                 "Z-Tilt",
-                ":/z_levelling/media/btn_icons/bed_levelling.svg",
+                Icon.BED_LEVELLING,
                 self.handle_ztilt,
             ),
             (
                 "Fans",
-                ":/fan_related/media/btn_icons/fan.svg",
+                Icon.FAN,
                 lambda: self.change_page(self.indexOf(self.fans_page)),
             ),
             (
                 "Swap\nPrint Core",
-                ":/ui/media/btn_icons/LEDs.svg",
+                Icon.LEDS,
                 self.show_swapcore,
             ),
         ]
@@ -235,7 +236,7 @@ class ControlTab(QtWidgets.QStackedWidget):
                 btn.clicked.disconnect()
         for btn, (text, icon, slot) in zip(self.cp_buttons, self._menu(active)):
             btn.setText(text)
-            btn.setPixmap(QtGui.QPixmap(icon))
+            btn.setPixmap(BlocksPixmap.get(icon))
             btn.clicked.connect(slot)
         self.cp_header_title.setText("Motion" if active else "Control")
         self.back_button.setVisible(active)
@@ -372,18 +373,14 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.cp_button_3.clicked.disconnect()
         if has_true_zero:
             self.cp_button_3.setText("Fans")
-            self.cp_button_3.setPixmap(
-                QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg")
-            )
+            self.cp_button_3.setPixmap(BlocksPixmap.get(Icon.FAN))
             self.cp_button_3.clicked.connect(
                 lambda: self.change_page(self.indexOf(self.fans_page))
             )
             self._show_blank(True)
         else:
             self.cp_button_3.setText("Nozzle\nCalibration")
-            self.cp_button_3.setPixmap(
-                QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg")
-            )
+            self.cp_button_3.setPixmap(BlocksPixmap.get(Icon.BED_LEVELLING))
             self.cp_button_3.clicked.connect(
                 lambda: self.change_page(self.indexOf(self.probe_helper_page))
             )
@@ -464,7 +461,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.cp_header_layout.addWidget(self.cp_header_title)
 
         self.back_button = IconButton(parent=self)
-        self.back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.back_button.setPixmap(BlocksPixmap.get(Icon.BACK))
         self.back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.cp_header_layout.addWidget(self.back_button)
