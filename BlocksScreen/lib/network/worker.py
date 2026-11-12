@@ -364,8 +364,6 @@ class NetworkManagerWorker(QObject):
                 return
 
             self._running = True
-            # The UI has no networking toggle, so `nmcli networking off` would lock the user out.
-            await self._ensure_networking_enabled()
             await self._detect_interfaces()
 
             if await self._is_ethernet_connected():
