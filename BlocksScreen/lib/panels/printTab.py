@@ -792,33 +792,35 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Goes back to the previous page"""
         self.request_back.emit()
 
+    @staticmethod
+    def _on_gone_drive(path: str, gone: str) -> bool:
+        """True if ``path`` is on USB drive ``gone``; empty ``gone`` means any drive."""
+        drive = path.strip("/").split("/", 1)[0]
+        return helper_methods.is_usb_mount(drive) and gone in ("", drive)
+
     @QtCore.pyqtSlot(str, name="on_usb_removed")
     def on_usb_removed(self, symlink: str = "") -> None:
         """Leave the confirm or metadata page of a file on the removed USB drive."""
         gone = helper_methods.get_file_name(symlink)
-
-        def on_gone_drive(path: str) -> bool:
-            drive = path.strip("/").split("/", 1)[0]
-            return helper_methods.is_usb_mount(drive) and gone in ("", drive)
-
         confirm, meta = self.confirmPage_widget, self.metadataPage_widget
-        stale_confirm = on_gone_drive(confirm.directory)
-        page = self.currentWidget()
-        if not (
-            (page is confirm and stale_confirm)
-            or (page is meta and on_gone_drive(meta.shown_path))
-        ):
+        stale_confirm = self._on_gone_drive(confirm.directory, gone)
+        stale = [confirm] if stale_confirm else []
+        if self._on_gone_drive(meta.shown_path, gone):
+            stale.append(meta)
+        if not stale:
             return
-        if not self.isVisible():  # another tab is up; global_back would switch to it
-            self.setCurrentIndex(self.indexOf(self.filesPage_widget))
-        else:
-            self.back_button()
-            if self.currentWidget() is confirm and stale_confirm:  # meta was over it
+        page = self.currentWidget()
+        if any(page is p for p in stale):
+            # Another tab is up; global_back would switch to it.
+            if not self.isVisible():
+                self.setCurrentIndex(self.indexOf(self.filesPage_widget))
+            else:
                 self.back_button()
-        stale = [self.indexOf(confirm)] if stale_confirm else []
-        if on_gone_drive(meta.shown_path):
-            stale.append(self.indexOf(meta))
-        self.request_forget_pages.emit(0, stale)  # else a later Back lands on them
+                # Metadata was over the confirm page.
+                if self.currentWidget() is confirm and stale_confirm:
+                    self.back_button()
+        # A header shortcut from these pages left them in the back history.
+        self.request_forget_pages.emit(0, [self.indexOf(p) for p in stale])
 
     @QtCore.pyqtSlot(name="klipper_ready_signal")
     def klipper_ready_signal(self) -> None:

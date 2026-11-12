@@ -371,3 +371,9 @@ def test_forget_pages_drops_only_that_tabs_entries() -> None:
     MainWindow.forget_pages(win, 0, [3, 4])
     assert list(win.index_stack) == [[0, 1], [2, 3]]
     assert win.index_stack.maxlen == 4
+
+
+def test_forget_pages_collapses_back_to_the_same_page() -> None:
+    win = SimpleNamespace(index_stack=deque([[0, 1], [0, 3], [0, 1], [2, 0]], maxlen=4))
+    MainWindow.forget_pages(win, 0, [3])
+    assert list(win.index_stack) == [[0, 1], [2, 0]]

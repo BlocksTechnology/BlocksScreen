@@ -451,6 +451,7 @@ class TestUsbRemovedLeavesStalePages:
             stack=[pages[n] for n in stack],
             isVisible=lambda: True,
             request_forget_pages=MagicMock(),
+            _on_gone_drive=PrintTab._on_gone_drive,
         )
         tab.currentWidget = lambda: tab.stack[-1]
         tab.back_button = lambda: tab.stack.pop()
@@ -489,7 +490,15 @@ class TestUsbRemovedLeavesStalePages:
         tab = self._tab(["files", "confirm", "meta"], "USB-BLOCKS", "cube.gcode")
         PrintTab.on_usb_removed(tab, "USB-BLOCKS")
         assert self._top(tab) == "meta"
-        tab.request_forget_pages.emit.assert_not_called()
+        tab.request_forget_pages.emit.assert_called_once_with(0, ["confirm"])
+
+    def test_left_via_header_shortcut_forgets_history(self) -> None:
+        # Leaving the tab reset it, but global history still holds the confirm page.
+        tab = self._tab(["files"], "USB-BLOCKS")
+        tab.isVisible = lambda: False
+        PrintTab.on_usb_removed(tab, "USB-BLOCKS")
+        tab.setCurrentIndex.assert_not_called()
+        tab.request_forget_pages.emit.assert_called_once_with(0, ["confirm"])
 
     def test_hidden_tab_resets_and_forgets_history(self) -> None:
         tab = self._tab(["files", "confirm"], "USB-BLOCKS")
