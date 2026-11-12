@@ -12,8 +12,12 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
 
+# Prep: G28 from any Z + Z_TILT_ADJUST + a 450 mm Z move at the 10 mm/s cap.
+_PREP_TIMEOUT_MS = 300_000
 # FINISH_Z: max_z_velocity 10 caps its F1200, so 6 x 449 mm = 270 s, then G28 from the top.
-_SAFETY_TIMEOUT_MS = 600_000
+_CYCLE_TIMEOUT_MS = 600_000
+# Klipper errors are broadcast as "!!" (MainWindow popup); -1/503 show ConnectionPage.
+_COVERED_ERROR_CODES = frozenset({-1, 400, 503})
 
 
 class AxisMaintPage(QtWidgets.QWidget):
@@ -23,19 +27,24 @@ class AxisMaintPage(QtWidgets.QWidget):
 
     call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
-    def __init__(self, parent: typing.Optional["QtWidgets.QWidget"]) -> None:
+    def __init__(
+        self,
+        parent: typing.Optional["QtWidgets.QWidget"],
+        gcode_runner: Callable[..., bool] | None = None,
+    ) -> None:
         super().__init__(parent)
 
-        self.gcode_runner: Callable[..., bool] | None = None
+        # MoonAPI.run_gcode(script, callback=...); False means the request was not sent
+        self.gcode_runner = gcode_runner
+        # Bumped on timeout too, so a reply to an abandoned run is dropped.
         self._run_id = 0
-        self._timed_out = False
         self._safety = QtCore.QTimer(self)
         self._safety.setSingleShot(True)
-        self._safety.setInterval(_SAFETY_TIMEOUT_MS)
         self._safety.timeout.connect(self._on_safety_timeout)
         self.current_object: str | None = None
         self.answerPage = BasePopup(self, False, True)
         self.answerPage.accepted.connect(self._run_AXIS_MAINTENANCE_gcode)
+        self.error_popup = BasePopup(self, False, False)
 
         self._setup_ui()
         self.axes_back_btn.clicked.connect(self.request_back.emit)
@@ -47,7 +56,11 @@ class AxisMaintPage(QtWidgets.QWidget):
             self.call_load_panel.emit(
                 True, f"Running maintenance cycle on {axis.upper()} axis...", False
             )
-            self._send(f"AXIS_MAINTENANCE_FINISH_{axis}\nM400", self._on_cycle_done)
+            self._send(
+                f"AXIS_MAINTENANCE_FINISH_{axis}\nM400",
+                self._on_cycle_done,
+                _CYCLE_TIMEOUT_MS,
+            )
 
         else:
             self.answerPage.hide()
@@ -62,13 +75,14 @@ class AxisMaintPage(QtWidgets.QWidget):
         )
 
         self.call_load_panel.emit(True, f"Homing {axis.upper()} axis...", False)
-        self._send(f"AXIS_MAINTENANCE_{axis}\nM400", self._on_homed)
+        self._send(f"AXIS_MAINTENANCE_{axis}\nM400", self._on_homed, _PREP_TIMEOUT_MS)
 
-    def _send(self, script: str, on_done: Callable[[object], None]) -> None:
+    def _send(
+        self, script: str, on_done: Callable[[object], None], timeout_ms: int
+    ) -> None:
         """Run ``script``; ``on_done`` gets the reply, or an error if unsent."""
         self._run_id += 1
         run_id = self._run_id
-        self._timed_out = False
         # A second run would queue behind the first in Klipper's gcode mutex.
         self.am_execute.setEnabled(False)
 
@@ -77,21 +91,17 @@ class AxisMaintPage(QtWidgets.QWidget):
                 return
             self._safety.stop()
             self.am_execute.setEnabled(True)
-            if isinstance(reply, dict) and "error" in reply:
+            error = reply.get("error") if isinstance(reply, dict) else None
+            if error is not None:
                 _logger.warning(
-                    "Axis maintenance: %s failed: %s",
-                    script.split("\n", 1)[0],
-                    reply["error"],
+                    "Axis maintenance: %s failed: %s", script.split("\n", 1)[0], error
                 )
-            if self._timed_out:
-                # Too late for the oil prompt; drop any overlay the timeout left.
-                self.call_load_panel.emit(False, "", False)
-                return
+                self._report_error(error)
             on_done(reply)
 
         # Moonraker replies to gcode.script once Klipper has run the whole script,
         # and fails it with an error when the socket closes, so a reply always comes.
-        self._safety.start()
+        self._safety.start(timeout_ms)
         run = self.gcode_runner
         if run is None:
             _logger.warning("Axis maintenance: no gcode runner wired, not sending")
@@ -99,33 +109,45 @@ class AxisMaintPage(QtWidgets.QWidget):
             on_reply({"error": {"code": -1, "message": "not connected"}})
 
     def _on_safety_timeout(self) -> None:
-        """Close the loading screen when Klipper never replied."""
-        self._timed_out = True
+        """Abandon the run when Klipper never replied, and free Execute again."""
+        self._run_id += 1
+        self.am_execute.setEnabled(True)
         _logger.warning(
             "Axis maintenance: no reply in %d s, closing the loading screen",
-            _SAFETY_TIMEOUT_MS // 1000,
+            self._safety.interval() // 1000,
         )
+        self._hide_overlay()
+
+    def _hide_overlay(self) -> None:
         # Hidden page: the overlay now belongs to whichever flow moved the user away.
         if self.isVisible():
             self.call_load_panel.emit(False, "", False)
 
+    def _report_error(self, error: object) -> None:
+        """Pop up errors nothing else reports (Moonraker-level, not Klipper's "!!")."""
+        code = error.get("code") if isinstance(error, dict) else None
+        if code in _COVERED_ERROR_CODES or not self.isVisible():
+            return
+        message = error.get("message") if isinstance(error, dict) else error
+        self.error_popup.set_message(f"Axis maintenance failed: {message}")
+        self.error_popup.show()
+
     def _on_homed(self, result: object) -> None:
         """Drop the loading screen and show the oil prompt once homing succeeded."""
-        self.call_load_panel.emit(False, "", False)
-        # No popup here: MainWindow pops up Klipper's "!!", ConnectionPage covers unsent
-        if isinstance(result, dict) and "error" in result:
-            return
         # Confirm moves the axis, so never ask from behind another tab.
         if not self.isVisible():
             _logger.info(
                 "Axis maintenance: page left during homing, oil prompt skipped"
             )
             return
+        self.call_load_panel.emit(False, "", False)
+        if isinstance(result, dict) and "error" in result:
+            return
         self.answerPage.show()
 
     def _on_cycle_done(self, _result: object) -> None:
         """Drop the loading screen when the maintenance cycle ends."""
-        self.call_load_panel.emit(False, "", False)
+        self._hide_overlay()
 
     def _setup_ui(self) -> None:
         self.setObjectName("axes_page")
