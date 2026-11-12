@@ -2,6 +2,7 @@
 
 import importlib
 import re
+from collections import Counter
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -20,9 +21,10 @@ XFAIL_KEYS = {
 
 # Text scan, not AST: AST misses f-strings; '/?' also matches ':ui/...'.
 # Spaces admit 'fonts for text/...'; a folder-less key needs an extension, and
-# a ':' or '%' after the prefix rejects '::1/128', ':%s/%s' and ': %s'.
+# a ':', '%' or '/' after the prefix rejects '::1/128', ':/%s/%s' and '://'.
 _LITERAL = re.compile(
-    r'["\'](:/?(?:[^"\'\s:%][^"\']*/[^"\']*|[\w.-]+\.[A-Za-z]{2,4}))["\']'
+    r'["\'](:/?(?:[^"\'\s:%/][^"\']*/[^"\']*'
+    r'|[\w.-][\w .-]*\.[A-Za-z][A-Za-z0-9]{1,4}))["\']'
 )
 
 
@@ -66,8 +68,8 @@ def _literal_sites() -> dict[str, list[str]]:
 
 
 def _qrc_prefix_roots() -> set[str]:
-    """Return the top-level ':/<prefix>' roots the .qrc files claim."""
-    return {f":/{key.split('/')[1]}" for key in _qrc_keys()}
+    """Return the top-level ':/<folder>' roots of the .qrc keys that have a folder."""
+    return {f":/{key.split('/')[1]}" for key in _qrc_keys() if key.count("/") > 1}
 
 
 def _import_blobs() -> None:
@@ -78,12 +80,12 @@ def _import_blobs() -> None:
 
 def _compiled_keys() -> set[str]:
     """Return the resource keys compiled into the _rc.py blobs, our prefixes only."""
-    from PyQt6.QtCore import QDir, QDirIterator
+    from PyQt6.QtCore import QDir, QDirIterator, QFile
 
     _import_blobs()
 
-    # Skip ':/': Qt's own resources land there, import-order dependent.
-    keys = set()
+    # Skip walking ':/': Qt's own resources land there, import-order dependent.
+    keys = {key for key in _qrc_keys() if key.count("/") == 1 and QFile.exists(key)}
     for root in _qrc_prefix_roots():
         walk = QDirIterator(
             root, QDir.Filter.Files, QDirIterator.IteratorFlag.Subdirectories
@@ -152,11 +154,11 @@ def test_compiled_blobs_match_the_qrc_xml():
     compiled = _compiled_keys()
     drift = {}
     if declared - compiled:
-        drift["declared in XML but not compiled (run `make rcc`)"] = sorted(
+        drift["declared in XML but not compiled (run `make rcc-all`)"] = sorted(
             declared - compiled
         )
     if compiled - declared:
-        drift["compiled but no longer in XML (run `make rcc`)"] = sorted(
+        drift["compiled but no longer in XML (run `make rcc-all`)"] = sorted(
             compiled - declared
         )
     assert not drift, _report("the .qrc XML and the _rc.py blobs disagree:", drift)
@@ -168,8 +170,13 @@ def test_compiled_blobs_match_the_asset_bytes():
 
     _import_blobs()
     # `make rcc` skips unchanged .qrc files, so an edited asset keeps a stale blob.
+    entries = _qrc_entries()
+    counts = Counter(key for key, _ in entries)
     stale = {}
-    for key, path in _qrc_entries():
+    for key, path in entries:
+        # A recompile cannot fix a duplicate; test_no_duplicate_qrc_keys reports it.
+        if counts[key] > 1:
+            continue
         handle = QFile(key)
         if not handle.open(QIODevice.OpenModeFlag.ReadOnly):
             stale[key] = ["absent from every compiled blob"]
@@ -180,6 +187,7 @@ def test_compiled_blobs_match_the_asset_bytes():
         if path.is_file() and compiled != path.read_bytes():
             stale[key] = [
                 f"{path.relative_to(REPO_ROOT)} changed after the blob was built"
+                " (run `make rcc-all`)"
             ]
     assert not stale, _report("assets edited without recompiling the blob:", stale)
 
@@ -199,6 +207,20 @@ def test_literal_scanner_shapes():
         m.group(1)
         for m in _LITERAL.finditer(
             "\":/logo.svg\" ':/a b/c.svg' \"::1/128\" ':%s/%s' \": %s\" ':ui/x.png'"
+            ' ":/%s/%s" "://" ":/font.woff2" ":/my logo.svg" ": a.b"'
         )
     ]
-    assert found == [":/logo.svg", ":/a b/c.svg", ":ui/x.png"]
+    assert found == [
+        ":/logo.svg",
+        ":/a b/c.svg",
+        ":ui/x.png",
+        ":/font.woff2",
+        ":/my logo.svg",
+    ]
+
+
+def test_folder_less_keys_are_not_walked_as_roots(monkeypatch):
+    """A prefix-less ':/logo.svg' is a file, so only foldered keys yield walk roots."""
+    module = importlib.import_module(__name__)
+    monkeypatch.setattr(module, "_qrc_keys", lambda: {":/a/b.svg", ":/top.svg"})
+    assert _qrc_prefix_roots() == {":/a"}
