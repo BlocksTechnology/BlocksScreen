@@ -64,6 +64,7 @@ def _tab(*, true_zero: bool) -> SimpleNamespace:
         _cancel_gen=0,
         _print_state="printing",
         _idle_state="Printing",
+        _usb_pending=False,
     )
     tab.save_config = lambda: PrintTab.save_config(tab)
     tab._maybe_finish_cancel = lambda: PrintTab._maybe_finish_cancel(tab)

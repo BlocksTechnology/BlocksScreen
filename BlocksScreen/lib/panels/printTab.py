@@ -1,8 +1,11 @@
 import logging
 import os
+import pathlib
+import threading
 import typing
 from functools import partial
 
+import helper_methods
 from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
@@ -20,10 +23,29 @@ from lib.printer import Printer
 from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
+from lib.utils.usb_import import (
+    UsbImportSignals,
+    UsbImportTask,
+    remember_import_async,
+)
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 if typing.TYPE_CHECKING:
     from devices.amu import AMUManager
+
+USB_SETTLE_TIMEOUT_MS = 120_000  # Happy Hare pre-processing of a large file
+USB_UNINDEXED_MAX = 20  # imports awaiting their Moonraker announce, oldest dropped
+# RF50-Klipper's SDCARD_PRINT_FILE override emits this for USB files (Mainsail starts).
+USB_PRINT_ACTION = "// action:blocks_usb_print "
+# The override hands USB files over only once this is True; older pairs print directly.
+USB_PRINT_FLAG = "blocksscreen_usb"
+# Clears the override's fallback; sent even when the print is refused (see _on_gcode_response).
+# Klipper reads VALUE as a Python literal, so '""' stores the empty string.
+USB_PRINT_ACK = (
+    "SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE VARIABLE=usb_pending VALUE='\"\"'"
+)
+# Klipper splits a script on newlines and cuts a line at ';' even inside quotes.
+_RESPOND_SAFE = str.maketrans({'"': "'", "\n": " ", "\r": " ", ";": ","})
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +110,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._cancel_gen: int = 0  # drops a cancel reply that outlived its cancel
         self._print_state: str = ""
         self._idle_state: str = ""
+        self._klippy_state: str = ""  # "" until the first report, which never refuses
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
         self._cancel_timer = QtCore.QTimer(self)
         self._cancel_timer.setSingleShot(True)
@@ -97,6 +120,23 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._cancel_settle.setSingleShot(True)
         self._cancel_settle.setInterval(_CANCEL_SETTLE_MS)
         self._cancel_settle.timeout.connect(self._on_cancel_settled)
+        # One UI-thread signal object for every import; the token drops stale results.
+        self._usb_signals = UsbImportSignals(self)
+        self._usb_signals.done.connect(self._on_usb_import_done)
+        self._usb_token: int = 0
+        self._usb_pending: bool = False
+        self._usb_key: str = ""
+        self._usb_local: str = ""
+        self._usb_created: set[str] = set()
+        self._usb_cancel = threading.Event()  # tells the running copy not to commit
+        # Copies Moonraker had not announced when their import ended, path -> key.
+        self._usb_unindexed: dict[str, str] = {}
+        self._usb_from_console: bool = False  # started by another client via Klipper
+        # Moonraker announces a new gcode only once its pre-processing is done.
+        self._usb_settle_timer = QtCore.QTimer(self)
+        self._usb_settle_timer.setSingleShot(True)
+        self._usb_settle_timer.setInterval(USB_SETTLE_TIMEOUT_MS)
+        self._usb_settle_timer.timeout.connect(self._on_usb_settle_timeout)
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
@@ -157,6 +197,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.filesPage_widget.request_dir_info.connect(self.file_data.request_dir_info)
         self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
         self.file_data.file_added.connect(self.filesPage_widget.on_file_added)
+        self.file_data.file_added.connect(self._on_usb_file_added)
         self.file_data.file_removed.connect(self.filesPage_widget.on_file_removed)
         self.file_data.file_modified.connect(self.filesPage_widget.on_file_modified)
         self.file_data.dir_added.connect(self.filesPage_widget.on_dir_added)
@@ -229,6 +270,8 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.jobStatusPage_widget.on_gcode_move_update
         )
         self.printer.request_available_objects_signal.connect(self.klipper_ready_signal)
+        self.printer.gcode_response.connect(self._on_gcode_response)
+        self.printer.gcode_macro_update.connect(self._on_gcode_macro_update)
         self.babystepPage = BabystepPage(self)
         self.babystepPage.request_back.connect(self.back_button)
         self.addWidget(self.babystepPage)
@@ -321,8 +364,9 @@ class PrintTab(QtWidgets.QStackedWidget):
             self._maybe_finish_cancel()
             return
         self._clear_cancel()
-        # Unforced: MainWindow's update and restart overlays outrank this release.
-        self.call_load_panel.emit(False, "", False)
+        if not self._usb_pending:  # the USB copy owns the loadscreen until it ends
+            # Unforced: MainWindow's update and restart overlays outrank this release.
+            self.call_load_panel.emit(False, "", False)
         self.on_cancel_print.emit()
         if not self._finish_print_handled and self._cancel_z_snapshot != 0:
             self._active_z_offset = self._cancel_z_snapshot
@@ -379,14 +423,199 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, name="start_print")
     def start_print(self, file: str) -> None:
         """Start *file* on the job status page unless PRINT_START would refuse it."""
+        self._begin_print(file)
+
+    def _print_refusal(self) -> str:
+        """Why no print may start now, or ""."""
+        if self._usb_pending:
+            return "A USB file is still being prepared for printing."
+        if self._cancel_pending:
+            return "The last print is still being cancelled."
+        if self._klippy_state not in ("", "ready"):
+            # Else the copy and settle wait run first, then PRINT_START is rejected
+            return "Klipper is not ready."
+        if self._print_state in ("printing", "paused"):
+            return "A print is already running."
         # A refused PRINT_START runs on_error CANCEL_PRINT, which HH v3 reopens as a job.
-        if self.amu_manager is not None and (
-            reason := self.amu_manager.print_start_refusal()
-        ):
+        if self.amu_manager is not None:
+            return self.amu_manager.print_start_refusal()
+        return ""
+
+    def _begin_print(self, file: str, from_console: bool = False) -> str:
+        """Start or import *file*; returns the refusal shown on screen, or ""."""
+        if reason := self._print_refusal():
             logger.warning("Print start of %s blocked: %s", file, reason)
             self.notify.emit("PrintTab", reason, 2, True)
+            return reason
+        if helper_methods.is_usb_path(file):
+            self._start_usb_import(file)
+            self._usb_from_console = from_console
+        else:
+            self.jobStatusPage_widget.on_print_start(file)
+        return ""
+
+    @QtCore.pyqtSlot(list, name="on_gcode_response")
+    def _on_gcode_response(self, messages: list) -> None:
+        """Import a USB file whose print another client started through Klipper."""
+        for line in messages:
+            text = str(line).rstrip()
+            file = text.removeprefix(USB_PRINT_ACTION)
+            # The macro sends USB paths only; a local one would bypass the touchscreen.
+            if file == text or not helper_methods.is_usb_path(file):
+                continue
+            # Ack even a refusal: the fallback would print from USB past the same checks.
+            self.run_gcode_signal.emit(USB_PRINT_ACK)
+            if reason := self._begin_print(file, from_console=True):
+                self._console_error(f"USB print refused: {reason}")
+
+    def _console_error(self, message: str) -> None:
+        """Report a failed console-started USB print back to the Klipper console."""
+        msg = message.translate(_RESPOND_SAFE)  # a quote would end RESPOND's MSG early
+        self.run_gcode_signal.emit(f'RESPOND TYPE=error MSG="{msg}"')
+
+    @QtCore.pyqtSlot(str, dict, name="on_gcode_macro_update")
+    def _on_gcode_macro_update(self, name: str, values: dict) -> None:
+        """Tell the RF50-Klipper USB override that BlocksScreen handles its files."""
+        # False only on the override that knows the flag; Klipper resets it on restart.
+        if name.upper() == "SDCARD_PRINT_FILE" and values.get(USB_PRINT_FLAG) is False:
+            self.run_gcode_signal.emit(
+                f"SET_GCODE_VARIABLE MACRO=SDCARD_PRINT_FILE VARIABLE={USB_PRINT_FLAG}"
+                " VALUE=True"
+            )
+
+    def _start_usb_import(self, file: str) -> None:
+        """Copy a USB gcode to the gcodes root off-thread, then print the copy."""
+        # Printing from the stick would fail mid-job if it is pulled or glitches.
+        self._usb_token += 1
+        self._usb_pending = True
+        self._usb_key = self._usb_local = ""
+        self._usb_created.clear()
+        self._usb_cancel = threading.Event()
+        task = UsbImportTask(
+            self._usb_signals,
+            self._usb_token,
+            pathlib.Path(self.gcode_path),
+            file,
+            self._usb_cancel,
+        )
+        self.call_load_panel.emit(True, "Copying file from USB...\nPlease wait", False)
+        QtCore.QThreadPool.globalInstance().start(task)
+
+    def _end_usb_print(self, message: str = "") -> None:
+        """Drop the pending USB print, release the loadscreen, show *message*."""
+        self._usb_settle_timer.stop()
+        self._usb_token += 1  # a copy still running reports to nobody
+        self._usb_cancel.set()
+        self._usb_pending = False
+        self._usb_key = self._usb_local = ""
+        # _usb_created survives: the aborted import's late result still checks it.
+        self.call_load_panel.emit(False, "", False)
+        if message:
+            self.notify.emit("PrintTab", message, 2, True)
+            if self._usb_from_console:
+                self._console_error(message)
+        self._usb_from_console = False
+
+    @QtCore.pyqtSlot(int, str, str, str, bool, str, name="on_usb_import_done")
+    def _on_usb_import_done(
+        self,
+        token: int,
+        usb_file: str,
+        local_file: str,
+        key: str,
+        reused: bool,
+        error: str,
+    ) -> None:
+        """Print a reused copy now, a new one once Moonraker has processed it."""
+        if token != self._usb_token:
+            logger.info("Dropping result of aborted USB import %s", usb_file)
+            if local_file and not reused:  # committed just before the abort
+                if local_file in self._usb_created:  # Moonraker announced it already
+                    remember_import_async(
+                        pathlib.Path(self.gcode_path), key, local_file
+                    )
+                else:
+                    self._index_when_processed(local_file, key)
             return
-        self.jobStatusPage_widget.on_print_start(file)
+        if error:
+            self._end_usb_print(f"USB print failed: {error}")
+            return
+        logger.info("Local copy of %s is %s", usb_file, local_file)
+        self._usb_key, self._usb_local = key, local_file
+        # Printing before Happy Hare rewrites the file runs the unprocessed gcode.
+        if reused or local_file in self._usb_created:
+            self._usb_print_local_copy()
+            return
+        self.call_load_panel.emit(True, "Preparing file...\nPlease wait", False)
+        self._usb_settle_timer.start()
+
+    @QtCore.pyqtSlot(dict, name="on_usb_file_added")
+    def _on_usb_file_added(self, item: dict) -> None:
+        """Release a waiting USB print when Moonraker announces its local copy."""
+        name = str(item.get("path", "")).removeprefix("/")
+        if (key := self._usb_unindexed.pop(name, None)) is not None:
+            # Processed now, so a retry of the same USB file can reuse it.
+            remember_import_async(pathlib.Path(self.gcode_path), key, name)
+        if not self._usb_pending:
+            return
+        self._usb_created.add(name)  # may beat the worker's done signal
+        if name == self._usb_local:
+            self._usb_print_local_copy()
+
+    @QtCore.pyqtSlot(name="on_usb_settle_timeout")
+    def _on_usb_settle_timeout(self) -> None:
+        """Ask Moonraker for the copy's metadata: the notification may have been lost."""
+        token, local, key = self._usb_token, self._usb_local, self._usb_key
+
+        def on_reply(reply: object) -> None:
+            if token != self._usb_token:
+                return
+            if isinstance(reply, dict) and "error" not in reply:
+                self._usb_print_local_copy()
+                return
+            logger.warning("No metadata for %s after the settle timeout", local)
+            self._mark_unindexed(local, key)
+            self._end_usb_print(
+                f"{local} is still being processed.\nStart it from the file list."
+            )
+
+        if not self.ws.send_request(
+            "server.files.metadata", {"filename": local}, callback=on_reply
+        ):
+            on_reply({"error": {"code": -1, "message": "not connected"}})
+
+    def _mark_unindexed(self, local: str, key: str) -> None:
+        """Index *local* once Moonraker announces it; only the newest few are kept."""
+        self._usb_unindexed.pop(local, None)
+        self._usb_unindexed[local] = key
+        while len(self._usb_unindexed) > USB_UNINDEXED_MAX:
+            self._usb_unindexed.pop(next(iter(self._usb_unindexed)))
+
+    def _index_when_processed(self, local: str, key: str) -> None:
+        """Index an aborted import's copy now if processed, else once announced."""
+        # Its announcement may have come while no import was pending, so ask Moonraker.
+        self._mark_unindexed(local, key)
+        root = pathlib.Path(self.gcode_path)
+
+        def on_reply(reply: object) -> None:
+            processed = isinstance(reply, dict) and "error" not in reply
+            if processed and self._usb_unindexed.pop(local, None) is not None:
+                remember_import_async(root, key, local)
+
+        self.ws.send_request(
+            "server.files.metadata", {"filename": local}, callback=on_reply
+        )
+
+    def _usb_print_local_copy(self) -> None:
+        """Index the settled local copy and start printing it."""
+        local, key = self._usb_local, self._usb_key
+        from_console, self._usb_from_console = self._usb_from_console, False
+        self._end_usb_print()
+        remember_import_async(pathlib.Path(self.gcode_path), key, local)
+        logger.info("Printing local copy %s", local)
+        # Checked again: another client may have started a job during the copy.
+        if (reason := self._begin_print(local)) and from_console:
+            self._console_error(f"USB print refused: {reason}")
 
     @QtCore.pyqtSlot(str, str, name="delete_file")
     @QtCore.pyqtSlot(str, name="delete_file")
@@ -492,13 +721,22 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
         """Dismiss the Z-offset save popup and reset save state on unexpected shutdown."""
+        self._klippy_state = state
         if state in ("ready", "startup"):
             return
+        self._print_state = (
+            ""  # printer.clear_printer_objs drops it too; ready re-queries
+        )
         if self._cancel_pending:
             # E-stop during the cancel macro: print_stats never reaches cancelled.
             self._clear_cancel()
             # Unforced: MainWindow's update and restart overlays outrank this release.
             self.call_load_panel.emit(False, "", False)
+        if self._usb_pending:  # e.g. FIRMWARE_RESTART or a thermal shutdown mid-copy
+            self._usb_from_console = False  # a non-ready Klipper rejects RESPOND
+            if self._usb_local:  # copy done, Moonraker still processing it
+                self._mark_unindexed(self._usb_local, self._usb_key)
+            self._end_usb_print(f"USB print cancelled: Klipper is {state}.")
         self.BasePopup_z_offset.reject()
         self.save_config_btn.setVisible(False)
         self.babystepPage.baby_stepchange = False
