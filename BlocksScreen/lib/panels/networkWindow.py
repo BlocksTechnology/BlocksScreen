@@ -3233,7 +3233,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.vlan_delete_button.setFont(btn_font)
         self.vlan_delete_button.setText("Delete")
         self.vlan_delete_button.setProperty(
-            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE_ICON)
+            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE)
         )
         btn_layout.addWidget(
             self.vlan_delete_button, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -3361,7 +3361,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_sip_dhcp_button.setFont(btn_font)
         self.wifi_sip_dhcp_button.setText("Reset\nDHCP")
         self.wifi_sip_dhcp_button.setProperty(
-            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE_ICON)
+            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE)
         )
         btn_layout.addWidget(
             self.wifi_sip_dhcp_button,
@@ -3477,7 +3477,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             BlocksPixmap.get(Icon.ETHERNET_CONNECTED),
         )
         self.network_delete_btn.setProperty(
-            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE_ICON)
+            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE)
         )
         self.network_activate_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.YES))
         self.network_details_btn.setProperty(

@@ -1679,7 +1679,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.filament_type_icon = self._make_header_icon("PLA", Icon.LOAD_FILAMENT)
         self.nozzle_size_icon = self._make_header_icon(
-            "0.4mm", Icon.STANDART_TEMPERATURE
+            "0.4mm", Icon.STANDARD_TEMPERATURE
         )
 
         self.wifi_button = IconButton(parent=self.main_header_layout)

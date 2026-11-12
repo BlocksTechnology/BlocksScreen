@@ -33,7 +33,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
         white = QtGui.QColor(255, 255, 255)
         self._icons = {
             "loaded": self._make_tinted_icon(Icon.LOADED_SPOOL, white),
-            "unloaded": self._make_tinted_icon(Icon.HALF_SPOLL, white),
+            "unloaded": self._make_tinted_icon(Icon.HALF_SPOOL, white),
         }
 
         self._label_pen = QtGui.QPen(white)

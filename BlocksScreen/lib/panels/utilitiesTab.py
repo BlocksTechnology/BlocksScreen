@@ -257,7 +257,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_update_btn.setFont(font)
         self.up_update_btn.setProperty(
             "icon_pixmap",
-            BlocksPixmap.get(Icon.UPDATE_SOFTWARE_ICON),
+            BlocksPixmap.get(Icon.UPDATE_SOFTWARE),
         )
         self.up_update_btn.setObjectName("up_update_btn")
         self.up_content_layout.addWidget(self.up_update_btn, 2, 0, 1, 1)

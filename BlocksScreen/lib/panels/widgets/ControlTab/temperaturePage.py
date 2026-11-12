@@ -276,7 +276,7 @@ class TemperaturePage(QtWidgets.QWidget):
         )
         self.temperature_cooldown_btn.setProperty(
             "icon_pixmap",
-            BlocksPixmap.get(Icon.HEATSOAK_ICON),
+            BlocksPixmap.get(Icon.HEATSOAK),
         )
         self.temperature_cooldown_btn.setObjectName("temperature_cooldown_btn")
         self.gridLayout.addWidget(self.temperature_cooldown_btn, 2, 0, 1, 1)

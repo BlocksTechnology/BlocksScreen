@@ -1058,7 +1058,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.fp_button_2.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.fp_button_2.setProperty(
             "icon_pixmap",
-            BlocksPixmap.get(Icon.BASE_DADOS_SPOOL_1),
+            BlocksPixmap.get(Icon.SPOOL_DATABASE_1),
         )
         self.fp_button_2.setObjectName("fp_button_2")
 

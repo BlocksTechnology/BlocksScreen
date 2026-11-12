@@ -229,7 +229,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.file_info_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.file_info_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.file_info_btn.setFlat(True)
-        self.file_info_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.FILE_ICON))
+        self.file_info_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.FILE))
         self.file_info_btn.setObjectName("file_info_btn")
         self.cf_header_title.insertWidget(
             0, self.file_info_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
@@ -303,7 +303,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.delete_file_button.setFont(font)
         self.delete_file_button.setFlat(True)
         self.delete_file_button.setProperty(
-            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE_ICON)
+            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE)
         )
         self.delete_file_button.setText("Delete")
         self.cf_confirm_layout.addWidget(

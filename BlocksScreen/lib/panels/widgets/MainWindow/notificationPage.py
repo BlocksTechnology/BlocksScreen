@@ -412,7 +412,7 @@ class NotificationPage(QtWidgets.QWidget):
         self.delete_btn.setSizePolicy(sizePolicy)
         self.delete_btn.setText("Delete")
         self.delete_btn.setEnabled(False)
-        self.delete_btn.setPixmap(BlocksPixmap.get(Icon.GARBAGE_ICON))
+        self.delete_btn.setPixmap(BlocksPixmap.get(Icon.GARBAGE))
         self.button_box.addWidget(
             self.delete_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
@@ -425,7 +425,7 @@ class NotificationPage(QtWidgets.QWidget):
         self.delete_all_btn.setPalette(palette)
         self.delete_all_btn.setSizePolicy(sizePolicy)
         self.delete_all_btn.setText("Delete all")
-        self.delete_all_btn.setPixmap(BlocksPixmap.get(Icon.GARBAGE_ICON))
+        self.delete_all_btn.setPixmap(BlocksPixmap.get(Icon.GARBAGE))
         self.button_box.addWidget(
             self.delete_all_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )

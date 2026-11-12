@@ -447,7 +447,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.update_page_button.setFlat(True)
         self.update_page_button.setProperty(
             "icon_pixmap",
-            BlocksPixmap.get(Icon.UPDATE_SOFTWARE_ICON),
+            BlocksPixmap.get(Icon.UPDATE_SOFTWARE),
         )
         self.update_page_button.setProperty("has_text", True)
         self.update_page_button.setProperty("text_formatting", "bottom")

@@ -466,7 +466,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.delete_btn = IconButton(self)
         self.delete_btn.setFixedSize(QtCore.QSize(60, 60))
         self.delete_btn.setFlat(True)
-        self.delete_btn.setPixmap(BlocksPixmap.get(Icon.GARBAGE_ICON))
+        self.delete_btn.setPixmap(BlocksPixmap.get(Icon.GARBAGE))
         normal_layout.addWidget(self.delete_btn, 0)
 
         info_layout.addWidget(button_widget, 0, QtCore.Qt.AlignmentFlag.AlignCenter)

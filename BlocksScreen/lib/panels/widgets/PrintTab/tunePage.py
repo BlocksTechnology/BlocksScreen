@@ -312,7 +312,7 @@ class TuneWidget(QtWidgets.QWidget):
         )
         self.tune_babystep_menu_btn.setAutoDefault(False)
         self.tune_babystep_menu_btn.setFlat(True)
-        self.tune_babystep_menu_btn.setPixmap(BlocksPixmap.get(Icon.BABY_STEP_ICON))
+        self.tune_babystep_menu_btn.setPixmap(BlocksPixmap.get(Icon.BABY_STEP))
         self.tune_babystep_menu_btn.setObjectName("tune_babystep_menu_btn")
         self.tune_menu_buttons.addWidget(
             self.tune_babystep_menu_btn,

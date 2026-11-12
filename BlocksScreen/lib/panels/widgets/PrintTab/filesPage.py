@@ -392,9 +392,9 @@ class FilesPage(QtWidgets.QWidget):
     def _make_directory_item(self, dir_data: dict) -> ListItem:
         """Dir row; root USB mounts get the USB icon."""
         name = str(dir_data.get("dirname", ""))
-        icon = BlocksPixmap.get(Icon.FOLDERICON)
+        icon = BlocksPixmap.get(Icon.FOLDER)
         if not self._curr_dir and helper_methods.is_usb_mount(name):
-            icon = BlocksPixmap.get(Icon.USB_ICON)
+            icon = BlocksPixmap.get(Icon.USB)
         return self._row(name, "", icon, None)
 
     def _make_file_item(self, filename: str, meta: dict | None = None) -> ListItem:

@@ -696,7 +696,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.update_all_btn.setMaximumSize(QtCore.QSize(360, 70))
         self.update_all_btn.setFont(QtGui.QFont(self._font_family, 22))
         self.update_all_btn.setText("Update")
-        self.update_all_btn.setPixmap(BlocksPixmap.get(Icon.UPDATE_SOFTWARE_ICON))
+        self.update_all_btn.setPixmap(BlocksPixmap.get(Icon.UPDATE_SOFTWARE))
         content.addWidget(self.update_all_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
         self.update_all_btn.hide()
 

@@ -561,7 +561,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.js_file_name_icon.setFlat(True)
         self.js_file_name_icon.setProperty(
             "icon_pixmap",
-            BlocksPixmap.get(Icon.FILE_ICON),
+            BlocksPixmap.get(Icon.FILE),
         )
         self.js_file_name_icon.setObjectName("js_file_name_icon")
         self.js_file_name_label = BlocksLabel(parent=self)
