@@ -1,6 +1,7 @@
 import logging
 import typing
 from collections.abc import Callable
+from functools import partial
 
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
@@ -91,30 +92,38 @@ class AxisMaintPage(QtWidgets.QWidget):
         # A second run would queue behind the first in Klipper's gcode mutex.
         self.am_execute.setEnabled(False)
 
-        def on_reply(reply: object) -> None:
-            if run_id != self._run_id:
-                if not self._safety.isActive():  # Klipper finished the timed-out run
-                    _logger.info("Axis maintenance: late reply, Execute unlocked")
-                    self.am_execute.setEnabled(True)
-                return
-            self._safety.stop()
-            self.am_execute.setEnabled(True)
-            error = reply.get("error") if isinstance(reply, dict) else None
-            if error is not None:
-                _logger.warning(
-                    "Axis maintenance: %s failed: %s", script.split("\n", 1)[0], error
-                )
-                self._report_error(error)
-            on_done(reply)
-
         # Moonraker replies to gcode.script once Klipper has run the whole script,
         # and fails it with an error when the socket closes, so a reply always comes.
         self._safety.start(timeout_ms)
         run = self.gcode_runner
         if run is None:
             _logger.warning("Axis maintenance: no gcode runner wired, not sending")
+        on_reply = partial(self._on_reply, run_id, script, on_done)
         if not (run and run(script, callback=on_reply)):
             on_reply({"error": {"code": -1, "message": "not connected"}})
+
+    def _on_reply(
+        self,
+        run_id: int,
+        script: str,
+        on_done: Callable[[object], None],
+        reply: object,
+    ) -> None:
+        """Finish run ``run_id``; a timed-out run's reply only unlocks Execute."""
+        if run_id != self._run_id:
+            if not self._safety.isActive():  # Klipper finished the timed-out run
+                _logger.info("Axis maintenance: late reply, Execute unlocked")
+                self.am_execute.setEnabled(True)
+            return
+        self._safety.stop()
+        self.am_execute.setEnabled(True)
+        error = reply.get("error") if isinstance(reply, dict) else None
+        if error is not None:
+            _logger.warning(
+                "Axis maintenance: %s failed: %s", script.split("\n", 1)[0], error
+            )
+            self._report_error(error)
+        on_done(reply)
 
     def _on_safety_timeout(self) -> None:
         """Close the loading screen; Execute stays locked until the late reply."""
@@ -125,9 +134,11 @@ class AxisMaintPage(QtWidgets.QWidget):
             self._safety.interval() // 1000,
         )
         self._hide_overlay()
-        self._report_error(
-            {"message": "Klipper is still busy.\nExecute unlocks once it finishes."}
-        )
+        if self.isVisible():
+            self._show_popup(
+                "Axis maintenance: Klipper is still busy.\n"
+                "Execute unlocks once it finishes."
+            )
 
     def _hide_overlay(self) -> None:
         # Hidden page: the overlay now belongs to whichever flow moved the user away.
@@ -140,7 +151,10 @@ class AxisMaintPage(QtWidgets.QWidget):
         if code in _COVERED_ERROR_CODES or not self.isVisible():
             return
         message = error.get("message") if isinstance(error, dict) else error
-        self.error_popup.set_message(f"Axis maintenance failed: {message}")
+        self._show_popup(f"Axis maintenance failed: {message}")
+
+    def _show_popup(self, text: str) -> None:
+        self.error_popup.set_message(text)
         self.error_popup.show()
         self._error_hide.start()
 

@@ -118,6 +118,28 @@ def test_execute_disabled_until_reply(page):
 
     page.calls[0][1]("ok")
     assert page.am_execute.isEnabled()
+    assert not page._safety.isActive()  # else a false timeout fires later
+
+
+def test_timeout_popup_is_not_a_failure(page, qtbot):
+    page.error_popup.set_message = MagicMock()
+    page.axis_maintenance()
+    page._safety.start(20)
+    qtbot.waitUntil(lambda: page.error_popup.show.called, timeout=2000)
+    text = page.error_popup.set_message.call_args.args[0]
+    assert "still busy" in text
+    assert "failed" not in text
+
+
+def test_stale_reply_keeps_execute_locked_while_a_run_is_timed(page):
+    page.axis_maintenance()
+    stale = page.calls[0][1]
+    page._run_AXIS_MAINTENANCE_gcode()  # a newer run is in flight
+    assert page._safety.isActive()
+
+    stale("ok")
+    assert not page.am_execute.isEnabled()
+    assert page._safety.isActive()
 
 
 def test_hidden_page_skips_oil_prompt_and_leaves_overlay(page, qtbot):
@@ -135,3 +157,5 @@ def test_hidden_page_timeout_leaves_overlay(page, qtbot):
     page.hide()
     with qtbot.assertNotEmitted(page.call_load_panel, wait=200):
         pass
+    assert not page.am_execute.isEnabled()
+    page.error_popup.show.assert_not_called()
