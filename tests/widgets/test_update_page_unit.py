@@ -1,10 +1,13 @@
 import json
+import subprocess
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from updater.models import PRINTER_BUSY, ComponentStatus
+
+_UP_MOD = "BlocksScreen.lib.panels.widgets.MainWindow.updatePage"
 
 
 @pytest.fixture
@@ -689,7 +692,11 @@ def deploy_flag(tmp_path):
     unit = tmp_path / "BlocksScreen-deploy.path"
     unit.touch()
     mod = "BlocksScreen.lib.panels.widgets.MainWindow.updatePage"
-    with patch(f"{mod}.DEPLOY_FLAG", flag), patch(f"{mod}.DEPLOY_PATH_UNIT", unit):
+    with (
+        patch(f"{mod}.DEPLOY_FLAG", flag),
+        patch(f"{mod}.DEPLOY_PATH_UNIT", unit),
+        patch(f"{mod}.UpdatePage._deploy_units_live", return_value=True),
+    ):
         yield flag
 
 
@@ -735,3 +742,36 @@ class TestDeployHold:
         page._on_deploy_cap()
         assert page._deploy_hold is False
         assert page.hold_for_deploy() is False
+
+    def test_dead_units_never_hold_for_a_stale_flag(self, page, deploy_flag):
+        # A failed/stopped path unit never clears the flag: holding would lock 900 s per boot.
+        deploy_flag.touch()
+        with patch.object(page, "_deploy_units_live", return_value=False):
+            assert page.hold_for_deploy() is False
+        assert page.hold_for_deploy() is False
+        assert not page._deploy_cap_timer.isActive()
+
+
+class TestDeployUnitsLive:
+    @pytest.mark.parametrize(
+        ("stdout", "live"),
+        [
+            ("active\ninactive\n", True),
+            ("inactive\nactivating\n", True),
+            ("failed\ninactive\n", False),
+            ("inactive\ninactive\n", False),
+        ],
+    )
+    def test_reads_systemctl_active_state(self, stdout, live):
+        from BlocksScreen.lib.panels.widgets.MainWindow.updatePage import UpdatePage
+
+        done = subprocess.CompletedProcess([], 0, stdout=stdout)
+        with patch(f"{_UP_MOD}.subprocess.run", return_value=done):
+            assert UpdatePage._deploy_units_live() is live
+
+    def test_systemctl_failure_trusts_the_flag(self):
+        from BlocksScreen.lib.panels.widgets.MainWindow.updatePage import UpdatePage
+
+        # Same fallback as the daemon's deploy_running(); the 900 s cap still bounds it.
+        with patch(f"{_UP_MOD}.subprocess.run", side_effect=OSError):
+            assert UpdatePage._deploy_units_live() is True

@@ -9,6 +9,9 @@ DEPLOY_HOLD_CAP_S = 900.0
 # Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
 DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
 DEPLOY_PATH_UNIT = Path("/etc/systemd/system/BlocksScreen-deploy.path")
+DEPLOY_UNITS = ("BlocksScreen-deploy.path", "BlocksScreen-deploy.service")
+# A failed/stopped path unit never fires, so its stale flag is not a running deploy.
+DEPLOY_LIVE_STATES = frozenset({"active", "activating", "deactivating", "reloading"})
 # error() reason for a run refused while Klipper is printing or not answering.
 PRINTER_BUSY = "printer is busy"
 

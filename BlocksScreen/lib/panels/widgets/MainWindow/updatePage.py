@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import subprocess  # nosec B404
 import typing
 from types import MappingProxyType
 
@@ -13,10 +14,13 @@ from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
+from updater.executor import SYSTEMCTL
 from updater.models import (
     DEPLOY_FLAG,
     DEPLOY_HOLD_CAP_S,
+    DEPLOY_LIVE_STATES,
     DEPLOY_PATH_UNIT,
+    DEPLOY_UNITS,
     PRINTER_BUSY,
     ComponentStatus,
 )
@@ -461,6 +465,22 @@ class UpdatePage(QtWidgets.QWidget):
         except OSError:
             return None
 
+    @staticmethod
+    def _deploy_units_live() -> bool:
+        """Same unit test as the daemon's deploy_running(): a dead path unit never clears the flag."""
+        try:
+            out = subprocess.run(  # nosec B603
+                [SYSTEMCTL, "show", *DEPLOY_UNITS, "-p", "ActiveState", "--value"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=True,
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            # Unknown state falls back to the flag, like the daemon; the cap still bounds it.
+            return True
+        return not DEPLOY_LIVE_STATES.isdisjoint(out.split())
+
     def hold_for_deploy(self) -> bool:
         """Lock the screen while install-updater runs, whatever the daemon says about busy."""
         if self._deploy_hold:
@@ -468,6 +488,10 @@ class UpdatePage(QtWidgets.QWidget):
             return True
         stamp = self._deploy_stamp()
         if self._busy or stamp is None or stamp == self._capped_deploy:
+            return False
+        if not self._deploy_units_live():
+            _log.warning("deploy flag set but its units are dead - not holding")
+            self._capped_deploy = stamp
             return False
         _log.info(
             "deploy flag set - holding the overlay until install-updater finishes"

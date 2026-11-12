@@ -62,7 +62,9 @@ from updater.executor import (
 )
 from updater.locking import process_lock, restart_sentinel_path
 from updater.models import DEPLOY_FLAG as _DEPLOY_FLAG
+from updater.models import DEPLOY_LIVE_STATES as _DEPLOY_LIVE_STATES
 from updater.models import DEPLOY_PATH_UNIT as _DEPLOY_PATH_UNIT
+from updater.models import DEPLOY_UNITS as _DEPLOY_UNITS
 from updater.models import ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
@@ -181,10 +183,6 @@ _FORWARD_HEAL_BASE_S = 1800.0
 _FORWARD_HEAL_JITTER_S = 300.0
 _OFFLINE_PROVISION_TRIES = 6  # ~30 min of 300s polls, for late Wi-Fi
 _FOLLOWUP_TRIES = 3  # counted in the marker, so a crash or reboot mid-try still counts
-
-_DEPLOY_UNITS = ("BlocksScreen-deploy.path", "BlocksScreen-deploy.service")
-# A failed/stopped path unit never fires, so its stale flag is not a running deploy.
-_DEPLOY_LIVE_STATES = frozenset({"active", "activating", "deactivating", "reloading"})
 
 
 class ProgressCallback(Protocol):
