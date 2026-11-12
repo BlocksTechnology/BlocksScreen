@@ -195,6 +195,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.usb_manager.usb_unmounted.connect(
             self.printPanel.filesPage_widget.on_usb_removed
         )
+        self.usb_manager.usb_unmounted.connect(self.printPanel.on_usb_removed)
         if not os.environ.get("BLOCKSCREEN_DEV"):
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
@@ -217,6 +218,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_notifications.connect(self.notiPage.new_notication)
 
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
+        self.printPanel.request_forget_pages.connect(self.forget_pages)
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
@@ -1003,6 +1005,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.set_current_panel_index(_panel)
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
+
+    @QtCore.pyqtSlot(int, list, name="forget-pages")
+    def forget_pages(self, tab_index: int, panels: list[int]) -> None:
+        """Drop back-history entries of pages whose content is gone."""
+        kept: list[list[int]] = []
+        for entry in self.index_stack:
+            gone = entry[0] == tab_index and entry[1] in panels
+            if not gone and (not kept or kept[-1] != entry):  # no Back to the same page
+                kept.append(entry)
+        self.index_stack.clear()
+        self.index_stack.extend(kept)
 
     @QtCore.pyqtSlot(name="bo-start-websocket-connection")
     def bo_start_websocket_connection(self) -> None:

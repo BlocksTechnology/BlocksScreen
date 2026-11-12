@@ -71,6 +71,9 @@ class PrintTab(QtWidgets.QStackedWidget):
     request_change_tab: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, name="request_change_tab"
     )
+    request_forget_pages: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, list, name="request_forget_pages"
+    )
 
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
@@ -796,6 +799,36 @@ class PrintTab(QtWidgets.QStackedWidget):
     def back_button(self) -> None:
         """Goes back to the previous page"""
         self.request_back.emit()
+
+    @staticmethod
+    def _is_on_removed_drive(path: str, gone: str) -> bool:
+        """True if ``path`` is on USB drive ``gone``; empty ``gone`` means any drive."""
+        drive = path.strip("/").split("/", 1)[0]
+        return helper_methods.is_usb_mount(drive) and gone in ("", drive)
+
+    @QtCore.pyqtSlot(str, name="on_usb_removed")
+    def on_usb_removed(self, symlink: str = "") -> None:
+        """Leave the confirm or metadata page of a file on the removed USB drive."""
+        gone = helper_methods.get_file_name(symlink)
+        confirm, meta = self.confirmPage_widget, self.metadataPage_widget
+        stale_confirm = self._is_on_removed_drive(confirm.directory, gone)
+        stale = [confirm] if stale_confirm else []
+        if self._is_on_removed_drive(meta.shown_path, gone):
+            stale.append(meta)
+        if not stale:
+            return
+        page = self.currentWidget()
+        if page in stale:
+            # Another tab is up; global_back would switch to it.
+            if not self.isVisible():
+                self.setCurrentIndex(self.indexOf(self.filesPage_widget))
+            else:
+                self.back_button()
+                # Metadata was over the confirm page.
+                if self.currentWidget() is confirm and stale_confirm:
+                    self.back_button()
+        # A header shortcut from these pages left them in the back history.
+        self.request_forget_pages.emit(0, [self.indexOf(p) for p in stale])
 
     @QtCore.pyqtSlot(name="klipper_ready_signal")
     def klipper_ready_signal(self) -> None:
