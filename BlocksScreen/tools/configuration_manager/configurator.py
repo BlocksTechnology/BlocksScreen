@@ -523,7 +523,11 @@ class ConfigManager:
                 section = pruned[1:-1].strip()
                 out.append(line)
                 continue
-            if _CFG_FIELD_R.sub("", pruned).lower() in saved.get(section, ()):
+            if (field := _CFG_FIELD_R.sub("", pruned).lower()) in saved.get(
+                section, ()
+            ):
+                # A stale saved block on a field box silently overrides the repo value.
+                _logger.info("SAVE_CONFIG overrides [%s] %s", section, field)
                 is_dup_field = True
                 line = "#" + line
             out.append(line)
@@ -625,7 +629,7 @@ class ConfigManager:
                             if name is not None and name not in tgt_sc_map:
                                 merged_save_lines.extend(block)
 
-                        # Autosave wins as in Klipper: changing an owned key needs a migration
+                        # Autosave wins as after Klipper's SAVE_CONFIG; owned keys need a migration
                         merged_header_lines = self._strip_duplicates(
                             merged_header_lines,
                             self._save_config_fields(merged_save_lines),

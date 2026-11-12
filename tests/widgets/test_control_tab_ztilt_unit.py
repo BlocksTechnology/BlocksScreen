@@ -32,7 +32,7 @@ _PASS = "// Retries: 0/6 Probed points range: 0.012700 tolerance: 0.050000"
 _LEGACY_OVERRIDE = "SET_KINEMATIC_POSITION Z=0\nG0 Z10\nM84 Z\nG28 Y\nG28 X"
 
 
-def _make_tab(override: str = "", unsent: tuple[str, ...] = ()):
+def _make_tab(override: str = "", unsent: tuple[str, ...] = (), loaded: bool = True):
     loads: list[tuple[bool, str]] = []
     callbacks: dict[str, object] = {}
 
@@ -47,7 +47,8 @@ def _make_tab(override: str = "", unsent: tuple[str, ...] = ()):
         _ztilt=run,
         hides=[],
         printer=SimpleNamespace(
-            get_config=lambda _s: {"gcode": override} if override else {}
+            configfile={"config": {"printer": {}}} if loaded else {},
+            get_config=lambda _s: {"gcode": override} if override else {},
         ),
         ztilt_result_screen=MagicMock(),
         ztilt_result_screen_timer=MagicMock(),
@@ -186,6 +187,13 @@ def test_timeout_blocks_new_run_until_klipper_answers(tab, qtbot):
     assert loads[-1][0] is False  # Late replies do not reopen the overlay
     ControlTab.handle_ztilt(t)
     assert list(callbacks) == ["G28\nM400"]
+
+
+def test_unloaded_config_counts_as_legacy_override(qtbot):
+    # Just after ready the configfile is empty, so the override is unknown
+    t, loads, callbacks = _make_tab(loaded=False)
+    callbacks["G28\nM400"]("ok")
+    assert list(callbacks) == ["G28\nM400", "Z_TILT_ADJUST"]
 
 
 def test_legacy_override_skips_final_home(qtbot):

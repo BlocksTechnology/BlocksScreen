@@ -336,6 +336,9 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def _home_keeps_tilt(self) -> bool:
         """False on the legacy homing override, whose M84 undoes the tilt."""
+        # Config not loaded yet (just after ready) reads as no override at all.
+        if not self.printer.configfile.get("config"):
+            return False
         override = self.printer.get_config("homing_override").get("gcode", "")
         return not _LEGACY_HOME_M84.search(override)
 
