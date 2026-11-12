@@ -5,19 +5,26 @@ from unittest.mock import MagicMock
 import pytest
 
 
+class _FakeRunner:
+    """Records MoonAPI.run_gcode calls and reports each request as sent."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    def __call__(self, script: str, callback: object = None) -> bool:
+        self.calls.append((script, callback))
+        return True
+
+
 @pytest.fixture
 def page(qtbot):
     from BlocksScreen.lib.panels.widgets.UtilitiesTab.axisMaintPage import (
         AxisMaintPage,
     )
 
-    calls: list = []
-
-    def run_gcode(script, callback=None):
-        calls.append((script, callback))
-        return True
-
-    p = AxisMaintPage(None, gcode_runner=run_gcode)
+    runner = _FakeRunner()
+    calls = runner.calls
+    p = AxisMaintPage(None, gcode_runner=runner)
     qtbot.addWidget(p)
     p.show()
     p.am_x.setChecked(True)

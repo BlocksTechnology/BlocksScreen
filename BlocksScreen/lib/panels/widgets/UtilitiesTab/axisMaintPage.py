@@ -1,5 +1,4 @@
 import logging
-import typing
 from collections.abc import Callable
 from functools import partial
 
@@ -19,6 +18,7 @@ _PREP_TIMEOUT_MS = 600_000
 _CYCLE_TIMEOUT_MS = 600_000
 # Klipper errors are broadcast as "!!" (MainWindow popup); -1/503 show ConnectionPage.
 _COVERED_ERROR_CODES = frozenset({-1, 400, 503})
+_POPUP_HIDE_MS = 5000
 
 
 class AxisMaintPage(QtWidgets.QWidget):
@@ -30,7 +30,7 @@ class AxisMaintPage(QtWidgets.QWidget):
 
     def __init__(
         self,
-        parent: typing.Optional["QtWidgets.QWidget"],
+        parent: QtWidgets.QWidget | None,
         gcode_runner: Callable[..., bool] | None = None,
     ) -> None:
         super().__init__(parent)
@@ -49,7 +49,7 @@ class AxisMaintPage(QtWidgets.QWidget):
         # No buttons on a non-dialog popup, so it must hide itself.
         self._error_hide = QtCore.QTimer(self)
         self._error_hide.setSingleShot(True)
-        self._error_hide.setInterval(5000)
+        self._error_hide.setInterval(_POPUP_HIDE_MS)
         self._error_hide.timeout.connect(self.error_popup.hide)
 
         self._setup_ui()
@@ -92,8 +92,7 @@ class AxisMaintPage(QtWidgets.QWidget):
         # A second run would queue behind the first in Klipper's gcode mutex.
         self.am_execute.setEnabled(False)
 
-        # Moonraker replies to gcode.script once Klipper has run the whole script,
-        # and fails it with an error when the socket closes, so a reply always comes.
+        # Moonraker replies after the whole script, or errors on socket close, so one comes.
         self._safety.start(timeout_ms)
         run = self.gcode_runner
         if run is None:
@@ -167,7 +166,7 @@ class AxisMaintPage(QtWidgets.QWidget):
             )
             return
         self.call_load_panel.emit(False, "", False)
-        if isinstance(result, dict) and "error" in result:
+        if isinstance(result, dict) and result.get("error") is not None:
             return
         self.answerPage.show()
 
