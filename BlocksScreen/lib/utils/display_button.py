@@ -398,12 +398,13 @@ class DisplayButton(QtWidgets.QPushButton):
         if name == "icon_pixmap":
             self.icon_pixmap = value
             self._icon_cache_size = QtCore.QSize()
-        if name == "secondary_pixmap":
+        elif name == "secondary_pixmap":
             self.icon_pixmap_secondary = value
             self._icon_secondary_cache_size = QtCore.QSize()
         elif name == "button_type":
             self._button_type = value
         elif name == "display_format":
             self.display_format = value
-
+        if name in ("icon_pixmap", "secondary_pixmap", "display_format"):
+            self.update()  # setText skips unchanged text, so nothing else repaints
         return super().setProperty(name, value)

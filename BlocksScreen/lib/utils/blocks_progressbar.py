@@ -88,6 +88,7 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         """
         self._pixmap = pixmap
         self._scale_pixmap()
+        self.update()  # set_progress skips sub-percent repaints, so it may never come
 
     def changeEvent(self, a0: QtCore.QEvent | None) -> None:
         """Re-implemented method, drop the cached text font on a font change"""

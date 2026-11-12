@@ -51,6 +51,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self._baseline_offset: float = 0.0
         self._background_path: QtGui.QPainterPath | None = None
         self._glow_path: QtGui.QPainterPath | None = None
+        self._path_rect: QtCore.QRect = QtCore.QRect()
         self._icon_cache: QtGui.QPixmap | None = None
         self._icon_cache_size: QtCore.QSize = QtCore.QSize()
         self._icon_target: QtCore.QRectF = QtCore.QRectF()
@@ -59,6 +60,7 @@ class BlocksLabel(QtWidgets.QLabel):
         """Drop every cache whose value depends on the widget size"""
         self._background_path = None
         self._glow_path = None
+        self._path_rect = QtCore.QRect()
         self._icon_cache = None
         self._icon_cache_size = QtCore.QSize()
 
@@ -295,6 +297,10 @@ class BlocksLabel(QtWidgets.QLabel):
         qp.setRenderHint(qp.RenderHint.Antialiasing, True)
         qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform, True)
         rect = self.contentsRect()
+        if rect != self._path_rect:  # margins move it without a resize
+            self._background_path = None
+            self._glow_path = None
+            self._path_rect = rect
         if self._background_color:
             qp.setBrush(self._background_color)
             qp.setPen(QtCore.Qt.PenStyle.NoPen)
