@@ -1011,31 +1011,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.try_connection()
 
     def messageReceivedEvent(self, event: events.WebSocketMessageReceived) -> None:
-        """Helper method that handles dispatching websocket
-        event messages to their respective handlers
-
-        Args:
-            event (events.WebSocketMessageReceivedEvent): The message event with all its contents
-
-        Raises:
-            Exception: When a klippy status change comes from the
-            websocket, tries to send another event
-            corresponding to the incoming status.
-            If the QApplication instance is of type
-            None raises an exception because the event
-            cannot be sent.
-        """
+        """Dispatch a websocket message to the handler for its method's route."""
         _method = event.method
         _data = event.data
         _metadata = event.metadata
         if not _method:
             return
-        if not _data:
+        if _method.startswith("notify_klippy_"):
+            route = "notify_klippy"
+        elif not _data:
             return
-        api_reference = _method.split(".")
-        if "klippy" in _method:
-            api_reference = "notify_klippy"
-        method_handle = f"_handle_{api_reference[0]}_message"
+        else:
+            route = _method.split(".")[0]
+        method_handle = f"_handle_{route}_message"
         if hasattr(self, method_handle):
             obj = getattr(self, method_handle)
             if callable(obj):
@@ -1104,51 +1092,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_notify_klippy_message(self, method, data, metadata) -> None:
-        """Handle websocket notifications for klippy events"""
-        _split = method.split("_")
-        if len(_split) > 2:
-            status_type = _split[2]
-            _state_upper = status_type[0].upper()
-            _state_call = f"{_state_upper}{status_type[1:]}"
-            _logger.debug(
-                "Notify_klippy_ %s Received from object subscription.",
-                str(_state_call),
-            )
-            self.klippy_status.on_klippy_notify(status_type)
-            if hasattr(events, f"Klippy{_state_call}"):
-                _klippy_event_callback = getattr(
-                    events,
-                    f"Klippy{_state_call}",
-                )
-                if callable(_klippy_event_callback):
-                    try:
-                        _event = _klippy_event_callback(data="")
-                        instance = QtWidgets.QApplication.instance()
-                        if not isinstance(_event, QtCore.QEvent):
-                            return
-                        if instance:
-                            _logger.info("Event %s sent", str(_klippy_event_callback))
-                            instance.postEvent(self, _event)
-                        else:
-                            raise Exception("QApplication.instance is None type.")
-                    except Exception as e:
-                        _logger.debug(
-                            "Unable to send internal klippy %s notification: %s",
-                            str(_state_call),
-                            str(e),
-                        )
-            if not self._popup_toggle and status_type in (
-                "shutdown",
-                "error",
-                "disconnected",
-            ):
-                self._emit_filtered_notification(
-                    MessageSource.KLIPPY_STATE,
-                    status_type,
-                    source_id="klippy_state",
-                    fallback=False,
-                    show_popup=True,
-                )
+        """Route notify_klippy_* to KlippyStatus (KlipperScreen notification_handler)."""
+        state = method.removeprefix("notify_klippy_")
+        try:
+            self.klippy_status.on_klippy_notify(state)
+        except Exception:
+            # Raised out of a Qt event override, PyQt6 aborts the whole app.
+            _logger.exception("KlippyStatus failed on notify_klippy_%s", state)
 
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
