@@ -9,11 +9,10 @@ import hashlib
 import logging
 import os
 import pathlib
-import shutil
 import subprocess
 import sys
 import threading
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -752,6 +751,20 @@ class TestMergeCfgMarker:
         result.read_string(tgt.read_text())
         assert result.get("section", "opt") == "from_repo"
 
+    def test_target_no_marker_strips_keys_the_source_block_owns(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(
+            tmp_path / "src_printer.cfg",
+            "[probe]\nz_offset: 2.0\nspeed: 5\n"
+            + SV_CONFIG_MARKER
+            + "\n#*# [probe]\n#*# z_offset = 1.0\n",
+        )
+        tgt = _write(tmp_path / "tgt_printer.cfg", "[probe]\nspeed: 5\n")
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
+        lines = tgt.read_text().splitlines()
+        assert "#z_offset: 2.0" in lines and "speed: 5" in lines
+        assert "#*# z_offset = 1.0" in lines
+
     def test_src_with_marker_target_also_with_marker(self, tmp_path):
         mgr = _make_manager(tmp_path)
         src = _write(
@@ -947,6 +960,32 @@ class TestMergeCfgMarker:
         assert "canbus_uuid: 456" in merged
         assert "canbus_uuid: 123" not in merged
         assert "/tmp/klipper_host_mcu" not in merged
+
+    def test_save_config_keys_stay_commented_in_header(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(
+            tmp_path / "src_printer.cfg",
+            "[input_shaper]\nshaper_freq_x: 57.0\nshaper_type_x: mzv\n"
+            "[bed_mesh]\nspeed: 100\nzero_ref: 1,\n  2\n",
+        )
+        save = (
+            SV_CONFIG_MARKER + "\n#*# DO NOT EDIT THIS BLOCK OR BELOW.\n#*#\n"
+            "#*# [input_shaper]\n#*# shaper_freq_x = 108.8\n"
+            "#*# [bed_mesh]\n#*# zero_ref = 3,\n#*# \t4\n"
+        )
+        tgt = _write(
+            tmp_path / "tgt_printer.cfg",
+            "[input_shaper]\n#shaper_freq_x: 57.0\nshaper_type_x: mzv\n"
+            "[bed_mesh]\nspeed: 100\n#zero_ref: 1,\n#  2\n" + save,
+        )
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
+        merged = tgt.read_text()
+        header = merged[: merged.index(SV_CONFIG_MARKER)]
+        assert "#shaper_freq_x: 57.0\nshaper_type_x: mzv\n" in header
+        assert "speed: 100\n#zero_ref: 1,\n#  2\n" in header
+        assert merged.endswith(save)
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
+        assert tgt.read_text() == merged
 
 
 # =========================================================================
