@@ -331,3 +331,35 @@ def test_notify_klippy_reaches_klippy_status(state) -> None:
     MainWindow.messageReceivedEvent(win, event)
 
     win.klippy_status.on_klippy_notify.assert_called_once_with(state)
+
+
+def _route_win() -> SimpleNamespace:
+    win = SimpleNamespace(klippy_status=MagicMock(), _handle_server_message=MagicMock())
+    win._handle_notify_klippy_message = MethodType(
+        MainWindow._handle_notify_klippy_message, win
+    )
+    return win
+
+
+def test_notify_klippy_routes_without_data() -> None:
+    win = _route_win()
+    event = SimpleNamespace(method="notify_klippy_ready", data={}, metadata=None)
+    MainWindow.messageReceivedEvent(win, event)
+    win.klippy_status.on_klippy_notify.assert_called_once_with("ready")
+
+
+def test_other_methods_route_by_namespace() -> None:
+    win = _route_win()
+    event = SimpleNamespace(method="server.files.list", data={"x": 1}, metadata="m")
+    MainWindow.messageReceivedEvent(win, event)
+    win._handle_server_message.assert_called_once_with(
+        "server.files.list", {"x": 1}, "m"
+    )
+    win.klippy_status.on_klippy_notify.assert_not_called()
+
+
+def test_klippy_status_error_does_not_escape_the_event() -> None:
+    win = _route_win()
+    win.klippy_status.on_klippy_notify.side_effect = RuntimeError("render")
+    event = SimpleNamespace(method="notify_klippy_shutdown", data={}, metadata=None)
+    MainWindow.messageReceivedEvent(win, event)

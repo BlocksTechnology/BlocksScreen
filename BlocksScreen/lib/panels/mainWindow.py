@@ -1017,10 +1017,10 @@ class MainWindow(QtWidgets.QMainWindow):
         _metadata = event.metadata
         if not _method:
             return
-        if not _data:
-            return
         if _method.startswith("notify_klippy_"):
             route = "notify_klippy"
+        elif not _data:
+            return
         else:
             route = _method.split(".")[0]
         method_handle = f"_handle_{route}_message"
@@ -1093,7 +1093,12 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_klippy_message(self, method, data, metadata) -> None:
         """Route notify_klippy_* to KlippyStatus (KlipperScreen notification_handler)."""
-        self.klippy_status.on_klippy_notify(method.removeprefix("notify_klippy_"))
+        state = method.removeprefix("notify_klippy_")
+        try:
+            self.klippy_status.on_klippy_notify(state)
+        except Exception:
+            # Raised out of a Qt event override, PyQt6 aborts the whole app.
+            _logger.exception("KlippyStatus failed on notify_klippy_%s", state)
 
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
