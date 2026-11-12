@@ -72,6 +72,9 @@ class PrintTab(QtWidgets.QStackedWidget):
     request_change_tab: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, name="request_change_tab"
     )
+    request_forget_pages: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, list, name="request_forget_pages"
+    )
 
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
@@ -808,10 +811,14 @@ class PrintTab(QtWidgets.QStackedWidget):
             return
         if not self.isVisible():  # another tab is up; global_back would switch to it
             self.setCurrentIndex(self.indexOf(self.filesPage_widget))
-            return
-        self.back_button()
-        if self.currentWidget() is confirm and stale_confirm:  # metadata was over it
+        else:
             self.back_button()
+            if self.currentWidget() is confirm and stale_confirm:  # meta was over it
+                self.back_button()
+        stale = [self.indexOf(confirm)] if stale_confirm else []
+        if on_gone_drive(meta.shown_path):
+            stale.append(self.indexOf(meta))
+        self.request_forget_pages.emit(0, stale)  # else a later Back lands on them
 
     @QtCore.pyqtSlot(name="klipper_ready_signal")
     def klipper_ready_signal(self) -> None:

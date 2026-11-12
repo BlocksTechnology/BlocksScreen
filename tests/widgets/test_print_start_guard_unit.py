@@ -450,6 +450,7 @@ class TestUsbRemovedLeavesStalePages:
             filesPage_widget=pages["files"],
             stack=[pages[n] for n in stack],
             isVisible=lambda: True,
+            request_forget_pages=MagicMock(),
         )
         tab.currentWidget = lambda: tab.stack[-1]
         tab.back_button = lambda: tab.stack.pop()
@@ -464,6 +465,7 @@ class TestUsbRemovedLeavesStalePages:
         tab = self._tab(["files", "confirm"], "USB-BLOCKS")
         PrintTab.on_usb_removed(tab, "/home/blocks/printer_data/gcodes/USB-BLOCKS")
         assert self._top(tab) == "files"
+        tab.request_forget_pages.emit.assert_called_once_with(0, ["confirm"])
 
     def test_metadata_over_usb_confirm_goes_back_twice(self) -> None:
         tab = self._tab(
@@ -471,6 +473,7 @@ class TestUsbRemovedLeavesStalePages:
         )
         PrintTab.on_usb_removed(tab, "")
         assert self._top(tab) == "files"
+        tab.request_forget_pages.emit.assert_called_once_with(0, ["confirm", "meta"])
 
     @pytest.mark.parametrize(
         ("confirm_dir", "symlink"),
@@ -480,15 +483,18 @@ class TestUsbRemovedLeavesStalePages:
         tab = self._tab(["files", "confirm"], confirm_dir)
         PrintTab.on_usb_removed(tab, symlink)
         assert self._top(tab) == "confirm"
+        tab.request_forget_pages.emit.assert_not_called()
 
     def test_job_metadata_stays_over_stale_confirm(self) -> None:
         tab = self._tab(["files", "confirm", "meta"], "USB-BLOCKS", "cube.gcode")
         PrintTab.on_usb_removed(tab, "USB-BLOCKS")
         assert self._top(tab) == "meta"
+        tab.request_forget_pages.emit.assert_not_called()
 
-    def test_hidden_tab_resets_without_global_back(self) -> None:
+    def test_hidden_tab_resets_and_forgets_history(self) -> None:
         tab = self._tab(["files", "confirm"], "USB-BLOCKS")
         tab.isVisible = lambda: False
         PrintTab.on_usb_removed(tab, "USB-BLOCKS")
         tab.setCurrentIndex.assert_called_once_with("files")
         assert self._top(tab) == "confirm"
+        tab.request_forget_pages.emit.assert_called_once_with(0, ["confirm"])

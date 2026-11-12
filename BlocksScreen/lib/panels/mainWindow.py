@@ -218,6 +218,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_notifications.connect(self.notiPage.new_notication)
 
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
+        self.printPanel.request_forget_pages.connect(self.forget_pages)
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
@@ -1004,6 +1005,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.set_current_panel_index(_panel)
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
+
+    @QtCore.pyqtSlot(int, list, name="forget-pages")
+    def forget_pages(self, tab_index: int, panels: list) -> None:
+        """Drop back-history entries of pages whose content is gone."""
+        kept = [e for e in self.index_stack if e[0] != tab_index or e[1] not in panels]
+        self.index_stack.clear()
+        self.index_stack.extend(kept)
 
     @QtCore.pyqtSlot(name="bo-start-websocket-connection")
     def bo_start_websocket_connection(self) -> None:
