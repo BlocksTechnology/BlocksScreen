@@ -24,6 +24,7 @@ def _resources(qapp):
         importlib.import_module(f"{_RC_PACKAGE}.{blob.stem}")
     BlocksPixmap.clear()
     yield
+    BlocksPixmap._closed = False
     BlocksPixmap.clear()
 
 
@@ -63,6 +64,7 @@ def test_clear_empties_every_cache():
     assert not BlocksPixmap._pixmaps
     assert not BlocksPixmap._scaled
     assert not BlocksPixmap._tints
+    assert not BlocksPixmap._origins
 
 
 def test_get_resamples_a_surface_once():
@@ -90,9 +92,16 @@ def test_get_keys_on_the_aspect_mode():
     assert keep.size() != ignore.size()
 
 
+def _surface(width: int = 64, height: int = 64) -> QtGui.QPixmap:
+    """A pixmap with no resource path behind it, as a decoded thumbnail is."""
+    pixmap = QtGui.QPixmap(width, height)
+    pixmap.fill(QtCore.Qt.GlobalColor.red)
+    return pixmap
+
+
 def test_derived_cache_is_bounded():
     """One 400x300 thumbnail costs 30 icon rescales, so the budget counts bytes not entries."""
-    source = BlocksPixmap.get(Icon.BACK)
+    source = _surface()
     for edge in range(16, 400):
         BlocksPixmap.get(source, QtCore.QSize(edge, edge))
     assert BlocksPixmap._scaled._bytes <= BlocksPixmap._scaled._budget
@@ -110,13 +119,82 @@ def test_get_without_size_returns_a_surface_unchanged():
     assert BlocksPixmap.get(source).cacheKey() == source.cacheKey()
 
 
-def test_thumbnail_resample_spares_the_icon_cache():
-    """A 400x300 thumbnail lands in its own budget, not the icon rescale one."""
-    thumbnail = QtGui.QPixmap(400, 300)
-    thumbnail.fill(QtCore.Qt.GlobalColor.red)
-    BlocksPixmap.get(thumbnail, QtCore.QSize(200, 150))
+def test_scaled_caches_nothing():
+    """A thumbnail is shown once per file, so caching it would only evict icons."""
+    result = BlocksPixmap.scaled(_surface(400, 300), QtCore.QSize(200, 150))
+    assert result.deviceIndependentSize().toSize() == QtCore.QSize(200, 150)
+    assert not BlocksPixmap._scaled and not BlocksPixmap._pixmaps
+
+
+def test_large_resample_output_is_not_cached():
+    """A 32px thumbnail blown up to 690px is sized by its output, not its source."""
+    BlocksPixmap.get(_surface(32, 32), QtCore.QSize(690, 690))
     assert not BlocksPixmap._scaled
-    assert len(BlocksPixmap._thumbnails) == 1
+
+
+def test_returned_pixmap_is_a_private_copy():
+    """A caller painting on its pixmap must not repaint the icon for everyone."""
+    size = QtCore.QSize(32, 32)
+    mine = BlocksPixmap.get(Icon.BACK, size)
+    mine.fill(QtCore.Qt.GlobalColor.red)
+    assert BlocksPixmap.get(Icon.BACK, size).toImage() != mine.toImage()
+
+
+def test_held_icon_re_renders_from_its_svg():
+    """A 128px setup pixmap drawn at 256px renders the SVG, never upscales the raster."""
+    held = BlocksPixmap.get(Icon.BACK)
+    size = QtCore.QSize(256, 256)
+    assert (
+        BlocksPixmap.get(held, size).cacheKey()
+        == BlocksPixmap.get(Icon.BACK, size).cacheKey()
+    )
+    assert not BlocksPixmap._scaled
+
+
+def test_tint_survives_its_source_being_evicted():
+    """Keyed on the render, so a re-rendered icon still hits its old tint."""
+    BlocksPixmap.tinted(BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32)), "white")
+    BlocksPixmap._pixmaps.clear()
+    BlocksPixmap.tinted(BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32)), "white")
+    assert len(BlocksPixmap._tints) == 1
+
+
+@pytest.mark.parametrize(
+    ("source", "size"),
+    [(Icon.BACK, QtCore.QSize(0, 0)), (":/no/such/key.svg", QtCore.QSize(32, 32))],
+    ids=["before-layout", "unknown-key"],
+)
+def test_null_render_is_not_cached(source, size):
+    """Caching a null would pin a blank icon after layout or hide a key typo."""
+    assert BlocksPixmap.get(source, size).isNull()
+    assert not BlocksPixmap._pixmaps
+
+
+def test_ignore_aspect_fills_the_target_exactly():
+    """Distorting card art renders covering then shrinks, so it fills the whole rect."""
+    pixmap = BlocksPixmap.get(
+        Icon.BACK, QtCore.QSize(80, 20), QtCore.Qt.AspectRatioMode.IgnoreAspectRatio
+    )
+    assert pixmap.deviceIndependentSize().toSize() == QtCore.QSize(80, 20)
+
+
+def test_default_size_fits_128():
+    """Setup-time callers have no paint size yet, so an Icon alone renders at 128px."""
+    size = BlocksPixmap.get(Icon.BACK).deviceIndependentSize().toSize()
+    assert max(size.width(), size.height()) == 128
+
+
+def test_source_decodes_once():
+    """Full-bleed art is a large PNG; decoding it per call is the cost to avoid."""
+    first = BlocksPixmap.source(Icon.BACKGROUND_1ST)
+    assert BlocksPixmap.source(Icon.BACKGROUND_1ST).cacheKey() == first.cacheKey()
+
+
+def test_close_stops_caching_late_paints():
+    """A paint after on_quit must not mint a surface that outlives qApp."""
+    BlocksPixmap.close()
+    assert BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32)).isNull()
+    assert not BlocksPixmap._pixmaps and not BlocksPixmap._icons
 
 
 def test_tint_keeps_the_source_device_pixel_ratio():
@@ -215,6 +293,9 @@ def test_get_costs_far_less_than_source():
         (9, True, Icon.WIFI_4BAR_PROTECTED),
         (2.0, False, Icon.WIFI_2BAR),
         (True, False, Icon.WIFI_1BAR),
+        (2.9, False, Icon.WIFI_3BAR),
+        (None, False, Icon.WIFI_0BAR),
+        (float("nan"), True, Icon.WIFI_0BAR_PROTECTED),
     ],
 )
 def test_wifi_clamps_to_the_declared_assets(bars, protected, expected):
