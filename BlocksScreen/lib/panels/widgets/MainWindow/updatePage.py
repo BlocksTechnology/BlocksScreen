@@ -13,7 +13,13 @@ from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
-from updater.models import PRINTER_BUSY, ComponentStatus
+from updater.models import (
+    DEPLOY_FLAG,
+    DEPLOY_HOLD_CAP_S,
+    DEPLOY_PATH_UNIT,
+    PRINTER_BUSY,
+    ComponentStatus,
+)
 
 _log = logging.getLogger(__name__)
 _DESCRIBE_SUFFIX = re.compile(r"-(\d+)-g[0-9a-f]+$")
@@ -105,6 +111,16 @@ class UpdatePage(QtWidgets.QWidget):
         self._stale_overlay_timer.setSingleShot(True)
         self._stale_overlay_timer.setInterval(60000)
         self._stale_overlay_timer.timeout.connect(self._dismiss_stale_overlay)
+        # Pre-hold daemons (Release-2.0) report busy=False while install-updater still runs.
+        self._deploy_hold: bool = False
+        self._capped_deploy: int | None = None
+        self._deploy_poll_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._deploy_poll_timer.setInterval(1000)
+        self._deploy_poll_timer.timeout.connect(self._poll_deploy_flag)
+        self._deploy_cap_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._deploy_cap_timer.setSingleShot(True)
+        self._deploy_cap_timer.setInterval(int(DEPLOY_HOLD_CAP_S * 1000))
+        self._deploy_cap_timer.timeout.connect(self._on_deploy_cap)
         self._update_confirm_popup: BasePopup | None = None
         self.show_loading(True)
 
@@ -357,7 +373,9 @@ class UpdatePage(QtWidgets.QWidget):
         self._update_avail = _update_avail
         if not self._busy:
             self.show_loading(False)
-            if self._post_update_status_pending and not self._restart_pending:
+            if self.hold_for_deploy():
+                _log.debug("status_ready: skipping loadscreen dismiss (deploy running)")
+            elif self._post_update_status_pending and not self._restart_pending:
                 _log.debug("status_ready: emitting call_load_panel(False)")
                 self.call_load_panel.emit(False, "", False)
                 self._post_update_status_pending = False
@@ -398,7 +416,9 @@ class UpdatePage(QtWidgets.QWidget):
             self._progress_label.hide()
             self._cancel_btn.hide()
             self.update_all_btn.setEnabled(True)
-            if self._restart_pending:
+            if self.hold_for_deploy():
+                _log.debug("busy=False: install-updater still running, overlay held")
+            elif self._restart_pending:
                 # Keep the overlay up: SIGTERM is imminent, MainWindow would flash.
                 self._restart_grace_timer.start()
             elif self._overlay_shown:
@@ -430,6 +450,56 @@ class UpdatePage(QtWidgets.QWidget):
         """Daemon left mid-busy to restart: keep the overlay until the new one reports."""
         self._cancel_btn.hide()
         self._show_finishing_overlay()
+
+    @staticmethod
+    def _deploy_stamp() -> int | None:
+        """Flag mtime while a deploy is pending; same test as the daemon's deploy_pending()."""
+        if not DEPLOY_PATH_UNIT.exists():
+            return None
+        try:
+            return DEPLOY_FLAG.stat().st_mtime_ns
+        except OSError:
+            return None
+
+    def hold_for_deploy(self) -> bool:
+        """Lock the screen while install-updater runs, whatever the daemon says about busy."""
+        if self._deploy_hold:
+            self._show_finishing_overlay()
+            return True
+        stamp = self._deploy_stamp()
+        if self._busy or stamp is None or stamp == self._capped_deploy:
+            return False
+        _log.info(
+            "deploy flag set - holding the overlay until install-updater finishes"
+        )
+        self._deploy_hold = True
+        self._stale_overlay_timer.stop()
+        self._deploy_poll_timer.start()
+        self._deploy_cap_timer.start()
+        self._show_finishing_overlay()
+        return True
+
+    def _poll_deploy_flag(self) -> None:
+        if self._deploy_stamp() is None:
+            _log.info("deploy flag cleared - waiting for the restarted updater")
+            self._end_deploy_hold()
+
+    def _on_deploy_cap(self) -> None:
+        _log.warning(
+            "install-updater still running after %.0fs - releasing the overlay",
+            DEPLOY_HOLD_CAP_S,
+        )
+        self._capped_deploy = self._deploy_stamp()
+        self._end_deploy_hold()
+
+    def _end_deploy_hold(self) -> None:
+        """install-updater restarts the daemon last: ride that restart on the grace timer."""
+        self._deploy_hold = False
+        self._deploy_poll_timer.stop()
+        self._deploy_cap_timer.stop()
+        if not self._busy:
+            self._restart_pending = True
+            self._restart_grace_timer.start()
 
     def _dismiss_stale_overlay(self) -> None:
         """Drop the overlay if the post-update status never arrived."""
@@ -565,6 +635,10 @@ class UpdatePage(QtWidgets.QWidget):
         )
         self.update_all_btn.setEnabled(False)
         self.reload_btn.setEnabled(True)
+        # MainWindow just dropped the overlay; re-lock if this exit is the deploy's restart.
+        if not self.hold_for_deploy() and self._restart_pending:
+            self._restart_grace_timer.start()
+            self._show_finishing_overlay()
 
     def show_loading(self, loading: bool = False) -> None:
         """Toggle between the spinner overlay and the scrollable component list."""

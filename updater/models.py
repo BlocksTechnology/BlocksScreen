@@ -6,6 +6,9 @@ from pathlib import Path
 # Shared with the UI process: imports nothing beyond the stdlib.
 # oneshot has no start timeout: bounds a hung install-updater (first DeviceDiscovery build takes minutes).
 DEPLOY_HOLD_CAP_S = 900.0
+# Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
+DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
+DEPLOY_PATH_UNIT = Path("/etc/systemd/system/BlocksScreen-deploy.path")
 # error() reason for a run refused while Klipper is printing or not answering.
 PRINTER_BUSY = "printer is busy"
 
