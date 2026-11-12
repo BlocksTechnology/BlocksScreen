@@ -99,10 +99,10 @@ class ProbeHelper(QtWidgets.QWidget):
 
         self.setObjectName("probe_offset_page")
         self._setup_ui()
-        self.inductive_icon = BlocksPixmap.get(Icon.INDUCTIVE)
-        self.bltouch_icon = BlocksPixmap.get(Icon.BLTOUCH)
-        self.endstop_icon = BlocksPixmap.get(Icon.SWITCH_ZOOM)
-        self.eddy_icon = BlocksPixmap.get(Icon.EDDY_MECH)
+        self.inductive_icon = Icon.INDUCTIVE
+        self.bltouch_icon = Icon.BLTOUCH
+        self.endstop_icon = Icon.SWITCH_ZOOM
+        self.eddy_icon = Icon.EDDY_MECH
         self._toggle_tool_buttons(False)
         self.mb_raise_nozzle.clicked.connect(lambda: self.handle_nozzle_move("raise"))
         self.mb_lower_nozzle.clicked.connect(lambda: self.handle_nozzle_move("lower"))

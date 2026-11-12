@@ -1,4 +1,4 @@
-"""Load-once registry of Qt resource pixmaps, rendered at draw size instead of intrinsic size."""
+"""Load-once registry of Qt resource pixmaps, rendered at draw size, not intrinsic."""
 
 from enum import StrEnum
 
@@ -6,6 +6,82 @@ from PyQt6 import QtCore, QtGui
 
 # Setup-time callers cannot know their paint size; 128 clears the tallest button.
 _ICON_EDGE = 128
+
+_KEEP_ASPECT = QtCore.Qt.AspectRatioMode.KeepAspectRatio
+_SMOOTH = QtCore.Qt.TransformationMode.SmoothTransformation
+_SOURCE_IN = QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
+
+_SizeLike = QtCore.QSize | QtCore.QSizeF | QtCore.QRect | QtCore.QRectF
+
+_MIB = 1024 * 1024
+
+# Largest icon surface (a 300px option card); a bigger resample is a thumbnail.
+_ICON_SOURCE_COST = 300 * 300 * 4
+
+# Origins are a few hundred bytes each, so the cap only stops unbounded resize churn.
+_MAX_ORIGINS = 4096
+
+
+def _as_size(size: _SizeLike) -> QtCore.QSize:
+    """Truncate any Qt size or rect to a QSize, so an icon never outgrows its rect."""
+    if isinstance(size, (QtCore.QRect, QtCore.QRectF)):
+        size = size.size()
+    if isinstance(size, QtCore.QSize):
+        return size
+    return QtCore.QSize(int(size.width()), int(size.height()))
+
+
+def _cost(pixmap: QtGui.QPixmap) -> int:
+    """Byte footprint of a surface: an entry count says nothing on a 2 GB board."""
+    return pixmap.width() * pixmap.height() * pixmap.depth() // 8
+
+
+def _resample(
+    pixmap: QtGui.QPixmap, size: QtCore.QSize, aspect: QtCore.Qt.AspectRatioMode
+) -> QtGui.QPixmap:
+    """Smooth-scale *pixmap* to the logical *size*, keeping its device pixel ratio."""
+    dpr = pixmap.devicePixelRatio()
+    scaled = pixmap.scaled(size * dpr, aspect, _SMOOTH)
+    scaled.setDevicePixelRatio(dpr)
+    return scaled
+
+
+class _PixmapCache:
+    """Byte-bounded LRU, so one 400x300 thumbnail cannot evict a screenful of icons."""
+
+    def __init__(self, budget: int) -> None:
+        """Hold entries newest-last, since a dict already preserves insertion order."""
+        self._entries: dict[tuple, QtGui.QPixmap] = {}
+        self._budget = budget
+        self._bytes = 0
+
+    def __len__(self) -> int:
+        """Report the entry count, so a caller can assert the cache emptied."""
+        return len(self._entries)
+
+    def get(self, key: tuple) -> QtGui.QPixmap | None:
+        """Return the entry for *key* and move it to newest, which is the LRU touch."""
+        pixmap = self._entries.pop(key, None)
+        if pixmap is not None:
+            self._entries[key] = pixmap
+        return pixmap
+
+    def put(self, key: tuple, pixmap: QtGui.QPixmap) -> QtGui.QPixmap:
+        """Store *pixmap*, then evict least-recent entries until inside the budget."""
+        stale = self._entries.pop(key, None)
+        if stale is not None:
+            self._bytes -= _cost(stale)
+        self._entries[key] = pixmap
+        self._bytes += _cost(pixmap)
+        # An evicted entry a widget still holds only mints a duplicate, never a fault.
+        while self._bytes > self._budget and len(self._entries) > 1:
+            self._bytes -= _cost(self._entries.pop(next(iter(self._entries))))
+        return pixmap
+
+    def clear(self) -> None:
+        """Drop every entry and reset the running total with it."""
+        self._entries.clear()
+        self._bytes = 0
 
 
 class Icon(StrEnum):
@@ -68,6 +144,7 @@ class Icon(StrEnum):
     LEFT_ARROW = ":/arrow_icons/media/btn_icons/left_arrow.svg"
     LOADED_SPOOL = ":/filament_related/media/btn_icons/loaded_spool.svg"
     LOAD_FILAMENT = ":/filament_related/media/btn_icons/load_filament.svg"
+    LOGO_BLOCKS = ":/graphics/media/logoblocks400x300.png"
     MENU_CONTROL = ":/icons/media/main_menu/ICON_control.png"
     MENU_CONTROL_BLOCKED = ":/icons/media/main_menu/ICON_control_blocked.png"
     MENU_CONTROL_PRESSED = ":/icons/media/main_menu/ICON_control_pressed.png"
@@ -137,7 +214,11 @@ class Icon(StrEnum):
     @classmethod
     def wifi(cls, bars: int, protected: bool = False) -> "Icon":
         """Return the signal-strength icon for *bars*, clamped to the 0..4 assets."""
-        bars = min(max(int(bars), 0), 4)
+        try:
+            bars = min(max(round(bars), 0), 4)
+        except (TypeError, ValueError, OverflowError):
+            # NetworkManager reports no strength for a hidden or vanishing AP.
+            bars = 0
         return cls[f"WIFI_{bars}BAR{'_PROTECTED' if protected else ''}"]
 
 
@@ -146,45 +227,177 @@ class BlocksPixmap:
 
     # Two QIcons over one path do not share their render cache, so hold the QIcon.
     _icons: dict[str, QtGui.QIcon] = {}
-    _pixmaps: dict[tuple[str, int, int], QtGui.QPixmap] = {}
 
-    # An evicted entry a widget still holds only mints a duplicate.
-    _MAX_PIXMAPS = len(Icon) * 2
+    # Not QPixmapCache: its idle flush drops entries widgets still hold.
+    _pixmaps = _PixmapCache(12 * _MIB)
+
+    # Resamples of a surface with no known path, keyed by cacheKey.
+    _scaled = _PixmapCache(8 * _MIB)
+    _tints = _PixmapCache(8 * _MIB)
+
+    # cacheKey -> render key, so a held 128px icon re-renders from its SVG at any size.
+    _origins: dict[int, tuple] = {}
+
+    # Set at quit: a surface made after clear() outlives qApp, faults in sip.
+    _closed = False
 
     @classmethod
     def icon(cls, icon: Icon | str) -> QtGui.QIcon:
-        """Return the shared QIcon for *icon*, built from the path so SVGs stay scalable."""
+        """Return the shared QIcon for *icon*, built from its path so SVGs scale."""
         key = str(icon)
         cached = cls._icons.get(key)
         if cached is None:
             cached = QtGui.QIcon(key)
-            cls._icons[key] = cached
+            if not cls._closed:
+                cls._icons[key] = cached
         return cached
 
     @classmethod
-    def get(cls, icon: Icon | str, size: QtCore.QSize | None = None) -> QtGui.QPixmap:
-        """Return *icon* rasterized at *size* (default 128x128), cached across calls."""
-        if size is None:
-            size = QtCore.QSize(_ICON_EDGE, _ICON_EDGE)
-        key = (str(icon), size.width(), size.height())
+    def get(
+        cls,
+        source: Icon | str | QtGui.QPixmap,
+        size: _SizeLike | None = None,
+        aspect: QtCore.Qt.AspectRatioMode = _KEEP_ASPECT,
+    ) -> QtGui.QPixmap:
+        """Return *source* at *size* as a private copy; an Icon defaults to 128px."""
+        if cls._closed:
+            return QtGui.QPixmap()
+        if isinstance(source, QtGui.QPixmap):
+            if size is None:
+                return source
+            origin = cls._origins.get(source.cacheKey())
+            if origin is not None:
+                return cls._rendered(origin[0], _as_size(size), aspect)
+            return cls._resampled(source, _as_size(size), aspect)
+        target = (
+            QtCore.QSize(_ICON_EDGE, _ICON_EDGE) if size is None else _as_size(size)
+        )
+        return cls._rendered(source, target, aspect)
+
+    @classmethod
+    def scaled(
+        cls,
+        pixmap: QtGui.QPixmap,
+        size: _SizeLike,
+        aspect: QtCore.Qt.AspectRatioMode = _KEEP_ASPECT,
+    ) -> QtGui.QPixmap:
+        """Resample a one-off surface (a thumbnail) uncached; the caller keeps it."""
+        if cls._closed or pixmap.isNull():
+            return QtGui.QPixmap()
+        origin = cls._origins.get(pixmap.cacheKey())
+        if origin is not None:
+            return cls._rendered(origin[0], _as_size(size), aspect)
+        return _resample(pixmap, _as_size(size), aspect)
+
+    @classmethod
+    def _rendered(
+        cls, path: Icon | str, size: QtCore.QSize, aspect: QtCore.Qt.AspectRatioMode
+    ) -> QtGui.QPixmap:
+        """Rasterize a resource path, which an SVG does crisply at any size."""
+        # Before layout a rect is 0x0; caching that null would pin a blank icon.
+        if size.isEmpty():
+            return QtGui.QPixmap()
+        # Icon is a StrEnum, so it keys identically to the bare path and needs no str().
+        key = (path, size.width(), size.height(), aspect)
         cached = cls._pixmaps.get(key)
         if cached is not None:
-            return cached
-        pixmap = cls.icon(icon).pixmap(size)
-        cls._pixmaps[key] = pixmap
-        # A widget resizing mid-drag mints one entry per pixel width; drop the oldest half.
-        if len(cls._pixmaps) > cls._MAX_PIXMAPS:
-            for stale in list(cls._pixmaps)[: cls._MAX_PIXMAPS // 2]:
-                del cls._pixmaps[stale]
-        return pixmap
+            return QtGui.QPixmap(cached)
+        icon = cls.icon(path)
+        if aspect == _KEEP_ASPECT:
+            pixmap = icon.pixmap(size)
+        else:
+            # Render covering the target, then crop: a fit-inside raster would stretch.
+            cover = icon.actualSize(size).scaled(
+                size, QtCore.Qt.AspectRatioMode.KeepAspectRatioByExpanding
+            )
+            pixmap = icon.pixmap(cover)
+            if pixmap.deviceIndependentSize().toSize() != size:
+                pixmap = _resample(pixmap, size, aspect)
+        # An unknown key renders null; caching it would hide the typo behind a blank.
+        if pixmap.isNull():
+            return pixmap
+        cls._remember(pixmap.cacheKey(), key)
+        return QtGui.QPixmap(cls._pixmaps.put(key, pixmap))
+
+    @classmethod
+    def _resampled(
+        cls,
+        pixmap: QtGui.QPixmap,
+        size: QtCore.QSize,
+        aspect: QtCore.Qt.AspectRatioMode,
+    ) -> QtGui.QPixmap:
+        """Resample a surface with no known path, caching only icon-sized results."""
+        if pixmap.isNull() or size.isEmpty():
+            return QtGui.QPixmap()
+        key = (pixmap.cacheKey(), size.width(), size.height(), aspect)
+        cached = cls._scaled.get(key)
+        if cached is not None:
+            return QtGui.QPixmap(cached)
+        scaled = _resample(pixmap, size, aspect)
+        # Sized by output: a 32px thumbnail blown up to 690px must not flush the icons.
+        if _cost(scaled) > _ICON_SOURCE_COST:
+            return scaled
+        return QtGui.QPixmap(cls._scaled.put(key, scaled))
+
+    @classmethod
+    def tinted(
+        cls,
+        pixmap: QtGui.QPixmap,
+        color: QtGui.QColor | str,
+        mode: QtGui.QPainter.CompositionMode = _SOURCE_IN,
+    ) -> QtGui.QPixmap:
+        """Return *pixmap* recoloured to *color* via its alpha, cached per source."""
+        if cls._closed or pixmap.isNull():
+            return QtGui.QPixmap()
+        if not isinstance(color, QtGui.QColor):
+            color = QtGui.QColor(color)
+        # Keyed on the render, not the surface: a re-rendered icon still hits its tint.
+        source = cls._origins.get(pixmap.cacheKey(), pixmap.cacheKey())
+        key = (source, color.rgba(), mode)
+        cached = cls._tints.get(key)
+        if cached is not None:
+            return QtGui.QPixmap(cached)
+        result = QtGui.QPixmap(pixmap.size())
+        # Same device pixels and ratio, or a HiDPI icon draws at half size.
+        result.setDevicePixelRatio(pixmap.devicePixelRatio())
+        result.fill(QtCore.Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter(result)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.setCompositionMode(mode)
+        painter.fillRect(result.rect(), color)
+        painter.end()
+        return QtGui.QPixmap(cls._tints.put(key, result))
 
     @classmethod
     def source(cls, icon: Icon | str) -> QtGui.QPixmap:
-        """Return the intrinsic-size pixmap; only for full-bleed art, never a btn_icon."""
-        return QtGui.QPixmap(str(icon))
+        """Return the intrinsic-size pixmap; for full-bleed or raster art only."""
+        if cls._closed:
+            return QtGui.QPixmap()
+        key = (icon, -1, -1, None)
+        cached = cls._pixmaps.get(key)
+        if cached is not None:
+            return QtGui.QPixmap(cached)
+        pixmap = QtGui.QPixmap(str(icon))
+        if pixmap.isNull():
+            return pixmap
+        return QtGui.QPixmap(cls._pixmaps.put(key, pixmap))
+
+    @classmethod
+    def _remember(cls, cache_key: int, render_key: tuple) -> None:
+        """Record where a surface came from; drop the oldest quarter past the cap."""
+        cls._origins[cache_key] = render_key
+        if len(cls._origins) > _MAX_ORIGINS:
+            for stale in list(cls._origins)[: _MAX_ORIGINS // 4]:
+                del cls._origins[stale]
 
     @classmethod
     def clear(cls) -> None:
-        """Drop every cached icon and pixmap, called from on_quit while qApp is alive."""
-        cls._icons.clear()
-        cls._pixmaps.clear()
+        """Drop every cached icon and pixmap."""
+        for cache in (cls._icons, cls._pixmaps, cls._scaled, cls._tints, cls._origins):
+            cache.clear()
+
+    @classmethod
+    def close(cls) -> None:
+        """Clear and stop caching, called from on_quit while qApp is still alive."""
+        cls.clear()
+        cls._closed = True

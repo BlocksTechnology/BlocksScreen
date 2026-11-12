@@ -71,7 +71,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self,
             "Automatic\nInput Shaper",
             "Automatic Input Shaper",
-            BlocksPixmap.get(Icon.INPUT_SHAPER_AUTO),
+            Icon.INPUT_SHAPER_AUTO,
         )  # type: ignore
         self.automatic_card_is.setObjectName("Automatic_IS_Card")
         self.is_content_layout.addWidget(
@@ -85,7 +85,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             self,
             "Manual\nInput Shaper",
             "Manual Input Shaper",
-            BlocksPixmap.get(Icon.INPUT_SHAPER_MANUAL),
+            Icon.INPUT_SHAPER_MANUAL,
         )  # type: ignore
         self.manual__card_is.setObjectName("Manual_IS_Card")
         self.is_content_layout.addWidget(

@@ -1,5 +1,4 @@
 import typing
-from collections import OrderedDict
 from dataclasses import dataclass, field
 
 from lib.utils.blocks_pixmap import BlocksPixmap, Icon
@@ -22,7 +21,8 @@ class ListItem:
 
     color: str = "#dfdfdf"
     color_left_icon: bool = False
-    right_icon: QtGui.QPixmap | None = None
+    # An Icon renders straight at the row's size; a QPixmap is resampled.
+    right_icon: QtGui.QPixmap | Icon | None = None
     left_icon: QtGui.QPixmap | None = None
 
     selected: bool = False
@@ -271,64 +271,11 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
     )
 
     def __init__(self) -> None:
-        """Initialise the delegate with a scaled-pixmap cache and default item height."""
+        """Initialise the delegate with a default item height."""
         super().__init__()
         self.prev_index: int = 0
         self._press_pos: QtCore.QPointF | None = None
         self.height: int = 60
-        self._scaled_cache: OrderedDict[tuple[int, int, int], QtGui.QPixmap] = (
-            OrderedDict()
-        )
-        self._tinted_cache: OrderedDict[tuple[int, int, int, str], QtGui.QPixmap] = (
-            OrderedDict()
-        )
-
-    def _get_scaled(
-        self,
-        pixmap: QtGui.QPixmap,
-        size: QtCore.QSize,
-    ) -> QtGui.QPixmap:
-        """Scaled pixmap, LRU-cached per (cacheKey, size)."""
-        key = (pixmap.cacheKey(), size.width(), size.height())
-        cached = self._scaled_cache.get(key)
-        if cached is not None:
-            self._scaled_cache.move_to_end(key)
-            return cached
-        scaled = pixmap.scaled(
-            size,
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
-        self._scaled_cache[key] = scaled
-        # 64 covers every wifi/icon variant.
-        if len(self._scaled_cache) > 64:
-            self._scaled_cache.popitem(last=False)
-        return scaled
-
-    def _get_tinted(
-        self,
-        pixmap: QtGui.QPixmap,
-        size: QtCore.QSize,
-        color: str,
-    ) -> QtGui.QPixmap:
-        """*pixmap* scaled to *size* and tinted *color*, LRU-cached."""
-        key = (pixmap.cacheKey(), size.width(), size.height(), color)
-        cached = self._tinted_cache.get(key)
-        if cached is not None:
-            self._tinted_cache.move_to_end(key)
-            return cached
-        scaled = self._get_scaled(pixmap, size)
-        tinted = QtGui.QPixmap(scaled.size())
-        tinted.fill(QtCore.Qt.GlobalColor.transparent)
-        p = QtGui.QPainter(tinted)
-        p.drawPixmap(0, 0, scaled)
-        p.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-        p.fillRect(tinted.rect(), QtGui.QColor(color))
-        p.end()
-        self._tinted_cache[key] = tinted
-        if len(self._tinted_cache) > 64:
-            self._tinted_cache.popitem(last=False)
-        return tinted
 
     def clear(self) -> None:
         """Clears delegate indexing"""
@@ -424,10 +371,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if item.not_clickable:
             painter.restore()
             return
+        right_icon = item.right_icon
         if item.allow_expand and item.needs_expansion:
-            item.right_icon = BlocksPixmap.get(
-                Icon.ARROW_DOWN if item.is_expanded else Icon.ARROW_RIGHT
-            )
+            right_icon = Icon.ARROW_DOWN if item.is_expanded else Icon.ARROW_RIGHT
 
         pressed_color = QtGui.QColor("#1A8FBF")
         pressed_color.setAlpha(90 if item.selected else 20)
@@ -445,11 +391,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             ellipse_size,
         )
 
-        if item.right_icon:
-            icon_scaled = self._get_scaled(
-                item.right_icon, ellipse_rect.size().toSize()
+        if right_icon:
+            painter.drawPixmap(
+                ellipse_rect.toRect(), BlocksPixmap.get(right_icon, ellipse_rect)
             )
-            painter.drawPixmap(ellipse_rect.toRect(), icon_scaled)
 
         left_icon_rect = QtCore.QRectF(
             rect.left() + ellipse_margin,
@@ -459,13 +404,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         )
 
         if item.left_icon:
-            icon_size = QtCore.QSize(
-                int(left_icon_rect.width()), int(left_icon_rect.height())
-            )
+            left_pixmap = BlocksPixmap.get(item.left_icon, left_icon_rect)
             if item.color_left_icon:
-                left_pixmap = self._get_tinted(item.left_icon, icon_size, item.color)
-            else:
-                left_pixmap = self._get_scaled(item.left_icon, icon_size)
+                left_pixmap = BlocksPixmap.tinted(left_pixmap, item.color)
             painter.drawPixmap(left_icon_rect.toRect(), left_pixmap)
 
         painter.setPen(QtGui.QColor(255, 255, 255))

@@ -59,15 +59,8 @@ class Spoll_button(QtWidgets.QAbstractButton):
 
     def _make_tinted_icon(self, icon: Icon, tint: QtGui.QColor) -> QtGui.QPixmap:
         """Return *icon* rendered at the slot icon size and filled with *tint*."""
-        scaled = BlocksPixmap.get(icon, QtCore.QSize(self._ICON_SIZE, self._ICON_SIZE))
-        tinted = QtGui.QPixmap(scaled.size())
-        tinted.fill(QtCore.Qt.GlobalColor.transparent)
-        p = QtGui.QPainter(tinted)
-        p.drawPixmap(0, 0, scaled)
-        p.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-        p.fillRect(tinted.rect(), tint)
-        p.end()
-        return tinted
+        size = QtCore.QSize(self._ICON_SIZE, self._ICON_SIZE)
+        return BlocksPixmap.tinted(BlocksPixmap.get(icon, size), tint)
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         super().resizeEvent(a0)

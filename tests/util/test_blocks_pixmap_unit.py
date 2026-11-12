@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 from PyQt6 import QtCore, QtGui
 
-from BlocksScreen.lib.utils.blocks_pixmap import BlocksPixmap, Icon
+from BlocksScreen.lib.utils.blocks_pixmap import (
+    BlocksPixmap,
+    Icon,
+    _cost,
+    _PixmapCache,
+)
 
 _RC_PACKAGE = "BlocksScreen.lib.ui.resources"
 _RESOURCES = Path(__file__).resolve().parents[2] / "BlocksScreen/lib/ui/resources"
@@ -19,12 +24,8 @@ def _resources(qapp):
         importlib.import_module(f"{_RC_PACKAGE}.{blob.stem}")
     BlocksPixmap.clear()
     yield
+    BlocksPixmap._closed = False
     BlocksPixmap.clear()
-
-
-def _bytes(pixmap: QtGui.QPixmap) -> int:
-    """Return the pixmap's buffer size in bytes."""
-    return pixmap.width() * pixmap.height() * pixmap.depth() // 8
 
 
 @pytest.mark.parametrize("icon", list(Icon), ids=lambda i: i.name)
@@ -48,25 +49,237 @@ def test_icon_objects_are_shared():
 
 
 def test_pixmap_cache_is_bounded():
-    """A widget resizing on every paint cannot grow the cache without limit."""
-    for edge in range(16, 16 + BlocksPixmap._MAX_PIXMAPS * 2):
+    """A widget resizing on every paint cannot grow the cache past its byte budget."""
+    for edge in range(16, 400):
         BlocksPixmap.get(Icon.BACK, QtCore.QSize(edge, edge))
-    assert len(BlocksPixmap._pixmaps) <= BlocksPixmap._MAX_PIXMAPS
+    assert BlocksPixmap._pixmaps._bytes <= BlocksPixmap._pixmaps._budget
 
 
-def test_clear_empties_both_caches():
+def test_clear_empties_every_cache():
     """clear() releases every QPixmap while qApp is still alive."""
-    BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32))
+    source = BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32))
+    BlocksPixmap.tinted(source, QtGui.QColor("white"))
     BlocksPixmap.clear()
     assert not BlocksPixmap._icons
     assert not BlocksPixmap._pixmaps
+    assert not BlocksPixmap._scaled
+    assert not BlocksPixmap._tints
+    assert not BlocksPixmap._origins
+
+
+def test_get_resamples_a_surface_once():
+    """A repeat get() on a surface hands back the cache rather than rescaling per paint."""
+    source = BlocksPixmap.get(Icon.BACK)
+    size = QtCore.QSize(40, 40)
+    assert (
+        BlocksPixmap.get(source, size).cacheKey()
+        == BlocksPixmap.get(source, size).cacheKey()
+    )
+
+
+def test_get_passes_a_null_surface_through_uncached():
+    """An unset widget pixmap is null, and scaling it per resize only fills the cache."""
+    assert BlocksPixmap.get(QtGui.QPixmap(), QtCore.QSize(40, 40)).isNull()
+    assert not BlocksPixmap._scaled
+
+
+def test_get_keys_on_the_aspect_mode():
+    """Distort-to-fill and fit-inside must not collide on one key."""
+    source = BlocksPixmap.get(Icon.BACK)
+    size = QtCore.QSize(80, 20)
+    keep = BlocksPixmap.get(source, size)
+    ignore = BlocksPixmap.get(source, size, QtCore.Qt.AspectRatioMode.IgnoreAspectRatio)
+    assert keep.size() != ignore.size()
+
+
+def _surface(width: int = 64, height: int = 64) -> QtGui.QPixmap:
+    """A pixmap with no resource path behind it, as a decoded thumbnail is."""
+    pixmap = QtGui.QPixmap(width, height)
+    pixmap.fill(QtCore.Qt.GlobalColor.red)
+    return pixmap
+
+
+def test_derived_cache_is_bounded():
+    """One 400x300 thumbnail costs 30 icon rescales, so the budget counts bytes not entries."""
+    source = _surface()
+    for edge in range(16, 400):
+        BlocksPixmap.get(source, QtCore.QSize(edge, edge))
+    assert BlocksPixmap._scaled._bytes <= BlocksPixmap._scaled._budget
+
+
+def test_fractional_size_truncates_so_an_icon_fits_its_rect():
+    """Rounding 40.6 up gives a 41px icon that overflows a 40.6px rect."""
+    pixmap = BlocksPixmap.get(Icon.BACK, QtCore.QSizeF(40.6, 40.6))
+    assert pixmap.width() <= 40 and pixmap.height() <= 40
+
+
+def test_get_without_size_returns_a_surface_unchanged():
+    """No size means no resample; only an Icon has a 128px default."""
+    source = BlocksPixmap.get(Icon.BACK, QtCore.QSize(300, 300))
+    assert BlocksPixmap.get(source).cacheKey() == source.cacheKey()
+
+
+def test_scaled_caches_nothing():
+    """A thumbnail is shown once per file, so caching it would only evict icons."""
+    result = BlocksPixmap.scaled(_surface(400, 300), QtCore.QSize(200, 150))
+    assert result.deviceIndependentSize().toSize() == QtCore.QSize(200, 150)
+    assert not BlocksPixmap._scaled and not BlocksPixmap._pixmaps
+
+
+def test_large_resample_output_is_not_cached():
+    """A 32px thumbnail blown up to 690px is sized by its output, not its source."""
+    BlocksPixmap.get(_surface(32, 32), QtCore.QSize(690, 690))
+    assert not BlocksPixmap._scaled
+
+
+def test_returned_pixmap_is_a_private_copy():
+    """A caller painting on its pixmap must not repaint the icon for everyone."""
+    size = QtCore.QSize(32, 32)
+    mine = BlocksPixmap.get(Icon.BACK, size)
+    mine.fill(QtCore.Qt.GlobalColor.red)
+    assert BlocksPixmap.get(Icon.BACK, size).toImage() != mine.toImage()
+
+
+def test_held_icon_re_renders_from_its_svg():
+    """A 128px setup pixmap drawn at 256px renders the SVG, never upscales the raster."""
+    held = BlocksPixmap.get(Icon.BACK)
+    size = QtCore.QSize(256, 256)
+    assert (
+        BlocksPixmap.get(held, size).cacheKey()
+        == BlocksPixmap.get(Icon.BACK, size).cacheKey()
+    )
+    assert not BlocksPixmap._scaled
+
+
+def test_tint_survives_its_source_being_evicted():
+    """Keyed on the render, so a re-rendered icon still hits its old tint."""
+    BlocksPixmap.tinted(BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32)), "white")
+    BlocksPixmap._pixmaps.clear()
+    BlocksPixmap.tinted(BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32)), "white")
+    assert len(BlocksPixmap._tints) == 1
+
+
+@pytest.mark.parametrize(
+    ("source", "size"),
+    [(Icon.BACK, QtCore.QSize(0, 0)), (":/no/such/key.svg", QtCore.QSize(32, 32))],
+    ids=["before-layout", "unknown-key"],
+)
+def test_null_render_is_not_cached(source, size):
+    """Caching a null would pin a blank icon after layout or hide a key typo."""
+    assert BlocksPixmap.get(source, size).isNull()
+    assert not BlocksPixmap._pixmaps
+
+
+def test_ignore_aspect_fills_the_target_exactly():
+    """Distorting card art renders covering then shrinks, so it fills the whole rect."""
+    pixmap = BlocksPixmap.get(
+        Icon.BACK, QtCore.QSize(80, 20), QtCore.Qt.AspectRatioMode.IgnoreAspectRatio
+    )
+    assert pixmap.deviceIndependentSize().toSize() == QtCore.QSize(80, 20)
+
+
+def test_default_size_fits_128():
+    """Setup-time callers have no paint size yet, so an Icon alone renders at 128px."""
+    size = BlocksPixmap.get(Icon.BACK).deviceIndependentSize().toSize()
+    assert max(size.width(), size.height()) == 128
+
+
+def test_source_decodes_once():
+    """Full-bleed art is a large PNG; decoding it per call is the cost to avoid."""
+    first = BlocksPixmap.source(Icon.BACKGROUND_1ST)
+    assert BlocksPixmap.source(Icon.BACKGROUND_1ST).cacheKey() == first.cacheKey()
+
+
+def test_close_stops_caching_late_paints():
+    """A paint after on_quit must not mint a surface that outlives qApp."""
+    BlocksPixmap.close()
+    assert BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32)).isNull()
+    assert not BlocksPixmap._pixmaps and not BlocksPixmap._icons
+
+
+def test_tint_keeps_the_source_device_pixel_ratio():
+    """A 2x icon tinted onto a 1x surface would paint at double its logical size."""
+    source = QtGui.QPixmap(64, 64)
+    source.setDevicePixelRatio(2.0)
+    source.fill(QtCore.Qt.GlobalColor.black)
+    tinted = BlocksPixmap.tinted(source, "#ffffff")
+    assert tinted.devicePixelRatio() == 2.0
+    assert tinted.deviceIndependentSize() == source.deviceIndependentSize()
+
+
+def test_eviction_drops_the_least_recently_used():
+    """FIFO would drop the startup icons first, which are the hottest entries of all."""
+    cache = _PixmapCache(2 * _cost(BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32))))
+    for key in ("a", "b"):
+        cache.put(key, BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32)))
+    cache.get("a")
+    cache.put("c", BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32)))
+    assert cache.get("a") is not None
+    assert cache.get("b") is None
+
+
+def test_overwriting_a_key_does_not_double_count_its_bytes():
+    """A leaked cost shrinks the live budget until the cache holds one entry."""
+    pixmap = BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32))
+    cache = _PixmapCache(10 * _cost(pixmap))
+    for _ in range(3):
+        cache.put("a", pixmap)
+    assert cache._bytes == _cost(pixmap)
+
+
+@pytest.mark.parametrize(
+    "size",
+    [
+        QtCore.QSize(40, 40),
+        QtCore.QSizeF(40.4, 40.4),
+        QtCore.QRect(0, 0, 40, 40),
+        QtCore.QRectF(0.0, 0.0, 40.4, 40.4),
+    ],
+    ids=["QSize", "QSizeF", "QRect", "QRectF"],
+)
+def test_get_accepts_whatever_the_caller_holds(size):
+    """Every Qt size or rect normalises to one target, so no call site converts by hand."""
+    reference = BlocksPixmap.get(Icon.BACK, QtCore.QSize(40, 40))
+    assert BlocksPixmap.get(Icon.BACK, size).cacheKey() == reference.cacheKey()
+
+
+def test_tinted_recolours_through_the_alpha():
+    """A tint keeps the glyph shape, so a painted pixel takes the colour and a clear one stays clear."""
+    source = BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32))
+    image = BlocksPixmap.tinted(source, QtGui.QColor("red")).toImage()
+    painted = [
+        image.pixelColor(x, y)
+        for x in range(image.width())
+        for y in range(image.height())
+        if image.pixelColor(x, y).alpha() > 0
+    ]
+    assert painted, "the source glyph painted nothing"
+    assert all(c.red() > 250 and not c.green() and not c.blue() for c in painted)
+
+
+def test_tinted_returns_the_same_surface_twice():
+    """A repeat tint hands back the cache rather than allocating a pixmap per paint."""
+    source = BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32))
+    assert (
+        BlocksPixmap.tinted(source, "white").cacheKey()
+        == BlocksPixmap.tinted(source, "white").cacheKey()
+    )
+
+
+def test_tinted_keys_on_the_colour():
+    """Two colours over one surface must not collide on one key."""
+    source = BlocksPixmap.get(Icon.BACK, QtCore.QSize(32, 32))
+    assert (
+        BlocksPixmap.tinted(source, "white").cacheKey()
+        != BlocksPixmap.tinted(source, "red").cacheKey()
+    )
 
 
 def test_get_costs_far_less_than_source():
     """The whole point: rendering at 64px must beat the intrinsic buffers 5x over."""
-    scaled = sum(_bytes(BlocksPixmap.get(i, QtCore.QSize(64, 64))) for i in Icon)
+    scaled = sum(_cost(BlocksPixmap.get(i, QtCore.QSize(64, 64))) for i in Icon)
     BlocksPixmap.clear()
-    intrinsic = sum(_bytes(BlocksPixmap.source(i)) for i in Icon)
+    intrinsic = sum(_cost(BlocksPixmap.source(i)) for i in Icon)
     assert scaled * 5 < intrinsic, f"{scaled} B scaled vs {intrinsic} B intrinsic"
 
 
@@ -80,6 +293,9 @@ def test_get_costs_far_less_than_source():
         (9, True, Icon.WIFI_4BAR_PROTECTED),
         (2.0, False, Icon.WIFI_2BAR),
         (True, False, Icon.WIFI_1BAR),
+        (2.9, False, Icon.WIFI_3BAR),
+        (None, False, Icon.WIFI_0BAR),
+        (float("nan"), True, Icon.WIFI_0BAR_PROTECTED),
     ],
 )
 def test_wifi_clamps_to_the_declared_assets(bars, protected, expected):

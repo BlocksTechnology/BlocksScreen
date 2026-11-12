@@ -3,6 +3,8 @@ import typing
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from lib.utils.blocks_pixmap import BlocksPixmap
+
 
 class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     class State(enum.Enum):
@@ -261,11 +263,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 self.handle_ellipseRect.width() * 0.90,
                 self.handle_ellipseRect.height() * 0.90,
             )
-            _icon_scaled = self.icon_pixmap.scaled(
-                _icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
+            _icon_scaled = BlocksPixmap.get(self.icon_pixmap, _icon_rect)
             # Calculate the actual QRect for the scaled pixmap (centering it if needed)
             scaled_width = _icon_scaled.width()
             scaled_height = _icon_scaled.height()

@@ -32,7 +32,10 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._setup_ui()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.thumbnail: QtGui.QImage = self._blocksthumbnail
+        self._thumbnail = QtGui.QImage()
+        self._thumbnail_pixmap = QtGui.QPixmap()
+        self._shown_key: tuple = ()
+        self.thumbnail = self._blocksthumbnail
         self._thumbnails: list = []
         self._current_gcode: str = ""
         self._loader_connected: bool = False
@@ -133,6 +136,20 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.filename = ""
         return super().hide()
 
+    @property
+    def thumbnail(self) -> QtGui.QImage:
+        """The shown file's thumbnail image."""
+        return self._thumbnail
+
+    @thumbnail.setter
+    def thumbnail(self, image: QtGui.QImage) -> None:
+        """Convert to a QPixmap once here, not on every paint."""
+        # The placeholder is re-set per file; reconverting it mints a new cacheKey.
+        if not image.isNull() and image.cacheKey() == self._thumbnail.cacheKey():
+            return
+        self._thumbnail = image
+        self._thumbnail_pixmap = QtGui.QPixmap.fromImage(image)
+
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
         if not self.isVisible():
@@ -144,13 +161,13 @@ class ConfirmWidget(QtWidgets.QWidget):
 
         # Scene rectangle (available display area)
         graphics_rect = self.cf_thumbnail.rect().toRectF()
+        # Paints far outnumber thumbnail or size changes; rescale only on a change.
+        shown_key = (self._thumbnail_pixmap.cacheKey(), graphics_rect.size())
+        if shown_key == self._shown_key:
+            return
+        self._shown_key = shown_key
 
-        # Scale pixmap preserving aspect ratio
-        pixmap = QtGui.QPixmap.fromImage(self.thumbnail).scaled(
-            graphics_rect.size().toSize(),
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
+        pixmap = BlocksPixmap.scaled(self._thumbnail_pixmap, graphics_rect)
 
         # Centering offsets
         adjusted_x = (graphics_rect.width() - pixmap.width()) / 2.0
@@ -341,6 +358,4 @@ class ConfirmWidget(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.verticalLayout_4.addLayout(self.cf_content_vertical_layout)
-        self._blocksthumbnail = QtGui.QImage(
-            "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-        )
+        self._blocksthumbnail = QtGui.QImage(str(Icon.LOGO_BLOCKS))

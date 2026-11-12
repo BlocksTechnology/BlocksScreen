@@ -170,7 +170,7 @@ def on_quit() -> None:
     _alive = [t.name for t in threading.enumerate() if t is not threading.main_thread()]
     logging.info("Final exit cleanup, threads still alive: %s", _alive)
     # aboutToQuit still has a live qApp, which QPixmap destruction requires.
-    BlocksPixmap.clear()
+    BlocksPixmap.close()
     LogManager.shutdown()
 
 

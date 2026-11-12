@@ -34,9 +34,9 @@ class FansPage(QtWidgets.QWidget):
         self.fans_back_btn.clicked.connect(self.request_back.emit)
 
         self.path = {
-            "fan_cage": BlocksPixmap.get(Icon.FAN_CAGE),
-            "blower": BlocksPixmap.get(Icon.BLOWER),
-            "fan": BlocksPixmap.get(Icon.FAN),
+            "fan_cage": Icon.FAN_CAGE,
+            "blower": Icon.BLOWER,
+            "fan": Icon.FAN,
         }
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")

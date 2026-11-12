@@ -15,7 +15,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         parent: QtWidgets.QFrame,
         text: str,
         name: str,
-        icon: QtGui.QPixmap,
+        icon: Icon | QtGui.QPixmap,
         /,
     ) -> None:
         super().__init__(parent)
@@ -57,15 +57,15 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.continue_button.setEnabled(True)
         self.repaint()
 
-    def set_card_icon(self, pixmap: QtGui.QPixmap) -> None:
-        """Set widget icon"""
-        scaled = pixmap.scaled(
-            300,
-            300,
-            QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
+    def set_card_icon(self, pixmap: Icon | QtGui.QPixmap) -> None:
+        """Set the card art; pass an Icon so the SVG renders at 300px instead of upscaling."""
+        self.option_icon.setPixmap(
+            BlocksPixmap.get(
+                pixmap,
+                QtCore.QSize(300, 300),
+                QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+            )
         )
-        self.option_icon.setPixmap(scaled)
         self.repaint()
 
     def set_card_text(self, text: str) -> None:
