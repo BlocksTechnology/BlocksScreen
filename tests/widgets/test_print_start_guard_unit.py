@@ -52,6 +52,7 @@ def _tab(amu_manager: object, printing_state: str = "standby") -> SimpleNamespac
         _klippy_state="",
         _usb_pending=False,
         _usb_from_console=False,
+        _usb_ack_supported=True,
         _cancel_pending=False,
         notify=MagicMock(),
         jobStatusPage_widget=MagicMock(),
@@ -132,7 +133,9 @@ class TestStartPrint:
 )
 def test_usb_print_action_from_macro(lines, started) -> None:
     tab = SimpleNamespace(
-        _begin_print=MagicMock(return_value=""), run_gcode_signal=MagicMock()
+        _begin_print=MagicMock(return_value=""),
+        run_gcode_signal=MagicMock(),
+        _usb_ack_supported=True,
     )
     PrintTab._on_gcode_response(tab, lines)
     if started is None:
@@ -183,6 +186,51 @@ def test_usb_flag_set_only_on_flagged_override(name, values, sent) -> None:
     tab = SimpleNamespace(run_gcode_signal=MagicMock())
     PrintTab._on_gcode_macro_update(tab, name, values)
     assert tab.run_gcode_signal.emit.called is sent
+
+
+def test_override_without_usb_pending_gets_no_ack() -> None:
+    # Pre-fallback usb_print.cfg: the ack would fail as an unknown variable.
+    tab = SimpleNamespace(
+        _begin_print=MagicMock(return_value=""),
+        run_gcode_signal=MagicMock(),
+        _usb_ack_supported=False,
+    )
+    PrintTab._on_gcode_macro_update(
+        tab, "SDCARD_PRINT_FILE", {"blocksscreen_usb": True}
+    )
+    PrintTab._on_gcode_response(tab, ["// action:blocks_usb_print USB-STICK/c.gcode"])
+    tab._begin_print.assert_called_once_with("USB-STICK/c.gcode", from_console=True)
+    tab.run_gcode_signal.emit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("name", "values", "supported"),
+    [
+        ("SDCARD_PRINT_FILE", {"blocksscreen_usb": False, "usb_pending": ""}, True),
+        ("SDCARD_PRINT_FILE", {"blocksscreen_usb": False}, False),
+        ("PRINT_START", {"usb_pending": ""}, False),
+    ],
+)
+def test_ack_support_read_from_override_variables(name, values, supported) -> None:
+    tab = SimpleNamespace(run_gcode_signal=MagicMock(), _usb_ack_supported=False)
+    PrintTab._on_gcode_macro_update(tab, name, values)
+    assert tab._usb_ack_supported is supported
+
+
+def test_ack_support_survives_deltas_until_klippy_leaves_ready() -> None:
+    tab = SimpleNamespace(run_gcode_signal=MagicMock(), _usb_ack_supported=True)
+    PrintTab._on_gcode_macro_update(
+        tab, "SDCARD_PRINT_FILE", {"blocksscreen_usb": True}
+    )
+    assert tab._usb_ack_supported is True
+
+    tab = _tab(None)
+    tab._usb_pending = False
+    tab.BasePopup_z_offset = MagicMock()
+    tab.save_config_btn = MagicMock()
+    tab.babystepPage = MagicMock()
+    PrintTab.on_klippy_state(tab, "shutdown")
+    assert tab._usb_ack_supported is False
 
 
 class TestUsbImportDone:
