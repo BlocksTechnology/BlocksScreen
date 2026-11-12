@@ -71,7 +71,7 @@ class AxisMaintPage(QtWidgets.QWidget):
         self.current_object = axis
 
         self.answerPage.set_message(
-            f"Apply oil to the {axis.upper()} axis, then press Confirm.",
+            f"Apply oil to the {axis.upper()} axis,\nthen press Confirm to spread it.",
         )
 
         self.call_load_panel.emit(True, f"Homing {axis.upper()} axis...", False)
