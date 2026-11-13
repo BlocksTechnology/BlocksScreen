@@ -442,3 +442,23 @@ def test_service_state_notifies_only_on_failure(
         win, "notify_service_state_changed", {"params": params}, None
     )
     assert win.show_notifications.emit.called is notifies
+
+
+@pytest.mark.parametrize(
+    ("line", "pops"),
+    [
+        ("!! BlocksScreen: USB print refused: No filament", False),
+        ("!! Machine is unloaded, please load the machine", True),
+    ],
+)
+def test_own_console_echo_is_not_shown_twice(line, pops) -> None:
+    # PrintTab already showed what it echoes; other clients still get the `!!` line.
+    win = SimpleNamespace(
+        gcode_response={list: MagicMock()},
+        _popup_toggle=False,
+        _emit_filtered_notification=MagicMock(),
+    )
+    MainWindow._handle_notify_gcode_response_message(
+        win, "notify_gcode_response", {"params": [line]}, None
+    )
+    assert win._emit_filtered_notification.called is pops

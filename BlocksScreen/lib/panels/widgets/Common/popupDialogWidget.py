@@ -70,6 +70,8 @@ class Popup(QtWidgets.QDialog):
         self.hide()
         self.isShown = False
         self.timeout_timer.stop()
+        # Forget the text so the same error raised again later still pops up.
+        self.text_label.clear()
         self._add_popup()
 
     def _calculate_target_geometry(self) -> QtCore.QRect:
@@ -133,6 +135,11 @@ class Popup(QtWidgets.QDialog):
         """
         if len(self.messages) == 4:
             return
+        # Klipper repeats some errors back to back (M112 sends its `!!` twice).
+        if (self.isShown and message == self.text_label.text()) or any(
+            m.get("message") == message for m in self.messages
+        ):
+            return
 
         self.messages.append(
             {
@@ -164,11 +171,6 @@ class Popup(QtWidgets.QDialog):
             message = message_entry.get("message")
             timeout = message_entry.get("timeout")
             self.timeout_timer.setInterval(timeout)
-            if message == self.text_label.text():
-                self.messages = deque(
-                    m for m in self.messages if m.get("message") != message
-                )
-                return
             self.userInput = message_entry.get("userInput")
             self.text_label.setFixedHeight(60)
             self.text_label.setFixedWidth(500)

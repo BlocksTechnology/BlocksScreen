@@ -183,7 +183,11 @@ class NotificationPage(QtWidgets.QWidget):
                 case _:
                     msg_type = Popup.MessageType.UNKNOWN
 
-            self.popup.new_message(message_type=msg_type, message=message, timeout=3000)
+            # Errors stay 10 s like KlipperScreen: a print refused while the user is away.
+            timeout = 10000 if priority == 3 else 3000
+            self.popup.new_message(
+                message_type=msg_type, message=message, timeout=timeout
+            )
 
         self.has_new_notification.emit(not self.isVisible())
 

@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import typing
 from collections import deque
 
@@ -10,8 +9,10 @@ from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
 from lib.klipper_message_filter import (
+    CONSOLE_ECHO_PREFIX,
     MessageSource,
     Severity,
+    macro_error_text,
     match_message,
 )
 from lib.klippy_status import KlippyStatus
@@ -44,10 +45,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
-
-_MACRO_ERROR_RE = re.compile(
-    r"Error evaluating 'gcode_macro ([^:]+):gcode'.*CommandError", re.IGNORECASE
-)
 
 
 def api_handler(func):
@@ -1216,10 +1213,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
             elif _gcode_msg_type == "!!":
+                if _message.startswith(CONSOLE_ECHO_PREFIX):
+                    return  # PrintTab showed it already; the echo is for other clients
                 source = MessageSource.GCODE_ERROR
-                m = _MACRO_ERROR_RE.search(_message)
-                if m:
-                    _message = f"macro failed: {m.group(1)}"
+                _message = macro_error_text(_message)
 
             else:
                 return
