@@ -8,6 +8,7 @@ from functools import partial
 import helper_methods
 from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
+from lib.klipper_message_filter import CONSOLE_ECHO_PREFIX
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.metadataPage import FileMetadataWidget
@@ -475,7 +476,8 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def _console_error(self, message: str) -> None:
         """Report a failed console-started USB print back to the Klipper console."""
-        msg = message.translate(_RESPOND_SAFE)  # a quote would end RESPOND's MSG early
+        # A quote would end RESPOND's MSG early.
+        msg = f"{CONSOLE_ECHO_PREFIX}{message}".translate(_RESPOND_SAFE)
         self.run_gcode_signal.emit(f'RESPOND TYPE=error MSG="{msg}"')
 
     @QtCore.pyqtSlot(str, dict, name="on_gcode_macro_update")

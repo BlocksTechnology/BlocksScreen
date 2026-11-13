@@ -9,6 +9,7 @@ from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
 from lib.klipper_message_filter import (
+    CONSOLE_ECHO_PREFIX,
     MessageSource,
     Severity,
     macro_error_text,
@@ -1212,6 +1213,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
             elif _gcode_msg_type == "!!":
+                if _message.startswith(CONSOLE_ECHO_PREFIX):
+                    return  # PrintTab showed it already; the echo is for other clients
                 source = MessageSource.GCODE_ERROR
                 _message = macro_error_text(_message)
 

@@ -684,6 +684,8 @@ _INDEX: dict[MessageSource, tuple[MessageRule, ...]] = {
     src: tuple(r for r in RULES if r.source is src) for src in MessageSource
 }
 
+# Marks errors BlocksScreen echoes to the console; it already showed them on screen.
+CONSOLE_ECHO_PREFIX = "BlocksScreen: "
 
 _MACRO_ERROR_RE = re.compile(
     r"Error evaluating 'gcode_macro ([^:]+):gcode'.*?CommandError:?\s*(.*)",
