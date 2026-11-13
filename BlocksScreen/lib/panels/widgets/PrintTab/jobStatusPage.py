@@ -271,6 +271,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._load_thumbnails(*metadata.get("thumbnail_paths", ()))
         self._refresh_layer_display()
 
+    @QtCore.pyqtSlot()
     def pause_resume_print(self) -> None:
         """Handle pause/resume print job button clicked"""
         self.pause_printing_btn.setEnabled(False)
@@ -686,7 +687,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.thumbnail_view.setRenderHints(
             QtGui.QPainter.RenderHint.Antialiasing
             | QtGui.QPainter.RenderHint.SmoothPixmapTransform
-            | QtGui.QPainter.RenderHint.LosslessImageRendering
         )
         self.thumbnail_view.setViewportUpdateMode(
             QtWidgets.QGraphicsView.ViewportUpdateMode.SmartViewportUpdate

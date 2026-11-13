@@ -76,6 +76,7 @@ class LedsPage(QtWidgets.QStackedWidget):
         else:
             self.setCurrentIndex(self.indexOf(self.main_page))
 
+    @QtCore.pyqtSlot()
     def update_led_values(self) -> None:
         """Update led state and color values"""
         if (led_state := self.leds.get(str(self.current_led))) is None:

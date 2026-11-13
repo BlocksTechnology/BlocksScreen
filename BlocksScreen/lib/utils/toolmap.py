@@ -35,7 +35,30 @@ class MmuToolmapWidget(QtWidgets.QWidget):
     _ACTIVE = QtGui.QColor("#2ec4a0")
     _HEATING = QtGui.QColor("#FF9800")
 
-    _HEAT_ZONE = QtCore.QRectF(160, 20, 130, 30)
+    # Paint runs every frame of the fill animation; geometry is in fixed view units.
+    _OUTLINE_PEN = QtGui.QPen(_OUTLINE, 1)
+    _ACTIVE_PEN = QtGui.QPen(_ACTIVE, 1.5)
+    _MUTED_PEN = QtGui.QPen(_MUTED_TEXT, 1.5)
+    _HEAT_TOP = QtCore.QRectF(160, 20, 130, 15)
+    _HEAT_BOTTOM = QtCore.QRectF(160, 35, 130, 15)
+    _ZONE_LABELS = (
+        (QtCore.QRectF(10, 20, 150, 14), None),
+        (QtCore.QRectF(290, 20, 85, 14), "Toolhead"),
+    )
+    _TUBE_OUTLINE = QtGui.QPainterPath(QtCore.QPointF(_TUBE_START_X, _TUBE_Y))
+    _TUBE_OUTLINE.lineTo(_TAPER_START_X, _TUBE_Y)
+    _TUBE_OUTLINE.lineTo(_NOZZLE_TIP_X, _TUBE_Y + _TUBE_THICKNESS / 2)
+    _TUBE_OUTLINE.lineTo(_TAPER_START_X, _TUBE_Y + _TUBE_THICKNESS)
+    _TUBE_OUTLINE.lineTo(_TUBE_START_X, _TUBE_Y + _TUBE_THICKNESS)
+    _NOZZLE_FILL = QtGui.QPolygonF(
+        [
+            QtCore.QPointF(_NOZZLE_FILL_START_X, _TUBE_Y),
+            QtCore.QPointF(_TAPER_START_X, _TUBE_Y),
+            QtCore.QPointF(_NOZZLE_TIP_X, _TUBE_Y + _TUBE_THICKNESS / 2),
+            QtCore.QPointF(_TAPER_START_X, _TUBE_Y + _TUBE_THICKNESS),
+            QtCore.QPointF(_NOZZLE_FILL_START_X, _TUBE_Y + _TUBE_THICKNESS),
+        ]
+    )
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -123,9 +146,12 @@ class MmuToolmapWidget(QtWidgets.QWidget):
 
     def set_temps(self, current: float, target: float) -> None:
         """Set the extruder current/target temperatures shown under the heating message."""
+        shown = (f"{current:.0f}", f"{target:.0f}")  # paint draws whole degrees only
+        repaint = shown != (f"{self._current_temp:.0f}", f"{self._target_temp:.0f}")
         self._current_temp = current
         self._target_temp = target
-        self.update()
+        if repaint:
+            self.update()
 
     def set_filament_pos(self, pos: FilamentPos, bowden_progress: float = -1.0) -> None:
         """Animate the fill bar to the local-coordinate x matching the given filament position.
@@ -206,28 +232,17 @@ class MmuToolmapWidget(QtWidgets.QWidget):
         painter.drawRoundedRect(self._GATE_ZONE, 20, 20)
         painter.drawRoundedRect(self._TOOLHEAD_ZONE, 20, 20)
 
-        painter.setPen(QtGui.QColor("#FFFFFF"))
+        painter.setPen(self._OUTLINE)
         painter.setFont(self._zone_font)
-        for zone, name in (
-            (self._GATE_ZONE, self.lefttext),
-            (self._TOOLHEAD_ZONE, "Toolhead"),
-        ):
+        for rect, name in self._ZONE_LABELS:
             painter.drawText(
-                QtCore.QRectF(zone.left(), zone.top() + 12, zone.width(), 14),
-                QtCore.Qt.AlignmentFlag.AlignHCenter,
-                name,
+                rect, QtCore.Qt.AlignmentFlag.AlignHCenter, name or self.lefttext
             )
 
     def _draw_tube(self, painter: QtGui.QPainter) -> None:
-        outline = QtGui.QPainterPath()
-        outline.moveTo(self._TUBE_START_X, self._TUBE_Y)
-        outline.lineTo(self._TAPER_START_X, self._TUBE_Y)
-        outline.lineTo(self._NOZZLE_TIP_X, self._TUBE_Y + self._TUBE_THICKNESS / 2)
-        outline.lineTo(self._TAPER_START_X, self._TUBE_Y + self._TUBE_THICKNESS)
-        outline.lineTo(self._TUBE_START_X, self._TUBE_Y + self._TUBE_THICKNESS)
-        painter.setPen(QtGui.QPen(self._OUTLINE, 1))
+        painter.setPen(self._OUTLINE_PEN)
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.drawPath(outline)
+        painter.drawPath(self._TUBE_OUTLINE)
 
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.setBrush(self._gate_color)
@@ -245,29 +260,16 @@ class MmuToolmapWidget(QtWidgets.QWidget):
             return
         dots = ("." * self._heat_dot_count) + (" " * (3 - self._heat_dot_count))
 
-        top_zone = QtCore.QRectF(
-            self._HEAT_ZONE.left(),
-            self._HEAT_ZONE.top(),
-            self._HEAT_ZONE.width(),
-            self._HEAT_ZONE.height() / 2,
-        )
-        bottom_zone = QtCore.QRectF(
-            self._HEAT_ZONE.left(),
-            self._HEAT_ZONE.top() + self._HEAT_ZONE.height() / 2,
-            self._HEAT_ZONE.width(),
-            self._HEAT_ZONE.height() / 2,
-        )
-
         painter.setPen(self._HEATING)
         painter.setFont(self._zone_font)
         painter.drawText(
-            top_zone, QtCore.Qt.AlignmentFlag.AlignCenter, f"Heating{dots}"
+            self._HEAT_TOP, QtCore.Qt.AlignmentFlag.AlignCenter, f"Heating{dots}"
         )
 
         painter.setPen(self._MUTED_TEXT)
         painter.setFont(self._temp_font)
         painter.drawText(
-            bottom_zone,
+            self._HEAT_BOTTOM,
             QtCore.Qt.AlignmentFlag.AlignCenter,
             f"{self._current_temp:.0f}°/{self._target_temp:.0f}°",
         )
@@ -277,23 +279,7 @@ class MmuToolmapWidget(QtWidgets.QWidget):
             return
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.setBrush(self._gate_color)
-        painter.drawPolygon(
-            QtGui.QPolygonF(
-                [
-                    QtCore.QPointF(self._NOZZLE_FILL_START_X, self._TUBE_Y),
-                    QtCore.QPointF(self._TAPER_START_X, self._TUBE_Y),
-                    QtCore.QPointF(
-                        self._NOZZLE_TIP_X, self._TUBE_Y + self._TUBE_THICKNESS / 2
-                    ),
-                    QtCore.QPointF(
-                        self._TAPER_START_X, self._TUBE_Y + self._TUBE_THICKNESS
-                    ),
-                    QtCore.QPointF(
-                        self._NOZZLE_FILL_START_X, self._TUBE_Y + self._TUBE_THICKNESS
-                    ),
-                ]
-            )
-        )
+        painter.drawPolygon(self._NOZZLE_FILL)
 
     def _draw_sensor_marker(
         self, painter: QtGui.QPainter, x: float, label: str, active: bool
@@ -301,7 +287,7 @@ class MmuToolmapWidget(QtWidgets.QWidget):
         color = self._ACTIVE if active else self._MUTED_TEXT
         line_top_y = self._TUBE_Y + self._TUBE_THICKNESS
 
-        painter.setPen(QtGui.QPen(color, 1.5))
+        painter.setPen(self._ACTIVE_PEN if active else self._MUTED_PEN)
         painter.drawLine(QtCore.QPointF(x, line_top_y), QtCore.QPointF(x, 96))
 
         painter.setPen(QtCore.Qt.PenStyle.NoPen)

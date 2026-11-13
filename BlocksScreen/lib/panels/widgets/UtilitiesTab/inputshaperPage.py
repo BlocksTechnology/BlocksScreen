@@ -128,6 +128,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
 
         self.setCurrentIndex(self.indexOf(self.manual_is))
 
+    @QtCore.pyqtSlot(list)
     def handle_gcode_response(self, data: list[str]) -> None:
         """
         Parses a Klipper Input Shaper console message and updates self.is_types.
@@ -358,6 +359,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         else:
             self._run.run(gcode, rehome="G28")
 
+    @QtCore.pyqtSlot()
     def reset_view_model(self) -> None:
         """Clears items from ListView
         (Resets `QAbstractListModel` by clearing entries)
@@ -414,6 +416,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
             return "N/A"
         return f"{value:.0f}{unit}"
 
+    @QtCore.pyqtSlot()
     def handle_ism_confirm(self) -> None:
         """Apply the selected shaper to the axis that was calibrated, and save."""
         if self.logic:

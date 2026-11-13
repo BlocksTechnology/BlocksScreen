@@ -76,6 +76,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         else:
             self.main_back_button.clicked.connect(self.request_back)
 
+    @QtCore.pyqtSlot(object)
     def on_mmu_state_changed(self, mmu_state):
         """Sync the carousel and info panel to live MMU state."""
         prev = self.status
@@ -101,6 +102,7 @@ class AMUpage(QtWidgets.QStackedWidget):
                 self.carousel.addSpool(gate_info, mmu_state.filament_pos)
         self._on_selection(mmu_state)
 
+    @QtCore.pyqtSlot(int)
     def _select_gate(self, idx: int):
         self.carousel.selectIndex(self.current_index)
         self.amu_manager.select_gate(idx)

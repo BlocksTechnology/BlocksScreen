@@ -71,6 +71,7 @@ class AxisMaintPage(QtWidgets.QWidget):
         else:
             self.answerPage.hide()
 
+    @QtCore.pyqtSlot()
     def axis_maintenance(self) -> None:
         """Routine, checks axis movement for printer debugging"""
         axis = self.axis_maintenance_gb.checkedButton().text().lower()

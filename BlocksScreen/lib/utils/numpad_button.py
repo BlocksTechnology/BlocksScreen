@@ -7,6 +7,13 @@ class NumpadButton(QtWidgets.QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._position: str = ""
+        self.button_ellipse: QtCore.QRectF = QtCore.QRectF()
+        # Paint caches, invalidated on resize and position change
+        self._path: QtGui.QPainterPath | None = None
+        self._margin: int = -1
+        self._down_color = QtGui.QColor(164, 164, 164)
+        self._up_color = QtGui.QColor(223, 223, 223)
+        self._text_color = QtGui.QColor(0, 0, 0)
 
     def get_position(self):
         """Get numpad button position"""
@@ -15,123 +22,80 @@ class NumpadButton(QtWidgets.QPushButton):
     def set_position(self, value):
         """Set position"""
         self._position = str(value).lower()
+        self._path = None
+        self.update()
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
+        """Re-implemented method, drop every size-dependent cache"""
+        self._path = None
+        self._margin = -1
+        super().resizeEvent(a0)
+
+    def _shape(self, rect_f: QtCore.QRectF) -> QtGui.QPainterPath:
+        """Cached background path, winding fill so subpaths union instead of cancel"""
+        if self._path is not None:
+            return self._path
+        width = rect_f.width()
+        height = rect_f.height()
+        radius = height / 2.0
+        path = QtGui.QPainterPath()
+        path.setFillRule(QtCore.Qt.FillRule.WindingFill)
+        if self._position == "left":
+            path.addRect(height, 0, width, height)
+            path.addRoundedRect(
+                0, 0, width, height, radius, radius, QtCore.Qt.SizeMode.AbsoluteSize
+            )
+        elif self._position == "right":
+            path.addRect(0, 0, width / 2, height)
+            path.addRoundedRect(
+                0, 0, width, height, radius, radius, QtCore.Qt.SizeMode.AbsoluteSize
+            )
+        elif self._position == "down":
+            path.addRoundedRect(
+                0, 0, width, height, radius, radius, QtCore.Qt.SizeMode.AbsoluteSize
+            )
+        else:
+            path.addRect(0, 0, width, height)
+        self.button_ellipse = QtCore.QRectF(
+            rect_f.left() + height * 0.05,
+            rect_f.top() + height * 0.05,
+            height * 0.90,
+            height * 0.90,
+        )
+        self._path = path
+        return path
 
     def paintEvent(self, e: QtGui.QPaintEvent | None):
         """Re-implemented method, paint widget"""
-        opt = QtWidgets.QStyleOptionButton()
-        self.initStyleOption(opt)
-
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
 
         _rect = self.rect()
         _style = self.style()
 
         if _style is None or _rect is None:
             return
-        margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
-        bg_color = (
-            QtGui.QColor(164, 164, 164)
-            if self.isDown()
-            else QtGui.QColor(223, 223, 223)
-        )
+        bg_color = self._down_color if self.isDown() else self._up_color
 
-        path = QtGui.QPainterPath()
-        xRadius = self.rect().toRectF().normalized().height() / 2.0
-        yRadius = self.rect().toRectF().normalized().height() / 2.0
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
-        if self._position == "left":
-            path.addRect(
-                0 + self.rect().toRectF().normalized().height(),
-                0,
-                self.rect().toRectF().normalized().width(),
-                self.rect().toRectF().normalized().height(),
-            )
-            painter.fillPath(path, bg_color)
-
-            path.addRoundedRect(
-                0,
-                0,
-                self.rect().toRectF().normalized().width(),
-                self.rect().toRectF().normalized().height(),
-                xRadius,
-                yRadius,
-                QtCore.Qt.SizeMode.AbsoluteSize,
-            )
-            painter.fillPath(path, bg_color)
-        elif self._position == "right":
-            path.addRect(
-                0,
-                0,
-                self.rect().toRectF().normalized().width() / 2,
-                self.rect().toRectF().normalized().height(),
-            )
-            painter.fillPath(path, bg_color)
-
-            path.addRoundedRect(
-                0,
-                0,
-                self.rect().toRectF().normalized().width(),
-                self.rect().toRectF().normalized().height(),
-                xRadius,
-                yRadius,
-                QtCore.Qt.SizeMode.AbsoluteSize,
-            )
-            painter.fillPath(path, bg_color)
-
-        elif self._position == "down":
-            path.addRoundedRect(
-                0,
-                0,
-                self.rect().toRectF().normalized().width(),
-                self.rect().toRectF().normalized().height(),
-                xRadius,
-                yRadius,
-                QtCore.Qt.SizeMode.AbsoluteSize,
-            )
-            painter.fillPath(path, bg_color)
-
-        else:
-            path.addRect(
-                0,
-                0,
-                self.rect().toRectF().normalized().width(),
-                self.rect().toRectF().normalized().height(),
-            )
-            painter.fillPath(path, bg_color)
-        icon_path = QtGui.QPainterPath()
-
-        self.button_ellipse = QtCore.QRectF(
-            self.rect().toRectF().normalized().left()
-            + self.rect().toRectF().normalized().height() * 0.05,
-            self.rect().toRectF().normalized().top()
-            + self.rect().toRectF().normalized().height() * 0.05,
-            (self.rect().toRectF().normalized().height() * 0.90),
-            (self.rect().toRectF().normalized().height() * 0.90),
-        )
-        icon_path.addEllipse(self.button_ellipse)
+        painter.fillPath(self._shape(_rect.toRectF().normalized()), bg_color)
 
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.setBrush(bg_color)
 
-        # Draw Icon
-        _parent_rect = self.button_ellipse.toRect()
-        _icon_rect = QtCore.QRectF(
-            _parent_rect.left() * 2.8,
-            _parent_rect.top() * 2.8,
-            _parent_rect.width() * 0.80,
-            _parent_rect.height() * 0.80,
-        )
-
         if self.text():
-            _start_text_position = int(self.button_ellipse.right())
-            _rect.setLeft(_start_text_position + margin)
+            if self._margin < 0:
+                opt = QtWidgets.QStyleOptionButton()
+                self.initStyleOption(opt)
+                self._margin = _style.pixelMetric(
+                    _style.PixelMetric.PM_ButtonMargin, opt, self
+                )
+            _rect.setLeft(int(self.button_ellipse.right()) + self._margin)
             _pen = painter.pen()
             _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
             _pen.setWidth(1)
-            _pen.setColor(QtGui.QColor(0, 0, 0))
+            _pen.setColor(self._text_color)
             painter.setPen(_pen)
 
             painter.drawText(

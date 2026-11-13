@@ -116,6 +116,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.change_page(0)
         return super().showEvent(a0)
 
+    @QtCore.pyqtSlot(dict)
     def on_save_variables_update(self, save_variables: dict):
         """receives save variables from the printer and updates the filament type accordingly
 
@@ -370,6 +371,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         """Switch this stacked widget to the page at *index*."""
         self.setCurrentIndex(index)
 
+    @QtCore.pyqtSlot()
     def back_button(self) -> None:
         """Emit request_back to signal the parent tab to navigate away."""
         self.request_back.emit()

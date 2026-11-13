@@ -99,7 +99,7 @@ class RoutingQueue(queue.LifoQueue):
 
         finally:
             # TODO: This is incorrect, i need to return just None if an exception is raised, not a tuple with None
-            return _command, _line_number, _timestamp
+            return _command, _line_number, _timestamp  # noqa: B012
 
     def clear_queues(self):
         """
@@ -124,5 +124,3 @@ class RoutingQueue(queue.LifoQueue):
             return True
         except Exception as e:
             raise Exception(f"Unexpected error while clearing queues, error: {e}")
-        finally:
-            return False

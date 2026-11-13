@@ -641,6 +641,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         return page
 
+    @QtCore.pyqtSlot()
     def handle_skip_button(self):
         """Clear the popup gate's map entry so it holds no spool."""
         gate = self.pre_gate_idx.get("gate", 0)
@@ -702,6 +703,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._add_filament_page.setData(material, temp)
         self.handle_popup(True)
 
+    @QtCore.pyqtSlot()
     def on_popup_accept(self):
         """Map the popup gate to the entered filament."""
         gate = self.pre_gate_idx.get("gate", 0)
@@ -836,6 +838,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._selected_spool = None
         self.accept_btn.setEnabled(False)
 
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int)
     def _open_numpad(
         self,
         name: str,
@@ -864,6 +867,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def _on_popup_temp_change(self, _name: str, value: int) -> None:
         self._popup_temp.setText(str(value))
 
+    @QtCore.pyqtSlot("PyQt_PyObject", str, str, str, int)
     def _on_show_keyboard(
         self,
         field: QtWidgets.QLineEdit,
@@ -880,15 +884,18 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._qwerty.setMaxLength(max_char)
         self._qwerty.show()
 
+    @QtCore.pyqtSlot()
     def _on_qwerty_go_back(self) -> None:
         self._qwerty.hide()
 
+    @QtCore.pyqtSlot(str)
     def _on_qwerty_value_selected(self, value: str) -> None:
         self._qwerty.hide()
         if self._current_field:
             self._current_field.setText(value)
             self._current_field.editingFinished.emit()
 
+    @QtCore.pyqtSlot(str, "PyQt_PyObject")
     def _open_color_wheel(
         self, current_hex: str, on_selected: typing.Callable[[str], None]
     ) -> None:
@@ -903,6 +910,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if callback is not None:
             callback(hex_str)
 
+    @QtCore.pyqtSlot(object)
     def on_mmu_state_changed(self, mmu_state):
         """Track gate fills/runouts and drive the AMU page and load popup."""
         if mmu_state is None:

@@ -25,6 +25,10 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         self._text_color = QtGui.QColor(0, 0, 0)
         self._placeholder_color = QtGui.QColor(130, 130, 130)
 
+        # Size dependent paint state, rebuilt on resize
+        self._widget_rect = QtCore.QRect()
+        self._text_rect = QtCore.QRect()
+
         # Touch support
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
@@ -72,12 +76,13 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         """Check if password is currently visible."""
         return self._is_password_visible
 
-    def _get_text_rect(self) -> QtCore.QRect:
-        """Calculate the rectangle available for text rendering."""
-        left_margin = self.TEXT_MARGIN
-        right_margin = self.TEXT_MARGIN
-
-        return self.rect().adjusted(left_margin, 0, -right_margin, 0)
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
+        """Re-implemented method, rebuild the cached paint rects"""
+        self._widget_rect = self.rect()
+        self._text_rect = self._widget_rect.adjusted(
+            self.TEXT_MARGIN, 0, -self.TEXT_MARGIN, 0
+        )
+        super().resizeEvent(a0)
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         """Handle mouse press"""
@@ -98,7 +103,9 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
             self._bg_color if self.isEnabled() else self._disabled_bg_color
         )
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(self.rect(), self.CORNER_RADIUS, self.CORNER_RADIUS)
+        painter.drawRoundedRect(
+            self._widget_rect, self.CORNER_RADIUS, self.CORNER_RADIUS
+        )
 
         # Text
         self._draw_text(painter)
@@ -107,7 +114,6 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
 
     def _draw_text(self, painter: QtGui.QPainter) -> None:
         """Draw the text or placeholder."""
-        text_rect = self._get_text_rect()
         display_text = self.text()
         align = (
             self.alignment() & QtCore.Qt.AlignmentFlag.AlignHorizontal_Mask
@@ -119,18 +125,8 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
 
         if display_text:
             painter.setPen(self._text_color)
-            painter.setFont(self.font())
-            painter.drawText(
-                text_rect,
-                align,
-                display_text,
-            )
         else:
-            # Placeholder text
+            display_text = self._placeholder_str
             painter.setPen(self._placeholder_color)
-            painter.setFont(self.font())
-            painter.drawText(
-                text_rect,
-                align,
-                self._placeholder_str,
-            )
+        painter.setFont(self.font())
+        painter.drawText(self._text_rect, align, display_text)

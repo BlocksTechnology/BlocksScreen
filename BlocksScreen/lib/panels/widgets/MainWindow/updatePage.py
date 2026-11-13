@@ -128,6 +128,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._update_confirm_popup: BasePopup | None = None
         self.show_loading(True)
 
+    @QtCore.pyqtSlot()
     def _request_status_debounced(self) -> None:
         self._status_debounce.start(500)
 
@@ -141,6 +142,7 @@ class UpdatePage(QtWidgets.QWidget):
         if prop == "target":
             self._heaters[name] = value
 
+    @QtCore.pyqtSlot()
     def _update_elapsed_time(self) -> None:
         """Update and display elapsed time counter."""
         self._elapsed_time_seconds += 1
@@ -148,6 +150,7 @@ class UpdatePage(QtWidgets.QWidget):
         seconds = self._elapsed_time_seconds % 60
         self._elapsed_time_label.setText(f"{minutes:02d}:{seconds:02d}")
 
+    @QtCore.pyqtSlot()
     def _on_busy_timeout(self) -> None:
         """Force-dismiss overlay if update takes longer than 400s (safety net)."""
         if self._busy:

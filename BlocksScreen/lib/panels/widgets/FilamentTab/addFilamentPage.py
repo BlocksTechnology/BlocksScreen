@@ -145,6 +145,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._numpad_popup.hide()
         self._bed_temp_field.setText(str(value))
 
+    @QtCore.pyqtSlot()
     def _open_color_wheel(self) -> None:
         self.color_whell.set_color_hex(self._color_hex or "ffffff")
         self._color_whell_popup.show()
@@ -172,6 +173,7 @@ class AddFilamentPage(QtWidgets.QWidget):
             f"border: 2px solid rgba(255,255,255,80);"
         )
 
+    @QtCore.pyqtSlot()
     def _on_submit(self) -> None:
         body: dict = {}
         name = self._name_field.text().strip()

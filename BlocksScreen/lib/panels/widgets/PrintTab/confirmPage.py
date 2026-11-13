@@ -26,6 +26,10 @@ class ConfirmWidget(QtWidgets.QWidget):
         str, dict, name="show_metadata"
     )
 
+    # Defaults so an early resizeEvent during _setup_ui is a no-op
+    _pixmap_item: QtWidgets.QGraphicsPixmapItem | None = None
+    _thumbnail_key: tuple | None = None
+
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self._setup_ui()
@@ -50,6 +54,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.delete_file_button.clicked.connect(
             lambda: self.on_delete.emit(self.filename, self.directory)
         )
+        self._update_thumbnail()
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
     def on_show_widget(self, text: str, metadata: dict | None = None) -> None:
@@ -62,12 +67,12 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._current_gcode = text.removeprefix("/")
         self._filedata = metadata or {}
         self._update_metadata_labels(self._filedata)
-        self.update()
 
     def _update_metadata_labels(self, metadata: dict) -> None:
         """Update thumbnail and text labels from metadata."""
         self._thumbnails = metadata.get("thumbnail_paths", [])
         self.thumbnail = self._resolve_thumbnail()
+        self._update_thumbnail()
         weight = metadata.get("filament_weight_total")
         estimated = metadata.get("estimated_time")
         seconds = (
@@ -93,7 +98,6 @@ class ConfirmWidget(QtWidgets.QWidget):
         # A file opened before its metadata arrived shows it once it lands.
         if self.isVisible():
             self._update_metadata_labels(filedata)
-            self.update()
 
     def _resolve_thumbnail(self) -> QtGui.QImage:
         """Largest on-disk thumbnail, else embedded, else placeholder."""
@@ -117,7 +121,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         """Show a late embedded thumbnail for the shown file."""
         if gcode_path == self._current_gcode and not image.isNull():
             self.thumbnail = image
-            self.update()
+            self._update_thumbnail()
 
     def estimate_print_time(self, seconds: int) -> list:
         """Convert seconds to [days, hours, minutes, seconds]."""
@@ -132,43 +136,40 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.filename = ""
         return super().hide()
 
-    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        """Re-implemented method, paint widget"""
-        if not self.isVisible():
-            self.directory = ""
-            self.filename = ""
-        if not hasattr(self, "_scene"):
-            self._scene = QtWidgets.QGraphicsScene(self)
-            self.cf_thumbnail.setScene(self._scene)
+    def _update_thumbnail(self) -> None:
+        """Rescale and centre the thumbnail, only on a new image or a resize"""
+        if self._pixmap_item is None:
+            return
 
-        # Scene rectangle (available display area)
         graphics_rect = self.cf_thumbnail.rect().toRectF()
+        target = graphics_rect.size().toSize()
+        key = (self.thumbnail.cacheKey(), target.width(), target.height())
+        if key == self._thumbnail_key:
+            return
+        self._thumbnail_key = key
 
-        # Scale pixmap preserving aspect ratio
         pixmap = QtGui.QPixmap.fromImage(self.thumbnail).scaled(
-            graphics_rect.size().toSize(),
+            target,
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
-
-        # Centering offsets
-        adjusted_x = (graphics_rect.width() - pixmap.width()) / 2.0
-        adjusted_y = (graphics_rect.height() - pixmap.height()) / 2.0
-
-        # Update existing pixmap item or create it once
-        if not hasattr(self, "_pixmap_item"):
-            self._pixmap_item = QtWidgets.QGraphicsPixmapItem(pixmap)
-            self._scene.addItem(self._pixmap_item)
-        else:
-            self._pixmap_item.setPixmap(pixmap)
-
-        self._pixmap_item.setPos(adjusted_x, adjusted_y)
+        self._pixmap_item.setPixmap(pixmap)
+        self._pixmap_item.setPos(
+            (graphics_rect.width() - pixmap.width()) / 2.0,
+            (graphics_rect.height() - pixmap.height()) / 2.0,
+        )
         self._scene.setSceneRect(graphics_rect)
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
+        """Re-implemented method, the thumbnail is sized from the view rect"""
+        super().resizeEvent(a0)
+        self._update_thumbnail()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         """Re-implemented method, Handle widget show event"""
         if self.thumbnail.isNull():
             self.cf_thumbnail.hide()
+        self._update_thumbnail()
         return super().showEvent(a0)
 
     def _setup_ui(self) -> None:
@@ -349,3 +350,8 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._blocksthumbnail = QtGui.QImage(
             "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
         )
+
+        self._scene = QtWidgets.QGraphicsScene(self)
+        self._pixmap_item = QtWidgets.QGraphicsPixmapItem()
+        self._scene.addItem(self._pixmap_item)
+        self.cf_thumbnail.setScene(self._scene)

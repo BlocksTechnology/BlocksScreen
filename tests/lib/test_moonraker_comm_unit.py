@@ -217,9 +217,24 @@ class TestReconnectCycle:
         assert ws.connect() is True
         ws._wst.join(1)
         app.return_value.run_forever.assert_called_once_with(
-            ping_interval=ws.PING_INTERVAL, ping_timeout=ws.PING_TIMEOUT
+            ping_interval=ws.PING_INTERVAL,
+            ping_timeout=ws.PING_TIMEOUT,
+            skip_utf8_validation=True,
         )
         assert ws.PING_INTERVAL > ws.PING_TIMEOUT  # else run_forever raises
+
+    def test_bytes_frame_is_parsed(self, ws):
+        # skip_utf8_validation hands on_message the raw bytes, undecoded
+        states = []
+        ws.klippy_state_signal.connect(states.append)
+        frame = {"id": 1, "result": {"klippy_state": "ready", "components": []}}
+        ws.request_table[1] = ("server.info", {})
+        ws.on_message(None, json.dumps(frame).encode())
+        assert states == ["ready"]
+
+    def test_invalid_utf8_frame_is_dropped(self, ws, caplog):
+        ws.on_message(None, b'{"method": "\xff"}')
+        assert "Failed to decode websocket message" in caplog.text
 
     def test_disconnect_stops_retry_timer(self, ws):
         ws._retry_timer = MagicMock()

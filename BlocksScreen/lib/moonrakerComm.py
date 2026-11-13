@@ -161,6 +161,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             kwargs={
                 "ping_interval": self.PING_INTERVAL,
                 "ping_timeout": self.PING_TIMEOUT,
+                # Pure-Python UTF-8 check costs 15x json.loads per frame (websocket-client FAQ)
+                "skip_utf8_validation": True,
             },
             daemon=True,
         )
@@ -294,7 +296,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
 
         try:
             response: dict = json.loads(_message)
-        except json.JSONDecodeError as e:
+        # ValueError also covers UnicodeDecodeError, as frames arrive as unvalidated bytes
+        except ValueError as e:
             logger.error("Failed to decode websocket message: %s", e)
             return
         message_event = None

@@ -56,6 +56,7 @@ class NotificationPage(QtWidgets.QWidget):
         if self.model.entries:
             self._select_row(0)
 
+    @QtCore.pyqtSlot()
     def delete_selected_item(self) -> None:
         """Deletes currently selected item from the list view"""
         if self.selected_item is None:
@@ -67,6 +68,7 @@ class NotificationPage(QtWidgets.QWidget):
         else:
             self._clear_info_box()
 
+    @QtCore.pyqtSlot()
     def reset_view_model(self) -> None:
         """Clears items from ListView
         (Resets `QAbstractListModel` by clearing entries)

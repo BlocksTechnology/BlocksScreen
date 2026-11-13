@@ -205,6 +205,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self._restart_30s_timer.stop()
         self.call_load_panel.emit(False, "", False)
 
+    @QtCore.pyqtSlot()
     def _add_dot(self) -> None:
         self.dot_count = self.dot_count % 3 + 1
         self.status_label.setText(f"{self.base_text}{'.' * self.dot_count}")
@@ -265,6 +266,7 @@ class ConnectionPage(QtWidgets.QFrame):
             return reason
         return f"{reason}\nPress 'Firmware Restart' to recover."
 
+    @QtCore.pyqtSlot()
     def _on_restart_clicked(self) -> None:
         is_firmware = self._state in self._FIRMWARE_RESTART_STATES
         self._last_restart_was_firmware = is_firmware
@@ -282,9 +284,11 @@ class ConnectionPage(QtWidgets.QFrame):
         else:
             self.restart_klipper_clicked.emit()
 
+    @QtCore.pyqtSlot()
     def _on_restart_10s_elapsed(self) -> None:
         self.call_load_panel.emit(True, "Still restarting, please wait…", False)
 
+    @QtCore.pyqtSlot()
     def _on_restart_30s_elapsed(self) -> None:
         if self._last_restart_was_firmware and not self._escalated_to_klipper_restart:
             self._escalated_to_klipper_restart = True
@@ -294,6 +298,7 @@ class ConnectionPage(QtWidgets.QFrame):
             return
         self._stop_restart_overlay()
 
+    @QtCore.pyqtSlot()
     def _on_update_page_clicked(self) -> None:
         self.update_button_clicked.emit(True)
 

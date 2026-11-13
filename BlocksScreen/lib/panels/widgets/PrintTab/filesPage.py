@@ -463,6 +463,7 @@ class FilesPage(QtWidgets.QWidget):
             "Unknown Filament"
         )
 
+    @QtCore.pyqtSlot()
     def _delayed_scrollbar_update(self) -> None:
         """Update scrollbar after model changes."""
         QtCore.QTimer.singleShot(10, self._setup_scrollbar)
@@ -508,6 +509,7 @@ class FilesPage(QtWidgets.QWidget):
         self._label.hide()
         self._list_widget.show()
 
+    @QtCore.pyqtSlot(int)
     def _handle_scrollbar_value_changed(self, value: int) -> None:
         """Sync scrollbar with list widget."""
         self._scrollbar.blockSignals(True)

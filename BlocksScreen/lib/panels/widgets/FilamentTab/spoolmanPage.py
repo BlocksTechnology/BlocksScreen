@@ -131,6 +131,7 @@ class SpoolmanPage(QtWidgets.QWidget):
             name = f"{name} [Archived]"
         return name
 
+    @QtCore.pyqtSlot()
     def _on_reload_clicked(self) -> None:
         self.request_spools.emit()
         self.request_get_spool_id.emit()
@@ -143,11 +144,13 @@ class SpoolmanPage(QtWidgets.QWidget):
             self._active_spool_id = int(spool_id)
             self._refresh_info_box()
 
+    @QtCore.pyqtSlot()
     def _on_delete_clicked(self) -> None:
         if self._selected_spool is None:
             return
         self.confirm_popup.show()
 
+    @QtCore.pyqtSlot()
     def _on_confirm_delete(self) -> None:
         if self._selected_spool is not None:
             spool_id = self._selected_spool.get("id")

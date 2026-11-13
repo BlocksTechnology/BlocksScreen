@@ -1,4 +1,4 @@
-from PyQt6 import QtWidgets, QtGui, QtCore
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class FlowguardWidget(QtWidgets.QProgressBar):
@@ -19,6 +19,85 @@ class FlowguardWidget(QtWidgets.QProgressBar):
         # Font for labels
         self._label_font = QtGui.QFont("Segoe UI", 9)
         self._label_font.setBold(True)
+
+        # Constant paint state
+        self._track_pen = QtGui.QPen(QtGui.QColor(40, 40, 40), 2)
+        self._dark_brush = QtGui.QBrush(QtGui.QColor(25, 25, 25))
+        self._marker_pen = QtGui.QPen(QtGui.QColor(223, 223, 223), 1)
+        self._center_pen = QtGui.QPen(
+            QtGui.QColor(100, 100, 100), 1, QtCore.Qt.PenStyle.DashLine
+        )
+        self._danger_pen = QtGui.QPen(QtGui.QColor(226, 31, 31), 1)
+        self._danger_brush = QtGui.QBrush(QtGui.QColor(226, 31, 31, 75))
+        self._label_pen = QtGui.QPen(QtGui.QColor(180, 180, 180))
+        self._fill_brush = QtGui.QBrush(self._bar_color)
+
+        # Size dependent paint state, rebuilt on resize
+        self._geometry_valid = False
+        self._bar_x = 0
+        self._bar_y = 0
+        self._bar_width = 30
+        self._bar_height = 0
+        self._center_y = 0.0
+        self._track_rect = QtCore.QRectF()
+        self._center_line = QtCore.QLineF()
+        self._top_danger_rect = QtCore.QRect()
+        self._bottom_danger_rect = QtCore.QRect()
+        self._clog_rect = QtCore.QRectF()
+        self._tangle_rect = QtCore.QRectF()
+
+        # Marker lines, also invalidated by the max clog/tangle setters
+        self._clog_line: QtCore.QLineF | None = None
+        self._tangle_line: QtCore.QLineF | None = None
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
+        """Re-implemented method, drop the size dependent paint state"""
+        self._geometry_valid = False
+        super().resizeEvent(a0)
+
+    def _ensure_geometry(self) -> None:
+        """Rebuild the bar, marker and label geometry after a resize or a new limit"""
+        if self._geometry_valid:
+            return
+
+        top_margin = 30
+        bottom_margin = 30
+        bar_width = self._bar_width
+        self._bar_x = int(self.width() / 2 - bar_width / 2)
+        self._bar_y = top_margin
+        self._bar_height = self.height() - top_margin - bottom_margin
+        bar_x, bar_y, bar_height = self._bar_x, self._bar_y, self._bar_height
+
+        self._track_rect = QtCore.QRectF(bar_x, bar_y, bar_width, bar_height)
+        self._center_y = bar_y + bar_height / 2
+
+        self._clog_line = None
+        if abs(self.max_clog) > 0.01:
+            clog_y = self._center_y - (abs(self.max_clog) * (bar_height / 2))
+            self._clog_line = QtCore.QLineF(bar_x, clog_y, bar_x + bar_width, clog_y)
+
+        self._tangle_line = None
+        if abs(self.max_tangle) > 0.01:
+            tangle_y = self._center_y + (abs(self.max_tangle) * (bar_height / 2))
+            self._tangle_line = QtCore.QLineF(
+                bar_x, tangle_y, bar_x + bar_width, tangle_y
+            )
+
+        self._center_line = QtCore.QLineF(
+            bar_x - 5, self._center_y, bar_x + bar_width + 5, self._center_y
+        )
+
+        danger_height = int(0.35 * (bar_height / 2))
+        self._top_danger_rect = QtCore.QRect(bar_x, bar_y, bar_width, danger_height)
+        self._bottom_danger_rect = QtCore.QRect(
+            bar_x, bar_y + bar_height - danger_height, bar_width, danger_height
+        )
+
+        self._clog_rect = QtCore.QRectF(0, top_margin - 25, self.width(), 20)
+        self._tangle_rect = QtCore.QRectF(
+            0, top_margin + bar_height + 5, self.width(), 20
+        )
+        self._geometry_valid = True
 
     def setValue(self, value: float) -> None:
         """Set progress value
@@ -43,6 +122,7 @@ class FlowguardWidget(QtWidgets.QProgressBar):
             value (float): Maximum clog value (typically negative, e.g., -0.134)
         """
         self.max_clog = value
+        self._geometry_valid = False
         self.update()
 
     def set_max_tangle(self, value: float) -> None:
@@ -52,96 +132,53 @@ class FlowguardWidget(QtWidgets.QProgressBar):
             value (float): Maximum tangle value (typically positive, e.g., 0.186)
         """
         self.max_tangle = value
+        self._geometry_valid = False
         self.update()
 
     def _draw_vertical_bar(self, painter: QtGui.QPainter) -> None:
         """Draw the vertical flow indicator bar"""
-        rect = self.rect()
+        painter.setPen(self._track_pen)
+        painter.setBrush(self._dark_brush)
+        painter.drawRect(self._track_rect)
 
-        top_margin = 30
-        bottom_margin = 30
+        painter.setPen(self._marker_pen)
+        if self._clog_line is not None:
+            painter.drawLine(self._clog_line)
+        if self._tangle_line is not None:
+            painter.drawLine(self._tangle_line)
 
-        bar_width = 30
-        bar_x = int(self.rect().width() / 2 - bar_width / 2)
-        bar_y = top_margin
-        bar_height = rect.height() - top_margin - bottom_margin
+        painter.setPen(self._center_pen)
+        painter.drawLine(self._center_line)
 
-        bg_pen = QtGui.QPen(QtGui.QColor(40, 40, 40), 2)
-        painter.setPen(bg_pen)
-        painter.setBrush(QtGui.QColor(25, 25, 25))
-
-        track_rect = QtCore.QRectF(bar_x, bar_y, bar_width, bar_height)
-        painter.drawRect(track_rect)
-
-        center_y = bar_y + bar_height / 2
-
-        pen = QtGui.QPen(QtGui.QColor(223, 223, 223), 1)
-        painter.setPen(pen)
-        if abs(self.max_clog) > 0.01:
-            clog_y = center_y - (abs(self.max_clog) * (bar_height / 2))
-            painter.drawLine(
-                QtCore.QPointF(bar_x, clog_y), QtCore.QPointF(bar_x + bar_width, clog_y)
-            )
-
-        if abs(self.max_tangle) > 0.01:
-            tangle_y = center_y + (abs(self.max_tangle) * (bar_height / 2))
-            painter.drawLine(
-                QtCore.QPointF(bar_x, tangle_y),
-                QtCore.QPointF(bar_x + bar_width, tangle_y),
-            )
-        center_pen = QtGui.QPen(
-            QtGui.QColor(100, 100, 100), 1, QtCore.Qt.PenStyle.DashLine
-        )
-        painter.setPen(center_pen)
-        painter.drawLine(
-            QtCore.QPointF(bar_x - 5, center_y),
-            QtCore.QPointF(bar_x + bar_width + 5, center_y),
-        )
         if abs(self.progress_value) > 0.01:
-            bar_color = self._bar_color
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.setBrush(bar_color)
-            if self.progress_value > 0:
-                fill_height = self.progress_value * (bar_height / 2)
-                fill_y = center_y - fill_height
-                fill_rect = QtCore.QRectF(bar_x, fill_y, bar_width, fill_height)
+            painter.setBrush(self._fill_brush)
+            fill_height = abs(self.progress_value) * (self._bar_height / 2)
+            fill_y = (
+                self._center_y - fill_height
+                if self.progress_value > 0
+                else self._center_y
+            )
+            painter.drawRect(
+                QtCore.QRectF(self._bar_x, fill_y, self._bar_width, fill_height)
+            )
 
-            else:
-                fill_height = abs(self.progress_value) * (bar_height / 2)
-                fill_rect = QtCore.QRectF(bar_x, center_y, bar_width, fill_height)
-
-            painter.drawRect(fill_rect)
-
-        fill_height = int(0.35 * (bar_height / 2))
-
-        pen = QtGui.QPen(QtGui.QColor(226, 31, 31), 1)
-        brush = QtGui.QBrush(QtGui.QColor(226, 31, 31, 75))
-        painter.setPen(pen)
-        painter.setBrush(brush)
-        painter.drawRect(bar_x, bar_y, bar_width, fill_height)
-
-        fill_y = center_y - fill_height
-        painter.drawRect(
-            bar_x, bar_y + bar_height - fill_height, bar_width, fill_height
-        )
+        painter.setPen(self._danger_pen)
+        painter.setBrush(self._danger_brush)
+        painter.drawRect(self._top_danger_rect)
+        painter.drawRect(self._bottom_danger_rect)
 
         # Draw labels
-        painter.setPen(QtGui.QColor(180, 180, 180))
+        painter.setPen(self._label_pen)
         painter.setFont(self._label_font)
-
-        x1 = top_margin - 25
-        x2 = top_margin + bar_height + 5
-
-        # "CLOG" label (top)
-        clog_rect = QtCore.QRectF(0, x1, self.width(), 20)
-        painter.drawText(clog_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "CLOG")
-
-        # "TANGLE" label (bottom)
-        tangle_rect = QtCore.QRectF(0, x2, self.width(), 20)
-        painter.drawText(tangle_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "TANGLE")
+        painter.drawText(self._clog_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "CLOG")
+        painter.drawText(
+            self._tangle_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "TANGLE"
+        )
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
+        self._ensure_geometry()
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
 

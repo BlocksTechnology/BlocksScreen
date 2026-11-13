@@ -105,9 +105,7 @@ def _make_clean_env() -> dict[str, str]:
     # git/apt error parsing matches English text.
     env["LC_ALL"] = "C"
     safe_sudo = {"SUDO_USER", "SUDO_UID", "SUDO_GID"}
-    for key, val in os.environ.items():
-        if key in safe_sudo:
-            env[key] = val
+    env.update({k: v for k, v in os.environ.items() if k in safe_sudo})
     # Tells hooks they run mid-batch: defer daemon restarts to the sentinel.
     env["BS_UPDATER_SELF_UPDATE"] = "1"
     with contextlib.suppress(OSError):

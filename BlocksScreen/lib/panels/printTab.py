@@ -641,6 +641,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.BasePopup.open()
 
+    @QtCore.pyqtSlot()
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
         self._pending_save_offset = self._active_z_offset
@@ -657,6 +658,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.BasePopup_z_offset.accepted.connect(self.update_configuration_file)
         self.BasePopup_z_offset.open()
 
+    @QtCore.pyqtSlot()
     def update_configuration_file(self) -> None:
         """Runs the `SAVE_CONFIG` gcode"""
         try:
@@ -772,6 +774,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         except (RuntimeError, TypeError):
             pass
 
+    @QtCore.pyqtSlot()
     def handle_cancel_print(self) -> None:
         """Handles the print cancel action"""
         if (

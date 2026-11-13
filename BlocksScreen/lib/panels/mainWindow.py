@@ -126,6 +126,18 @@ class MainWindow(QtWidgets.QMainWindow):
         list, name="device-config-declined"
     )
 
+    _EVT_WS_MSG: typing.ClassVar[QtCore.QEvent.Type] = (
+        events.WebSocketMessageReceived.type()
+    )
+    _EVT_PRINT_START: typing.ClassVar[QtCore.QEvent.Type] = events.PrintStart.type()
+    _EVT_PRINT_CANCELLED: typing.ClassVar[QtCore.QEvent.Type] = (
+        events.PrintCancelled.type()
+    )
+    # Enum-member frozenset beats a tuple scan for the common non-matching event.
+    _EVT_PRINT_END: typing.ClassVar[frozenset[QtCore.QEvent.Type]] = frozenset(
+        (events.PrintError.type(), events.PrintComplete.type(), _EVT_PRINT_CANCELLED)
+    )
+
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
         super().__init__()
@@ -412,7 +424,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cancelpage.setGeometry(0, 0, self.width(), self.height())
         self.cancelpage.raise_()
         self.cancelpage.updateGeometry()
-        self.cancelpage.repaint()
         self.cancelpage.show()
 
     @QtCore.pyqtSlot(bool, str, bool, name="show-load-page")
@@ -474,7 +485,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.update_page.raise_()
         self.update_page.updateGeometry()
-        self.update_page.repaint()
         self.update_page.show()
 
     @QtCore.pyqtSlot(str, name="on-klippy-state")
@@ -651,7 +661,6 @@ class MainWindow(QtWidgets.QMainWindow):
         """Signal render for red dot on utilities tab icon and Update button"""
         self.main_content_widget.setNotification(3, state)
         self.utilitiesPanel.up_update_btn.setShowNotification(state)
-        self.repaint()
 
     def enable_tab_bar(self) -> bool:
         """Enables the tab bar
@@ -982,6 +991,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Requested page change -> Tab index : {requested_page[0]} | panel index : {requested_page[1]}",
         )
 
+    @QtCore.pyqtSlot(int)
     def global_change_tab(self, tab_index: int) -> None:
         """Changes the current tab while keeping the current panel page index if possible
 
@@ -1356,12 +1366,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def event(self, event: QtCore.QEvent) -> bool:
         """Receives PyQt Events, reimplemented method from the QEvent class"""
-        if event.type() == events.WebSocketMessageReceived.type():
+        etype = event.type()
+        if etype == self._EVT_WS_MSG:
             if isinstance(event, events.WebSocketMessageReceived):
                 self.messageReceivedEvent(event)
                 return True
             return False
-        if event.type() == events.PrintStart.type():
+        if etype == self._EVT_PRINT_START:
             self.print_status = "printing"
             self.disable_tab_bar()
             try:
@@ -1383,15 +1394,11 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return False
 
-        if event.type() in (
-            events.PrintError.type(),
-            events.PrintComplete.type(),
-            events.PrintCancelled.type(),
-        ):
+        if etype in self._EVT_PRINT_END:
             self.print_status = "idle"
             QtCore.QTimer.singleShot(0, self._prompt_device_confirmation)
             QtCore.QTimer.singleShot(0, self._try_device_config_restart)
-            if event.type() == events.PrintCancelled.type():
+            if etype == self._EVT_PRINT_CANCELLED:
                 self.handle_cancel_print()
             self.enable_tab_bar()
             try:

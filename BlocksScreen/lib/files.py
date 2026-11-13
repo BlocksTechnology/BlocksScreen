@@ -114,6 +114,12 @@ class FileMetadata:
 class Files(QtCore.QObject):
     """Gcode file and dir state, synced from Moonraker notifications."""
 
+    _EVT_WS_OPEN: typing.ClassVar[QtCore.QEvent.Type] = events.WebSocketOpen.type()
+    _EVT_KLIPPER_DISC: typing.ClassVar[QtCore.QEvent.Type] = (
+        events.KlippyDisconnected.type()
+    )
+    _EVT_FILE_DATA: typing.ClassVar[QtCore.QEvent.Type] = events.ReceivedFileData.type()
+
     # Signals for API requests
     request_dir_info = QtCore.pyqtSignal(
         [], [str], [str, bool], name="api_get_dir_info"
@@ -182,10 +188,14 @@ class Files(QtCore.QObject):
         self._history_job.connect(self._on_history_job)
 
     def _install_event_filter(self) -> None:
-        """Install event filter on application instance."""
-        app = QtWidgets.QApplication.instance()
-        if app:
-            app.installEventFilter(self)
+        """Install event filter on parent to limit scope to mainWindow events only."""
+        parent = self.parent()
+        if parent is not None:
+            parent.installEventFilter(self)
+        else:
+            app = QtWidgets.QApplication.instance()
+            if app:
+                app.installEventFilter(self)
 
     @property
     def file_list(self) -> list[dict]:
@@ -698,19 +708,18 @@ class Files(QtCore.QObject):
 
     def eventFilter(self, obj: QtCore.QObject, event: QtCore.QEvent) -> bool:
         """Handle application-level events."""
-        if event.type() == events.WebSocketOpen.type():
+        etype = event.type()
+        if etype == self._EVT_WS_OPEN:
             self.initial_load()
             return False
-
-        if event.type() == events.KlippyDisconnected.type():
+        if etype == self._EVT_KLIPPER_DISC:
             self._clear_all_data()
             return False
-
         return super().eventFilter(obj, event)
 
     def event(self, event: QtCore.QEvent) -> bool:
         """Handle object-level events."""
-        if event.type() == events.ReceivedFileData.type():
+        if event.type() == self._EVT_FILE_DATA:
             if isinstance(event, events.ReceivedFileData):
                 self.handle_message_received(event.method, event.data, event.params)
                 return True

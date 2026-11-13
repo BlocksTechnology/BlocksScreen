@@ -119,12 +119,6 @@ class ExtruderPage(QtWidgets.QWidget):
             return
         self.extrude_length = value
 
-    def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
-        """Refresh the info label while the extrude page is visible."""
-        if self.isVisible():
-            self.exp_info_label.setText(self.extrude_page_message)
-        return super().paintEvent(a0)
-
     def _setup_ui(self) -> None:
         """Build the extruder page: extrude/retract controls and status labels."""
         self.setObjectName("extruder_page")

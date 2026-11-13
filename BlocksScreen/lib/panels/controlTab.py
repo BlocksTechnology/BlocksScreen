@@ -312,6 +312,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         if _swapping == "cleaning":
             self.call_load_panel.emit(True, "Cleaning print core", False)
 
+    @QtCore.pyqtSlot(list)
     def _handle_gcode_response(self, messages: list) -> None:
         """Show Z-Tilt progress from each probing pass result."""
         if not self._ztilt.active:
@@ -402,11 +403,13 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
             self._show_blank(False)
 
+    @QtCore.pyqtSlot()
     def show_swapcore(self):
         """Show swap printcore"""
         self.run_gcode_signal.emit("CHANGE_PRINTCORES")
         self.call_load_panel.emit(True, "Preparing to swap print core", False)
 
+    @QtCore.pyqtSlot()
     def handle_swapcore(self):
         """Handle swap printcore routine finish"""
         self.printcores_page.setText("Executing \n Firmware Restart")
