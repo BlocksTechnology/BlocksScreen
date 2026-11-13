@@ -540,11 +540,12 @@ RULES: tuple[MessageRule, ...] = (
         severity=Severity.ERROR,
     ),
     # Klipper gcode.py cmd_M112: invoke_shutdown("Shutdown due to M112 command").
+    # Software e-stop (macro, console, Mainsail): no physical button to clear.
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("due to m112 command"),
         display="Emergency Stop",
-        hint="Clear E-stop and restart Klipper",
+        hint="Restart Klipper",
         severity=Severity.ERROR,
     ),
     MessageRule(

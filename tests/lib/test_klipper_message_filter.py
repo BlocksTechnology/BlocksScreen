@@ -482,6 +482,15 @@ def test_match_message(
         assert rule.severity == expected_severity
 
 
+def test_estop_hint_mentions_button_only_for_hardware() -> None:
+    m112 = match_message(MessageSource.GCODE_ERROR, "Shutdown due to M112 command")
+    button = match_message(
+        MessageSource.GCODE_ERROR, "Printers emergency button pressed"
+    )
+    assert m112 is not None and m112.hint == "Restart Klipper"
+    assert button is not None and "E-stop" in (button.hint or "")
+
+
 def test_match_message_case_insensitive() -> None:
     rule = match_message(MessageSource.GCODE_ERROR, "FILAMENT RUNOUT")
     assert rule is not None
