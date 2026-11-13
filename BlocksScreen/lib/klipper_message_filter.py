@@ -539,6 +539,14 @@ RULES: tuple[MessageRule, ...] = (
         hint="Restart Klipper",
         severity=Severity.ERROR,
     ),
+    # Klipper gcode.py cmd_M112: invoke_shutdown("Shutdown due to M112 command").
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("due to m112 command"),
+        display="Emergency Stop",
+        hint="Clear E-stop and restart Klipper",
+        severity=Severity.ERROR,
+    ),
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("error loading template"),

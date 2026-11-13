@@ -423,3 +423,22 @@ def test_only_status_reply_emits(method, emits) -> None:
     win = SimpleNamespace(on_update_message=MagicMock())
     MainWindow._handle_machine_message(win, method, {"version_info": {}}, None)
     assert win.on_update_message.emit.called is emits
+
+
+@pytest.mark.parametrize(
+    ("active_state", "sub_state", "notifies"),
+    [
+        ("active", "running", False),
+        ("inactive", "dead", False),
+        ("failed", "failed", True),
+    ],
+)
+def test_service_state_notifies_only_on_failure(
+    active_state, sub_state, notifies
+) -> None:
+    win = SimpleNamespace(_popup_toggle=False, show_notifications=MagicMock())
+    params = [{"klipper": {"active_state": active_state, "sub_state": sub_state}}]
+    MainWindow._handle_notify_service_state_changed_message(
+        win, "notify_service_state_changed", {"params": params}, None
+    )
+    assert win.show_notifications.emit.called is notifies

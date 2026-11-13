@@ -448,6 +448,12 @@ def test_re_no_match() -> None:
             "Too Many LEDs",
             Severity.ERROR,
         ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Shutdown due to M112 command",
+            "Emergency Stop",
+            Severity.ERROR,
+        ),
         # GCODEs Errors - Kalico / Danger Klipper
         (
             MessageSource.GCODE_ERROR,

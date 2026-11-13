@@ -1128,21 +1128,19 @@ class MainWindow(QtWidgets.QMainWindow):
     def _handle_notify_service_state_changed_message(
         self, method, data, metadata
     ) -> None:
-        """Handle websocket service messages"""
+        """Notify only when a service fails; routine start/stop transitions are noise."""
         entry = data.get("params")
-        if entry:
-            if self._popup_toggle:
-                return
-            service_entry: dict = entry[0]
-            service_name, service_info = service_entry.popitem()
-            self.show_notifications.emit(
-                "mainwindow",
-                str(
-                    f"{service_name} service changed state to \n{service_info.get('sub_state')}"
-                ),
-                1,
-                False,
-            )
+        if not entry or self._popup_toggle:
+            return
+        # Mainsail stores these silently and KlipperScreen ignores them: every boot and restart emits several.
+        for service_name, service_info in entry[0].items():
+            if service_info.get("active_state") == "failed":
+                self.show_notifications.emit(
+                    "mainwindow",
+                    f"{service_name} service failed",
+                    Severity.WARNING.value,
+                    False,
+                )
 
     def _emit_filtered_notification(
         self,
