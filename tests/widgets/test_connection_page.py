@@ -305,14 +305,18 @@ class TestBugRegressions:
 
     @pytest.mark.parametrize(
         "raw",
-        [
-            "Shutdown due to M112 command",
-            "Printers Emergency Button Pressed.",
-            "Printer Emergency Button Pressed.",
-        ],
+        ["Printers Emergency Button Pressed.", "Printer Emergency Button Pressed."],
     )
-    def test_estop_reasons_share_one_text(self, page, raw):
-        assert ConnectionPage._build_reason(raw) == ConnectionPage._ESTOP_TEXT
+    def test_button_estop_says_release_the_button(self, page, raw):
+        assert ConnectionPage._build_reason(raw) == ConnectionPage._BUTTON_ESTOP_TEXT
+
+    @pytest.mark.parametrize(
+        "raw", ["Shutdown due to M112 command", "Shutdown due to webhooks request"]
+    )
+    def test_software_estop_has_no_button(self, page, raw):
+        reason = ConnectionPage._build_reason(raw)
+        assert reason == ConnectionPage._SOFTWARE_ESTOP_TEXT
+        assert "button" not in reason
 
     def test_unmapped_shutdown_reason_strips_prefix(self, page):
         result = ConnectionPage._clean_shutdown_context(

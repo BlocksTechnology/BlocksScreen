@@ -448,6 +448,12 @@ def test_re_no_match() -> None:
             "Too Many LEDs",
             Severity.ERROR,
         ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Shutdown due to M112 command",
+            "Emergency Stop",
+            Severity.ERROR,
+        ),
         # GCODEs Errors - Kalico / Danger Klipper
         (
             MessageSource.GCODE_ERROR,
@@ -474,6 +480,22 @@ def test_match_message(
         assert rule is not None
         assert rule.display == expected_display
         assert rule.severity == expected_severity
+
+
+@pytest.mark.parametrize(
+    ("text", "names_button"),
+    [
+        ("Printers emergency button pressed", True),
+        ("Shutdown due to M112 command", False),
+        ("Shutdown due to webhooks request", False),
+    ],
+)
+def test_estop_rules_point_at_firmware_restart(text: str, names_button: bool) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, text)
+    assert rule is not None and rule.display == "Emergency Stop"
+    hint = rule.hint or ""
+    assert "Firmware Restart" in hint
+    assert ("E-stop" in hint) is names_button
 
 
 def test_match_message_case_insensitive() -> None:
