@@ -133,11 +133,25 @@ def test_cancel_timeout_drops_loadscreen_when_idle_never_arrives():
     tab = _tab(true_zero=True)
     PrintTab.handle_cancel_print(tab)
     tab._cancel_timer.start.assert_called_once_with()
+    tab._print_state = "cancelled"
 
     PrintTab._on_cancel_timeout(tab)
 
     assert tab.call_load_panel.emit.call_args.args == (False, "", True)
     assert tab._cancel_pending is False
+
+
+@pytest.mark.parametrize("state", ["printing", "paused"])
+def test_cancel_timeout_keeps_waiting_while_cancel_is_queued(state):
+    tab = _tab(true_zero=True)
+    PrintTab.handle_cancel_print(tab)
+    tab._print_state = state
+
+    PrintTab._on_cancel_timeout(tab)
+
+    assert _hides(tab) == 0
+    assert tab._cancel_pending is True
+    assert tab._cancel_timer.start.call_count == 2
 
 
 def test_cancel_by_other_client_leaves_loadscreen_alone():
