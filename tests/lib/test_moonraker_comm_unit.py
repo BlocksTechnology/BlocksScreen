@@ -252,6 +252,24 @@ class TestReconnectCycle:
         # The oneshot-token GET blocks up to 3 s, so it must never run on the GUI thread
         assert threading.main_thread() not in ran_on
 
+    def test_disconnect_mid_token_fetch_opens_no_socket(self, ws, monkeypatch):
+        entered, release = threading.Event(), threading.Event()
+
+        def slow_token():
+            entered.set()
+            release.wait(2)
+            return "token"
+
+        ws.moonRest.get_oneshot_token.side_effect = slow_token
+        app = MagicMock()
+        monkeypatch.setattr(moonrakerComm.websocket, "WebSocketApp", app)
+        ws.try_connection()
+        assert entered.wait(2)
+        threading.Timer(0.2, release.set).start()
+        ws.wb_disconnect()  # blocks on the in-flight attempt, then sees no new socket
+        assert not app.called
+        assert ws._connect_lock.acquire(blocking=False)
+
     def test_open_resets_count_and_keeps_watchdog(self, ws):
         ws._retry_timer = MagicMock()
         ws._reconnect_count = 5

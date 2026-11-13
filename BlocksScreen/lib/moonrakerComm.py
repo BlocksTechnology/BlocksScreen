@@ -150,6 +150,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             )
             return False
 
+        # The token GET can outlast wb_disconnect; a socket opened now outlives its owner
+        if self._closing:
+            return False
         _url = f"ws://{self._host}:{self._port}/websocket?token={_oneshot_token}"
         self.ws = websocket.WebSocketApp(
             _url,
@@ -182,6 +185,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self.query_klippy_status_timer.stopTimer()
         if self._retry_timer is not None:
             self._retry_timer.stopTimer()
+        # Let an in-flight connect thread finish so the _wst read below sees its socket
+        if self._connect_lock.acquire(timeout=self.timeout + 1):
+            self._connect_lock.release()
         if self._wst is not None and self.ws is not None:
             self.ws.keep_running = False
             # ws.close() frees the fd under the dispatcher's epoll (it sleeps ping_timeout); SHUT_RD wakes it
