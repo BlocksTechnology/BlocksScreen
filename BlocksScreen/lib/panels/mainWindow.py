@@ -424,6 +424,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
+                if not show:
+                    # A boot-sync restart deferred by the update has no other retry.
+                    QtCore.QTimer.singleShot(0, self._try_device_config_restart)
             if (
                 not show
                 and self._post_update_reconnect

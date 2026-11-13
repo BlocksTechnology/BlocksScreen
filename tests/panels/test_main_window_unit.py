@@ -319,6 +319,41 @@ def test_cancel_page_leaves_loadscreen_alone() -> None:
     win.cancelpage.show.assert_called_once()
 
 
+def _make_update_overlay_window() -> SimpleNamespace:
+    update_page = object()
+    win = _make_device_window(
+        _update_in_progress=True,
+        _post_update_reconnect=False,
+        update_page=update_page,
+        sender=lambda: update_page,
+        filamentPanel=None,
+        controlPanel=None,
+        printPanel=None,
+        utilitiesPanel=None,
+    )
+    win.ws.api.restart_service.return_value = True
+    return win
+
+
+@pytest.mark.parametrize("show, restarts", [(False, 1), (True, 0)])
+def test_update_overlay_dismiss_retries_deferred_restart(
+    monkeypatch, show, restarts
+) -> None:
+    # On the first update the boot sync's restart is deferred and nothing else retries it.
+    monkeypatch.setattr(
+        "BlocksScreen.lib.panels.mainWindow.QtCore.QTimer.singleShot",
+        lambda _ms, fn: fn(),
+    )
+    win = _make_update_overlay_window()
+    win.request_klipper_restart()
+    win.ws.api.restart_service.assert_not_called()
+
+    MainWindow.show_loadscreen(win, show, "")
+
+    assert win.ws.api.restart_service.call_count == restarts
+    assert win._device_restart_pending is (restarts == 0)
+
+
 @pytest.mark.parametrize("state", ["ready", "shutdown", "disconnected"])
 def test_notify_klippy_reaches_klippy_status(state) -> None:
     # Old route rebound api_reference to a str, so [0] gave "n": _handle_n_message
