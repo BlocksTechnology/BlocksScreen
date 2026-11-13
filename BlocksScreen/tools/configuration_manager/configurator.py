@@ -947,7 +947,7 @@ class ConfigManager:
         except OSError as e:
             _logger.warning("Cannot list SAVE_CONFIG backups: %s", e)
             return
-        # The timestamp name sorts chronologically, so the oldest come first.
+        # Names sort oldest first; a pre-NTP or DST-repeat stamp can be up to 1 h early.
         for old in backups[:-SAVE_CONFIG_BACKUPS_KEPT]:
             try:
                 old.unlink()
