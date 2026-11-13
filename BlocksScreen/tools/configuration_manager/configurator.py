@@ -33,6 +33,8 @@ _SAVE_CONFIG_BACKUP_R = re.compile(r"printer-([0-9]{8}_[0-9]{6})\.cfg")
 SAVE_CONFIG_BACKUPS_KEPT = 10
 # No RTC cell: fake-hwclock restores a clock up to 1 h old, DST end repeats 1 h.
 SAVE_CONFIG_STAMP_SLACK = timedelta(hours=2)
+# timesyncd touches this on every NTP sync (systemd-timesyncd(8)); /run clears on boot.
+_CLOCK_SYNCED_FLAG = pathlib.Path("/run/systemd/timesync/synchronized")
 
 _logger = logging.getLogger(__name__)
 
@@ -947,8 +949,9 @@ class ConfigManager:
         _logger.warning("No beacon device found via serial scan")
         return config_text
 
-    def _prune_save_config_backups(self) -> None:
+    def _prune_save_config_backups(self, now: datetime | None = None) -> None:
         """Delete printer.cfg backups stamped well before the newest few kept."""
+        horizon = (now or datetime.now()) + SAVE_CONFIG_STAMP_SLACK
         try:
             backups = sorted(
                 (stamp, p)
@@ -960,6 +963,17 @@ class ConfigManager:
         except OSError as e:
             _logger.warning("Cannot list SAVE_CONFIG backups: %s", e)
             return
+        if backups and backups[-1][0] > horizon:
+            if not _CLOCK_SYNCED_FLAG.exists():
+                # Clock lost (offline) or stamps from a bad clock: either may be wrong.
+                _logger.warning(
+                    "Skipping SAVE_CONFIG backup prune: %s is ahead of the unsynced "
+                    "clock",
+                    backups[-1][1].name,
+                )
+                return
+            # The NTP clock is right, so these stamps are bogus: keep, do not count.
+            backups = [(stamp, p) for stamp, p in backups if stamp <= horizon]
         if len(backups) <= SAVE_CONFIG_BACKUPS_KEPT:
             return
         # A newer save can carry an earlier stamp, so spare stamps near the cutoff.
