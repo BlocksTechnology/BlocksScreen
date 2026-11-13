@@ -12,6 +12,7 @@ import pathlib
 import subprocess
 import sys
 import threading
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -24,6 +25,8 @@ _BS_DIR = os.path.abspath(
 )
 if _BS_DIR not in sys.path:
     sys.path.append(_BS_DIR)
+
+_CONFIGURATOR = "BlocksScreen.tools.configuration_manager.configurator"
 
 from BlocksScreen.tools.configuration_manager.configurator import (  # noqa: E402
     SAVE_CONFIG_BACKUPS_KEPT,
@@ -1221,6 +1224,46 @@ class TestPruneSaveConfigBackups:
         mgr._prune_save_config_backups()
         left = sorted(p.name for p in mgr.config_dir.iterdir())
         assert left == sorted([*cluster, early])
+
+    @staticmethod
+    def _seed(mgr, stamps):
+        for stamp in stamps:
+            _write(mgr.config_dir / f"printer-{stamp}.cfg", "[g]\n")
+
+    @staticmethod
+    def _left(mgr):
+        return sorted(p.name[8:23] for p in mgr.config_dir.iterdir())
+
+    def test_unsynced_clock_behind_stamps_skips_prune(self, tmp_path, monkeypatch):
+        # Offline box lost its clock: the newest save is stamped at the image date.
+        monkeypatch.setattr(_CONFIGURATOR + "._CLOCK_SYNCED_FLAG", tmp_path / "nope")
+        mgr = _make_manager(tmp_path)
+        stamps = [f"20261110_1200{m:02d}" for m in range(10)] + ["20250601_120000"]
+        self._seed(mgr, stamps)
+        mgr._prune_save_config_backups(now=datetime(2025, 6, 1, 13))
+        assert self._left(mgr) == sorted(stamps)
+
+    def test_synced_clock_keeps_future_stamps_out_of_the_count(
+        self, tmp_path, monkeypatch
+    ):
+        # Clock ran ahead for some saves, then NTP corrected it.
+        flag = _write(tmp_path / "synchronized", "")
+        monkeypatch.setattr(_CONFIGURATOR + "._CLOCK_SYNCED_FLAG", flag)
+        mgr = _make_manager(tmp_path)
+        future = [f"20300101_0000{m:02d}" for m in range(10)]
+        real = [f"202611{d:02d}_120000" for d in range(1, 13)]
+        self._seed(mgr, future + real)
+        mgr._prune_save_config_backups(now=datetime(2026, 11, 13, 15))
+        assert self._left(mgr) == sorted(future + real[2:])
+
+    def test_stamps_within_slack_ahead_still_prune(self, tmp_path, monkeypatch):
+        # Power cut: fake-hwclock restored an hour-old clock, prune runs unsynced.
+        monkeypatch.setattr(_CONFIGURATOR + "._CLOCK_SYNCED_FLAG", tmp_path / "nope")
+        mgr = _make_manager(tmp_path)
+        cluster = [f"20261113_1400{m:02d}" for m in range(10)]
+        self._seed(mgr, [*cluster, "20261101_120000"])
+        mgr._prune_save_config_backups(now=datetime(2026, 11, 13, 13))
+        assert self._left(mgr) == cluster
 
     def test_under_limit_deletes_nothing(self, tmp_path):
         mgr = _make_manager(tmp_path)
