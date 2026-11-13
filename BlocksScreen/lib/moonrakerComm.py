@@ -96,18 +96,21 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         return self._moonRest
 
     @QtCore.pyqtSlot(name="retry_wb_conn")
-    def retry_wb_conn(self):
+    def retry_wb_conn(self) -> None:
         """Retry websocket connection"""
-        return self.try_connection()
+        self.try_connection()
 
     @QtCore.pyqtSlot(name="try_connection")
-    def try_connection(self):
-        """Arm the reconnect watchdog and attempt a connection now"""
+    def try_connection(self) -> None:
+        """Arm the reconnect watchdog and attempt a connection now, off the GUI thread"""
         if self._retry_timer is None:
             self._retry_timer = RepeatedTimer(self.timeout, self.reconnect)
         else:
             self._retry_timer.startTimer()
-        return self.reconnect()
+        # connect() does a blocking oneshot-token GET (3 s timeout); callers are Qt slots
+        threading.Thread(
+            target=self.reconnect, name="moonraker.connect", daemon=True
+        ).start()
 
     def reconnect(self) -> bool:
         """Watchdog tick, retries forever per Moonraker's client startup sequence"""

@@ -229,13 +229,28 @@ class TestReconnectCycle:
     def test_try_connection_arms_one_watchdog(self, ws, monkeypatch):
         timers = MagicMock()
         monkeypatch.setattr(moonrakerComm, "RepeatedTimer", timers)
-        connect = MagicMock(return_value=True)
+        ran_on = []
+        connect = MagicMock(
+            side_effect=lambda: ran_on.append(threading.current_thread()) or True
+        )
         monkeypatch.setattr(ws, "connect", connect)
+        started = []
+
+        class _Recorded(threading.Thread):
+            def start(self):
+                started.append(self)
+                super().start()
+
+        monkeypatch.setattr(moonrakerComm.threading, "Thread", _Recorded)
         ws.try_connection()
+        started[-1].join(1)
         ws.try_connection()
+        started[-1].join(1)
         timers.assert_called_once_with(ws.timeout, ws.reconnect)
         timers.return_value.startTimer.assert_called_once()
         assert connect.call_count == 2
+        # The oneshot-token GET blocks up to 3 s, so it must never run on the GUI thread
+        assert threading.main_thread() not in ran_on
 
     def test_open_resets_count_and_keeps_watchdog(self, ws):
         ws._retry_timer = MagicMock()

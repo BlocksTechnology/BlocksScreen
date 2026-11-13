@@ -1069,7 +1069,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if "ok" in data:
             return
         if "update" in method:
-            if ("status" or "refresh") in method:
+            # The refresh reply is skipped: notify_update_refreshed carries the same payload
+            if "status" in method:
                 self.on_update_message.emit(dict(data))
 
     @api_handler

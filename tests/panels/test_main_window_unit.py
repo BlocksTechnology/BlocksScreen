@@ -412,3 +412,14 @@ def test_forget_pages_collapses_back_to_the_same_page() -> None:
     win = SimpleNamespace(index_stack=deque([[0, 1], [0, 3], [0, 1], [2, 0]], maxlen=4))
     MainWindow.forget_pages(win, 0, [3])
     assert list(win.index_stack) == [[0, 1], [2, 0]]
+
+
+@pytest.mark.parametrize(
+    ("method", "emits"),
+    [("machine.update.status", True), ("machine.update.refresh", False)],
+)
+def test_update_replies_emit_once(method, emits) -> None:
+    # Refresh replies are dropped: notify_update_refreshed carries the same payload
+    win = SimpleNamespace(on_update_message=MagicMock())
+    MainWindow._handle_machine_message(win, method, {"version_info": {}}, None)
+    assert win.on_update_message.emit.called is emits

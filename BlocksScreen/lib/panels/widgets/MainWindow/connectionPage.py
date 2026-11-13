@@ -328,9 +328,10 @@ class ConnectionPage(QtWidgets.QFrame):
         self._set_state(mapped, self._build_reason(message) if failed else "")
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
-        """Refresh update status, close overlays and announce the page."""
+        """Fetch update status, close overlays and announce the page."""
         if self.conn_toggle:
-            self.ws.api.refresh_update_status()
+            # Cached status, as KlipperScreen panels/updater.py; refresh 503s mid-print
+            self.ws.api.update_status()
             self.call_load_panel.emit(False, "", False)
             self.call_cancel_panel.emit(False)
         # Top-level popups (e.g. filament load) would stay above this child frame.
