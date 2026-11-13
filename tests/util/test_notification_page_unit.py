@@ -87,3 +87,44 @@ def test_reset_view_model_clears_dot(page, qtbot):
     with qtbot.waitSignal(page.has_new_notification, timeout=200) as blocker:
         page.reset_view_model()
     assert blocker.args == [False]
+
+
+def test_error_popup_stays_longer_than_info(page):
+    page.new_notication(message="boom", priority=3, popup=True)
+    page.new_notication(message="hello", priority=1, popup=True)
+    timeouts = [c.kwargs["timeout"] for c in page.popup.new_message.call_args_list]
+    assert timeouts == [10000, 3000]
+
+
+_Popup = sys.modules["lib.panels.widgets.Common.popupDialogWidget"].Popup
+
+
+@pytest.fixture
+def popup(qtbot):
+    p = _Popup(None)
+    qtbot.addWidget(p)
+    return p
+
+
+def test_popup_repeat_while_shown_is_dropped(popup):
+    popup.new_message(message="Print Not Started")
+    popup.new_message(message="Print Not Started")
+    assert popup.isShown
+    assert len(popup.messages) == 0
+
+
+def test_popup_repeat_while_queued_is_dropped(popup):
+    popup.new_message(message="first")
+    popup.new_message(message="second")
+    popup.new_message(message="second")
+    assert [m["message"] for m in popup.messages] == ["second"]
+
+
+def test_popup_same_message_after_dismiss_shows_again(popup):
+    popup.new_message(message="Print Not Started")
+    popup.slide_in_animation.stop()  # slide-out only runs after slide-in ends
+    popup.on_slide_out_finished()
+    assert not popup.isShown
+    popup.new_message(message="Print Not Started")
+    assert popup.isShown
+    assert popup.text_label.text() == "Print Not Started"

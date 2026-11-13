@@ -486,6 +486,14 @@ RULES: tuple[MessageRule, ...] = (
         severity=Severity.ERROR,
     ),
     # ── Gcode errors — general ─────────────────────────────────────────────────
+    # RF50 PRINT_START refuses when the toolhead or pre-gate sensor is empty.
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("machine is unloaded"),
+        display="Print Not Started",
+        hint="Load filament, then start the print again",
+        severity=Severity.ERROR,
+    ),
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("filament runout"),
@@ -675,6 +683,21 @@ _IGNORED: tuple[re.Pattern, ...] = (
 _INDEX: dict[MessageSource, tuple[MessageRule, ...]] = {
     src: tuple(r for r in RULES if r.source is src) for src in MessageSource
 }
+
+
+_MACRO_ERROR_RE = re.compile(
+    r"Error evaluating 'gcode_macro ([^:]+):gcode'.*?CommandError:?\s*(.*)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def macro_error_text(text: str) -> str:
+    """Shorten a Klipper macro error to its raised reason, as KlipperScreen shows it."""
+    m = _MACRO_ERROR_RE.search(text)
+    if m is None:
+        return text
+    reason = m.group(2).strip()
+    return reason or f"macro failed: {m.group(1)}"
 
 
 def match_message(source: MessageSource, text: str) -> MessageRule | None:
