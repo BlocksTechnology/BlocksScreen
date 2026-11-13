@@ -725,8 +725,14 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(name="on_cancel_timeout")
     def _on_cancel_timeout(self) -> None:
         """Drop the cancel loadscreen if neither the reply nor the idle update came."""
-        if self._cancel_pending:
-            self._finish_cancel()
+        if not self._cancel_pending:
+            return
+        # CANCEL_PRINT queues behind a running macro (PRINT_START can take minutes).
+        if self._print_state in ("printing", "paused"):
+            logger.info("Cancel still queued behind a running macro, waiting")
+            self._cancel_timer.start()
+            return
+        self._finish_cancel()
 
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
