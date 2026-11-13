@@ -26,6 +26,7 @@ if _BS_DIR not in sys.path:
     sys.path.append(_BS_DIR)
 
 from BlocksScreen.tools.configuration_manager.configurator import (  # noqa: E402
+    SAVE_CONFIG_BACKUPS_KEPT,
     SV_CONFIG_MARKER,
     ConfigManager,
     check_broken_symlinks,
@@ -1190,3 +1191,39 @@ class TestSync:
         mgr.repo = tmp_path / "ghost_repo"
         mgr.sync()
         assert len(caplog.records) > 0
+
+
+class TestPruneSaveConfigBackups:
+    def test_keeps_newest_and_ignores_other_files(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        names = [f"printer-202611{d:02d}_120000.cfg" for d in range(1, 13)]
+        for name in names:
+            _write(mgr.config_dir / name, "[g]\n")
+        keep = [
+            "printer.cfg",
+            "printer-old.cfg",
+            "macros-20261101_120000.cfg",
+            "printer-20261399_120000.cfg",
+        ]
+        for name in keep:
+            _write(mgr.config_dir / name, "[g]\n")
+        mgr._prune_save_config_backups()
+        left = sorted(p.name for p in mgr.config_dir.iterdir())
+        assert left == sorted(names[-SAVE_CONFIG_BACKUPS_KEPT:] + keep)
+
+    def test_early_stamped_newer_save_is_spared(self, tmp_path):
+        # Pre-NTP boot: the newest save is stamped before the last session's saves.
+        mgr = _make_manager(tmp_path)
+        cluster = [f"printer-20261110_1200{m:02d}.cfg" for m in range(10)]
+        early, old = "printer-20261110_115500.cfg", "printer-20261101_120000.cfg"
+        for name in [*cluster, early, old]:
+            _write(mgr.config_dir / name, "[g]\n")
+        mgr._prune_save_config_backups()
+        left = sorted(p.name for p in mgr.config_dir.iterdir())
+        assert left == sorted([*cluster, early])
+
+    def test_under_limit_deletes_nothing(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        _write(mgr.config_dir / "printer-20261101_120000.cfg", "[g]\n")
+        mgr._prune_save_config_backups()
+        assert (mgr.config_dir / "printer-20261101_120000.cfg").exists()
