@@ -356,10 +356,18 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                         metadata=_entry,
                     )
         elif "method" in response:
-            if response["method"] in self._KLIPPY_NOTIFY_METHODS:
-                if response["method"] == "notify_klippy_disconnected":
+            method = response["method"]
+            # Ready while still polling: query now, as KlipperScreen's _klippy_ready does
+            ready_mid_poll = (
+                method == "notify_klippy_ready"
+                and self.query_klippy_status_timer.running
+            )
+            if method in self._KLIPPY_NOTIFY_METHODS:
+                if method == "notify_klippy_disconnected":
                     self._klippy_state = None  # Restart may end in the same state
                 self.evaluate_klippy_status()
+            elif ready_mid_poll:
+                self.query_server_info_signal.emit()
             message_event = (
                 WebSocketMessageReceived(  # mainly used to pass websocket notifications
                     method=response["method"],

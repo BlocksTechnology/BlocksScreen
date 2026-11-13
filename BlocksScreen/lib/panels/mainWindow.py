@@ -207,6 +207,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.usb_manager.usb_unmounted.connect(
             self.printPanel.filesPage_widget.on_usb_removed
         )
+        self.usb_manager.usb_unmounted.connect(self.printPanel.on_usb_removed)
         if not os.environ.get("BLOCKSCREEN_DEV"):
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
@@ -229,6 +230,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_notifications.connect(self.notiPage.new_notication)
 
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
+        self.printPanel.request_forget_pages.connect(self.forget_pages)
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
@@ -326,6 +328,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.request_cancel.connect(self.updater_worker.trigger_cancel)
         self.update_page.update_available.connect(self.on_update_available)
         self.update_page.call_load_panel.connect(self.show_loadscreen)
+        # Connect-time busy=False may beat this wiring; deferred until loadwidget exists.
+        QtCore.QTimer.singleShot(0, self.update_page.hold_for_deploy)
         self.update_page.disable_popups.connect(self.popup_toggle)
         self.update_page.update_back_btn.clicked.connect(self.update_page.hide)
         self.updater_worker.step_complete.connect(self.update_page.handle_step_complete)
@@ -431,6 +435,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
+                if not show:
+                    # A boot-sync restart deferred by the update has no other retry.
+                    QtCore.QTimer.singleShot(0, self._try_device_config_restart)
             if (
                 not show
                 and self._post_update_reconnect
@@ -1014,6 +1021,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
 
+    @QtCore.pyqtSlot(int, list, name="forget-pages")
+    def forget_pages(self, tab_index: int, panels: list[int]) -> None:
+        """Drop back-history entries of pages whose content is gone."""
+        kept: list[list[int]] = []
+        for entry in self.index_stack:
+            gone = entry[0] == tab_index and entry[1] in panels
+            if not gone and (not kept or kept[-1] != entry):  # no Back to the same page
+                kept.append(entry)
+        self.index_stack.clear()
+        self.index_stack.extend(kept)
+
     @QtCore.pyqtSlot(name="bo-start-websocket-connection")
     def bo_start_websocket_connection(self) -> None:
         """Starts the Websocket connection with moonraker"""
@@ -1021,31 +1039,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.try_connection()
 
     def messageReceivedEvent(self, event: events.WebSocketMessageReceived) -> None:
-        """Helper method that handles dispatching websocket
-        event messages to their respective handlers
-
-        Args:
-            event (events.WebSocketMessageReceivedEvent): The message event with all its contents
-
-        Raises:
-            Exception: When a klippy status change comes from the
-            websocket, tries to send another event
-            corresponding to the incoming status.
-            If the QApplication instance is of type
-            None raises an exception because the event
-            cannot be sent.
-        """
+        """Dispatch a websocket message to the handler for its method's route."""
         _method = event.method
         _data = event.data
         _metadata = event.metadata
         if not _method:
             return
-        if not _data:
+        if _method.startswith("notify_klippy_"):
+            route = "notify_klippy"
+        elif not _data:
             return
-        api_reference = _method.split(".")
-        if "klippy" in _method:
-            api_reference = "notify_klippy"
-        method_handle = f"_handle_{api_reference[0]}_message"
+        else:
+            route = _method.split(".")[0]
+        method_handle = f"_handle_{route}_message"
         if hasattr(self, method_handle):
             obj = getattr(self, method_handle)
             if callable(obj):
@@ -1114,51 +1120,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_notify_klippy_message(self, method, data, metadata) -> None:
-        """Handle websocket notifications for klippy events"""
-        _split = method.split("_")
-        if len(_split) > 2:
-            status_type = _split[2]
-            _state_upper = status_type[0].upper()
-            _state_call = f"{_state_upper}{status_type[1:]}"
-            _logger.debug(
-                "Notify_klippy_ %s Received from object subscription.",
-                str(_state_call),
-            )
-            self.klippy_status.on_klippy_notify(status_type)
-            if hasattr(events, f"Klippy{_state_call}"):
-                _klippy_event_callback = getattr(
-                    events,
-                    f"Klippy{_state_call}",
-                )
-                if callable(_klippy_event_callback):
-                    try:
-                        _event = _klippy_event_callback(data="")
-                        instance = QtWidgets.QApplication.instance()
-                        if not isinstance(_event, QtCore.QEvent):
-                            return
-                        if instance:
-                            _logger.info("Event %s sent", str(_klippy_event_callback))
-                            instance.postEvent(self, _event)
-                        else:
-                            raise Exception("QApplication.instance is None type.")
-                    except Exception as e:
-                        _logger.debug(
-                            "Unable to send internal klippy %s notification: %s",
-                            str(_state_call),
-                            str(e),
-                        )
-            if not self._popup_toggle and status_type in (
-                "shutdown",
-                "error",
-                "disconnected",
-            ):
-                self._emit_filtered_notification(
-                    MessageSource.KLIPPY_STATE,
-                    status_type,
-                    source_id="klippy_state",
-                    fallback=False,
-                    show_popup=True,
-                )
+        """Route notify_klippy_* to KlippyStatus (KlipperScreen notification_handler)."""
+        state = method.removeprefix("notify_klippy_")
+        try:
+            self.klippy_status.on_klippy_notify(state)
+        except Exception:
+            # Raised out of a Qt event override, PyQt6 aborts the whole app.
+            _logger.exception("KlippyStatus failed on notify_klippy_%s", state)
 
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:

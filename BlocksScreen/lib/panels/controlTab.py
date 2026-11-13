@@ -19,9 +19,25 @@ from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.icon_button import IconButton
 from lib.utils.menu_grid import fixed_menu_grid
+from lib.utils.moonraker_reply import CalibrationText, HomedCalibration
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
+
+_ZTILT_PROGRESS = re.compile(
+    r"Retries:\s*\d+/\d+.*?range:\s*([\d.]+)\s*tolerance:\s*([\d.]+)"
+)
+# The homing override before RF50-Klipper#7 runs M84, which disables every motor.
+# TODO: drop with _home_keeps_tilt once #7 is on every box; misses M84 in called macros.
+_LEGACY_HOME_M84 = re.compile(r"^\s*M84\b", re.MULTILINE | re.IGNORECASE)
+_ZTILT_TEXT = CalibrationText(
+    title="Z-Tilt",
+    homing="Calibrating Z-Tilt\nHoming the printer",
+    running="Calibrating Z-Tilt\nProbing the bed",
+    failed="Z-Tilt calibration failed.\nCheck the bed and try again.",
+    done="Z-Tilt calibration complete.",
+    rehoming="Homing Z axis",
+)
 
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -60,7 +76,16 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._true_zero_state: bool | None = None
         self._motion_active: bool = False
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.ztilt_state = False
+        # Silence limit; every probing pass reports well within it
+        self._ztilt = HomedCalibration(
+            _ZTILT_TEXT,
+            180_000,
+            self,
+            runner=self.ws.api.run_gcode,
+            klippy_busy=lambda: self.printer.printer_busy,
+        )
+        self._ztilt.overlay.connect(self.call_load_panel)
+        self._ztilt.finished.connect(self._on_ztilt_finished)
         self.ztilt_result_screen = BasePopup(self, False, False)
         self.ztilt_result_screen_timer = QtCore.QTimer()
         self.ztilt_result_screen_timer.setSingleShot(True)
@@ -158,7 +183,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.ws.klippy_state_signal.connect(self.probe_helper_page.on_klippy_status)
         self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
         self.printer.gcode_response.connect(self._handle_gcode_response)
-        self.printer.z_tilt_update.connect(self._handle_z_tilt_object_update)
 
         self.cp_button_6.hide()
 
@@ -252,16 +276,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._button_change(False)
         return super().showEvent(a0)
 
-    @QtCore.pyqtSlot(str, bool)
-    def _handle_z_tilt_object_update(self, value, state):
-        if not self.isVisible():
-            return
-        if state:
-            self.call_load_panel.emit(False, "", False)
-            self.ztilt_result_screen.set_message("Z-axis calibration was successful.")
-            self.ztilt_result_screen.show()
-            self.ztilt_result_screen_timer.start()
-
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_slidePage_request")
     def on_slidePage_request(
@@ -299,54 +313,52 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.call_load_panel.emit(True, "Cleaning print core", False)
 
     @QtCore.pyqtSlot(list)
-    def _handle_gcode_response(self, messages: list):
-        """Handle gcode response for Z-tilt adjustment"""
-        pattern = r"Retries:\s*(\d+)/(\d+).*?range:\s*([\d.]+)\s*tolerance:\s*([\d.]+)"
+    def _handle_gcode_response(self, messages: list) -> None:
+        """Show Z-Tilt progress from each probing pass result."""
+        if not self._ztilt.active:
+            return
+        for message in messages:
+            match = _ZTILT_PROGRESS.search(message or "")
+            if match:
+                self._ztilt.feed()
+                self._ztilt.show(
+                    f"Calibrating Z-Tilt\nDeviation {float(match[1]):.3f} mm,"
+                    f" target {float(match[2]):.3f} mm"
+                )
 
-        for msg_list in messages:
-            if not msg_list:
-                continue
-
-            if (
-                "Retries:" in msg_list
-                and "range:" in msg_list
-                and "tolerance:" in msg_list
-            ):
-                match = re.search(pattern, msg_list)
-
-                if match:
-                    retries_done = int(match.group(1))
-                    retries_total = int(match.group(2))
-                    probed_range = float(match.group(3))
-                    tolerance = float(match.group(4))
-                    if retries_done == retries_total:
-                        self.call_load_panel.emit(False, "", False)
-                        self.ztilt_result_screen.set_message(
-                            "Something went wrong during Z-axis calibration."
-                        )
-                        self.ztilt_result_screen.show()
-                        self.ztilt_result_screen_timer.start()
-                        return
-                    self.call_load_panel.emit(
-                        True,
-                        f"Retries: {retries_done}/{retries_total}"
-                        f" | Range: {probed_range:.6f}"
-                        f" | Tolerance: {tolerance:.6f}",
-                        False,
-                    )
-
-    def handle_ztilt(self):
-        """Handle Z-Tilt Adjustment"""
-        self.call_load_panel.emit(
-            True, "Please wait, performing Z-axis calibration.", False
+    def handle_ztilt(self) -> None:
+        """Home, run Z_TILT_ADJUST, home Z again; the overlay stays up until the end."""
+        if self._ztilt.refused():
+            return
+        # Z only: XY stay homed through the tilt, so the override skips them (~10 s)
+        self._ztilt.run(
+            "Z_TILT_ADJUST", rehome="G28 Z" if self._home_keeps_tilt() else ""
         )
-        self.run_gcode_signal.emit("G28\nM400")
-        self.run_gcode_signal.emit("Z_TILT_ADJUST")
+
+    def _home_keeps_tilt(self) -> bool:
+        """False on the legacy homing override, whose M84 undoes the tilt."""
+        # Config not loaded yet (just after ready) reads as no override at all.
+        if not self.printer.configfile.get("config"):
+            return False
+        override = self.printer.get_config("homing_override").get("gcode", "")
+        return not _LEGACY_HOME_M84.search(override)
+
+    def _on_ztilt_finished(self, _ok: bool, message: str) -> None:
+        """Show the run's result, if it has one."""
+        if message:
+            self._ztilt_report(message)
+
+    def _ztilt_report(self, message: str) -> None:
+        """Show ``message`` in the auto-hiding result popup."""
+        self.ztilt_result_screen.set_message(message)
+        self.ztilt_result_screen.show()
+        self.ztilt_result_screen_timer.start()
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
     def on_klippy_status(self, state: str):
         """Handles incoming klippy status changes"""
         if state.lower() == "ready":
+            self._ztilt.forget_replies()
             self.printcores_page.hide()
             self.disable_popups.emit(False)
             return

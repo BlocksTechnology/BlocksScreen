@@ -115,7 +115,8 @@ class Printer(QtCore.QObject):
     printing: bool = False
     printing_state: str = ""
     print_file_loaded: bool = False
-    printer_busy: bool = False
+    # idle_timeout "Printing": Klipper holds the gcode mutex, not only during a print
+    _gcode_running: bool = False
     current_loaded_file: str = ""
     current_loaded_file_metadata: str = ""
 
@@ -153,6 +154,12 @@ class Printer(QtCore.QObject):
             self._TRUE_ZERO_PROBES & set(self.available_objects)
         )
 
+    @property
+    def printer_busy(self) -> bool:
+        """True while Klipper runs any gcode, or a print is running or paused."""
+        # Derived on read: a stored flag went stale when the two updates interleaved
+        return self._gcode_running or self.printing_state in ("printing", "paused")
+
     def clear_printer_objs(self) -> None:
         """Clear all tracking of printer object"""
         self.available_gcode_commands.clear()
@@ -161,7 +168,7 @@ class Printer(QtCore.QObject):
         self.printing = False
         self.printing_state = ""
         self.print_file_loaded = False
-        self.printer_busy = False
+        self._gcode_running = False
         self.current_loaded_file = ""
         self.current_loaded_file_metadata = ""
         _heater_attributes: dict = {
@@ -587,11 +594,7 @@ class Printer(QtCore.QObject):
     ) -> None:
         if "state" in value:
             self.idle_timeout_update[str, str].emit("state", value["state"])
-            if "printing" in value["state"]:
-                self.printer_busy = True
-            elif self.printing_state != "printing" and value["state"] != "printing":
-                # It's also busy if the printer is printing or paused
-                self.printer_busy = False
+            self._gcode_running = value["state"].lower() == "printing"
         if "printing_time" in value:
             self.idle_timeout_update[str, float].emit(
                 "printing_time", value["printing_time"]
