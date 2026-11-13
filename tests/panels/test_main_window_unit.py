@@ -418,8 +418,8 @@ def test_forget_pages_collapses_back_to_the_same_page() -> None:
     ("method", "emits"),
     [("machine.update.status", True), ("machine.update.refresh", False)],
 )
-def test_update_replies_emit_once(method, emits) -> None:
-    # Refresh replies are dropped: notify_update_refreshed carries the same payload
+def test_only_status_reply_emits(method, emits) -> None:
+    # Pins the old ("status" or "refresh") behaviour, which never matched refresh
     win = SimpleNamespace(on_update_message=MagicMock())
     MainWindow._handle_machine_message(win, method, {"version_info": {}}, None)
     assert win.on_update_message.emit.called is emits

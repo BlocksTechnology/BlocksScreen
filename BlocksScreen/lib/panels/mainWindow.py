@@ -1069,7 +1069,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if "ok" in data:
             return
         if "update" in method:
-            # The refresh reply is skipped: notify_update_refreshed carries the same payload
+            # Same behaviour as the old ("status" or "refresh"), which never matched refresh
             if "status" in method:
                 self.on_update_message.emit(dict(data))
 
