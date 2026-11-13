@@ -482,13 +482,20 @@ def test_match_message(
         assert rule.severity == expected_severity
 
 
-def test_estop_hint_mentions_button_only_for_hardware() -> None:
-    m112 = match_message(MessageSource.GCODE_ERROR, "Shutdown due to M112 command")
-    button = match_message(
-        MessageSource.GCODE_ERROR, "Printers emergency button pressed"
-    )
-    assert m112 is not None and m112.hint == "Restart Klipper"
-    assert button is not None and "E-stop" in (button.hint or "")
+@pytest.mark.parametrize(
+    ("text", "names_button"),
+    [
+        ("Printers emergency button pressed", True),
+        ("Shutdown due to M112 command", False),
+        ("Shutdown due to webhooks request", False),
+    ],
+)
+def test_estop_rules_point_at_firmware_restart(text: str, names_button: bool) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, text)
+    assert rule is not None and rule.display == "Emergency Stop"
+    hint = rule.hint or ""
+    assert "Firmware Restart" in hint
+    assert ("E-stop" in hint) is names_button
 
 
 def test_match_message_case_insensitive() -> None:
