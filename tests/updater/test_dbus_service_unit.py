@@ -937,3 +937,29 @@ class TestShutdown:
         assert not task.done()
         release.set()
         await task
+
+
+class TestMoonrakerSync:
+    @pytest.mark.asyncio
+    async def test_busy_release_resyncs_once(self, svc):
+        svc._busy = True
+        svc._set_busy(False)
+        svc._schedule_moonraker_sync()
+        await svc._moonraker_sync
+        svc._svc.sync_moonraker.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_retries_while_refused_and_skips_while_busy(self, svc):
+        from updater import dbus_service
+
+        svc._svc.sync_moonraker = AsyncMock(side_effect=[False, True])
+        busy_on_sleep = [True, False]
+
+        async def fake_sleep(_s):
+            svc._busy = busy_on_sleep.pop(0)
+
+        with patch.object(dbus_service.asyncio, "sleep", fake_sleep):
+            await svc._moonraker_sync_loop()
+        # Tries: refused, busy (skipped), then synced.
+        assert svc._svc.sync_moonraker.await_count == 2
+        assert busy_on_sleep == []

@@ -52,6 +52,8 @@ from updater.executor import (
     is_git_repo,
     is_service_active,
     klipper_printing,
+    moonraker_refresh_repo,
+    moonraker_repo_hashes,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -313,6 +315,32 @@ class UpdateService:
     def has_fetch_failures(self) -> bool:
         """True while any component's git fetch is failing (entry is popped on success)."""
         return bool(self._fetch_backoff)
+
+    async def sync_moonraker(self) -> bool:
+        """Make Moonraker re-read repos whose HEAD moved; False = retry later."""
+        # Moonraker restores repo state from its DB and re-reads git only every
+        # refresh_interval (git_deploy.initialize), so our updates look like "behind".
+        recorded = await moonraker_repo_hashes()
+        if recorded is None:
+            return False
+        synced = True
+        for c in self._components:
+            if c.kind != "git" or c.name not in recorded:
+                continue
+            head = await git_get_hash(c.path)
+            if not head or head == recorded[c.name]:
+                continue
+            if await moonraker_refresh_repo(c.name):
+                self._log.info(
+                    "Moonraker refreshed %s: %s -> %s",
+                    c.name,
+                    recorded[c.name][:8],
+                    head[:8],
+                )
+            else:
+                self._log.info("Moonraker refused refresh of %s for now", c.name)
+                synced = False
+        return synced
 
     async def check_status(self, force: bool = False) -> dict[str, ComponentStatus]:
         """Concurrently check status of all components."""
