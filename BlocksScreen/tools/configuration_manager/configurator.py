@@ -10,7 +10,7 @@ import re
 import shutil  # nosec
 import subprocess  # nosec B404
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
 from devices.discovery.serial_devices import SerialScanner
@@ -29,8 +29,10 @@ _CFG_FIELD_R = re.compile(r"[^A-Za-z0-9_].*$")
 # Copied only when missing; bs_migrate_moonraker_conf and Mainsail own it after that.
 SEED_ONLY_FILES: frozenset[str] = frozenset({"moonraker.conf"})
 # Klipper configfile.py cmd_SAVE_CONFIG renames printer.cfg to these and never prunes.
-_SAVE_CONFIG_BACKUP_R = re.compile(r"printer-[0-9]{8}_[0-9]{6}\.cfg")
+_SAVE_CONFIG_BACKUP_R = re.compile(r"printer-([0-9]{8}_[0-9]{6})\.cfg")
 SAVE_CONFIG_BACKUPS_KEPT = 10
+# No RTC cell: fake-hwclock restores a clock up to 1 h old, DST end repeats 1 h.
+SAVE_CONFIG_STAMP_SLACK = timedelta(hours=2)
 
 _logger = logging.getLogger(__name__)
 
@@ -43,6 +45,17 @@ def _opt_line(opt: str, val: str) -> str:
 def _timestamp() -> str:
     """Local time in ISO 8601 basic format: no colons, safe over SMB and scp."""
     return datetime.now().strftime("%Y%m%dT%H%M%S")
+
+
+def _save_config_backup_stamp(name: str) -> datetime | None:
+    """Local-time stamp Klipper put in a SAVE_CONFIG backup name, None if not one."""
+    match = _SAVE_CONFIG_BACKUP_R.fullmatch(name)
+    if match is None:
+        return None
+    try:
+        return datetime.strptime(match.group(1), "%Y%m%d_%H%M%S")
+    except ValueError:
+        return None
 
 
 def is_git_repo(path: pathlib.Path) -> bool:
@@ -935,20 +948,25 @@ class ConfigManager:
         return config_text
 
     def _prune_save_config_backups(self) -> None:
-        """Delete all but the newest SAVE_CONFIG_BACKUPS_KEPT printer.cfg backups."""
+        """Delete printer.cfg backups stamped well before the newest few kept."""
         try:
             backups = sorted(
-                p
+                (stamp, p)
                 for p in self.config_dir.iterdir()
-                if _SAVE_CONFIG_BACKUP_R.fullmatch(p.name)
+                if (stamp := _save_config_backup_stamp(p.name)) is not None
                 and p.is_file()
                 and not p.is_symlink()
             )
         except OSError as e:
             _logger.warning("Cannot list SAVE_CONFIG backups: %s", e)
             return
-        # Names sort oldest first; a pre-NTP or DST-repeat stamp can be up to 1 h early.
-        for old in backups[:-SAVE_CONFIG_BACKUPS_KEPT]:
+        if len(backups) <= SAVE_CONFIG_BACKUPS_KEPT:
+            return
+        # A newer save can carry an earlier stamp, so spare stamps near the cutoff.
+        cutoff = backups[-SAVE_CONFIG_BACKUPS_KEPT][0] - SAVE_CONFIG_STAMP_SLACK
+        for stamp, old in backups[:-SAVE_CONFIG_BACKUPS_KEPT]:
+            if stamp >= cutoff:
+                continue
             try:
                 old.unlink()
                 _logger.info("Removed old SAVE_CONFIG backup %s", old.name)
