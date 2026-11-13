@@ -28,6 +28,9 @@ _CFG_COMMENT_R = re.compile(r"[#;].*$")
 _CFG_FIELD_R = re.compile(r"[^A-Za-z0-9_].*$")
 # Copied only when missing; bs_migrate_moonraker_conf and Mainsail own it after that.
 SEED_ONLY_FILES: frozenset[str] = frozenset({"moonraker.conf"})
+# Klipper configfile.py cmd_SAVE_CONFIG renames printer.cfg to these and never prunes.
+_SAVE_CONFIG_BACKUP_R = re.compile(r"printer-[0-9]{8}_[0-9]{6}\.cfg")
+SAVE_CONFIG_BACKUPS_KEPT = 10
 
 _logger = logging.getLogger(__name__)
 
@@ -931,6 +934,27 @@ class ConfigManager:
         _logger.warning("No beacon device found via serial scan")
         return config_text
 
+    def _prune_save_config_backups(self) -> None:
+        """Delete all but the newest SAVE_CONFIG_BACKUPS_KEPT printer.cfg backups."""
+        try:
+            backups = sorted(
+                p
+                for p in self.config_dir.iterdir()
+                if _SAVE_CONFIG_BACKUP_R.fullmatch(p.name)
+                and p.is_file()
+                and not p.is_symlink()
+            )
+        except OSError as e:
+            _logger.warning("Cannot list SAVE_CONFIG backups: %s", e)
+            return
+        # The timestamp name sorts chronologically, so the oldest come first.
+        for old in backups[:-SAVE_CONFIG_BACKUPS_KEPT]:
+            try:
+                old.unlink()
+                _logger.info("Removed old SAVE_CONFIG backup %s", old.name)
+            except OSError as e:
+                _logger.warning("Cannot remove SAVE_CONFIG backup %s: %s", old.name, e)
+
     def sync(self) -> None:
         """Synchronizes configuration repo with the machines configuration"""
         # Every step only writes on a difference, so none is gated.
@@ -946,3 +970,5 @@ class ConfigManager:
             self._cpy_cfg_files()
         except Exception as e:
             _logger.error("Caught exception during sync: %s", e)
+        # Outside the try: a failed repo sync must not let backups pile up.
+        self._prune_save_config_backups()
