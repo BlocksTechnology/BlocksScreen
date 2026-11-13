@@ -25,6 +25,9 @@ _RECONCILE_RETRY_S = 5.0
 _BOOT_DELAY_S = 3.0
 _SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
 _DEPLOY_POLL_S = 1.0
+# Moonraker answers 503 while printing, updating or before its first refresh.
+_MOONRAKER_SYNC_RETRY_S = 60.0
+_MOONRAKER_SYNC_TRIES = 10
 
 
 class DbusProgressCallback:
@@ -126,6 +129,9 @@ class UpdaterInterface(
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
         self._invalid_requests: int = 0
+        self._moonraker_sync: asyncio.Task | None = None
+        # Held by a Moonraker refresh (it runs git fetch) and by our own git work.
+        self._git_guard = asyncio.Lock()
         self._reconcile_task = self._spawn(
             self._boot_reconcile(), name="boot_reconcile"
         )
@@ -216,6 +222,27 @@ class UpdaterInterface(
             self._busy = busy
             _log.info("busy_changed -> %s", busy)
             self.busy_changed.emit((busy,))
+            if not busy:
+                self._schedule_moonraker_sync()
+
+    def _schedule_moonraker_sync(self) -> None:
+        """Start a Moonraker resync unless one is already pending."""
+        if self._closing or (self._moonraker_sync and not self._moonraker_sync.done()):
+            return
+        self._moonraker_sync = self._spawn(
+            self._moonraker_sync_loop(), name="moonraker_sync"
+        )
+
+    async def _moonraker_sync_loop(self) -> None:
+        """Resync Moonraker's repo state, retrying while it refuses or is down."""
+        for _ in range(_MOONRAKER_SYNC_TRIES):
+            if not self._busy:
+                async with self._git_guard:
+                    with process_lock() as acquired:
+                        if acquired and await self._svc.sync_moonraker():
+                            return
+            await asyncio.sleep(_MOONRAKER_SYNC_RETRY_S)
+        _log.info("Moonraker resync gave up, next status check retries")
 
     def _hold_wanted(self) -> bool:
         """A deploy flag is set and has not already used up the hold cap."""
@@ -320,6 +347,8 @@ class UpdaterInterface(
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
             await self._followup_pass()
+            # Also catches repos moved while we were down or by a CLI run.
+            self._schedule_moonraker_sync()
             interval = self._svc.poll_interval
             if self._svc.has_fetch_failures():
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)
@@ -402,20 +431,24 @@ class UpdaterInterface(
         """Run work() under the cross-process lock, then clear busy; True if the lock was held."""
         ran = False
         try:
-            with process_lock() as acquired:
-                if not acquired:
-                    _log.warning("%s: a CLI run holds the lock; skipping", label)
-                    self.error.emit((target, "another update is running"))
-                    return False
-                # The UI checks too, but a print can start while its confirm popup is open.
-                # Fail closed: a Klippy too loaded to answer may be mid-print.
-                if await klipper_printing(unanswered=True):
-                    _log.warning("%s: printer busy or not answering; skipping", label)
-                    self.error.emit((target, PRINTER_BUSY))
-                    return False
-                ran = True
-                await self._svc.reconcile_if_pending()
-                await work()
+            # A Moonraker refresh in flight fetches these repos: let it finish.
+            async with self._git_guard:
+                with process_lock() as acquired:
+                    if not acquired:
+                        _log.warning("%s: a CLI run holds the lock; skipping", label)
+                        self.error.emit((target, "another update is running"))
+                        return False
+                    # The UI checks too, but a print can start while its popup is open.
+                    # Fail closed: a Klippy too loaded to answer may be mid-print.
+                    if await klipper_printing(unanswered=True):
+                        _log.warning(
+                            "%s: printer busy or not answering; skipping", label
+                        )
+                        self.error.emit((target, PRINTER_BUSY))
+                        return False
+                    ran = True
+                    await self._svc.reconcile_if_pending()
+                    await work()
         except Exception as exc:  # noqa: BLE001
             _log.error("_run_%s failed: %s", label, exc, exc_info=True)
         finally:

@@ -13,7 +13,7 @@ import tempfile
 import time
 from collections.abc import Sequence
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from updater.locking import restart_sentinel_path
 from updater.models import ComponentStatus
@@ -35,6 +35,7 @@ DPKG = "/usr/bin/dpkg"
 # Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
 APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
 KLIPPY_SOCK = Path("~/printer_data/comms/klippy.sock").expanduser()
+MOONRAKER_HOST, MOONRAKER_PORT = "127.0.0.1", 7125
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_SHA_RE = re.compile(r"^[a-f0-9]{7,40}$")
@@ -1069,6 +1070,47 @@ def _http_probe(url: str) -> bool:
         return False
     finally:
         conn.close()
+
+
+def _moonraker_call(method: str, path: str, timeout: float) -> object:
+    """One blocking loopback Moonraker request; its result on a 2xx, else None."""
+    conn = http.client.HTTPConnection(MOONRAKER_HOST, MOONRAKER_PORT, timeout=timeout)
+    try:
+        conn.request(method, path)
+        resp = conn.getresponse()
+        body = resp.read()
+        if not 200 <= resp.status < 300:
+            logger.debug("moonraker %s %s: HTTP %d", method, path, resp.status)
+            return None
+        return json.loads(body)["result"]
+    except (OSError, http.client.HTTPException, ValueError, LookupError, TypeError):
+        return None
+    finally:
+        conn.close()
+
+
+async def moonraker_repo_hashes() -> dict[str, str] | None:
+    """Commit Moonraker last recorded per git repo it manages; None if unreachable."""
+    result = await asyncio.to_thread(
+        _moonraker_call, "GET", "/machine/update/status", 5.0
+    )
+    info = result.get("version_info") if isinstance(result, dict) else None
+    if not isinstance(info, dict):
+        return None
+    return {
+        name: entry["current_hash"]
+        for name, entry in info.items()
+        if isinstance(entry, dict)
+        and isinstance(entry.get("current_hash"), str)
+        and _GIT_SHA_RE.match(entry["current_hash"])
+    }
+
+
+async def moonraker_refresh_repo(name: str) -> bool:
+    """Make Moonraker re-read one repo; False while it refuses (printing, busy)."""
+    # The refresh runs a git fetch, so allow far more than a status read.
+    path = "/machine/update/refresh?" + urlencode({"name": name})
+    return await asyncio.to_thread(_moonraker_call, "POST", path, 120.0) is not None
 
 
 async def klipper_printing(
