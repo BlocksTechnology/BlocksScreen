@@ -183,6 +183,13 @@ class TestVisibility:
         with qtbot.waitSignal(shown_page.page_shown):
             shown_page._set_state(ConnectionState.WEBSOCKET_LOST)
 
+    def test_show_sends_no_update_request(self, shown_page, mock_ws):
+        # machine.update.refresh 503s while printing and raised an ERROR popup on start
+        shown_page.hide()
+        shown_page.show()
+        mock_ws.api.refresh_update_status.assert_not_called()
+        mock_ws.api.update_status.assert_not_called()
+
     def test_manual_show_emits_page_shown_with_toggle_off(self, page, qtbot):
         # Top-level popups cover this frame whether or not it auto-showed.
         page.hide()
