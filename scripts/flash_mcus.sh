@@ -45,6 +45,7 @@ MCU_CONFIG_DIR="$SCRIPT_DIR/mcu_config"
 UUID_CACHE="$MCU_CONFIG_DIR/.uuid_cache"
 MOONRAKER_URL="${MOONRAKER_URL:-http://localhost:7125}"
 VERSIONS_PY="$SCRIPT_DIR/mcu_versions.py"
+PREFLIGHT_PY="$SCRIPT_DIR/mcu_preflight.py"
 MCU_VERSIONS_FILE="${MCU_VERSIONS_FILE:-$HOME/printer_data/logs/mcu_versions.json}"
 # Out-of-tree builds; ~/klipper/.config and ~/klipper/out are never modified.
 FW_BUILD_ROOT="${FW_BUILD_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/blocks-flash}"
@@ -341,10 +342,8 @@ write_versions_file() {
 
 # Append a flash result to the versions file, keyed by klipper_section.
 record_flash() {
-    local cfg="$1" iface="$2" result="$3" section=""
-    while IFS='=' read -r key val; do
-        [ "$key" = "klipper_section" ] && section="$val"
-    done < <(parse_config_metadata "$cfg")
+    local cfg="$1" iface="$2" result="$3" section
+    section=$(config_meta "$cfg" klipper_section)
     [ -z "$section" ] && return 0
     python3 "$VERSIONS_PY" record --state-file "$MCU_VERSIONS_FILE" --section "$section" \
         --version "$SRC_VERSION" --interface "$iface" --result "$result" || true
@@ -394,7 +393,7 @@ ensure_can_up() {
 bootloader_uuids() {
     $KATAPULT_OK || return
     python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" -q 2>&1 |
-        awk '/Detected UUID/ { gsub(/,/, "", $3); print $3 }'
+        awk '/Detected UUID/ && /Application: Katapult/ { gsub(/,/, "", $3); print $3 }'
 }
 
 # Query ALL CAN UUIDs (running Klipper + Katapult bootloader) via Klipper's
@@ -583,32 +582,166 @@ trigger_to_dfu() {
     return 1
 }
 
+# Compare the first <size> bytes of flash at <addr> with <image>.
+# Returns 0 match, 1 mismatch, 2 readback unavailable (e.g. read protection).
+_dfu_readback_matches() {
+    local readback="$1" image="$2" addr="$3"
+    shift 3
+    local output size
+    size=$(stat -c%s "$image") || return 2
+    rm -f "$readback"
+    # -U refuses an existing file (O_EXCL), hence the rm above.
+    output=$(sudo dfu-util "$@" -s "${addr}:${size}" -U "$readback" 2>&1) || {
+        echo "$output" | tail -n 3 | _indent >&2
+        return 2
+    }
+    [ -f "$readback" ] || return 2
+    cmp -s "$image" "$readback"
+}
+
+# Return 0 if <serial> is on the DFU list, 1 if it is not, 2 if dfu-util --list failed.
+_dfu_listed() {
+    local serial="$1" list="$2" rc=0
+    # Direct redirect, not $(): sudo USB access breaks in nested subshells.
+    # shellcheck disable=SC2024 # root runs dfu-util only, the file is ours
+    sudo dfu-util --list >"$list" 2>&1 || rc=2
+    [ "$rc" -eq 0 ] && { grep -qF "serial=\"$serial\"" "$list" || rc=1; }
+    rm -f "$list"
+    return "$rc"
+}
+
+# Return 0 once <serial> drops off the DFU list, 1 if it is still there after the
+# wait, 2 if dfu-util --list never answered (absence of the serial proves nothing).
+_dfu_left() {
+    local serial="$1" list="$2" _i _rc _seen=false
+    for ((_i = 0; _i < ${DFU_LEAVE_WAIT:-5}; _i++)); do
+        sleep 1
+        _rc=0
+        _dfu_listed "$serial" "$list" || _rc=$?
+        [ "$_rc" -eq 1 ] && return 0
+        [ "$_rc" -eq 0 ] && _seen=true
+    done
+    $_seen && return 1
+    return 2
+}
+
+# Write <image> at <addr>, read it back, and leave DFU only once it matches.
+# A :leave on the write would jump into an unverified image, so it is a separate
+# command after the readback; a mismatch is rewritten while the ROM still runs.
+# Returns 0 verified, 3 booted but unverified (no readback), 1 failed.
 flash_dfu() {
     local name="$1" vidpid="$2" serial="$3" alt="${4:-0}" addr="${5:-0x08000000}"
-    info "Flashing [$name] via DFU (serial: $serial, addr: $addr)..."
-    local output rc=0
-    output=$(sudo dfu-util -d "$vidpid" -S "$serial" -a "$alt" \
-        -s "${addr}:leave" -D "$FW_BIN" 2>&1) || rc=$?
-    echo "$output" | _indent >&2
-    # "Error during download get_status" after :leave is benign - MCU already rebooted
-    if echo "$output" | grep -q "Download done"; then
-        ok "[$name] flashed via DFU"
-        return 0
-    fi
-    # Device not present when flashing started
-    if echo "$output" | grep -qiE "No DFU capable USB device|Cannot open DFU device|unable to open"; then
-        err "[$name] DFU device not found (serial: $serial) - board not in DFU mode or disconnected"
-        return 1
-    fi
-    # Device disconnected mid-transfer
-    if echo "$output" | grep -qiE "Error during (special command|download)|libusb_open\(\) failed|Lost device|No error condition.*download"; then
-        err "[$name] MCU disconnected during flash - reconnect and retry"
-        warn "  The board may be in an unknown state. Power-cycle it and re-enter DFU mode before retrying."
-        return 1
-    fi
-    err "[$name] DFU flash failed (exit $rc)"
+    local image="${6:-$FW_BIN}" opts="${7:-}"
+    local -a dev=(-d "$vidpid" -S "$serial" -a "$alt")
+    local readback="${image%.bin}.readback.bin" list="${image%.bin}.dfu-list.txt"
+    local output rc attempt verify try left
+    for attempt in 1 2; do
+        info "Flashing [$name] via DFU (serial: $serial, addr: $addr, attempt $attempt/2)..."
+        rc=0
+        output=$(sudo dfu-util "${dev[@]}" -s "${addr}${opts:+:$opts}" -D "$image" 2>&1) || rc=$?
+        echo "$output" | _indent >&2
+        if echo "$output" | grep -qiE "No DFU capable USB device|Cannot open DFU device|unable to open"; then
+            err "[$name] DFU device not found (serial: $serial) - board not in DFU mode or disconnected"
+            [ "$attempt" -gt 1 ] &&
+                warn "  The first write may have left a partial image: power-cycle it into DFU mode and re-run."
+            return 1
+        fi
+        if [ "$rc" -ne 0 ]; then
+            warn "[$name] DFU write failed (exit $rc)"
+            local listed=0
+            _dfu_listed "$serial" "$list" || listed=$?
+            [ "$listed" -eq 2 ] && warn "[$name] dfu-util --list failed - retrying the write"
+            if [ "$listed" -eq 1 ]; then
+                err "[$name] MCU disconnected during the flash - reconnect and retry"
+                warn "  The board may be in an unknown state. Power-cycle it and re-enter DFU mode before retrying."
+                return 1
+            fi
+            continue
+        fi
+        info "Reading back [$name] to verify..."
+        for try in 1 2; do
+            verify=0
+            _dfu_readback_matches "$readback" "$image" "$addr" "${dev[@]}" || verify=$?
+            [ "$verify" -ne 2 ] && break
+            [ "$try" -eq 1 ] && warn "[$name] readback failed - retrying it once"
+        done
+        [ "$verify" -eq 1 ] && {
+            warn "[$name] readback does not match the image"
+            continue
+        }
+        # Read protection keeps the board listed; a board gone from USB never booted our leave.
+        local listed=0
+        [ "$verify" -eq 2 ] && { _dfu_listed "$serial" "$list" || listed=$?; }
+        if [ "$listed" -eq 1 ]; then
+            rm -f "$readback"
+            err "[$name] board dropped off USB after the write - the image in flash is unverified"
+            warn "  Power-cycle it into DFU mode and re-run."
+            return 1
+        fi
+        [ "$verify" -eq 2 ] && warn "[$name] flash readback unavailable - leaving DFU with the write unverified"
+        # Exit status is not checked: the ROM often resets before answering the request.
+        sudo dfu-util "${dev[@]}" -s "${addr}:leave" 2>&1 | tail -n 2 | _indent >&2
+        rm -f "$readback"
+        left=0
+        _dfu_left "$serial" "$list" || left=$?
+        if [ "$left" -eq 2 ]; then
+            warn "[$name] dfu-util --list failed - cannot confirm the board left DFU"
+            if [ "$verify" -eq 0 ]; then
+                ok "[$name] flashed via DFU, readback verified - boot unconfirmed"
+                return 0
+            fi
+            warn "[$name] flashed via DFU, boot unconfirmed - the post-flash version check decides"
+            return 3
+        fi
+        if [ "$left" -eq 1 ]; then
+            err "[$name] still in DFU mode after the leave request"
+            if [ "$verify" -eq 0 ]; then
+                warn "  The image is verified - power-cycle the board to boot it."
+            else
+                warn "  Power-cycle the board; it boots the unverified image in flash."
+            fi
+            return 1
+        fi
+        if [ "$verify" -eq 0 ]; then
+            ok "[$name] flashed via DFU, readback verified"
+            return 0
+        fi
+        warn "[$name] flashed via DFU, readback unverified - the post-flash version check decides"
+        return 3
+    done
+    err "[$name] DFU flash failed - the board is still in DFU mode, nothing was booted"
+    warn "  Re-run to retry. A power cycle boots whatever is in flash, possibly a partial image."
     return 1
 }
+
+# Set DFU_VIDPID/DFU_MEM/DFU_ADDR/DFU_ALT/DFU_MCU_TYPE from a config's metadata.
+dfu_params() {
+    local cfg="$1" katapult_vid="" katapult_mem="" _key _val
+    DFU_VIDPID="" DFU_MEM="" DFU_ADDR="0x08000000" DFU_ALT="0" DFU_MCU_TYPE=""
+    while IFS='=' read -r _key _val; do
+        case "$_key" in
+        dfu) DFU_VIDPID="$_val" ;;
+        dfu_mem) DFU_MEM="$_val" ;;
+        dfu_addr) DFU_ADDR="$_val" ;;
+        dfu_alt) DFU_ALT="$_val" ;;
+        mcu_type) DFU_MCU_TYPE="$_val" ;;
+        katapult_dfu) katapult_vid="$_val" ;;
+        katapult_dfu_mem) katapult_mem="$_val" ;;
+        esac
+    done < <(parse_config_metadata "$cfg")
+    # No dfu: header (e.g. a CAN toolhead): Katapult holds the start of flash.
+    if [ -z "$DFU_VIDPID" ] && [ -n "$katapult_vid" ]; then
+        DFU_VIDPID="$katapult_vid"
+        DFU_MEM="${katapult_mem:-$DFU_MEM}"
+        local app_addr
+        app_addr=$(grep -oP 'CONFIG_FLASH_APPLICATION_ADDRESS=\K0x[0-9a-fA-F]+' "$cfg" 2>/dev/null || true)
+        [ -n "$app_addr" ] && DFU_ADDR="$app_addr"
+    fi
+    return 0
+}
+
+# Value of one metadata header key of <cfg>, empty when absent.
+config_meta() { parse_config_metadata "$1" | sed -n "s/^$2=//p"; }
 
 parse_config_metadata() {
     local cfg="$1"
@@ -653,8 +786,7 @@ build_firmware() {
     local cfg="$1" name="$2" iface="$3"
     info "Building firmware for [$name] ($iface)..."
     _make_build "$KLIPPER_DIR" "$cfg" "$name" "Build failed for [$name]" || return 1
-    FW_BIN="${FW_OUT}klipper.bin"
-    is_linux_config "$cfg" && FW_BIN="${FW_OUT}klipper.elf"
+    use_build "$name" "$cfg"
     if [ ! -f "$FW_BIN" ]; then
         err "Build completed but $(basename "$FW_BIN") not found in $FW_OUT"
         warn "Files in out/: $(ls "$FW_OUT" 2>/dev/null || echo '(empty)')"
@@ -663,12 +795,101 @@ build_firmware() {
     ok "Firmware built ($FW_OUT)"
 }
 
+# Point FW_OUT/FW_MAKE_ARGS/FW_BIN at the build_firmware output for <name>.
+use_build() {
+    local name="$1" cfg="$2" dir="$FW_BUILD_ROOT/$1"
+    FW_OUT="$dir/out/"
+    FW_MAKE_ARGS=("KCONFIG_CONFIG=$dir/.config" "OUT=$FW_OUT")
+    FW_BIN="${FW_OUT}klipper.bin"
+    is_linux_config "$cfg" && FW_BIN="${FW_OUT}klipper.elf"
+    return 0
+}
+
+# Refuse a build that cannot boot, lands at the wrong address, or changes how the
+# host reaches the MCU: chip, CAN/USB/crystal pins and bridge mode versus the running
+# MCU, crystal frequency versus the last flashed .config (the MCU does not report it).
+preflight_firmware() {
+    local name="$1" iface="$2" cfg="$3" rc=0 section
+    is_linux_config "$cfg" && return 0
+    local -a at=()
+    if [ "$iface" = "dfu" ]; then
+        dfu_params "$cfg"
+        at=(--at "$DFU_ADDR")
+    fi
+    local check_rc=0
+    python3 "$PREFLIGHT_PY" image --config "$FW_BUILD_ROOT/$name/.config" \
+        --image "$FW_BIN" "${at[@]}" || check_rc=$?
+    case "$check_rc" in
+    0) ;;
+    4) err "[$name] image check could not run - not flashing"; return 1 ;;
+    *) err "[$name] built image failed its sanity checks - not flashing"; return 1 ;;
+    esac
+    # Katapult writes at its own LAUNCH_APP_ADDRESS, so the app must be linked there.
+    if [ "$iface" = "can" ] || [ "$iface" = "usb" ]; then
+        local katapult_cfg="$MCU_CONFIG_DIR/${name}.katapult.config"
+        if [ -f "$katapult_cfg" ]; then
+            python3 "$PREFLIGHT_PY" pair --klipper "$FW_BUILD_ROOT/$name/.config" \
+                --katapult "$katapult_cfg" || {
+                err "[$name] build does not match its Katapult (address/pins/clock) - not flashing"
+                return 1
+            }
+        else
+            warn "[$name] no $katapult_cfg - app address against Katapult unchecked"
+        fi
+    fi
+    local flashed="$FW_BUILD_ROOT/$name.flashed.config"
+    if [ -f "$flashed" ]; then
+        python3 "$PREFLIGHT_PY" flashed --new "$FW_BUILD_ROOT/$name/.config" \
+            --flashed "$flashed" || check_rc=$?
+        case "$check_rc" in
+        0) ;;
+        4) err "[$name] crystal check could not run - not flashing"; return 1 ;;
+        *) rc=1 ;;
+        esac
+    fi
+    section=$(config_meta "$cfg" klipper_section)
+    if [ "$CONTEXT" = "pi" ] && [ -n "$section" ]; then
+        local comms_rc=0
+        python3 "$PREFLIGHT_PY" comms --dict "${FW_OUT}klipper.dict" --section "$section" \
+            --url "$MOONRAKER_URL" || comms_rc=$?
+        case "$comms_rc" in
+        0) ;;
+        3) warn "[$name] no running firmware to compare - comms settings unchecked" ;;
+        5)
+            if ! $ALLOW_COMMS_CHANGE; then
+                err "[$name] Moonraker has no running constants to compare - not flashing"
+                err "  Start Klipper and Moonraker, or re-run with --allow-comms-change."
+                return 1
+            fi
+            warn "[$name] comms settings unchecked (--allow-comms-change)"
+            ;;
+        # An internal error is no comms change, so --allow-comms-change must not cover it.
+        4) err "[$name] comms check could not run - not flashing"; return 1 ;;
+        *) rc=1 ;;
+        esac
+    fi
+    [ "$rc" -eq 0 ] && return 0
+    if $ALLOW_COMMS_CHANGE; then
+        warn "[$name] comms settings change accepted (--allow-comms-change)"
+        return 0
+    fi
+    err "[$name] the new build changes how the host reaches this MCU - not flashing"
+    err "  If intended, re-run with --allow-comms-change, with physical access to the board."
+    return 1
+}
+
 # Sets FW_OUT/FW_MAKE_ARGS to the Katapult build.
 build_katapult_firmware() {
     local name="$1" katapult_cfg="$2"
     info "Building Katapult for [$name]..."
     _make_build "$KATAPULT_DIR" "$katapult_cfg" "$name.katapult" \
         "Katapult build failed for [$name]" || return 1
+    # A Katapult that disagrees with the app on pins or clock is unreachable once flashed.
+    if ! python3 "$PREFLIGHT_PY" pair --klipper "$FW_BUILD_ROOT/$name/.config" \
+        --katapult "$FW_BUILD_ROOT/$name.katapult/.config"; then
+        err "[$name] Katapult config does not match the Klipper config - not flashing"
+        return 1
+    fi
     ok "Katapult built"
 }
 
@@ -692,14 +913,10 @@ wait_for_katapult_node() {
 # Requires a USB cable from the MCU to the Pi; if absent, prints instructions.
 bootstrap_katapult() {
     local name="$1" cfg="$2"
-    local katapult_bootsel="" katapult_dfu="" katapult_dfu_mem=""
-    while IFS='=' read -r _k _v; do
-        case "$_k" in
-        katapult_bootsel) katapult_bootsel="$_v" ;;
-        katapult_dfu) katapult_dfu="$_v" ;;
-        katapult_dfu_mem) katapult_dfu_mem="$_v" ;;
-        esac
-    done < <(parse_config_metadata "$cfg")
+    local katapult_bootsel katapult_dfu katapult_dfu_mem
+    katapult_bootsel=$(config_meta "$cfg" katapult_bootsel)
+    katapult_dfu=$(config_meta "$cfg" katapult_dfu)
+    katapult_dfu_mem=$(config_meta "$cfg" katapult_dfu_mem)
 
     local katapult_cfg="$MCU_CONFIG_DIR/${name}.katapult.config"
     if [ ! -f "$katapult_cfg" ]; then
@@ -711,6 +928,9 @@ bootstrap_katapult() {
         warn "[$name] no katapult_bootsel/katapult_dfu declared in config - cannot bootstrap"
         return 1
     fi
+
+    # Build first: a board found in DFU/BOOTSEL is flashed at once, not left waiting.
+    build_katapult_firmware "$name" "$katapult_cfg" || return 1
 
     if [ -n "$katapult_bootsel" ]; then
         info "[$name] waiting for BOOTSEL device ($katapult_bootsel, up to 8s)..."
@@ -724,7 +944,6 @@ bootstrap_katapult() {
             warn "  Connect a USB cable from [$name] to the Pi and re-run."
             return 1
         fi
-        build_katapult_firmware "$name" "$katapult_cfg" || return 1
         info "Flashing Katapult on [$name] via BOOTSEL..."
         local _kat_tmp _kat_rc
         _kat_tmp=$(mktemp)
@@ -746,6 +965,14 @@ bootstrap_katapult() {
     fi
 
     if [ -n "$katapult_dfu" ]; then
+        local boot_addr
+        boot_addr=$(grep -oP '^CONFIG_FLASH_BOOT_ADDRESS=\K0x[0-9a-fA-F]+' \
+            "$FW_BUILD_ROOT/$name.katapult/.config" || echo 0x08000000)
+        python3 "$PREFLIGHT_PY" image --config "$FW_BUILD_ROOT/$name.katapult/.config" \
+            --image "${FW_OUT}katapult.bin" --at "$boot_addr" --bootloader || {
+            err "[$name] Katapult image failed its sanity checks - not flashing"
+            return 1
+        }
         info "[$name] waiting for DFU device ($katapult_dfu, up to 8s)..."
         local i dfu_result=""
         for ((i = 1; i <= 8; i++)); do
@@ -760,14 +987,12 @@ bootstrap_katapult() {
             return 1
         fi
         local dfu_serial="${dfu_result%%|*}"
-        build_katapult_firmware "$name" "$katapult_cfg" || return 1
-        info "Flashing Katapult on [$name] via DFU (serial: $dfu_serial)..."
-        local _output
-        _output=$(sudo dfu-util -d "$katapult_dfu" -S "$dfu_serial" -a 0 \
-            -s "0x08000000:mass-erase:force:leave" \
-            -D "${FW_OUT}katapult.bin" 2>&1) || true
-        echo "$_output" | _indent >&2
-        if echo "$_output" | grep -q "Download done"; then
+        # Mass erase drops the old app, so Katapult stays in its bootloader for the CAN flash.
+        local _dfu_rc=0
+        flash_dfu "$name Katapult" "$katapult_dfu" "$dfu_serial" 0 "$boot_addr" \
+            "${FW_OUT}katapult.bin" "mass-erase:force" || _dfu_rc=$?
+        # Unverified (3) is fine here: the caller waits for Katapult to answer on CAN.
+        if [ "$_dfu_rc" -eq 0 ] || [ "$_dfu_rc" -eq 3 ]; then
             ok "Katapult installed on [$name]"
             sleep 2
             return 0
@@ -781,9 +1006,12 @@ flash_can() {
     local name="$1" uuid="$2"
     info "Flashing [$name] via CAN (UUID: $uuid)..."
     local _output _rc=0
-    _output=$(python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" -u "$uuid" \
-        -f "$FW_BIN" 2>&1 | tr -d '\0')
-    _rc=${PIPESTATUS[0]}
+    # PIPESTATUS after $(...) is the assignment's, so pipefail carries flashtool's exit.
+    _output=$(
+        set -o pipefail
+        python3 "$KATAPULT_SCRIPT" -i "$CAN_INTERFACE" -u "$uuid" -f "$FW_BIN" 2>&1 |
+            tr -d '\0'
+    ) || _rc=$?
     echo "$_output" | _indent >&2
     if [ "$_rc" -eq 0 ]; then
         ok "[$name] flashed via CAN"
@@ -1190,6 +1418,21 @@ _summary_box() {
     _box_bottom
 }
 
+# Warn on host under-voltage: a brown-out mid-transfer leaves a board half-written.
+check_host_power() {
+    command -v vcgencmd >/dev/null 2>&1 || return 0
+    local throttled
+    throttled=$(vcgencmd get_throttled 2>/dev/null) || return 0
+    throttled="${throttled#*=}"
+    [[ "$throttled" =~ ^0x[0-9a-fA-F]+$ ]] || return 0
+    # Bit 0 = under-voltage now (Raspberry Pi vcgencmd get_throttled docs).
+    if ((throttled & 0x1)); then
+        err "Host is under-voltage now (get_throttled=$throttled) - check the PSU before flashing"
+        return 1
+    fi
+    return 0
+}
+
 # Returns 0 if the config file is a USB-CAN bridge firmware (must flash last).
 is_canbus_bridge() { grep -q "^CONFIG_USBCANBUS=y" "$1"; }
 
@@ -1200,6 +1443,7 @@ is_canbus_bridge() { grep -q "^CONFIG_USBCANBUS=y" "$1"; }
 # flashing them first would drop the CAN bus mid-session.
 declare -a FLASH_NAMES=()
 FORCE=false
+ALLOW_COMMS_CHANGE=false # flash even if the build changes CAN/USB/clock settings
 FLASH_ORDER_LOCKED=false # true when TUI user explicitly set the order
 
 cmd_flash() {
@@ -1282,6 +1526,39 @@ cmd_flash() {
         fi
     fi
 
+    # Build and check everything while Klipper still runs: a bad build touches no MCU,
+    # the running constants are still readable, and no board waits in DFU for a compile.
+    header "Building firmware..."
+    local -a _ready=()
+    local -A _built=()
+    for entry in "${to_flash[@]}"; do
+        IFS='|' read -r name iface id cfg fw_ver detected <<<"$entry"
+        if [ -z "${_built[$name]:-}" ]; then
+            build_firmware "$cfg" "$name" "$iface" && _built[$name]=1 || _built[$name]=0
+        fi
+        use_build "$name" "$cfg"
+        if [ "${_built[$name]}" = 1 ] && preflight_firmware "$name" "$iface" "$cfg"; then
+            _ready+=("$entry")
+        else
+            failed+=("$name ($iface) - not flashed")
+            record_flash "$cfg" "$iface" failed
+        fi
+    done
+    to_flash=("${_ready[@]}")
+    if [ ${#to_flash[@]} -eq 0 ]; then
+        save_uuid_cache
+        _summary_box "Flash Summary"
+        return 1
+    fi
+    if ! check_host_power; then
+        if ! $FORCE; then
+            err "Not flashing on an under-volted host - fix the PSU, or re-run with --force"
+            save_uuid_cache
+            return 1
+        fi
+        warn "Flashing on an under-volted host (--force)"
+    fi
+
     # Interrupts (incl. SSH hangup) finish the current step, then Klipper is restarted.
     local _flash_aborted=false _saved_traps
     _saved_traps=$(trap -p INT TERM HUP TSTP)
@@ -1297,105 +1574,112 @@ cmd_flash() {
     [ "$CONTEXT" = "pi" ] && ensure_can_up
 
     local _flash_idx=0 _flash_total=${#to_flash[@]}
-    local _bridge_flashed=false
+    local _bridge_flashed=false _can_failed=false
     for entry in "${to_flash[@]}"; do
         IFS='|' read -r name iface id cfg fw_ver detected <<<"$entry"
         if $_flash_aborted; then
             failed+=("$name ($iface) - interrupted")
+            record_flash "$cfg" "$iface" failed
+            continue
+        fi
+        # A failed CAN node is only reachable for a retry through the bridge it sits behind.
+        if $_can_failed && ! $FLASH_ORDER_LOCKED && is_canbus_bridge "$cfg"; then
+            warn "[$name] skipped: a CAN node behind this bridge failed - fix it first"
+            failed+=("$name ($iface) - skipped, CAN node failed")
+            record_flash "$cfg" "$iface" failed
             continue
         fi
         ((_flash_idx++))
         header "[$name] ($iface) - ${_flash_idx}/${_flash_total}"
-        local ok_flag=0
-        if build_firmware "$cfg" "$name" "$iface"; then
-            case "$iface" in
-            can)
-                local _can_rc=0
-                flash_can "$name" "$id" || _can_rc=$?
-                if [ "$_can_rc" -eq 0 ]; then
+        local ok_flag=0 _note=""
+        use_build "$name" "$cfg"
+        case "$iface" in
+        can)
+            local _can_rc=0
+            flash_can "$name" "$id" || _can_rc=$?
+            if [ "$_can_rc" -eq 0 ]; then
+                ok_flag=1
+            elif [ "$_can_rc" -eq 2 ]; then
+                # CONNECT error: Katapult not in bootloader mode.
+                # Try firmware restart first - works when Katapult is installed
+                # but Klipper is running (e.g. EBB-36 connected via CAN).
+                # On success, Katapult comes up on CAN and no USB is needed.
+                info "[$name] Katapult not responding - triggering firmware restart..."
+                trigger_can_bootloader "$id" >&2 || true
+                if wait_for_katapult_node "$id" 10 && flash_can "$name" "$id"; then
                     ok_flag=1
-                elif [ "$_can_rc" -eq 2 ]; then
-                    # CONNECT error: Katapult not in bootloader mode.
-                    # Try firmware restart first - works when Katapult is installed
-                    # but Klipper is running (e.g. EBB-36 connected via CAN).
-                    # On success, Katapult comes up on CAN and no USB is needed.
-                    info "[$name] Katapult not responding - triggering firmware restart..."
-                    trigger_can_bootloader "$id" >&2 || true
-                    if wait_for_katapult_node "$id" 10 && flash_can "$name" "$id"; then
-                        ok_flag=1
-                    else
-                        # Katapult not installed - attempt USB bootstrap.
-                        info "[$name] restart failed - attempting Katapult bootstrap via USB..."
-                        if bootstrap_katapult "$name" "$cfg" &&
-                            wait_for_katapult_node "$id" &&
-                            flash_can "$name" "$id"; then
-                            ok_flag=1
-                        fi
-                    fi
-                fi
-                ;;
-            usb) flash_usb "$name" "$id" && ok_flag=1 ;;
-            bootsel) flash_bootsel "$name" "$id" && ok_flag=1 ;;
-            linux) flash_linux "$name" "$id" && ok_flag=1 ;;
-            dfu)
-                local dfu_vidpid="" dfu_mem="" dfu_addr="0x08000000" dfu_alt="0" dfu_mcu_type=""
-                local katapult_dfu_vid="" katapult_dfu_mem_f=""
-                while IFS='=' read -r _key _val; do
-                    case "$_key" in
-                    dfu) dfu_vidpid="$_val" ;;
-                    dfu_mem) dfu_mem="$_val" ;;
-                    dfu_addr) dfu_addr="$_val" ;;
-                    dfu_alt) dfu_alt="$_val" ;;
-                    mcu_type) dfu_mcu_type="$_val" ;;
-                    katapult_dfu) katapult_dfu_vid="$_val" ;;
-                    katapult_dfu_mem) katapult_dfu_mem_f="$_val" ;;
-                    esac
-                done < <(parse_config_metadata "$cfg")
-                # Fall back to katapult_dfu if no dfu: header (e.g. ebb_can)
-                if [ -z "$dfu_vidpid" ] && [ -n "$katapult_dfu_vid" ]; then
-                    dfu_vidpid="$katapult_dfu_vid"
-                    dfu_mem="${katapult_dfu_mem_f:-$dfu_mem}"
-                    # Katapult occupies the start of flash - read APPLICATION_ADDRESS from config
-                    local app_addr
-                    app_addr=$(grep -oP 'CONFIG_FLASH_APPLICATION_ADDRESS=\K0x[0-9a-fA-F]+' "$cfg" 2>/dev/null || true)
-                    [ -n "$app_addr" ] && dfu_addr="$app_addr"
-                    info "[$name] using katapult_dfu=$dfu_vidpid  addr=$dfu_addr"
-                fi
-                local dfu_serial="$id"
-                if [ -z "$dfu_serial" ]; then
-                    # Check if already in DFU mode (pre-triggered above).
-                    scan_dfu_devices
-                    local _pre
-                    _pre=$(find_dfu_device "$dfu_vidpid" "$dfu_mem")
-                    if [ -n "$_pre" ]; then
-                        dfu_serial="${_pre%%|*}"
-                        info "[$name] already in DFU mode (serial: $dfu_serial)"
-                    else
-                        local trigger_uuid="${UUID_CACHE_MAP[$dfu_mcu_type]:-}"
-                        if [ -n "$trigger_uuid" ]; then
-                            local dfu_result
-                            if dfu_result=$(trigger_to_dfu "$name" "$trigger_uuid" "$dfu_vidpid" "$dfu_mem"); then
-                                dfu_serial="${dfu_result%%|*}"
-                            fi
-                        fi
-                    fi
-                fi
-                if [ -n "$dfu_serial" ]; then
-                    flash_dfu "$name" "$dfu_vidpid" "$dfu_serial" "${dfu_alt:-0}" "${dfu_addr:-0x08000000}" &&
-                        ok_flag=1
                 else
-                    err "[$name] DFU trigger failed - $CAN_INTERFACE unavailable"
-                    err "  The board must be powered (24V PSU on) and $CAN_INTERFACE must be up."
-                    err "  Option 1: power on the printer, then re-run this script."
-                    err "  Option 2: hold BOOT0 on the board, press RESET, release BOOT0, then re-run with --force."
+                    # Katapult not installed - attempt USB bootstrap.
+                    info "[$name] restart failed - attempting Katapult bootstrap via USB..."
+                    if bootstrap_katapult "$name" "$cfg" &&
+                        wait_for_katapult_node "$id" &&
+                        flash_can "$name" "$id"; then
+                        ok_flag=1
+                    fi
                 fi
-                ;;
-            esac
-        fi
+            fi
+            # Broken comms leave the node in Katapult; one more write usually lands.
+            if [ "$ok_flag" -eq 0 ] && bootloader_uuids | grep -qF "$id"; then
+                warn "[$name] still in Katapult - retrying the flash once"
+                flash_can "$name" "$id" && ok_flag=1
+            fi
+            if [ "$ok_flag" -eq 0 ]; then
+                _can_failed=true
+                # Katapult boots the app even after a failed verify, so a node gone from
+                # both Klipper and Katapult is a half-written app: only a reset recovers it.
+                warn "  If [$name] no longer answers on $CAN_INTERFACE, double-press its reset"
+                warn "  button to enter Katapult, then re-run this script."
+            fi
+            ;;
+        usb) flash_usb "$name" "$id" && ok_flag=1 ;;
+        bootsel) flash_bootsel "$name" "$id" && ok_flag=1 ;;
+        linux) flash_linux "$name" "$id" && ok_flag=1 ;;
+        dfu)
+            dfu_params "$cfg"
+            local dfu_vidpid="$DFU_VIDPID" dfu_mem="$DFU_MEM" dfu_addr="$DFU_ADDR"
+            local dfu_alt="$DFU_ALT" dfu_mcu_type="$DFU_MCU_TYPE"
+            info "[$name] DFU $dfu_vidpid at $dfu_addr"
+            warn "  Some boards drive heater outputs while in ROM DFU - stay with the printer."
+            local dfu_serial="$id"
+            if [ -z "$dfu_serial" ]; then
+                # Check if already in DFU mode (pre-triggered above).
+                scan_dfu_devices
+                local _pre
+                _pre=$(find_dfu_device "$dfu_vidpid" "$dfu_mem")
+                if [ -n "$_pre" ]; then
+                    dfu_serial="${_pre%%|*}"
+                    info "[$name] already in DFU mode (serial: $dfu_serial)"
+                else
+                    local trigger_uuid="${UUID_CACHE_MAP[$dfu_mcu_type]:-}"
+                    if [ -n "$trigger_uuid" ]; then
+                        local dfu_result
+                        if dfu_result=$(trigger_to_dfu "$name" "$trigger_uuid" "$dfu_vidpid" "$dfu_mem"); then
+                            dfu_serial="${dfu_result%%|*}"
+                        fi
+                    fi
+                fi
+            fi
+            if [ -n "$dfu_serial" ]; then
+                local _dfu_rc=0
+                flash_dfu "$name" "$dfu_vidpid" "$dfu_serial" "${dfu_alt:-0}" "${dfu_addr:-0x08000000}" ||
+                    _dfu_rc=$?
+                [ "$_dfu_rc" -eq 0 ] && ok_flag=1
+                [ "$_dfu_rc" -eq 3 ] && ok_flag=1 && _note=" - readback unverified"
+            else
+                err "[$name] DFU trigger failed - $CAN_INTERFACE unavailable"
+                err "  The board must be powered (24V PSU on) and $CAN_INTERFACE must be up."
+                err "  Option 1: power on the printer, then re-run this script."
+                err "  Option 2: hold BOOT0 on the board, press RESET, release BOOT0, then re-run with --force."
+            fi
+            ;;
+        esac
         is_canbus_bridge "$cfg" && _bridge_flashed=true
         if [ "$ok_flag" -eq 1 ]; then
-            flashed+=("$name ($iface)")
+            flashed+=("$name ($iface)$_note")
             record_flash "$cfg" "$iface" ok
+            # Baseline for the next run's crystal check (preflight_firmware).
+            is_linux_config "$cfg" ||
+                cp -f "$FW_BUILD_ROOT/$name/.config" "$FW_BUILD_ROOT/$name.flashed.config"
         else
             failed+=("$name ($iface)")
             record_flash "$cfg" "$iface" failed
@@ -1712,6 +1996,7 @@ main() {
         --versions) mode="versions" ;;
         --release) mode="release" ;;
         --force) FORCE=true ;;
+        --allow-comms-change) ALLOW_COMMS_CHANGE=true ;;
         --help | -h)
             cat >&2 <<'EOF'
 Blocks Klipper MCU Flasher
@@ -1727,6 +2012,9 @@ USAGE:
 
 OPTIONS:
   --force   Bypass version check - flash even if MCU firmware is up to date
+  --allow-comms-change
+            Flash even if the build changes the MCU, clock, CAN or USB settings the
+            running firmware reports (the host may lose the MCU; keep physical access)
 
 CONFIG FILES:
   mcu_config/<name>.config - Klipper build config with interface headers:
