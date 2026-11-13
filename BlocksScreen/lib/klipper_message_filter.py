@@ -525,18 +525,28 @@ RULES: tuple[MessageRule, ...] = (
         display="Position Unreachable",
         severity=Severity.ERROR,
     ),
+    # E-stop halts the MCU; only FIRMWARE_RESTART clears it (Klipper G-Codes.md).
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("emergency button"),
         display="Emergency Stop",
-        hint="Clear E-stop and restart Klipper",
+        hint="Release E-stop, then press Firmware Restart",
         severity=Severity.ERROR,
     ),
+    # Moonraker printer.emergency_stop: the Mainsail/Fluidd/KlipperScreen E-stop.
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("webhooks request"),
-        display="Shutdown via Webhook",
-        hint="Restart Klipper",
+        display="Emergency Stop",
+        hint="Press Firmware Restart",
+        severity=Severity.ERROR,
+    ),
+    # Klipper gcode.py cmd_M112, from a macro or console: no button to release.
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("due to m112 command"),
+        display="Emergency Stop",
+        hint="Press Firmware Restart",
         severity=Severity.ERROR,
     ),
     MessageRule(

@@ -51,16 +51,20 @@ class ConnectionPage(QtWidgets.QFrame):
         "then press 'Firmware Restart' to recover."
     )
 
-    _ESTOP_TEXT: typing.Final[str] = (
+    _BUTTON_ESTOP_TEXT: typing.Final[str] = (
         "Emergency stop activated.\nRelease the emergency button, then\n"
         "press 'Firmware Restart' to recover."
     )
+    # M112 and Moonraker emergency_stop are software stops: no button to release.
+    _SOFTWARE_ESTOP_TEXT: typing.Final[str] = (
+        "Emergency stop activated.\nPress 'Firmware Restart' to recover."
+    )
 
     _REASON_MAP: typing.ClassVar[dict[str, str]] = {
-        "m112 command": _ESTOP_TEXT,
-        "printers emergency button pressed": _ESTOP_TEXT,
-        "printer emergency button pressed": _ESTOP_TEXT,
-        "webhooks request": "Emergency stop activated.",
+        "m112 command": _SOFTWARE_ESTOP_TEXT,
+        "printers emergency button pressed": _BUTTON_ESTOP_TEXT,
+        "printer emergency button pressed": _BUTTON_ESTOP_TEXT,
+        "webhooks request": _SOFTWARE_ESTOP_TEXT,
         "lost communication with mcu": "Lost communication with the MCU.",
         "timer too close": "MCU overload\nCommunication timing failure.\nPress 'Firmware Restart' to recover.",
         "adc out of range": "Temperature sensor fault.",
