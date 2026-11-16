@@ -62,6 +62,7 @@ def _tab(*, true_zero: bool) -> SimpleNamespace:
         _cancel_settle=MagicMock(),
         _cancel_returned=False,
         _cancel_gen=0,
+        _cancel_waits=0,
         _print_state="printing",
         _idle_state="Printing",
         _usb_pending=False,
@@ -212,3 +213,14 @@ def test_reply_of_an_earlier_cancel_is_ignored():
     PrintTab.handle_cancel_print(tab)
     stale({"error": {"code": -1, "message": "not connected"}})
     assert tab._cancel_pending is True
+
+
+def test_cancel_wait_behind_a_macro_is_capped():
+    tab = _tab(true_zero=True)
+    PrintTab.handle_cancel_print(tab)
+    for _ in range(5):
+        PrintTab._on_cancel_timeout(tab)
+    assert _hides(tab) == 0
+    PrintTab._on_cancel_timeout(tab)
+    assert tab.call_load_panel.emit.call_args.args == (False, "", True)
+    assert tab._cancel_pending is False
