@@ -168,7 +168,8 @@ def test_refused_hand_off_is_acked_and_reported_to_console() -> None:
     sent = [c.args[0] for c in tab.run_gcode_signal.emit.call_args_list]
     assert sent[0].endswith("VARIABLE=usb_pending VALUE='\"\"'")
     assert sent[1] == (
-        'RESPOND TYPE=error MSG="USB print refused: A print is already running."'
+        'RESPOND TYPE=error MSG="BlocksScreen: USB print refused:'
+        ' A print is already running."'
     )
     tab.notify.emit.assert_called_once()
 
@@ -437,7 +438,9 @@ class TestUsbImportDone:
         self._done(tab, local="", error='No "space"')
         assert (
             self._responds(tab)
-            == ["RESPOND TYPE=error MSG=\"USB print failed: No 'space'\""][:sent]
+            == [
+                "RESPOND TYPE=error MSG=\"BlocksScreen: USB print failed: No 'space'\""
+            ][:sent]
         )
         assert tab._usb_from_console is False
 
@@ -445,7 +448,7 @@ class TestUsbImportDone:
         tab._usb_from_console = True
         self._done(tab, local="", error="a;b\nc")
         assert self._responds(tab) == [
-            'RESPOND TYPE=error MSG="USB print failed: a,b c"'
+            'RESPOND TYPE=error MSG="BlocksScreen: USB print failed: a,b c"'
         ]
 
     def test_refusal_after_copy_reaches_console(self, tab) -> None:
@@ -453,7 +456,8 @@ class TestUsbImportDone:
         tab._print_state = "printing"
         self._done(tab, reused=True)
         assert self._responds(tab) == [
-            'RESPOND TYPE=error MSG="USB print refused: A print is already running."'
+            'RESPOND TYPE=error MSG="BlocksScreen: USB print refused:'
+            ' A print is already running."'
         ]
 
     def test_klipper_shutdown_skips_console(self, tab) -> None:

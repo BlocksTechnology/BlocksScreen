@@ -52,6 +52,8 @@ from updater.executor import (
     is_git_repo,
     is_service_active,
     klipper_printing,
+    moonraker_refresh_repo,
+    moonraker_repo_hashes,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -257,6 +259,8 @@ class UpdateService:
         # -inf: monotonic() may start near 0 on a fresh boot, faking a recent refresh.
         self._apt_list_time: float = float("-inf")
         self._fetch_backoff: dict[str, _Backoff] = {}
+        # Per repo, the HEAD Moonraker last failed to record (no upstream, offline).
+        self._moonraker_unreadable: dict[str, str] = {}
         self._state_path = _STATE_PATH
         self._inflight_path = _INFLIGHT_PATH
         self._history_path = _HISTORY_PATH
@@ -313,6 +317,45 @@ class UpdateService:
     def has_fetch_failures(self) -> bool:
         """True while any component's git fetch is failing (entry is popped on success)."""
         return bool(self._fetch_backoff)
+
+    async def sync_moonraker(self) -> bool:
+        """Make Moonraker re-read repos whose HEAD moved; False = retry later."""
+        # Moonraker restores repo state from its DB and re-reads git only every
+        # refresh_interval (git_deploy.initialize), so our updates look like "behind".
+        recorded = await moonraker_repo_hashes()
+        if recorded is None:
+            return False
+        for c in self._components:
+            if c.kind != "git" or c.name not in recorded:
+                continue
+            head = await git_get_hash(c.path)
+            if (
+                not head
+                or head == recorded[c.name]
+                or self._moonraker_unreadable.get(c.name) == head
+            ):
+                continue
+            now = await moonraker_refresh_repo(c.name)
+            if now is None:
+                # Refused or down: the other repos would fail the same way.
+                return False
+            if now == head:
+                self._log.info(
+                    "Moonraker refreshed %s: %s -> %s",
+                    c.name,
+                    recorded[c.name][:8],
+                    head[:8],
+                )
+            else:
+                # Retrying cannot help until HEAD moves again.
+                self._moonraker_unreadable[c.name] = head
+                self._log.warning(
+                    "Moonraker cannot read %s at %s (recorded %s)",
+                    c.name,
+                    head[:8],
+                    now[:8],
+                )
+        return True
 
     async def check_status(self, force: bool = False) -> dict[str, ComponentStatus]:
         """Concurrently check status of all components."""

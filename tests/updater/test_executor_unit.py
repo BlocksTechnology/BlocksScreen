@@ -13,6 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from updater.executor import (
+    _moonraker_call,
+    moonraker_refresh_repo,
+    moonraker_repo_hashes,
     _clear_stale_git_index_lock,
     _is_head_readable,
     _make_clean_env,
@@ -1611,3 +1614,57 @@ class TestKlipperPrinting:
     @pytest.mark.asyncio
     async def test_missing_socket_stays_idle_when_failing_closed(self, tmp_path):
         assert not await klipper_printing(tmp_path / "absent.sock", unanswered=True)
+
+
+class TestMoonrakerRepoHashes:
+    @pytest.mark.asyncio
+    async def test_keeps_git_repos_including_unknown_hash(self):
+        sha = "a" * 40
+        info = {
+            "BlocksScreen": {"current_hash": sha},
+            "klipper": {"current_hash": "?"},
+            "mainsail": {"version": "v2.14.0"},
+            "system": {"package_count": 0},
+        }
+        with patch(
+            "updater.executor._moonraker_call", return_value={"version_info": info}
+        ):
+            assert await moonraker_repo_hashes() == {
+                "BlocksScreen": sha,
+                "klipper": "?",
+            }
+
+    @pytest.mark.asyncio
+    async def test_unreachable_is_none(self):
+        with patch("updater.executor._moonraker_call", return_value=None):
+            assert await moonraker_repo_hashes() is None
+
+    @pytest.mark.asyncio
+    async def test_refresh_posts_by_name(self):
+        result = {"version_info": {"RF50 Klipper": {"current_hash": "b" * 40}}}
+        with patch("updater.executor._moonraker_call", return_value=result) as call:
+            assert await moonraker_refresh_repo("RF50 Klipper") == "b" * 40
+        call.assert_called_once_with(
+            "POST", "/machine/update/refresh?name=RF50+Klipper", 120.0
+        )
+
+    @pytest.mark.asyncio
+    async def test_refresh_returns_unknown_hash_from_failed_fetch(self):
+        # Moonraker answers 200 with "?" when its git fetch fails (offline).
+        result = {"version_info": {"RF50 Klipper": {"current_hash": "?"}}}
+        with patch("updater.executor._moonraker_call", return_value=result):
+            assert await moonraker_refresh_repo("RF50 Klipper") == "?"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("result", [None, {}, {"version_info": {}}])
+    async def test_refused_refresh_is_none(self, result):
+        with patch("updater.executor._moonraker_call", return_value=result):
+            assert await moonraker_refresh_repo("RF50 Klipper") is None
+
+    @pytest.mark.parametrize(("status", "expected"), [(200, {"a": 1}), (503, None)])
+    def test_call_returns_result_only_on_2xx(self, status, expected):
+        resp = MagicMock(status=status)
+        resp.read.return_value = json.dumps({"result": {"a": 1}}).encode()
+        with patch("updater.executor.http.client.HTTPConnection") as conn:
+            conn.return_value.getresponse.return_value = resp
+            assert _moonraker_call("GET", "/x", 1.0) == expected
