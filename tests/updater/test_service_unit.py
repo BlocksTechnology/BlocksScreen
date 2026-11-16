@@ -4246,3 +4246,66 @@ class TestPinnedCheckoutIsEnforced:
         assert _git_run(repo, "rev-parse", "HEAD") == shas["pin"]
         assert _git_run(repo, "branch", "--show-current") == "v3"
         assert _git_run(repo, "status", "--porcelain", "--untracked-files=no") == ""
+
+
+class TestSyncMoonraker:
+    @pytest.mark.asyncio
+    async def test_refreshes_only_repos_moonraker_has_stale(self, tmp_path):
+        head, old = "b" * 40, "a" * 40
+        svc = UpdateService()
+        svc._components = [
+            ComponentConfig(name=n, kind="git", path=tmp_path / n, order=i)
+            for i, n in enumerate(("BlocksScreen", "klipper", "Happy-Hare"))
+        ] + [ComponentConfig(name="system", kind="apt", order=9)]
+        recorded = {"BlocksScreen": old, "klipper": head, "system": old}
+        refresh = AsyncMock(return_value=head)
+        with (
+            patch("updater.service.moonraker_repo_hashes", return_value=recorded),
+            patch("updater.service.moonraker_refresh_repo", refresh),
+            patch("updater.service.git_get_hash", return_value=head),
+        ):
+            assert await svc.sync_moonraker() is True
+        refresh.assert_awaited_once_with("BlocksScreen")
+
+    @pytest.mark.asyncio
+    async def test_refused_or_unreachable_asks_for_retry(self, tmp_path):
+        svc = UpdateService()
+        svc._components = [
+            ComponentConfig(name="klipper", kind="git", path=tmp_path, order=1)
+        ]
+        with (
+            patch("updater.service.moonraker_repo_hashes", return_value=None),
+        ):
+            assert await svc.sync_moonraker() is False
+        with (
+            patch(
+                "updater.service.moonraker_repo_hashes",
+                return_value={"klipper": "a" * 40},
+            ),
+            patch("updater.service.moonraker_refresh_repo", return_value=None),
+            patch("updater.service.git_get_hash", return_value="b" * 40),
+        ):
+            assert await svc.sync_moonraker() is False
+
+    @pytest.mark.asyncio
+    async def test_unrecorded_head_gives_up_until_head_moves(self, tmp_path):
+        # No upstream or offline: Moonraker answers but records "?", retrying is futile.
+        svc = UpdateService()
+        svc._components = [
+            ComponentConfig(name="klipper", kind="git", path=tmp_path, order=1)
+        ]
+        refresh = AsyncMock(return_value="?")
+        heads = ["b" * 40, "b" * 40, "c" * 40]
+        with (
+            patch(
+                "updater.service.moonraker_repo_hashes",
+                return_value={"klipper": "?"},
+            ),
+            patch("updater.service.moonraker_refresh_repo", refresh),
+            patch("updater.service.git_get_hash", side_effect=heads),
+        ):
+            assert await svc.sync_moonraker() is True
+            assert await svc.sync_moonraker() is True
+            assert refresh.await_count == 1
+            assert await svc.sync_moonraker() is True
+        assert refresh.await_count == 2
