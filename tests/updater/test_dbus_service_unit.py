@@ -593,6 +593,8 @@ class TestBootProvision:
             if len(sleeps) > polls:
                 raise asyncio.CancelledError
 
+        # The resync task's own sleeps would land in the poll intervals.
+        svc._schedule_moonraker_sync = MagicMock()
         with (
             patch.object(dbus_service.asyncio, "sleep", fake_sleep),
             pytest.raises(asyncio.CancelledError),
@@ -942,10 +944,13 @@ class TestShutdown:
 class TestMoonrakerSync:
     @pytest.mark.asyncio
     async def test_busy_release_resyncs_once(self, svc):
+        from updater import dbus_service
+
         svc._busy = True
-        svc._set_busy(False)
-        svc._schedule_moonraker_sync()
-        await svc._moonraker_sync
+        with patch.object(dbus_service.asyncio, "sleep", AsyncMock()):
+            svc._set_busy(False)
+            svc._schedule_moonraker_sync()
+            await svc._moonraker_sync
         svc._svc.sync_moonraker.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -953,7 +958,7 @@ class TestMoonrakerSync:
         from updater import dbus_service
 
         svc._svc.sync_moonraker = AsyncMock(side_effect=[False, True])
-        busy_on_sleep = [True, False]
+        busy_on_sleep = [False, True, False]
 
         async def fake_sleep(_s):
             svc._busy = busy_on_sleep.pop(0)
@@ -963,3 +968,13 @@ class TestMoonrakerSync:
         # Tries: refused, busy (skipped), then synced.
         assert svc._svc.sync_moonraker.await_count == 2
         assert busy_on_sleep == []
+
+    @pytest.mark.asyncio
+    async def test_status_check_waits_for_a_moonraker_refresh(self, svc):
+        await svc._git_guard.acquire()
+        task = asyncio.ensure_future(svc._emit_status())
+        await asyncio.sleep(0)
+        svc._svc.check_status.assert_not_awaited()
+        svc._git_guard.release()
+        await task
+        svc._svc.check_status.assert_awaited_once()

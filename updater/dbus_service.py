@@ -236,12 +236,14 @@ class UpdaterInterface(
     async def _moonraker_sync_loop(self) -> None:
         """Resync Moonraker's repo state, retrying while it refuses or is down."""
         for _ in range(_MOONRAKER_SYNC_TRIES):
-            if not self._busy:
-                async with self._git_guard:
-                    with process_lock() as acquired:
-                        if acquired and await self._svc.sync_moonraker():
-                            return
+            # Sleep first: the restarted BlocksScreen-start.sh waits only 20 s for the lock.
             await asyncio.sleep(_MOONRAKER_SYNC_RETRY_S)
+            if self._busy:
+                continue
+            async with self._git_guard:
+                with process_lock() as acquired:
+                    if acquired and await self._svc.sync_moonraker():
+                        return
         _log.info("Moonraker resync gave up, next status check retries")
 
     def _hold_wanted(self) -> bool:
@@ -298,7 +300,9 @@ class UpdaterInterface(
             return
         self._status_check_in_progress = True
         try:
-            status = await self._svc.check_status(force=force)
+            # Its git fetch would race a Moonraker refresh fetch on the ref locks.
+            async with self._git_guard:
+                status = await self._svc.check_status(force=force)
         except Exception as exc:  # noqa: BLE001
             _log.error("check_status failed: %s", exc)
             status = {
