@@ -1104,15 +1104,15 @@ async def moonraker_repo_hashes() -> dict[str, str] | None:
     }
 
 
-async def moonraker_refresh_repo(name: str, head: str) -> bool:
-    """Make Moonraker re-read one repo; True only once it records `head`."""
+async def moonraker_refresh_repo(name: str) -> str | None:
+    """Make Moonraker re-read one repo; the hash it now records, None if refused."""
     # The refresh runs a git fetch, so allow far more than a status read.
     path = "/machine/update/refresh?" + urlencode({"name": name})
     result = await asyncio.to_thread(_moonraker_call, "POST", path, 120.0)
-    # A failed fetch still answers 200, with current_hash left at "?".
     info = result.get("version_info") if isinstance(result, dict) else None
     entry = info.get(name) if isinstance(info, dict) else None
-    return isinstance(entry, dict) and entry.get("current_hash") == head
+    current = entry.get("current_hash") if isinstance(entry, dict) else None
+    return current if isinstance(current, str) else None
 
 
 async def klipper_printing(

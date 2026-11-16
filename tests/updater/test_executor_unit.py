@@ -1643,19 +1643,23 @@ class TestMoonrakerRepoHashes:
     async def test_refresh_posts_by_name(self):
         result = {"version_info": {"RF50 Klipper": {"current_hash": "b" * 40}}}
         with patch("updater.executor._moonraker_call", return_value=result) as call:
-            assert await moonraker_refresh_repo("RF50 Klipper", "b" * 40) is True
+            assert await moonraker_refresh_repo("RF50 Klipper") == "b" * 40
         call.assert_called_once_with(
             "POST", "/machine/update/refresh?name=RF50+Klipper", 120.0
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "result", [None, {}, {"version_info": {"RF50 Klipper": {"current_hash": "?"}}}]
-    )
-    async def test_refresh_that_did_not_record_head_is_false(self, result):
+    async def test_refresh_returns_unknown_hash_from_failed_fetch(self):
         # Moonraker answers 200 with "?" when its git fetch fails (offline).
+        result = {"version_info": {"RF50 Klipper": {"current_hash": "?"}}}
         with patch("updater.executor._moonraker_call", return_value=result):
-            assert await moonraker_refresh_repo("RF50 Klipper", "b" * 40) is False
+            assert await moonraker_refresh_repo("RF50 Klipper") == "?"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("result", [None, {}, {"version_info": {}}])
+    async def test_refused_refresh_is_none(self, result):
+        with patch("updater.executor._moonraker_call", return_value=result):
+            assert await moonraker_refresh_repo("RF50 Klipper") is None
 
     @pytest.mark.parametrize(("status", "expected"), [(200, {"a": 1}), (503, None)])
     def test_call_returns_result_only_on_2xx(self, status, expected):

@@ -244,6 +244,9 @@ class UpdaterInterface(
             if self._busy:
                 continue
             async with self._git_guard:
+                # An update may have started while this waited for the guard.
+                if self._busy:
+                    continue
                 with process_lock() as acquired:
                     if acquired and await self._svc.sync_moonraker():
                         return

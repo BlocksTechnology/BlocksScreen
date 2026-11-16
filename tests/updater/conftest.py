@@ -50,7 +50,7 @@ def moonraker():
     """Moonraker unreachable; never dials the host's real :7125."""
     with (
         patch("updater.service.moonraker_repo_hashes", AsyncMock(return_value=None)),
-        patch("updater.service.moonraker_refresh_repo", AsyncMock(return_value=False)),
+        patch("updater.service.moonraker_refresh_repo", AsyncMock(return_value=None)),
     ):
         yield
 

@@ -259,6 +259,8 @@ class UpdateService:
         # -inf: monotonic() may start near 0 on a fresh boot, faking a recent refresh.
         self._apt_list_time: float = float("-inf")
         self._fetch_backoff: dict[str, _Backoff] = {}
+        # Per repo, the HEAD Moonraker last failed to record (no upstream, offline).
+        self._moonraker_unreadable: dict[str, str] = {}
         self._state_path = _STATE_PATH
         self._inflight_path = _INFLIGHT_PATH
         self._history_path = _HISTORY_PATH
@@ -323,14 +325,21 @@ class UpdateService:
         recorded = await moonraker_repo_hashes()
         if recorded is None:
             return False
-        synced = True
         for c in self._components:
             if c.kind != "git" or c.name not in recorded:
                 continue
             head = await git_get_hash(c.path)
-            if not head or head == recorded[c.name]:
+            if (
+                not head
+                or head == recorded[c.name]
+                or self._moonraker_unreadable.get(c.name) == head
+            ):
                 continue
-            if await moonraker_refresh_repo(c.name, head):
+            now = await moonraker_refresh_repo(c.name)
+            if now is None:
+                # Refused or down: the other repos would fail the same way.
+                return False
+            if now == head:
                 self._log.info(
                     "Moonraker refreshed %s: %s -> %s",
                     c.name,
@@ -338,9 +347,15 @@ class UpdateService:
                     head[:8],
                 )
             else:
-                self._log.info("Moonraker refresh of %s not done yet, retrying", c.name)
-                synced = False
-        return synced
+                # Retrying cannot help until HEAD moves again.
+                self._moonraker_unreadable[c.name] = head
+                self._log.warning(
+                    "Moonraker cannot read %s at %s (recorded %s)",
+                    c.name,
+                    head[:8],
+                    now[:8],
+                )
+        return True
 
     async def check_status(self, force: bool = False) -> dict[str, ComponentStatus]:
         """Concurrently check status of all components."""

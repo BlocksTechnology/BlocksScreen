@@ -970,6 +970,32 @@ class TestMoonrakerSync:
         assert busy_on_sleep == []
 
     @pytest.mark.asyncio
+    async def test_update_started_while_waiting_for_guard_is_not_raced(self, svc):
+        from updater import dbus_service
+
+        svc._busy = False
+        svc._svc.sync_moonraker = AsyncMock(return_value=True)
+        sleeps = 0
+
+        async def fake_sleep(_s):
+            nonlocal sleeps
+            sleeps += 1
+            if sleeps == 2:
+                svc._busy = False
+
+        real_sleep = asyncio.sleep
+        await svc._git_guard.acquire()
+        with patch.object(dbus_service.asyncio, "sleep", fake_sleep):
+            task = asyncio.ensure_future(svc._moonraker_sync_loop())
+            await real_sleep(0)
+            # An update grabs busy while the loop waits on the guard.
+            svc._busy = True
+            svc._git_guard.release()
+            await task
+        assert sleeps == 2
+        svc._svc.sync_moonraker.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_keeps_retrying_through_a_long_print_with_capped_backoff(self, svc):
         from updater import dbus_service
 
