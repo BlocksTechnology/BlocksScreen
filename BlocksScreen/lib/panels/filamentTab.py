@@ -964,8 +964,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.load_state = True
             self.load_popup.show()
 
-        if not self.load_popup.isVisible():
-            return
+        # Also while hidden: Load/Unload taps show the popup before the next MMU diff.
         self.load_status_widget.set_filament_pos(
             mmu_state.filament_pos, mmu_state.bowden_progress
         )
