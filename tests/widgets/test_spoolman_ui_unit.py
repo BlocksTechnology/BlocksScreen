@@ -172,6 +172,18 @@ class TestFilamentTabGates:
         )
         assert colors[-1].name() == "#ff0000"
 
+    def test_hidden_load_popup_keeps_tracking_the_mmu(self, tab):
+        tab.on_mmu_state_changed(self._state(action="Loading", filament_pos=3))
+        assert tab.load_popup.isVisible()
+        tab.on_mmu_state_changed(self._state(action="Idle", filament_pos=3))
+        assert not tab.load_popup.isVisible()
+        tab.on_mmu_state_changed(self._state(action="Heating", filament_pos=10))
+        widget = tab.load_status_widget
+        assert not tab.load_popup.isVisible()
+        assert widget._filament_pos == FilamentPos.LOADED
+        assert widget._action == "Heating"
+        assert tab.load_status_label.text() == "Heating"
+
 
 class TestVendorLookup:
     @staticmethod
