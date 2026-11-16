@@ -1618,7 +1618,7 @@ class TestKlipperPrinting:
 
 class TestMoonrakerRepoHashes:
     @pytest.mark.asyncio
-    async def test_keeps_only_git_shas(self):
+    async def test_keeps_git_repos_including_unknown_hash(self):
         sha = "a" * 40
         info = {
             "BlocksScreen": {"current_hash": sha},
@@ -1629,7 +1629,10 @@ class TestMoonrakerRepoHashes:
         with patch(
             "updater.executor._moonraker_call", return_value={"version_info": info}
         ):
-            assert await moonraker_repo_hashes() == {"BlocksScreen": sha}
+            assert await moonraker_repo_hashes() == {
+                "BlocksScreen": sha,
+                "klipper": "?",
+            }
 
     @pytest.mark.asyncio
     async def test_unreachable_is_none(self):
@@ -1638,11 +1641,21 @@ class TestMoonrakerRepoHashes:
 
     @pytest.mark.asyncio
     async def test_refresh_posts_by_name(self):
-        with patch("updater.executor._moonraker_call", return_value={}) as call:
-            assert await moonraker_refresh_repo("RF50 Klipper") is True
+        result = {"version_info": {"RF50 Klipper": {"current_hash": "b" * 40}}}
+        with patch("updater.executor._moonraker_call", return_value=result) as call:
+            assert await moonraker_refresh_repo("RF50 Klipper", "b" * 40) is True
         call.assert_called_once_with(
             "POST", "/machine/update/refresh?name=RF50+Klipper", 120.0
         )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "result", [None, {}, {"version_info": {"RF50 Klipper": {"current_hash": "?"}}}]
+    )
+    async def test_refresh_that_did_not_record_head_is_false(self, result):
+        # Moonraker answers 200 with "?" when its git fetch fails (offline).
+        with patch("updater.executor._moonraker_call", return_value=result):
+            assert await moonraker_refresh_repo("RF50 Klipper", "b" * 40) is False
 
     @pytest.mark.parametrize(("status", "expected"), [(200, {"a": 1}), (503, None)])
     def test_call_returns_result_only_on_2xx(self, status, expected):

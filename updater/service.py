@@ -330,7 +330,7 @@ class UpdateService:
             head = await git_get_hash(c.path)
             if not head or head == recorded[c.name]:
                 continue
-            if await moonraker_refresh_repo(c.name):
+            if await moonraker_refresh_repo(c.name, head):
                 self._log.info(
                     "Moonraker refreshed %s: %s -> %s",
                     c.name,
@@ -338,7 +338,7 @@ class UpdateService:
                     head[:8],
                 )
             else:
-                self._log.info("Moonraker refused refresh of %s for now", c.name)
+                self._log.info("Moonraker refresh of %s not done yet, retrying", c.name)
                 synced = False
         return synced
 

@@ -4234,7 +4234,7 @@ class TestSyncMoonraker:
             patch("updater.service.git_get_hash", return_value=head),
         ):
             assert await svc.sync_moonraker() is True
-        refresh.assert_awaited_once_with("BlocksScreen")
+        refresh.assert_awaited_once_with("BlocksScreen", head)
 
     @pytest.mark.asyncio
     async def test_refused_or_unreachable_asks_for_retry(self, tmp_path):

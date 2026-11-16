@@ -1090,7 +1090,7 @@ def _moonraker_call(method: str, path: str, timeout: float) -> object:
 
 
 async def moonraker_repo_hashes() -> dict[str, str] | None:
-    """Commit Moonraker last recorded per git repo it manages; None if unreachable."""
+    """Commit (or "?") Moonraker last recorded per git repo; None if unreachable."""
     result = await asyncio.to_thread(
         _moonraker_call, "GET", "/machine/update/status", 5.0
     )
@@ -1100,17 +1100,19 @@ async def moonraker_repo_hashes() -> dict[str, str] | None:
     return {
         name: entry["current_hash"]
         for name, entry in info.items()
-        if isinstance(entry, dict)
-        and isinstance(entry.get("current_hash"), str)
-        and _GIT_SHA_RE.match(entry["current_hash"])
+        if isinstance(entry, dict) and isinstance(entry.get("current_hash"), str)
     }
 
 
-async def moonraker_refresh_repo(name: str) -> bool:
-    """Make Moonraker re-read one repo; False while it refuses (printing, busy)."""
+async def moonraker_refresh_repo(name: str, head: str) -> bool:
+    """Make Moonraker re-read one repo; True only once it records `head`."""
     # The refresh runs a git fetch, so allow far more than a status read.
     path = "/machine/update/refresh?" + urlencode({"name": name})
-    return await asyncio.to_thread(_moonraker_call, "POST", path, 120.0) is not None
+    result = await asyncio.to_thread(_moonraker_call, "POST", path, 120.0)
+    # A failed fetch still answers 200, with current_hash left at "?".
+    info = result.get("version_info") if isinstance(result, dict) else None
+    entry = info.get(name) if isinstance(info, dict) else None
+    return isinstance(entry, dict) and entry.get("current_hash") == head
 
 
 async def klipper_printing(
