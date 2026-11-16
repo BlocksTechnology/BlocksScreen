@@ -1251,11 +1251,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if "does not exist" in lower_text:
             self.printPanel.filesPage_widget.on_directory_error()
 
+        # A refused API print start carries the full "Error evaluating ..." text.
+        shown = macro_error_text(text)
         if not self._emit_filtered_notification(
-            MessageSource.MOONRAKER_ERROR, text, fallback=False, show_popup=True
+            MessageSource.MOONRAKER_ERROR, shown, fallback=False, show_popup=True
         ):
             self._emit_filtered_notification(
-                MessageSource.GCODE_ERROR, text, fallback=True, show_popup=True
+                MessageSource.GCODE_ERROR, shown, fallback=True, show_popup=True
             )
         _logger.error(text)
 

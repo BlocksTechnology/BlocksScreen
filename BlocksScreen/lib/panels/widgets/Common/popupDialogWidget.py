@@ -49,11 +49,6 @@ class Popup(QtWidgets.QDialog):
         self.slide_out_animation.setDuration(200)
         self.slide_out_animation.setEasingCurve(QtCore.QEasingCurve.Type.InCubic)
 
-        self.SingleTime = QtCore.QTimer(self)
-        self.SingleTime.setInterval(5000)
-        self.SingleTime.setSingleShot(True)
-        self.SingleTime.timeout.connect(self._add_popup)
-
         self.slide_out_animation.finished.connect(self.hide)
         self.slide_in_animation.finished.connect(self.on_slide_in_finished)
         self.timeout_timer.timeout.connect(lambda: self.slide_out_animation.start())
@@ -166,10 +161,8 @@ class Popup(QtWidgets.QDialog):
 
     def _add_popup(self) -> None:
         """Add popup to queue"""
+        # hideEvent calls back here, so a queued message waits for the current one.
         if self.isShown:
-            if self.SingleTime.isActive():
-                return
-            self.SingleTime.start()
             return
 
         if (
