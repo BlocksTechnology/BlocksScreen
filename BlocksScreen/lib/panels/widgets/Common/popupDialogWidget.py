@@ -68,11 +68,20 @@ class Popup(QtWidgets.QDialog):
     def on_slide_out_finished(self):
         """Handle slide out animation finished"""
         self.hide()
+
+    def hideEvent(self, a0: QtGui.QHideEvent | None) -> None:
+        """Reset on every hide: Qt closes a Popup window by itself on any outside tap."""
+        super().hideEvent(a0)
+        if not self.isShown:
+            return
         self.isShown = False
         self.timeout_timer.stop()
+        self.slide_in_animation.stop()
+        self.slide_out_animation.stop()
         # Forget the text so the same error raised again later still pops up.
         self.text_label.clear()
-        self._add_popup()
+        # Deferred: showing the next message from inside a hide event re-enters Qt.
+        QtCore.QTimer.singleShot(0, self._add_popup)
 
     def _calculate_target_geometry(self) -> QtCore.QRect:
         """Calculate on end posisition rect for popup"""
@@ -136,9 +145,11 @@ class Popup(QtWidgets.QDialog):
         if len(self.messages) == 4:
             return
         # Klipper repeats some errors back to back (M112 sends its `!!` twice).
-        if (self.isShown and message == self.text_label.text()) or any(
-            m.get("message") == message for m in self.messages
-        ):
+        if self.isShown and message == self.text_label.text():
+            if self.timeout_timer.isActive():
+                self.timeout_timer.start()  # keep a repeated warning up its full time
+            return
+        if any(m.get("message") == message for m in self.messages):
             return
 
         self.messages.append(

@@ -128,3 +128,23 @@ def test_popup_same_message_after_dismiss_shows_again(popup):
     popup.new_message(message="Print Not Started")
     assert popup.isShown
     assert popup.text_label.text() == "Print Not Started"
+
+
+def test_popup_outside_tap_close_then_repeat_shows(popup):
+    popup.new_message(message="Print Not Started")
+    popup.close()  # Qt closes a WindowType.Popup on any tap outside it
+    assert not popup.isShown
+    popup.new_message(message="Print Not Started")
+    assert popup.isVisible()
+    assert popup.text_label.text() == "Print Not Started"
+
+
+def test_popup_repeat_while_shown_rearms_timeout(popup):
+    popup.new_message(message="Print Not Started", timeout=10000)
+    popup.timeout_timer = MagicMock()
+    popup.timeout_timer.isActive.return_value = False  # still sliding in
+    popup.new_message(message="Print Not Started")
+    popup.timeout_timer.start.assert_not_called()
+    popup.timeout_timer.isActive.return_value = True
+    popup.new_message(message="Print Not Started")
+    popup.timeout_timer.start.assert_called_once_with()
