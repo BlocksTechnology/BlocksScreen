@@ -293,6 +293,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self._restart = _RestartPhase.KLIPPER
             self.call_load_panel.emit(True, "Restarting printer…", False)
             self.restart_klipper_clicked.emit()
+            self._restart_10s_timer.start()
             self._restart_30s_timer.start()
             return
         self._stop_restart_overlay()

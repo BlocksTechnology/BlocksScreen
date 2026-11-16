@@ -473,13 +473,34 @@ class TestKlippyStateRegressions:
         feed.webhooks("shutdown", self.TIMER_TOO_CLOSE)
         page = feed.page
         page._on_restart_clicked()
+        page._restart_10s_timer.stop()  # the 10 s hint already fired
         with qtbot.waitSignal(page.restart_klipper_clicked):
             page._on_restart_30s_elapsed()
         assert page.manual_restart_pending
+        assert page._restart_10s_timer.isActive()
         assert page._restart_30s_timer.isActive()
         with qtbot.assertNotEmitted(page.restart_klipper_clicked):
             page._on_restart_30s_elapsed()
         assert not page.manual_restart_pending
+
+    def test_klipper_restart_times_out_without_escalating(self, feed, qtbot):
+        feed.server_info("disconnected")
+        page = feed.page
+        page._on_restart_clicked()
+        assert page.manual_restart_pending
+        with qtbot.assertNotEmitted(page.restart_klipper_clicked):
+            page._on_restart_30s_elapsed()
+        assert not page.manual_restart_pending
+
+    def test_link_loss_after_escalation_stops_timers(self, feed):
+        feed.webhooks("shutdown", self.TIMER_TOO_CLOSE)
+        page = feed.page
+        page._on_restart_clicked()
+        page._on_restart_30s_elapsed()
+        feed.status.on_connection_lost("gone")
+        assert not page.manual_restart_pending
+        assert not page._restart_10s_timer.isActive()
+        assert not page._restart_30s_timer.isActive()
 
     def test_r3_estop_arms_nothing(self, feed):
         feed.webhooks("shutdown", self.ESTOP)
