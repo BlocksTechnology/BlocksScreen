@@ -27,7 +27,8 @@ _SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
 _DEPLOY_POLL_S = 1.0
 # Moonraker answers 503 while printing, updating or before its first refresh.
 _MOONRAKER_SYNC_RETRY_S = 60.0
-_MOONRAKER_SYNC_TRIES = 10
+# A print can refuse it for hours; the next periodic check is up to a day away.
+_MOONRAKER_SYNC_RETRY_MAX_S = 600.0
 
 
 class DbusProgressCallback:
@@ -235,16 +236,17 @@ class UpdaterInterface(
 
     async def _moonraker_sync_loop(self) -> None:
         """Resync Moonraker's repo state, retrying while it refuses or is down."""
-        for _ in range(_MOONRAKER_SYNC_TRIES):
+        delay = _MOONRAKER_SYNC_RETRY_S
+        while True:
             # Sleep first: the restarted BlocksScreen-start.sh waits only 20 s for the lock.
-            await asyncio.sleep(_MOONRAKER_SYNC_RETRY_S)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, _MOONRAKER_SYNC_RETRY_MAX_S)
             if self._busy:
                 continue
             async with self._git_guard:
                 with process_lock() as acquired:
                     if acquired and await self._svc.sync_moonraker():
                         return
-        _log.info("Moonraker resync gave up, next status check retries")
 
     def _hold_wanted(self) -> bool:
         """A deploy flag is set and has not already used up the hold cap."""
