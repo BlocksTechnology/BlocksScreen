@@ -262,6 +262,37 @@ class TestCheckStatus:
             await svc.check_status(force=True)
         mock_update.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_fresh_outside_apt_refresh_skips_apt_update(self, apt_lists_partial):
+        """The previous daemon refreshed seconds ago: the restarted one must not redo it."""
+        apt_lists_partial.mkdir()
+        with patch("updater.service.apt_update", AsyncMock()) as mock_update:
+            await UpdateService()._refresh_apt_lists(force=True, printing=False)
+        mock_update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_old_outside_apt_refresh_still_runs_apt_update(self):
+        """Outside evidence only counts for minutes; a failed old refresh cannot mute 24 h."""
+        old = time.monotonic() - updater_service._APT_LIST_FORCE_TTL_S - 1
+        with (
+            patch("updater.service._apt_lists_refreshed_at", return_value=old),
+            patch(
+                "updater.service.apt_update", AsyncMock(return_value=(True, ""))
+            ) as mock_update,
+        ):
+            await UpdateService()._refresh_apt_lists(force=False, printing=False)
+        mock_update.assert_awaited_once()
+
+    @pytest.mark.parametrize("offset", [-10 * 365 * 86_400.0, 3600.0])
+    def test_apt_refresh_stamp_outside_this_boot_is_ignored(
+        self, apt_lists_partial, offset
+    ):
+        """An mtime from an earlier boot or the future (clock stepped) proves nothing."""
+        apt_lists_partial.mkdir()
+        stamp = time.time() + offset
+        os.utime(apt_lists_partial, (stamp, stamp))
+        assert updater_service._apt_lists_refreshed_at() == float("-inf")
+
 
 class TestStateFile:
     @pytest.mark.asyncio

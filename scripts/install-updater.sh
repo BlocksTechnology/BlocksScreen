@@ -32,6 +32,14 @@ _install_atomic() {
     local mode="$1" src="$2" dst="$3"
     sudo install -m "$mode" "$src" "${dst}.new" && sudo mv -Tf "${dst}.new" "$dst"
 }
+# A no-op apt-get install still waits on the apt lock and rereads every list; upgrades come from the apt sweep.
+# Callers use `if ! _apt_installed`: any doubt (missing, half-configured, unknown) still installs.
+_apt_installed() {
+    local p
+    for p in "$@"; do
+        [[ "$(dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null)" == "installed" ]] || return 1
+    done
+}
 
 echo_info "Installing D-Bus policy ..."
 _install_atomic 0644 "$SCRIPT_PATH/com.blockscreen.Updater.conf" /etc/dbus-1/system.d/com.blockscreen.Updater.conf
@@ -254,9 +262,13 @@ fi
 # Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
 _as_blocks "$BSENV/bin/pip" install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||
     echo_warn "Pinned pip install FAILED; continuing with the venv's current pip"
-sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
+if ! _apt_installed libsystemd-dev python3-dev; then
+    sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
+fi
 # xsetroot is used as belt-and-suspenders cursor hiding alongside the Xorg -nocursor server flag.
-sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet x11-xserver-utils 2>/dev/null || true
+if ! _apt_installed x11-xserver-utils; then
+    sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet x11-xserver-utils 2>/dev/null || true
+fi
 # sdbus pinned; --no-binary needs libsystemd-dev; only-if-needed skips satisfied.
 # A failure must not abort setup, but it must be visible: a silent one hid the typing==3.7.4.3 break.
 if _as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
@@ -289,12 +301,15 @@ _DD_UNIT="device-discoveryd.service"
 _setup_device_discovery() {
     # Called in an `||` context, where set -e is off: every step checks itself.
     if [[ "$(cat "$_DD_REPO/.install-mode" 2>/dev/null)" == "prebuilt" ]]; then
-        sudo apt-get install -y --no-install-recommends \
-            curl ca-certificates libusb-1.0-0 libudev1 || return 1
+        _apt_installed curl ca-certificates libusb-1.0-0 libudev1 ||
+            sudo apt-get install -y --no-install-recommends \
+                curl ca-certificates libusb-1.0-0 libudev1 || return 1
     else
-        sudo apt-get install -y --no-install-recommends \
-            build-essential cmake pkg-config \
-            libusb-1.0-0-dev libudev-dev nlohmann-json3-dev || return 1
+        _apt_installed build-essential cmake pkg-config \
+            libusb-1.0-0-dev libudev-dev nlohmann-json3-dev ||
+            sudo apt-get install -y --no-install-recommends \
+                build-essential cmake pkg-config \
+                libusb-1.0-0-dev libudev-dev nlohmann-json3-dev || return 1
     fi
     # As blocks, so build/ and bin/ stay writable by later updater hook runs.
     sudo -u "$_BSENV_USER" "$_DD_REPO/scripts/build.sh" || return 1
