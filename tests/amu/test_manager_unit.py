@@ -867,8 +867,8 @@ class TestPrintStartRefusal:
         "sensors",
         [
             {},
-            {"toolhead": True, "mmu_pre_gate": True},
-            {"toolhead": None, "mmu_pre_gate": None},
+            {"toolhead": True, "mmu_gate": True, "mmu_pre_gate": True},
+            {"toolhead": None, "mmu_gate": None, "mmu_pre_gate": None},
         ],
     )
     def test_loaded_missing_or_disabled_allows(self, manager, sensors) -> None:
@@ -878,15 +878,25 @@ class TestPrintStartRefusal:
     # .151 2026-10-21 11:10:20: toolhead False with both pre-gates True raised PRINT_START.
     def test_toolhead_empty_refuses(self, manager) -> None:
         manager.update_mmu_state(
-            _status(sensors={"toolhead": False, "mmu_pre_gate": True})
+            _status(sensors={"toolhead": False, "mmu_gate": True, "mmu_pre_gate": True})
         )
         assert "toolhead" in manager.print_start_refusal()
 
-    def test_pre_gate_empty_refuses(self, manager) -> None:
+    # HH parks unloaded filament before the gate sensor: gate False, pre-gate True.
+    def test_gate_empty_refuses(self, manager) -> None:
         manager.update_mmu_state(
-            _status(sensors={"toolhead": None, "mmu_pre_gate": False})
+            _status(sensors={"toolhead": None, "mmu_gate": False, "mmu_pre_gate": True})
         )
-        assert "gate" in manager.print_start_refusal()
+        assert "past the gate" in manager.print_start_refusal()
+
+    # An empty gate names the gate even though every downstream sensor is empty too.
+    def test_pre_gate_empty_refuses_first(self, manager) -> None:
+        manager.update_mmu_state(
+            _status(
+                sensors={"toolhead": False, "mmu_gate": False, "mmu_pre_gate": False}
+            )
+        )
+        assert "selected gate" in manager.print_start_refusal()
 
     def test_klippy_disconnect_drops_refusal(self, manager) -> None:
         manager.update_mmu_state(_status(sensors={"toolhead": False}))

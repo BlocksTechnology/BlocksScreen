@@ -240,13 +240,17 @@ class AMUManager(QtCore.QObject):
         return ""
 
     def print_start_refusal(self) -> str:
-        """Return why RF50-Klipper print_start.cfg would refuse to start, or ""."""
+        """Return why RF50-Klipper SDCARD_PRINT_FILE would refuse to start, or ""."""
         sensors = self._mmu_state.sensors if self._mmu_state is not None else {}
         # The macro tests `== False`: a missing or disabled (None) sensor passes.
-        if sensors.get("toolhead") is False:
-            return "No filament at the toolhead. Load filament before printing."
         if sensors.get("mmu_pre_gate") is False:
             return "No filament in the selected gate. Load filament before printing."
+        if sensors.get("mmu_gate") is False:
+            return (
+                "Filament is not loaded past the gate. Load filament before printing."
+            )
+        if sensors.get("toolhead") is False:
+            return "No filament at the toolhead. Load filament before printing."
         return ""
 
     def _selected_gate_unloaded(self) -> GateInfo | None:
