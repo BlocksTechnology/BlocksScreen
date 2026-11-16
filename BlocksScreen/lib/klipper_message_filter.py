@@ -486,10 +486,11 @@ RULES: tuple[MessageRule, ...] = (
         severity=Severity.ERROR,
     ),
     # ── Gcode errors — general ─────────────────────────────────────────────────
-    # RF50 PRINT_START refuses when the toolhead or pre-gate sensor is empty.
+    # RF50 PRINT_START refuses when the toolhead or pre-gate sensor is empty; its
+    # RESUME refusal also says "Machine is unloaded", so match only this tail.
     MessageRule(
         source=MessageSource.GCODE_ERROR,
-        matcher=_sub("machine is unloaded"),
+        matcher=_sub("please load the machine"),
         display="Print Not Started",
         hint="Load filament, then start the print again",
         severity=Severity.ERROR,

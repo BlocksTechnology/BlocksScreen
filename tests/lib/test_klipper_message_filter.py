@@ -570,3 +570,9 @@ def test_unloaded_print_start_maps_to_rule() -> None:
     assert rule is not None
     assert rule.display == "Print Not Started"
     assert rule.severity == Severity.ERROR
+
+
+def test_unloaded_resume_is_not_a_refused_print() -> None:
+    text = "Machine is unloaded, please load filament before resuming."
+    rule = match_message(MessageSource.GCODE_ERROR, text)
+    assert rule is None or rule.display != "Print Not Started"
