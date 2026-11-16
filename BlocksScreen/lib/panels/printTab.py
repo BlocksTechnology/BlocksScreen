@@ -443,7 +443,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             return "Klipper is not ready."
         if self._print_state in ("printing", "paused"):
             return "A print is already running."
-        # A refused PRINT_START runs on_error CANCEL_PRINT, which HH v3 reopens as a job.
+        # SDCARD_PRINT_FILE's gate check, run here before any USB copy starts.
         if self.amu_manager is not None:
             return self.amu_manager.print_start_refusal()
         return ""

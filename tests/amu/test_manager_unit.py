@@ -875,12 +875,12 @@ class TestPrintStartRefusal:
         manager.update_mmu_state(_status(sensors=sensors))
         assert manager.print_start_refusal() == ""
 
-    # .151 2026-10-21 11:10:20: toolhead False with both pre-gates True raised PRINT_START.
-    def test_toolhead_empty_refuses(self, manager) -> None:
+    # PRINT_START loads the initial tool, so only an empty gate refuses.
+    def test_toolhead_empty_allows(self, manager) -> None:
         manager.update_mmu_state(
             _status(sensors={"toolhead": False, "mmu_pre_gate": True})
         )
-        assert "toolhead" in manager.print_start_refusal()
+        assert manager.print_start_refusal() == ""
 
     def test_pre_gate_empty_refuses(self, manager) -> None:
         manager.update_mmu_state(
@@ -889,6 +889,6 @@ class TestPrintStartRefusal:
         assert "gate" in manager.print_start_refusal()
 
     def test_klippy_disconnect_drops_refusal(self, manager) -> None:
-        manager.update_mmu_state(_status(sensors={"toolhead": False}))
+        manager.update_mmu_state(_status(sensors={"mmu_pre_gate": False}))
         manager.on_klippy_state("shutdown")
         assert manager.print_start_refusal() == ""
