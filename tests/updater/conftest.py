@@ -45,6 +45,14 @@ def printing():
         yield m
 
 
+@pytest.fixture(autouse=True)
+def apt_lists_partial(tmp_path):
+    """Host apt state never leaks in; tests create or touch this path to simulate a refresh."""
+    path = tmp_path / "apt-lists-partial"
+    with patch("updater.service._APT_LISTS_PARTIAL", path):
+        yield path
+
+
 @pytest.fixture
 def svc():
     """UpdaterDbusService with mocked UpdateService and signals."""
