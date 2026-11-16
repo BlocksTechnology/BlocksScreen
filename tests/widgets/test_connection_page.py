@@ -161,7 +161,6 @@ class TestVisibility:
         for state in ConnectionState:
             if state == ConnectionState.KLIPPER_READY:
                 continue
-            shown_page._firmware_restarting_pending = False
             shown_page._state = ConnectionState.DISCONNECTED
             shown_page.hide()
             shown_page._set_state(state)
@@ -365,7 +364,7 @@ class TestErrorMessages:
         )
         assert feed.page._state == ConnectionState.KLIPPER_SHUTDOWN
         assert "emergency button" in feed.page.status_label.text()
-        assert feed.page._firmware_restarting_pending is False
+        assert not feed.page.manual_restart_pending
 
     def test_error_during_config_after_reboot(self, feed):
         # mcu.py _send_get_config: the other message an E-stop + reboot can produce
