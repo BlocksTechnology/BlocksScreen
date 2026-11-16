@@ -74,12 +74,12 @@ class TestStartPrint:
 
     def test_refusal_blocks_and_notifies(self) -> None:
         amu = MagicMock()
-        amu.print_start_refusal.return_value = "No filament at the toolhead."
+        amu.print_start_refusal.return_value = "No filament in the selected gate."
         tab = _tab(amu)
         PrintTab.start_print(tab, "cube.gcode")
         tab.jobStatusPage_widget.on_print_start.assert_not_called()
         tab.notify.emit.assert_called_once_with(
-            "PrintTab", "No filament at the toolhead.", 2, True
+            "PrintTab", "No filament in the selected gate.", 2, True
         )
 
     @pytest.mark.parametrize(

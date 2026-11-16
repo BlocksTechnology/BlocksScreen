@@ -882,6 +882,12 @@ class TestPrintStartRefusal:
         )
         assert manager.print_start_refusal() == ""
 
+    def test_disabled_mmu_with_empty_toolhead_refuses(self, manager) -> None:
+        manager.update_mmu_state(
+            _status(enabled=False, sensors={"toolhead": False, "mmu_pre_gate": True})
+        )
+        assert "disabled" in manager.print_start_refusal()
+
     def test_pre_gate_empty_refuses(self, manager) -> None:
         manager.update_mmu_state(
             _status(sensors={"toolhead": None, "mmu_pre_gate": False})
