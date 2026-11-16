@@ -291,7 +291,7 @@ class ConnectionPage(QtWidgets.QFrame):
     def _on_restart_30s_elapsed(self) -> None:
         if self._restart is _RestartPhase.FIRMWARE:
             self._restart = _RestartPhase.KLIPPER
-            self.call_load_panel.emit(True, "Restarting printer...", False)
+            self.call_load_panel.emit(True, "Restarting printer…", False)
             self.restart_klipper_clicked.emit()
             self._restart_30s_timer.start()
             return

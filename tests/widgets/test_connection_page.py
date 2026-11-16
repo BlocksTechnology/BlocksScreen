@@ -469,6 +469,18 @@ class TestKlippyStateRegressions:
         assert feed.page.manual_restart_pending
         assert feed.page._restart_30s_timer.isActive()
 
+    def test_firmware_restart_escalates_once_then_closes(self, feed, qtbot):
+        feed.webhooks("shutdown", self.TIMER_TOO_CLOSE)
+        page = feed.page
+        page._on_restart_clicked()
+        with qtbot.waitSignal(page.restart_klipper_clicked):
+            page._on_restart_30s_elapsed()
+        assert page.manual_restart_pending
+        assert page._restart_30s_timer.isActive()
+        with qtbot.assertNotEmitted(page.restart_klipper_clicked):
+            page._on_restart_30s_elapsed()
+        assert not page.manual_restart_pending
+
     def test_r3_estop_arms_nothing(self, feed):
         feed.webhooks("shutdown", self.ESTOP)
         page = feed.page
