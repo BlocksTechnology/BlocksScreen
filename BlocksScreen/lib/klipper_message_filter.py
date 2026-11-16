@@ -486,10 +486,10 @@ RULES: tuple[MessageRule, ...] = (
         severity=Severity.ERROR,
     ),
     # ── Gcode errors — general ─────────────────────────────────────────────────
-    # PRINT_START tail only: the RESUME refusal also says "Machine is unloaded".
+    # PRINT_START/SDCARD_PRINT_FILE tails only: RESUME also says "Machine is unloaded".
     MessageRule(
         source=MessageSource.GCODE_ERROR,
-        matcher=_sub("please load the machine"),
+        matcher=_re("please load the machine|before starting a print"),
         display="Print Not Started",
         hint="Load filament, then start the print again",
         severity=Severity.ERROR,

@@ -565,8 +565,15 @@ def test_macro_error_text_leaves_other_errors() -> None:
     assert macro_error_text("Must home axis first") == "Must home axis first"
 
 
-def test_unloaded_print_start_maps_to_rule() -> None:
-    rule = match_message(MessageSource.GCODE_ERROR, macro_error_text(_UNLOADED))
+@pytest.mark.parametrize(
+    "text",
+    [
+        macro_error_text(_UNLOADED),
+        "Machine is unloaded, please load filament before starting a print.",
+    ],
+)
+def test_unloaded_print_start_maps_to_rule(text: str) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, text)
     assert rule is not None
     assert rule.display == "Print Not Started"
     assert rule.severity == Severity.ERROR
