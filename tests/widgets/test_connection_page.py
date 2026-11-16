@@ -161,7 +161,6 @@ class TestVisibility:
         for state in ConnectionState:
             if state == ConnectionState.KLIPPER_READY:
                 continue
-            shown_page._firmware_restarting_pending = False
             shown_page._state = ConnectionState.DISCONNECTED
             shown_page.hide()
             shown_page._set_state(state)
@@ -365,7 +364,7 @@ class TestErrorMessages:
         )
         assert feed.page._state == ConnectionState.KLIPPER_SHUTDOWN
         assert "emergency button" in feed.page.status_label.text()
-        assert feed.page._firmware_restarting_pending is False
+        assert not feed.page.manual_restart_pending
 
     def test_error_during_config_after_reboot(self, feed):
         # mcu.py _send_get_config: the other message an E-stop + reboot can produce
@@ -469,6 +468,39 @@ class TestKlippyStateRegressions:
             feed.printer_info("shutdown", self.TIMER_TOO_CLOSE)
         assert feed.page.manual_restart_pending
         assert feed.page._restart_30s_timer.isActive()
+
+    def test_firmware_restart_escalates_once_then_closes(self, feed, qtbot):
+        feed.webhooks("shutdown", self.TIMER_TOO_CLOSE)
+        page = feed.page
+        page._on_restart_clicked()
+        page._restart_10s_timer.stop()  # the 10 s hint already fired
+        with qtbot.waitSignal(page.restart_klipper_clicked):
+            page._on_restart_30s_elapsed()
+        assert page.manual_restart_pending
+        assert page._restart_10s_timer.isActive()
+        assert page._restart_30s_timer.isActive()
+        with qtbot.assertNotEmitted(page.restart_klipper_clicked):
+            page._on_restart_30s_elapsed()
+        assert not page.manual_restart_pending
+
+    def test_klipper_restart_times_out_without_escalating(self, feed, qtbot):
+        feed.server_info("disconnected")
+        page = feed.page
+        page._on_restart_clicked()
+        assert page.manual_restart_pending
+        with qtbot.assertNotEmitted(page.restart_klipper_clicked):
+            page._on_restart_30s_elapsed()
+        assert not page.manual_restart_pending
+
+    def test_link_loss_after_escalation_stops_timers(self, feed):
+        feed.webhooks("shutdown", self.TIMER_TOO_CLOSE)
+        page = feed.page
+        page._on_restart_clicked()
+        page._on_restart_30s_elapsed()
+        feed.status.on_connection_lost("gone")
+        assert not page.manual_restart_pending
+        assert not page._restart_10s_timer.isActive()
+        assert not page._restart_30s_timer.isActive()
 
     def test_r3_estop_arms_nothing(self, feed):
         feed.webhooks("shutdown", self.ESTOP)

@@ -162,14 +162,27 @@ class TestFilamentTabGates:
         tab.on_mmu_state_changed(self._state(gate_status=[0]))
         tab.amu_manager.clear_gate.assert_not_called()
 
+    # Hidden on purpose: a Load/Unload tap shows the popup before the next MMU diff.
     def test_load_popup_uses_happy_hare_rgb(self, tab, monkeypatch):
-        monkeypatch.setattr(tab.load_popup, "isVisible", lambda: True)
+        assert not tab.load_popup.isVisible()
         colors = []
         monkeypatch.setattr(tab.load_status_widget, "set_gate_color", colors.append)
         tab.on_mmu_state_changed(
             self._state(gate_color=["red"], gate_color_rgb=[[1.0, 0.0, 0.0]])
         )
         assert colors[-1].name() == "#ff0000"
+
+    def test_hidden_load_popup_keeps_tracking_the_mmu(self, tab):
+        tab.on_mmu_state_changed(self._state(action="Loading", filament_pos=3))
+        assert tab.load_popup.isVisible()
+        tab.on_mmu_state_changed(self._state(action="Idle", filament_pos=3))
+        assert not tab.load_popup.isVisible()
+        tab.on_mmu_state_changed(self._state(action="Heating", filament_pos=10))
+        widget = tab.load_status_widget
+        assert not tab.load_popup.isVisible()
+        assert widget._filament_pos == FilamentPos.LOADED
+        assert widget._action == "Heating"
+        assert tab.load_status_label.text() == "Heating"
 
 
 class TestVendorLookup:
