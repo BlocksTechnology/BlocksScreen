@@ -51,6 +51,8 @@ logger = logging.getLogger(__name__)
 
 # Upper bound for CANCEL_PRINT, including an MMU unload over a long bowden.
 _CANCEL_TIMEOUT_MS = 180_000
+# Re-arms behind a running macro (18 min in all); one that never returns frees the UI.
+_CANCEL_MAX_WAITS = 5
 # A Printing update can lag the cancel reply by one 250 ms status push.
 _CANCEL_SETTLE_MS = 1_000
 
@@ -111,6 +113,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._cancel_saw_busy: bool = False
         self._cancel_returned: bool = False  # CANCEL_PRINT ran to its end
         self._cancel_gen: int = 0  # drops a cancel reply that outlived its cancel
+        self._cancel_waits: int = 0  # timer periods spent queued behind a macro
         self._print_state: str = ""
         self._idle_state: str = ""
         self._klippy_state: str = ""  # "" until the first report, which never refuses
@@ -727,8 +730,18 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(name="on_cancel_timeout")
     def _on_cancel_timeout(self) -> None:
         """Drop the cancel loadscreen if neither the reply nor the idle update came."""
-        if self._cancel_pending:
-            self._finish_cancel()
+        if not self._cancel_pending:
+            return
+        # CANCEL_PRINT queues behind a running macro (PRINT_START can take minutes).
+        if (
+            self._print_state in ("printing", "paused")
+            and self._cancel_waits < _CANCEL_MAX_WAITS
+        ):
+            self._cancel_waits += 1
+            logger.info("Cancel still queued behind a running macro, waiting")
+            self._cancel_timer.start()
+            return
+        self._finish_cancel()
 
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
@@ -787,6 +800,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._cancel_returned = False
         self._cancel_saw_busy = self._idle_state.lower() == "printing"
         self._cancel_gen += 1
+        self._cancel_waits = 0
         self._cancel_timer.start()
         self.call_load_panel.emit(True, "Cancelling print...\nPlease wait", False)
         on_reply = partial(self._on_cancel_reply, self._cancel_gen)
