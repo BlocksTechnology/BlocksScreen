@@ -486,8 +486,7 @@ RULES: tuple[MessageRule, ...] = (
         severity=Severity.ERROR,
     ),
     # ── Gcode errors — general ─────────────────────────────────────────────────
-    # RF50 PRINT_START refuses when the toolhead or pre-gate sensor is empty; its
-    # RESUME refusal also says "Machine is unloaded", so match only this tail.
+    # PRINT_START tail only: the RESUME refusal also says "Machine is unloaded".
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("please load the machine"),
@@ -695,7 +694,7 @@ _MACRO_ERROR_RE = re.compile(
 
 
 def macro_error_text(text: str) -> str:
-    """Shorten a Klipper macro error to its raised reason, as KlipperScreen shows it."""
+    """Shorten a Klipper macro error to the reason its macro raised."""
     m = _MACRO_ERROR_RE.search(text)
     if m is None:
         return text

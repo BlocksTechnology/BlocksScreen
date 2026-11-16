@@ -54,7 +54,7 @@ class Popup(QtWidgets.QDialog):
         self.SingleTime.setSingleShot(True)
         self.SingleTime.timeout.connect(self._add_popup)
 
-        self.slide_out_animation.finished.connect(self.on_slide_out_finished)
+        self.slide_out_animation.finished.connect(self.hide)
         self.slide_in_animation.finished.connect(self.on_slide_in_finished)
         self.timeout_timer.timeout.connect(lambda: self.slide_out_animation.start())
         self.actionbtn.clicked.connect(self.slide_out_animation.start)
@@ -64,10 +64,6 @@ class Popup(QtWidgets.QDialog):
         if self.userInput:
             return
         self.timeout_timer.start()
-
-    def on_slide_out_finished(self):
-        """Handle slide out animation finished"""
-        self.hide()
 
     def hideEvent(self, a0: QtGui.QHideEvent | None) -> None:
         """Reset on every hide: Qt closes a Popup window by itself on any outside tap."""
@@ -145,7 +141,13 @@ class Popup(QtWidgets.QDialog):
         if len(self.messages) == 4:
             return
         # Klipper repeats some errors back to back (M112 sends its `!!` twice).
-        if self.isShown and message == self.text_label.text():
+        # Not while sliding out: the copy would be lost when the popup hides.
+        if (
+            self.isShown
+            and message == self.text_label.text()
+            and self.slide_out_animation.state()
+            != QtCore.QPropertyAnimation.State.Running
+        ):
             if self.timeout_timer.isActive():
                 self.timeout_timer.start()  # keep a repeated warning up its full time
             return

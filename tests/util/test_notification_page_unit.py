@@ -123,10 +123,21 @@ def test_popup_repeat_while_queued_is_dropped(popup):
 def test_popup_same_message_after_dismiss_shows_again(popup):
     popup.new_message(message="Print Not Started")
     popup.slide_in_animation.stop()  # slide-out only runs after slide-in ends
-    popup.on_slide_out_finished()
+    popup.hide()
     assert not popup.isShown
     popup.new_message(message="Print Not Started")
     assert popup.isShown
+    assert popup.text_label.text() == "Print Not Started"
+
+
+def test_popup_repeat_while_sliding_out_shows_after_hide(popup, qtbot):
+    popup.new_message(message="Print Not Started")
+    popup.slide_in_animation.stop()
+    popup.slide_out_animation.start()
+    popup.new_message(message="Print Not Started")
+    assert [m["message"] for m in popup.messages] == ["Print Not Started"]
+    popup.hide()
+    qtbot.waitUntil(lambda: popup.isShown, timeout=1000)
     assert popup.text_label.text() == "Print Not Started"
 
 
