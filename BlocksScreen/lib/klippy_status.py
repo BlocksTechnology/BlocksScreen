@@ -3,6 +3,8 @@
 MainWindow, Printer and the panels still act on ``MoonWebSocket.klippy_state_signal``.
 """
 
+import functools
+
 from lib.moonrakerComm import MoonWebSocket
 from PyQt6 import QtCore
 
@@ -53,12 +55,9 @@ class KlippyStatus(QtCore.QObject):
         self._apply(self.link, state, message)
 
     def _poll(self) -> None:
-        gen = self._gen
-
-        def _on_reply(reply: dict | None) -> None:
-            self._on_printer_info(gen, reply)
-
-        self._ws.send_request("printer.info", callback=_on_reply)
+        self._ws.send_request(
+            "printer.info", callback=functools.partial(self._on_printer_info, self._gen)
+        )
 
     def _on_printer_info(self, gen: int, reply: dict | None) -> None:
         if gen != self._gen or self.link != "connected":
