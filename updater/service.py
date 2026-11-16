@@ -590,18 +590,26 @@ class UpdateService:
     async def _unattended_provisions(self) -> tuple[list[ComponentConfig], bool]:
         """Missing components to install unprompted, and whether an offline one should retry."""
         state = await asyncio.to_thread(self._read_state)
-        todo: list[ComponentConfig] = []
-        offline = False
+        probe: list[ComponentConfig] = []
         for c in self._missing_provisions():
             comp = state.get(c.name)
             if isinstance(comp, dict) and comp.get("provision_failed"):
                 self._log.info("%s: last install failed - waiting for Update", c.name)
-            elif not await git_remote_reachable(c.url or ""):
+            else:
+                probe.append(c)
+        # Concurrent: offline, each probe runs to its 15 s timeout.
+        reachable = await asyncio.gather(
+            *(git_remote_reachable(c.url or "") for c in probe)
+        )
+        todo: list[ComponentConfig] = []
+        offline = False
+        for c, ok in zip(probe, reachable, strict=True):
+            if ok:
+                todo.append(c)
+            else:
                 # Offline devices must never sit behind the install overlay.
                 self._log.info("%s: remote unreachable - not installing", c.name)
                 offline = True
-            else:
-                todo.append(c)
         if offline:
             self._offline_provision_tries += 1
             if self._offline_provision_tries >= _OFFLINE_PROVISION_TRIES:
