@@ -10,6 +10,7 @@ from BlocksScreen.lib.klipper_message_filter import (
     _INDEX,
     _re,
     _sub,
+    macro_error_text,
     match_message,
 )
 
@@ -543,3 +544,42 @@ def test_full_display_with_hint() -> None:
         severity=Severity.INFO,
     )
     assert rule.full_display == "Title\nAction"
+
+
+_UNLOADED = (
+    "Error evaluating 'gcode_macro PRINT_START:gcode': "
+    "gcode.CommandError: Machine is unloaded, please load the machine"
+)
+
+
+def test_macro_error_text_keeps_raised_reason() -> None:
+    assert macro_error_text(_UNLOADED) == "Machine is unloaded, please load the machine"
+
+
+def test_macro_error_text_without_reason_names_macro() -> None:
+    text = "Error evaluating 'gcode_macro FOO:gcode': gcode.CommandError:"
+    assert macro_error_text(text) == "macro failed: FOO"
+
+
+def test_macro_error_text_leaves_other_errors() -> None:
+    assert macro_error_text("Must home axis first") == "Must home axis first"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        macro_error_text(_UNLOADED),
+        "Machine is unloaded, please load filament before starting a print.",
+    ],
+)
+def test_unloaded_print_start_maps_to_rule(text: str) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, text)
+    assert rule is not None
+    assert rule.display == "Print Not Started"
+    assert rule.severity == Severity.ERROR
+
+
+def test_unloaded_resume_is_not_a_refused_print() -> None:
+    text = "Machine is unloaded, please load filament before resuming."
+    rule = match_message(MessageSource.GCODE_ERROR, text)
+    assert rule is None or rule.display != "Print Not Started"
