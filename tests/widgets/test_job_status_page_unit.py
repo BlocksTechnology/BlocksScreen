@@ -649,3 +649,48 @@ class TestCompletionDisplay:
     def test_total_not_blanked(self, widget):
         self._complete(widget)
         assert widget.total_layers == "250"
+
+
+class TestResumeLock:
+    """Pause stays locked until the file advances, and no reset strands it."""
+
+    def _resume(self, widget, position: float = 100.0) -> None:
+        widget._file_position = position
+        widget._handle_print_state("paused")
+        widget.pause_resume_print()
+        widget._handle_print_state("printing")
+
+    def test_resume_keeps_button_disabled(self, widget):
+        self._resume(widget)
+        assert widget._awaiting_resume is True
+        assert not widget.pause_printing_btn.isEnabled()
+
+    def test_position_at_baseline_keeps_lock(self, widget):
+        self._resume(widget)
+        widget.virtual_sdcard_update("file_position", 100.0)
+        assert widget._awaiting_resume is True
+        assert not widget.pause_printing_btn.isEnabled()
+
+    def test_position_past_baseline_unlocks(self, widget):
+        self._resume(widget)
+        widget.virtual_sdcard_update("file_position", 101.0)
+        assert widget._awaiting_resume is False
+        assert widget.pause_printing_btn.isEnabled()
+
+    def test_reset_while_awaiting_reenables_button(self, widget):
+        self._resume(widget)
+        widget._reset_job_display()
+        assert widget._awaiting_resume is False
+        assert widget.pause_printing_btn.isEnabled()
+
+    def test_new_filename_while_awaiting_reenables_button(self, widget):
+        widget._current_file_name = "old.gcode"
+        self._resume(widget)
+        widget.on_print_stats_update("filename", "new.gcode")
+        assert widget.pause_printing_btn.isEnabled()
+
+    def test_print_end_while_awaiting_reenables_button(self, widget):
+        self._resume(widget)
+        widget._handle_print_state("complete")
+        assert widget._awaiting_resume is False
+        assert widget.pause_printing_btn.isEnabled()
