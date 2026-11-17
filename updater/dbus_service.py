@@ -141,6 +141,7 @@ class UpdaterInterface(
         self._closing: bool = False
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
+        self._followup_running: bool = False
         self._invalid_requests: int = 0
         self._moonraker_sync: asyncio.Task | None = None
         # Held by a Moonraker refresh (it runs git fetch) and by our own git work.
@@ -161,6 +162,7 @@ class UpdaterInterface(
         if self._svc.followup_pending():
             self._busy = True
             self._followup_hold = True
+            self._spawn(self._release_hold_if_printing(), name="followup_hold_print")
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
@@ -238,6 +240,15 @@ class UpdaterInterface(
         if self._followup_hold:
             self._followup_hold = False
             self._set_busy(False)
+
+    async def _release_hold_if_printing(self) -> None:
+        """A marker that outlived a mid-print daemon restart must not cover the print."""
+        # A silent Klippy counts as printing: an overlay over a live print hides Pause.
+        if await klipper_printing(unanswered=True) and not self._followup_running:
+            _log.info(
+                "followup hold: printer busy - releasing until the follow-up runs"
+            )
+            self._end_followup_hold()
 
     def _emit_busy(self, busy: bool) -> None:
         """Emit busy_changed only on state transitions to avoid redundant signals."""
@@ -399,6 +410,9 @@ class UpdaterInterface(
 
     async def _followup_pass(self) -> None:
         """After provisioning, apply manifest changes the previous daemon could not see."""
+        # A second pass (periodic vs followup_after_deploy) must not end the running one's hold.
+        if self._followup_running:
+            return
         if (
             not self._provisioned
             or self._followed_up
@@ -406,6 +420,7 @@ class UpdaterInterface(
         ):
             self._end_followup_hold()
             return
+        self._followup_running = True
         try:
             retry, ran = await self._svc.run_followup(self._set_busy)
             if ran:
@@ -414,6 +429,7 @@ class UpdaterInterface(
             _log.error("followup pass failed: %s", exc, exc_info=True)
             retry, ran = False, False
         finally:
+            self._followup_running = False
             self._end_followup_hold()
         self._followed_up = not retry
         # A failed try that will retry sweeps apt once the follow-up settles.

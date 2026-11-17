@@ -109,6 +109,7 @@ def svc():
     s._provisioned = False
     s._followed_up = False
     s._followup_hold = False
+    s._followup_running = False
     s._boot_pass_done = True
     s._deploy_hold = None
     s._capped_flag = None

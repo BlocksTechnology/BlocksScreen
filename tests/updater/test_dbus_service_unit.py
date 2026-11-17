@@ -809,6 +809,61 @@ class TestFollowupHold:
         await asyncio.sleep(0.05)
         assert self._emitted(svc) == [False]
 
+    @staticmethod
+    async def _blocking_followup(gate, calls, on_busy) -> tuple[bool, bool]:
+        calls.append(len(calls))
+        if len(calls) > 1:
+            # The real one defers here: process_lock is held by the first pass.
+            return True, False
+        on_busy(True)
+        await gate.wait()
+        on_busy(False)
+        return False, True
+
+    @pytest.mark.asyncio
+    async def test_second_pass_during_followup_keeps_busy_up(self, svc):
+        """Periodic pass racing followup_after_deploy must not drop busy mid-apply."""
+        gate = asyncio.Event()
+        calls: list[int] = []
+        self._hold(svc)
+        svc._provisioned = True
+        svc._svc.run_followup = partial(self._blocking_followup, gate, calls)
+        first = asyncio.create_task(svc._followup_pass())
+        await asyncio.sleep(0)
+        await svc._followup_pass()
+        assert self._emitted(svc) == []
+        assert (svc._busy, svc._followup_hold, svc._followed_up) == (True, True, False)
+        gate.set()
+        await first
+        assert calls == [0]
+        assert self._emitted(svc) == [False]
+        assert svc._followed_up is True
+
+    @pytest.mark.asyncio
+    async def test_print_at_start_releases_the_hold(self, svc, printing):
+        """A marker left by a mid-print daemon restart must not cover the print."""
+        printing.return_value = True
+        self._hold(svc)
+        await svc._release_hold_if_printing()
+        assert (svc._busy, svc._followup_hold) == (False, False)
+        printing.assert_awaited_once_with(unanswered=True)
+
+    @pytest.mark.asyncio
+    async def test_idle_at_start_keeps_the_hold(self, svc):
+        self._hold(svc)
+        await svc._release_hold_if_printing()
+        assert (svc._busy, svc._followup_hold) == (True, True)
+        svc.busy_changed.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_print_check_leaves_a_running_followup_alone(self, svc, printing):
+        """Once the follow-up pass owns busy, its own finally releases it."""
+        printing.return_value = True
+        self._hold(svc)
+        svc._followup_running = True
+        await svc._release_hold_if_printing()
+        assert (svc._busy, svc._followup_hold) == (True, True)
+
 
 class TestProvisioningFlag:
     def test_provision_busy_emits_provisioning_then_busy(self, svc):
