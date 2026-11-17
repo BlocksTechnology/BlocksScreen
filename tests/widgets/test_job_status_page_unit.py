@@ -466,6 +466,29 @@ class TestStartPurgeHold:
         self._feed(widget, 0.8, 40.0)
         assert widget.layer_display_button.text() == "4"
 
+    @pytest.mark.parametrize(
+        ("first_layer_height", "z_offset", "expected"),
+        [
+            (0.2, 0.0, ["0", "0", "1", "2", "3", "10", "50"]),
+            # Mainsail's formula is one layer high in these two, as before this PR
+            (None, 0.0, ["0", "0", "2", "3", "4", "11", "51"]),
+            (0.2, 0.01, ["0", "0", "2", "3", "4", "11", "51"]),
+        ],
+    )
+    def test_whole_print_never_sticks_at_zero(
+        self, widget, first_layer_height, z_offset, expected
+    ):
+        self._start(widget)
+        if first_layer_height is None:
+            del widget.file_metadata["first_layer_height"]
+        shown = []
+        # purge 0.8, Z-hop 1.6, then the print from the first layer up
+        for step, z in enumerate([0.8, 1.6, 0.2, 0.4, 0.6, 2.0, 10.0]):
+            widget.on_print_stats_update("print_duration", 1.0 + step * 5)
+            self._feed(widget, z + z_offset, 35.0 + step * 10)
+            shown.append(widget.layer_display_button.text())
+        assert shown == expected
+
 
 class TestPauseResumePrint:
     """pause_resume_print toggles state and emits the right signal."""
