@@ -88,6 +88,8 @@ _APT_PERMANENT_COOLDOWN_S = 3600.0
 # apt-get update TTL on the poll, and the floor between forced refreshes.
 _APT_LIST_TTL_S = 86_400.0
 _APT_LIST_FORCE_TTL_S = 300.0
+# apt-get update rewrites partial/ even when no index changed; installs leave it alone.
+_APT_LISTS_PARTIAL = Path("/var/lib/apt/lists/partial")
 _FETCH_BACKOFF_BASE_S = 30.0
 _FETCH_BACKOFF_MAX_S = 900.0
 
@@ -131,6 +133,19 @@ def _move_untracked(src: Path, dst: Path, entries: list[str]) -> list[str]:
         except OSError:
             failed.append(rel)
     return failed
+
+
+def _apt_lists_refreshed_at() -> float:
+    """Monotonic time of this boot's last apt-get update by any process, else -inf."""
+    try:
+        mtime = _APT_LISTS_PARTIAL.stat().st_mtime
+    except OSError:
+        return float("-inf")
+    now_wall, now_mono = time.time(), time.monotonic()
+    # Before this boot, or the clock stepped since (no RTC until NTP): refresh.
+    if not now_wall - now_mono <= mtime <= now_wall:
+        return float("-inf")
+    return now_mono - (now_wall - mtime)
 
 
 class _Backoff:
@@ -299,10 +314,15 @@ class UpdateService:
         """Run apt-get update: the upgradable count reads local lists and is stale without it."""
         now = time.monotonic()
         ttl = _APT_LIST_FORCE_TTL_S if force else _APT_LIST_TTL_S
+        last = self._apt_list_time
+        # Each Update restarts this daemon; trust a fresh outside refresh, never an old one.
+        seen = _apt_lists_refreshed_at()
+        if now - seen < _APT_LIST_FORCE_TTL_S:
+            last = max(last, seen)
         # A held lock = an update is running, and it refreshes the lists itself.
         if (
             printing
-            or (now - self._apt_list_time) < ttl
+            or (now - last) < ttl
             or self._apt_backoff.cooling_down()
             or self._apt_lock.locked()
         ):
@@ -570,18 +590,26 @@ class UpdateService:
     async def _unattended_provisions(self) -> tuple[list[ComponentConfig], bool]:
         """Missing components to install unprompted, and whether an offline one should retry."""
         state = await asyncio.to_thread(self._read_state)
-        todo: list[ComponentConfig] = []
-        offline = False
+        probe: list[ComponentConfig] = []
         for c in self._missing_provisions():
             comp = state.get(c.name)
             if isinstance(comp, dict) and comp.get("provision_failed"):
                 self._log.info("%s: last install failed - waiting for Update", c.name)
-            elif not await git_remote_reachable(c.url or ""):
+            else:
+                probe.append(c)
+        # Concurrent: offline, each probe runs to its 15 s timeout.
+        reachable = await asyncio.gather(
+            *(git_remote_reachable(c.url or "") for c in probe)
+        )
+        todo: list[ComponentConfig] = []
+        offline = False
+        for c, ok in zip(probe, reachable, strict=True):
+            if ok:
+                todo.append(c)
+            else:
                 # Offline devices must never sit behind the install overlay.
                 self._log.info("%s: remote unreachable - not installing", c.name)
                 offline = True
-            else:
-                todo.append(c)
         if offline:
             self._offline_provision_tries += 1
             if self._offline_provision_tries >= _OFFLINE_PROVISION_TRIES:

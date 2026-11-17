@@ -579,7 +579,45 @@ def test_unloaded_print_start_maps_to_rule(text: str) -> None:
     assert rule.severity == Severity.ERROR
 
 
-def test_unloaded_resume_is_not_a_refused_print() -> None:
-    text = "Machine is unloaded, please load filament before resuming."
-    rule = match_message(MessageSource.GCODE_ERROR, text)
-    assert rule is None or rule.display != "Print Not Started"
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Error evaluating 'gcode_macro RESUME:gcode': gcode.CommandError: "
+        "Machine is unloaded, please load filament before resuming.",
+        "Machine is unloaded, please load filament before resuming.",
+    ],
+)
+def test_unloaded_resume_maps_to_resume_rule(text: str) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, macro_error_text(text))
+    assert rule is not None
+    assert rule.display == "Print Not Resumed"
+    assert rule.severity == Severity.ERROR
+
+
+_HH_PICKUP = (
+    "MMU issue detected. Print will be paused\n"
+    "Reason: Load sequence failed because:\n"
+    "Couldn't pick up filament at gate (gate endstop didn't trigger)\n"
+    "Gate marked as empty. Use 'MMU_GATE_MAP GATE=0 AVAILABLE=1' to reset.\n"
+    "Occured when changing tool: > T0"
+)
+
+
+@pytest.mark.parametrize(
+    "text, display",
+    [
+        (_HH_PICKUP, "Filament Not Picked Up"),
+        ("Load sequence failed because:\nSome other reason", "Filament Load Failed"),
+        ("Unload sequence failed because:\nSome reason", "Filament Unload Failed"),
+        (
+            "Error on 'MMU_CHANGE_TOOL TOOL=1 NEXT_POS=\"165.375,250.375\" ; T1': "
+            "TOOL must have maximum of 0",
+            "Tool Not Available",
+        ),
+    ],
+)
+def test_happy_hare_errors_map_to_rules(text: str, display: str) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, macro_error_text(text))
+    assert rule is not None
+    assert rule.display == display
+    assert rule.severity == Severity.ERROR

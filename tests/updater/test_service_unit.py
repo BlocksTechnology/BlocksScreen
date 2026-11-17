@@ -262,6 +262,37 @@ class TestCheckStatus:
             await svc.check_status(force=True)
         mock_update.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_fresh_outside_apt_refresh_skips_apt_update(self, apt_lists_partial):
+        """The previous daemon refreshed seconds ago: the restarted one must not redo it."""
+        apt_lists_partial.mkdir()
+        with patch("updater.service.apt_update", AsyncMock()) as mock_update:
+            await UpdateService()._refresh_apt_lists(force=True, printing=False)
+        mock_update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_old_outside_apt_refresh_still_runs_apt_update(self):
+        """Outside evidence only counts for minutes; a failed old refresh cannot mute 24 h."""
+        old = time.monotonic() - updater_service._APT_LIST_FORCE_TTL_S - 1
+        with (
+            patch("updater.service._apt_lists_refreshed_at", return_value=old),
+            patch(
+                "updater.service.apt_update", AsyncMock(return_value=(True, ""))
+            ) as mock_update,
+        ):
+            await UpdateService()._refresh_apt_lists(force=False, printing=False)
+        mock_update.assert_awaited_once()
+
+    @pytest.mark.parametrize("offset", [-10 * 365 * 86_400.0, 3600.0])
+    def test_apt_refresh_stamp_outside_this_boot_is_ignored(
+        self, apt_lists_partial, offset
+    ):
+        """An mtime from an earlier boot or the future (clock stepped) proves nothing."""
+        apt_lists_partial.mkdir()
+        stamp = time.time() + offset
+        os.utime(apt_lists_partial, (stamp, stamp))
+        assert updater_service._apt_lists_refreshed_at() == float("-inf")
+
 
 class TestStateFile:
     @pytest.mark.asyncio
@@ -2390,6 +2421,30 @@ class TestProvisionMissing:
         assert retries == [True] * (tries - 1) + [False]
         mock_prov.assert_not_called()
         on_busy.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_probes_run_concurrently(self, tmp_path, reachable):
+        """Every probe is in flight at once; only the reachable component clones."""
+        both = asyncio.Event()
+        started: list[str] = []
+
+        async def probe(url: str) -> bool:
+            started.append(url)
+            if len(started) == 2:
+                both.set()
+            await both.wait()  # a sequential loop deadlocks here
+            return url.endswith("/Spoolman")
+
+        reachable.side_effect = probe
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            spoolman = self._comp(tmp_path)
+            svc._components = [spoolman, self._comp(tmp_path, name="Happy-Hare")]
+            assert await asyncio.wait_for(svc.provision_missing(), 2.0) is True
+        mock_prov.assert_called_once_with(spoolman)
 
     @pytest.mark.asyncio
     async def test_late_wifi_installs_on_retry(self, tmp_path, reachable):
