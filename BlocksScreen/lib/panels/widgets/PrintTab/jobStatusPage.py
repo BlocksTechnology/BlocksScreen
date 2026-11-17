@@ -229,6 +229,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._reported_layer = None
         self._layer_frozen = False
         self._awaiting_resume = False
+        # Clearing the resume lock here must not strand a tap-disabled button.
+        self.pause_printing_btn.setEnabled(True)
         self._resume_baseline = 0.0
         self._displayed_layer = 0
         self._last_z = 0.0
@@ -338,6 +340,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._current_file_name = ""
             self._layer_frozen = False
             self._awaiting_resume = False
+            self.pause_printing_btn.setEnabled(True)
             self._last_z = 0.0
             self._filament_used = 0.0
             self._print_duration = 0.0
