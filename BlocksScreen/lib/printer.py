@@ -146,6 +146,7 @@ class Printer(QtCore.QObject):
         self._callbacks: dict[str, typing.Callable[[dict, str], None]] = {}
         self._webhooks_state: str = ""
         self._webhooks_state_message: str = ""
+        self._display_message: str | None = None
 
     @property
     def uses_true_zero_offset(self) -> bool:
@@ -165,6 +166,7 @@ class Printer(QtCore.QObject):
         self.available_gcode_commands.clear()
         self.available_objects.clear()
         self.configfile.clear()
+        self._display_message = None
         self.printing = False
         self.printing_state = ""
         self.print_file_loaded = False
@@ -651,7 +653,11 @@ class Printer(QtCore.QObject):
         self, values: dict, name: str = "display_status"
     ) -> None:
         if "message" in values:
-            self.display_update[str, str].emit("message", values["message"])
+            message = values["message"] or ""  # Klipper sends None until the first M117
+            previous, self._display_message = self._display_message, message
+            # The subscribe snapshot repeats the last M117 (e.g. RESUME's), not a new one.
+            if previous is not None and message != previous:
+                self.display_update[str, str].emit("message", message)
         if "progress" in values:
             self.display_update[str, float].emit("progress", values["progress"])
 
