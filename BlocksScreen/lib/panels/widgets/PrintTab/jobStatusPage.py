@@ -300,7 +300,8 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._awaiting_resume = False
             event_state = "pause"
         elif lstate == "printing":
-            self._layer_frozen = False
+            # Resume reheats at park Z: keep the pause hold until the file advances.
+            self._layer_frozen = self._internal_print_status == "paused"
             self.pause_printing_btn.setText("Pause")
             self.pause_printing_btn.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
@@ -492,6 +493,8 @@ class JobStatusWidget(QtWidgets.QWidget):
             return  # is_active and other fields have nothing to render
         if self._awaiting_resume and self._file_position > self._resume_baseline:
             self._awaiting_resume = False
+            # No repaint here: Z may still be the park height, next extrusion redraws.
+            self._layer_frozen = False
             self.pause_printing_btn.setEnabled(True)
         if self.isVisible():
             self.printing_progress_bar.set_progress(self._compute_progress())

@@ -567,6 +567,70 @@ class TestPauseFreeze:
         assert widget.layer_display_button.text() == "4"
 
 
+class TestResumeLayerHold:
+    """Layer stays held through the resume reheat (park Z) until the file advances."""
+
+    def _printing_at_layer_4(self, widget):
+        """Print running at Z 0.8 (layer 4), file at byte 1000."""
+        widget.show()
+        widget.file_metadata = {
+            "object_height": 10.0,
+            "layer_height": 0.2,
+            "first_layer_height": 0.2,
+        }
+        widget._handle_print_state("printing")
+        widget._print_duration = 10.0
+        widget.virtual_sdcard_update("file_position", 1000.0)
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 0])
+        widget.on_print_stats_update("filament_used", 1.0)
+        assert widget.layer_display_button.text() == "4"
+
+    def _pause_and_resume(self, widget):
+        """Pause, park at Z 10, resume: state is printing but the nozzle is parked."""
+        widget._handle_print_state("paused")
+        widget.on_gcode_move_update("gcode_position", [0, 0, 10.0, 0])
+        widget._handle_print_state("printing")
+
+    def test_reheat_extrusion_at_park_z_keeps_layer(self, widget):
+        self._printing_at_layer_4(widget)
+        self._pause_and_resume(widget)
+        widget.on_print_stats_update("filament_used", 1.5)  # purge during reheat
+        assert widget.layer_display_button.text() == "4"
+
+    def test_file_advance_releases_hold(self, widget):
+        self._printing_at_layer_4(widget)
+        self._pause_and_resume(widget)
+        widget.virtual_sdcard_update("file_position", 1001.0)
+        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
+        widget.on_print_stats_update("filament_used", 2.0)
+        assert widget.layer_display_button.text() == "5"
+
+    def test_release_does_not_paint_stale_park_z(self, widget):
+        self._printing_at_layer_4(widget)
+        self._pause_and_resume(widget)
+        widget.virtual_sdcard_update("file_position", 1001.0)  # Z still 10
+        assert widget.layer_display_button.text() == "4"
+
+    def test_fresh_start_not_held(self, widget):
+        """standby -> printing must track Z at once, never hold at 0."""
+        widget._handle_print_state("standby")
+        self._printing_at_layer_4(widget)
+        assert widget._layer_frozen is False
+
+    def test_mid_print_restart_not_held(self, widget):
+        """BlocksScreen restart mid-print sees printing first (no paused): no hold."""
+        widget._internal_print_status = ""
+        widget._handle_print_state("printing")
+        assert widget._layer_frozen is False
+
+    def test_cancel_during_reheat_clears_hold(self, widget):
+        self._printing_at_layer_4(widget)
+        self._pause_and_resume(widget)
+        widget._handle_print_state("cancelled")
+        assert widget._layer_frozen is False
+        assert widget._awaiting_resume is False
+
+
 class TestCompletionDisplay:
     """A completed print shows the final layer=total and is not blanked."""
 
