@@ -159,3 +159,24 @@ def test_popup_repeat_while_shown_rearms_timeout(popup):
     popup.timeout_timer.isActive.return_value = True
     popup.new_message(message="Print Not Started")
     popup.timeout_timer.start.assert_called_once_with()
+
+
+def test_popup_queued_message_waits_after_outside_tap_close(popup, qtbot):
+    popup.new_message(_Popup.MessageType.ERROR, "A")
+    popup.new_message(_Popup.MessageType.ERROR, "B")
+    popup.close()  # the tap that closes A must not also close B
+    QtWidgets.QApplication.processEvents()
+    assert not popup.isShown
+    qtbot.waitUntil(lambda: popup.isShown, timeout=2000)
+    assert popup.text_label.text() == "B"
+
+
+def test_popup_message_arriving_in_delay_window_waits(popup, qtbot):
+    popup.new_message(_Popup.MessageType.ERROR, "A")
+    popup.new_message(_Popup.MessageType.ERROR, "B")
+    popup.close()
+    popup.new_message(_Popup.MessageType.ERROR, "C")
+    assert not popup.isShown
+    qtbot.waitUntil(lambda: popup.isShown, timeout=2000)
+    assert popup.text_label.text() == "B"
+    assert [m["message"] for m in popup.messages] == ["C"]
