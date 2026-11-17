@@ -287,6 +287,8 @@ class TestFilamentPeakGate:
         }
         widget._handle_print_state("printing")
         widget._print_duration = 10.0
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.2, 0])  # first layer
+        widget.on_print_stats_update("filament_used", 5.0)
         widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 0])
         widget.on_print_stats_update("filament_used", 10.0)
         assert widget.layer_display_button.text() == "4"
