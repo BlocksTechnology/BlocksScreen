@@ -313,6 +313,7 @@ class TestPollIntervalUsage:
             pytest.raises(asyncio.CancelledError),
         ):
             await svc._periodic_status_check()
+        sleeps.pop(0)  # startup settle delay, 0 or _BOOT_DELAY_S by uptime
         return sleeps
 
     @pytest.mark.asyncio
@@ -326,7 +327,7 @@ class TestPollIntervalUsage:
 
         sleeps = await self._record_sleeps(svc)
 
-        assert sleeps == [3.0, dbus_service._FETCH_RETRY_INTERVAL_S]
+        assert sleeps == [dbus_service._FETCH_RETRY_INTERVAL_S]
 
     @pytest.mark.asyncio
     async def test_periodic_check_keeps_full_interval_when_healthy(self, svc):
@@ -337,7 +338,7 @@ class TestPollIntervalUsage:
 
         sleeps = await self._record_sleeps(svc)
 
-        assert sleeps == [3.0, 86_400.0]
+        assert sleeps == [86_400.0]
 
     @pytest.mark.asyncio
     async def test_periodic_check_never_lengthens_a_short_poll_interval(self, svc):
@@ -348,7 +349,7 @@ class TestPollIntervalUsage:
 
         sleeps = await self._record_sleeps(svc)
 
-        assert sleeps == [3.0, 42.0]
+        assert sleeps == [42.0]
 
 
 class TestBootNotBusy:
@@ -554,6 +555,15 @@ class TestStatusAfterBootPass:
             await task
 
 
+@pytest.mark.parametrize(("uptime", "want"), [(15.0, 3.0), (900.0, 0.0)])
+def test_boot_delay_only_while_booting(uptime, want):
+    """Deploy restarts long after boot skip the settle delay."""
+    from updater import dbus_service
+
+    with patch.object(dbus_service.time, "clock_gettime", return_value=uptime):
+        assert dbus_service._boot_delay_s() == want
+
+
 @pytest.mark.usefixtures("reconciled")
 class TestBootProvision:
     @pytest.mark.asyncio
@@ -600,7 +610,7 @@ class TestBootProvision:
             pytest.raises(asyncio.CancelledError),
         ):
             await svc._periodic_status_check()
-        assert sleeps.pop(0) == dbus_service._BOOT_DELAY_S
+        sleeps.pop(0)  # startup settle delay, 0 or _BOOT_DELAY_S by uptime
         return sleeps
 
     @pytest.mark.asyncio

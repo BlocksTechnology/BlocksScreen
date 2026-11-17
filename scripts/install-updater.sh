@@ -40,6 +40,12 @@ _apt_installed() {
         [[ "$(dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null)" == "installed" ]] || return 1
     done
 }
+# _reqs_current HASH VENV: the bs-bootstrap/post-merge sentinel matches and no failed install is pending.
+# A left-over attempt file means an install failed (even one bs-bootstrap gave up on): retry it.
+_reqs_current() {
+    [[ -n "$1" && ! -e "$2/.blockscreen-reqs-attempt" &&
+        "$(cat "$2/.blockscreen-reqs-hash" 2>/dev/null)" == "$1" ]]
+}
 
 echo_info "Installing D-Bus policy ..."
 _install_atomic 0644 "$SCRIPT_PATH/com.blockscreen.Updater.conf" /etc/dbus-1/system.d/com.blockscreen.Updater.conf
@@ -63,8 +69,8 @@ SERVICE=${SERVICE//BSENV/$BSENV}
 SERVICE=${SERVICE//BS_PRIMARY_HOME/$_BSENV_HOME}
 echo "$SERVICE" | sudo tee /etc/systemd/system/.BlocksScreen-updater.service.new >/dev/null
 sudo mv -Tf /etc/systemd/system/.BlocksScreen-updater.service.new /etc/systemd/system/BlocksScreen-updater.service
-sudo systemctl daemon-reload
-sudo systemctl enable BlocksScreen-updater.service
+# --no-reload: enable reads the unit from disk; the reload after the Spoolman unit covers both.
+sudo systemctl enable --no-reload BlocksScreen-updater.service
 echo_ok "BlocksScreen-updater service installed (restarted at the end)"
 
 echo_info "Installing Spoolman service unit (inactive until the updater provisions it) ..."
@@ -145,7 +151,7 @@ elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC
 fi
 sudo systemctl daemon-reload
 # Every run on purpose: a linked-but-disabled UI unit is a blank screen with no SSH recovery.
-sudo systemctl enable BlocksScreen.service 2>/dev/null || echo_warn "could not enable BlocksScreen.service"
+sudo systemctl enable --no-reload BlocksScreen.service 2>/dev/null || echo_warn "could not enable BlocksScreen.service"
 echo_ok "BlocksScreen.service is a symlink - hook no longer needs sudo cp"
 
 echo_info "Setting up apt cache directory for blocks user ..."
@@ -221,9 +227,6 @@ DEPLOY_PATH=$(cat "$SCRIPT_PATH/BlocksScreen-deploy.path")
 DEPLOY_PATH=${DEPLOY_PATH//BS_PRIMARY_HOME/$_BSENV_HOME}
 echo "$DEPLOY_PATH" | sudo tee /etc/systemd/system/.BlocksScreen-deploy.path.new >/dev/null
 sudo mv -Tf /etc/systemd/system/.BlocksScreen-deploy.path.new /etc/systemd/system/BlocksScreen-deploy.path
-sudo systemctl daemon-reload
-sudo systemctl enable --now BlocksScreen-deploy.path
-echo_ok "BlocksScreen-deploy path unit installed"
 
 echo_info "Installing BlocksScreen-bootstrap service ..."
 _BOOTSTRAP_SRC="$SCRIPT_PATH/BlocksScreen-bootstrap.service"
@@ -232,9 +235,12 @@ if [[ -f "$_BOOTSTRAP_DEST" && ! -L "$_BOOTSTRAP_DEST" ]]; then
     sudo rm "$_BOOTSTRAP_DEST"
 fi
 if [[ ! -L "$_BOOTSTRAP_DEST" ]]; then
-    sudo systemctl link "$_BOOTSTRAP_SRC"
+    sudo systemctl link --no-reload "$_BOOTSTRAP_SRC"
 fi
+# Each implicit reload costs ~0.3 s on a Pi: one explicit reload covers the deploy and bootstrap units.
 sudo systemctl daemon-reload
+sudo systemctl enable --now --no-reload BlocksScreen-deploy.path
+echo_ok "BlocksScreen-deploy path unit installed"
 echo_ok "BlocksScreen-bootstrap service installed (symlink)"
 
 echo_info "Installing post-merge hook ..."
@@ -260,8 +266,13 @@ if $_venv_locked; then
     sudo find "$BSENV"/lib/python3*/site-packages -maxdepth 1 -type d -name '~?*' -exec rm -rf {} + 2>/dev/null || true
 fi
 # Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
-_as_blocks "$BSENV/bin/pip" install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||
-    echo_warn "Pinned pip install FAILED; continuing with the venv's current pip"
+_pip_pin=$(grep -m1 '^pip==' "$BS_PATH/scripts/requirements-pip.txt" 2>/dev/null | cut -d= -f3 || true)
+if [[ -n "$_pip_pin" ]] && compgen -G "$BSENV/lib/python3*/site-packages/pip-$_pip_pin.dist-info" >/dev/null; then
+    echo_ok "pip $_pip_pin already installed"
+else
+    _as_blocks "$BSENV/bin/pip" install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||
+        echo_warn "Pinned pip install FAILED; continuing with the venv's current pip"
+fi
 if ! _apt_installed libsystemd-dev python3-dev; then
     sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
 fi
@@ -269,11 +280,21 @@ fi
 if ! _apt_installed x11-xserver-utils; then
     sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet x11-xserver-utils 2>/dev/null || true
 fi
+# Sentinel shared with bs-bootstrap and post-merge, which also own venv repair (probes, truncated .so).
+_REQS_SENTINEL="$BSENV/.blockscreen-reqs-hash"
+_reqs_hash=$(md5sum "$BS_PATH/scripts/requirements.txt" 2>/dev/null | cut -d' ' -f1 || true)
 # sdbus pinned; --no-binary needs libsystemd-dev; only-if-needed skips satisfied.
 # A failure must not abort setup, but it must be visible: a silent one hid the typing==3.7.4.3 break.
-if _as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
+if _reqs_current "$_reqs_hash" "$BSENV"; then
+    echo_ok "Python requirements unchanged since their last install"
+elif _as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \
     -r "$BS_PATH/scripts/requirements.txt"; then
+    if [[ -n "$_reqs_hash" ]]; then
+        echo "$_reqs_hash" | sudo tee "$_REQS_SENTINEL" >/dev/null
+        sudo chown "$_BSENV_USER" "$_REQS_SENTINEL" 2>/dev/null || true
+        sudo rm -f "$BSENV/.blockscreen-reqs-attempt" 2>/dev/null || true
+    fi
     echo_ok "Python requirements installed"
 else
     echo_warn "Python requirements install FAILED; bs-bootstrap retries it on the next boot"
@@ -282,7 +303,12 @@ fi
 # uv: Spoolman's dependency installer (run-from-source); provide it for the hook.
 echo_info "Ensuring uv is available for Spoolman provisioning ..."
 # Pinned: Spoolman tracks master, so the uv version is the one lever we hold over how it resolves.
-if _as_blocks "$BSENV/bin/pip" install --quiet uv==0.12.24; then
+_UV_PIN=0.12.24
+# Runs the binary, not just the metadata: a truncated uv fails this and gets reinstalled.
+_uv_ver=$(_as_blocks "$BSENV/bin/uv" --version 2>/dev/null || true)
+if [[ "$_uv_ver" == "uv $_UV_PIN" || "$_uv_ver" == "uv $_UV_PIN "* ]]; then
+    echo_ok "uv $_UV_PIN already installed"
+elif _as_blocks "$BSENV/bin/pip" install --quiet --force-reinstall --no-deps "uv==$_UV_PIN"; then
     echo_ok "uv ready"
 else
     echo_warn "uv install FAILED; Spoolman provisioning fails until it is installed"
@@ -314,10 +340,10 @@ _setup_device_discovery() {
     # As blocks, so build/ and bin/ stay writable by later updater hook runs.
     sudo -u "$_BSENV_USER" "$_DD_REPO/scripts/build.sh" || return 1
     if [[ "$(systemctl show --property=LoadState --value "$_DD_UNIT")" != "loaded" ]]; then
-        sudo systemctl link "$_DD_REPO/systemd/$_DD_UNIT" || return 1
+        sudo systemctl link --no-reload "$_DD_REPO/systemd/$_DD_UNIT" || return 1
         sudo systemctl daemon-reload || return 1
     fi
-    sudo systemctl enable "$_DD_UNIT" || return 1
+    sudo systemctl enable --no-reload "$_DD_UNIT" || return 1
     sudo systemctl restart "$_DD_UNIT" || return 1
 }
 if [[ -d "$_DD_REPO/.git" ]]; then
