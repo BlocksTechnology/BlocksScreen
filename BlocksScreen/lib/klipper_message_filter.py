@@ -285,6 +285,36 @@ RULES: tuple[MessageRule, ...] = (
         hint="Replace the empty spool",
         severity=Severity.ERROR,
     ),
+    # Happy Hare v3 mmu.py load/unload failure texts; pick-up first, it nests in a load.
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("couldn't pick up filament at gate"),
+        display="Filament Not Picked Up",
+        hint="Feed the filament into the gate, then load again",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("unload sequence failed"),
+        display="Filament Unload Failed",
+        hint="Check the filament path, then unload again",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("load sequence failed"),
+        display="Filament Load Failed",
+        hint="Check the filament path, then load again",
+        severity=Severity.ERROR,
+    ),
+    # Klipper's TOOL= range check: the file calls a tool past the last gate.
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re(r"\btool must have maximum of \d+"),
+        display="Tool Not Available",
+        hint="The file uses more tools than this printer has, slice it again",
+        severity=Severity.ERROR,
+    ),
     # Same clog/tangle word Happy Hare reports and Mainsail's FlowGuard meter shows.
     MessageRule(
         source=MessageSource.GCODE_ERROR,
