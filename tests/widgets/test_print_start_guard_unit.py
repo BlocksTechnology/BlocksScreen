@@ -1,4 +1,4 @@
-"""PrintTab.start_print blocks a print PRINT_START would refuse as unloaded."""
+"""PrintTab.start_print blocks a print the start macros would refuse as unloaded."""
 
 import sys
 import threading

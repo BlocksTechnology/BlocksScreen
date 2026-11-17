@@ -430,7 +430,7 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, name="start_print")
     def start_print(self, file: str) -> None:
-        """Start *file* on the job status page unless PRINT_START would refuse it."""
+        """Start *file* on the job status page unless a start macro would refuse it."""
         self._begin_print(file)
 
     def _print_refusal(self) -> str:
@@ -444,7 +444,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             return "Klipper is not ready."
         if self._print_state in ("printing", "paused"):
             return "A print is already running."
-        # A refused PRINT_START runs on_error CANCEL_PRINT, which HH v3 reopens as a job.
+        # R2 PRINT_START refusing would make HH v3 reopen the job; refuse here first.
         if self.amu_manager is not None:
             return self.amu_manager.print_start_refusal()
         return ""
