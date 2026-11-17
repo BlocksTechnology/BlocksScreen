@@ -177,6 +177,7 @@ class TestOnGcodeMoveUpdate:
         widget.show()
         widget._internal_print_status = "printing"
         widget._print_duration = 10.0
+        widget._first_layer_reached = True  # past the start purge
         widget.layer_display_button.setText("sentinel")
         widget.file_metadata = {
             "object_height": 10.0,
@@ -255,7 +256,7 @@ class TestOnGcodeMoveUpdate:
         """Restart mid-print: filament already used + late metadata must fill both fields."""
         widget.show()
         widget._internal_print_status = "printing"
-        widget._print_duration = 500.0
+        widget.on_print_stats_update("print_duration", 500.0)
         widget.on_print_stats_update("filament_used", 1234.0)  # already printing
         widget.on_gcode_move_update(
             "gcode_position", [0, 0, 0.8, 0]
@@ -327,6 +328,58 @@ class TestOnFlowguardUpdate:
         widget.flowrate.setValue.assert_called_once_with(10)
         widget.flowrate.set_max_clog.assert_called_once_with(20)
         widget.flowrate.set_max_tangle.assert_called_once_with(30)
+
+
+class TestStartPurgeHold:
+    """The Z layer waits for the first layer: the start purge runs above the bed."""
+
+    def _start(self, widget):
+        """Fresh print as the printer reports it: duration grows from zero."""
+        widget.on_print_start("job.gcode")
+        widget._internal_print_status = "printing"
+        widget.file_metadata = {
+            "object_height": 25.0,
+            "layer_height": 0.2,
+            "first_layer_height": 0.2,
+        }
+        widget.on_print_stats_update("print_duration", 0.5)
+
+    def _feed(self, widget, z, filament_used):
+        """Report a Z move then filament progress, as the printer would."""
+        widget.on_gcode_move_update("gcode_position", [0, 0, z, 0])
+        widget.on_print_stats_update("filament_used", float(filament_used))
+
+    def test_purge_above_first_layer_keeps_zero(self, widget):
+        self._start(widget)
+        self._feed(widget, 0.8, 35.5)  # KAMP LINE_PURGE height -> would be layer 4
+        assert widget.layer_display_button.text() == "0"
+
+    def test_first_layer_releases_the_estimate(self, widget):
+        self._start(widget)
+        self._feed(widget, 0.8, 35.5)
+        self._feed(widget, 0.2, 36.5)
+        assert widget.layer_display_button.text() == "1"
+        self._feed(widget, 0.8, 80.0)  # layer 4 for real now
+        assert widget.layer_display_button.text() == "4"
+
+    def test_reconnect_midprint_skips_the_hold(self, widget):
+        widget._internal_print_status = "printing"
+        widget.file_metadata = {
+            "object_height": 25.0,
+            "layer_height": 0.2,
+            "first_layer_height": 0.2,
+        }
+        widget.on_print_stats_update("print_duration", 1800.0)
+        self._feed(widget, 10.0, 5000.0)
+        assert widget.layer_display_button.text() == "50"
+
+    def test_new_job_rearms_the_hold(self, widget):
+        self._start(widget)
+        self._feed(widget, 0.2, 36.5)
+        widget._handle_print_state("cancelled")
+        self._start(widget)
+        self._feed(widget, 0.8, 35.5)
+        assert widget.layer_display_button.text() == "0"
 
 
 class TestPauseResumePrint:

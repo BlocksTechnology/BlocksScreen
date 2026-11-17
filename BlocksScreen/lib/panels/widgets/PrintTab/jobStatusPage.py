@@ -64,6 +64,8 @@ class JobStatusWidget(QtWidgets.QWidget):
     file_metadata: dict | None = None
     total_layers = "?"
     _print_duration: float = 0.0
+    # Klipper updates print_duration ~4 Hz, a first reading this deep means a mid-print join.
+    _JOINED_MIDPRINT_S: typing.ClassVar[float] = 30.0
     _VALID_STATES: typing.ClassVar[frozenset[str]] = frozenset({"printing"})
     _INVALID_STATES: typing.ClassVar[frozenset[str]] = frozenset(
         {"cancelled", "complete", "error", "standby"}
@@ -96,6 +98,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._layer_frozen = False
         self._awaiting_resume = False
         self._resume_baseline = 0.0
+        self._first_layer_reached = False
         self._setup_ui()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -238,6 +241,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._gcode_start_byte = 0
         self._gcode_end_byte = 0
         self._print_duration = 0.0
+        self._first_layer_reached = False
         self.layer_display_button.setText("0")
         self.layer_display_button.secondary_text = "?"
         self.print_time_display_button.setText("?")
@@ -341,6 +345,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._last_z = 0.0
             self._filament_used = 0.0
             self._print_duration = 0.0
+            self._first_layer_reached = False
             self.file_metadata = None
         # Send Event on Print state
         event_class_name = "Print" + event_state.capitalize()
@@ -398,6 +403,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         elif isinstance(value, float):
             # print_duration + filament_used tracked regardless of visibility (gate Z fallback)
             if "print_duration" in field:
+                if self._print_duration == 0 and value > self._JOINED_MIDPRINT_S:
+                    self._first_layer_reached = True  # restart/reconnect mid-print
                 self._print_duration = value
             elif "filament_used" in field:
                 self._filament_used = value
@@ -452,12 +459,18 @@ class JobStatusWidget(QtWidgets.QWidget):
         layer_height = float(meta.get("layer_height", 0) or 0)
         if layer_height <= 0:
             return self._displayed_layer
-        return calculate_current_layer(
+        layer = calculate_current_layer(
             z_position=self._last_z,
             layer_height=layer_height,
             first_layer_height=float(meta.get("first_layer_height", 0) or 0),
             max_layers=self._max_layers(),
         )
+        if not self._first_layer_reached:
+            # print_duration starts at the start purge (KAMP LINE_PURGE, Z 0.8): wait for the bed.
+            if layer > 1:
+                return self._displayed_layer
+            self._first_layer_reached = True
+        return layer
 
     def _refresh_layer_display(self) -> None:
         """Render current/total layer: Klipper's current_layer wins, else the Z estimate.
