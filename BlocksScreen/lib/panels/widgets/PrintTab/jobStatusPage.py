@@ -97,6 +97,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._layer_frozen = False
         self._awaiting_resume = False
         self._resume_baseline = 0.0
+        self._first_layer_reached = False
+        self._start_line_pos: float | None = None
         self._setup_ui()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -242,6 +244,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._gcode_start_byte = 0
         self._gcode_end_byte = 0
         self._print_duration = 0.0
+        self._first_layer_reached = False
+        self._start_line_pos = None
         self.layer_display_button.setText("0")
         self.layer_display_button.secondary_text = "?"
         self.print_time_display_button.setText("?")
@@ -350,6 +354,8 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._filament_used = 0.0
             self._filament_peak = 0.0
             self._print_duration = 0.0
+            self._first_layer_reached = False
+            self._start_line_pos = None
             self.file_metadata = None
         # Send Event on Print state
         event_class_name = "Print" + event_state.capitalize()
@@ -463,10 +469,18 @@ class JobStatusWidget(QtWidgets.QWidget):
         layer_height = float(meta.get("layer_height", 0) or 0)
         if layer_height <= 0:
             return self._displayed_layer
+        first_layer_height = float(meta.get("first_layer_height", 0) or 0)
+        if not self._first_layer_reached:
+            # First extrusion (MMU load, KAMP purge) is inside PRINT_START; file_position moves when it returns.
+            if self._start_line_pos is None:
+                self._start_line_pos = self._file_position
+            if self._file_position <= self._start_line_pos:
+                return self._displayed_layer
+            self._first_layer_reached = True
         return calculate_current_layer(
             z_position=self._last_z,
             layer_height=layer_height,
-            first_layer_height=float(meta.get("first_layer_height", 0) or 0),
+            first_layer_height=first_layer_height,
             max_layers=self._max_layers(),
         )
 

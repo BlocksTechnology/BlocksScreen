@@ -177,6 +177,7 @@ class TestOnGcodeMoveUpdate:
         widget.show()
         widget._internal_print_status = "printing"
         widget._print_duration = 10.0
+        widget._first_layer_reached = True  # past the start purge
         widget.layer_display_button.setText("sentinel")
         widget.file_metadata = {
             "object_height": 10.0,
@@ -255,7 +256,7 @@ class TestOnGcodeMoveUpdate:
         """Restart mid-print: filament already used + late metadata must fill both fields."""
         widget.show()
         widget._internal_print_status = "printing"
-        widget._print_duration = 500.0
+        widget.on_print_stats_update("print_duration", 500.0)
         widget.on_print_stats_update("filament_used", 1234.0)  # already printing
         widget.on_gcode_move_update(
             "gcode_position", [0, 0, 0.8, 0]
@@ -263,6 +264,9 @@ class TestOnGcodeMoveUpdate:
         widget.on_fileinfo(
             {"object_height": 10.0, "layer_height": 0.2, "first_layer_height": 0.2}
         )
+        # the start hold waits one file line, then the next extrusion paints the layer
+        widget.virtual_sdcard_update("file_position", 2_000_000.0)
+        widget.on_print_stats_update("filament_used", 1235.0)
         assert widget.layer_display_button.text() == "4"
         assert widget.layer_display_button.secondary_text != ""
 
@@ -287,6 +291,7 @@ class TestFilamentPeakGate:
         }
         widget._handle_print_state("printing")
         widget._print_duration = 10.0
+        widget._first_layer_reached = True  # PRINT_START already returned
         widget.on_gcode_move_update("gcode_position", [0, 0, 0.2, 0])  # first layer
         widget.on_print_stats_update("filament_used", 5.0)
         widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 0])
@@ -389,6 +394,115 @@ class TestOnFlowguardUpdate:
         widget.flowrate.setValue.assert_called_once_with(10)
         widget.flowrate.set_max_clog.assert_called_once_with(20)
         widget.flowrate.set_max_tangle.assert_called_once_with(30)
+
+
+class TestStartPurgeHold:
+    """The Z layer waits for PRINT_START to return: its MMU load and purge run off the bed."""
+
+    _START_LINE = 1000.0
+
+    def _start(self, widget):
+        """Fresh print inside PRINT_START: duration grows from zero, file stays on its line."""
+        widget.on_print_start("job.gcode")
+        widget._internal_print_status = "printing"
+        widget.file_metadata = {
+            "object_height": 25.0,
+            "layer_height": 0.2,
+            "first_layer_height": 0.2,
+        }
+        widget.virtual_sdcard_update("file_position", self._START_LINE)
+        widget.on_print_stats_update("print_duration", 0.5)
+
+    def _start_macro_done(self, widget):
+        widget.virtual_sdcard_update("file_position", self._START_LINE + 40)
+
+    def _feed(self, widget, z, filament_used):
+        """Report a Z move then filament progress, as the printer would."""
+        widget.on_gcode_move_update("gcode_position", [0, 0, z, 0])
+        widget.on_print_stats_update("filament_used", float(filament_used))
+
+    def test_purge_above_first_layer_keeps_zero(self, widget):
+        self._start(widget)
+        self._feed(widget, 0.8, 35.5)  # KAMP LINE_PURGE height -> would be layer 4
+        assert widget.layer_display_button.text() == "0"
+
+    def test_first_layer_releases_the_estimate(self, widget):
+        self._start(widget)
+        self._feed(widget, 0.8, 35.5)
+        self._start_macro_done(widget)
+        self._feed(widget, 0.2, 36.5)
+        assert widget.layer_display_button.text() == "1"
+        self._feed(widget, 0.8, 80.0)  # layer 4 for real now
+        assert widget.layer_display_button.text() == "4"
+
+    def test_tool_change_at_start_holds_through_the_whole_macro(self, widget):
+        """Loading T1 extrudes first: homing, contact probe, mesh and purge must all stay 0."""
+        self._start(widget)
+        shown = []
+        # load at park Z, Beacon contact touch, mesh, then purge and Z-hop minutes later
+        for duration, z, used in [
+            (5.0, 5.0, 3.0),
+            (90.0, 0.0, 3.5),
+            (200.0, 2.0, 4.0),
+            (400.0, 0.8, 40.0),
+            (405.0, 1.6, 41.0),
+        ]:
+            widget.on_print_stats_update("print_duration", duration)
+            self._feed(widget, z, used)
+            shown.append(widget.layer_display_button.text())
+        assert shown == ["0"] * 5
+        self._start_macro_done(widget)
+        self._feed(widget, 0.2, 42.0)
+        assert widget.layer_display_button.text() == "1"
+
+    def test_reconnect_midprint_shows_the_layer_on_the_next_line(self, widget):
+        widget._internal_print_status = "printing"
+        widget.file_metadata = {
+            "object_height": 25.0,
+            "layer_height": 0.2,
+            "first_layer_height": 0.2,
+        }
+        widget.virtual_sdcard_update("file_position", 5_000_000.0)
+        widget.on_print_stats_update("print_duration", 1800.0)
+        self._feed(widget, 10.0, 5000.0)
+        widget.virtual_sdcard_update("file_position", 5_000_060.0)
+        self._feed(widget, 10.0, 5001.0)
+        assert widget.layer_display_button.text() == "50"
+
+    def test_new_job_rearms_the_hold(self, widget):
+        self._start(widget)
+        self._start_macro_done(widget)
+        self._feed(widget, 0.2, 36.5)
+        widget._handle_print_state("cancelled")
+        self._start(widget)
+        self._feed(widget, 0.8, 35.5)
+        assert widget.layer_display_button.text() == "0"
+
+    @pytest.mark.parametrize(
+        ("first_layer_height", "z_offset", "expected"),
+        [
+            (0.2, 0.0, ["0", "0", "1", "2", "3", "10", "50"]),
+            # Mainsail's formula is one layer high in these two, as before this PR
+            (None, 0.0, ["0", "0", "2", "3", "4", "11", "51"]),
+            (0.2, 0.01, ["0", "0", "2", "3", "4", "11", "51"]),
+            (0.2, 0.6, ["0", "0", "4", "5", "6", "13", "53"]),
+        ],
+    )
+    def test_whole_print_never_sticks_at_zero(
+        self, widget, first_layer_height, z_offset, expected
+    ):
+        self._start(widget)
+        if first_layer_height is None:
+            del widget.file_metadata["first_layer_height"]
+        shown = []
+        # purge 0.8, Z-hop 1.6, PRINT_START returns, then the print from the first layer up
+        for step, z in enumerate([0.8, 1.6, 0.2, 0.4, 0.6, 2.0, 10.0]):
+            if step == 2:
+                self._start_macro_done(widget)
+            widget.on_print_stats_update("print_duration", 1.0 + step * 5)
+            self._feed(widget, z + (z_offset if step >= 2 else 0.0), 35.0 + step * 10)
+            shown.append(widget.layer_display_button.text())
+        assert shown == expected
 
 
 class TestPauseResumePrint:
@@ -642,6 +756,7 @@ class TestResumeLayerHold:
         }
         widget._handle_print_state("printing")
         widget._print_duration = 10.0
+        widget._first_layer_reached = True  # PRINT_START already returned
         widget.virtual_sdcard_update("file_position", 1000.0)
         widget.on_gcode_move_update("gcode_position", [0, 0, 0.2, 0])  # first layer
         widget.on_print_stats_update("filament_used", 0.5)
