@@ -74,3 +74,36 @@ class TestPrinterBusy:
         printer._idle_timeout_object_updated({"state": "Ready"})
         printer._print_stats_object_updated({"state": "paused"})
         assert printer.printer_busy
+
+
+class TestDisplayMessage:
+    @staticmethod
+    def _shown(printer) -> list:
+        shown: list = []
+        printer.display_update[str, str].connect(lambda _n, v: shown.append(v))
+        return shown
+
+    def test_subscribe_snapshot_is_not_shown(self, printer) -> None:
+        # Klipper keeps the last M117 (RESUME's) until replaced; a restart re-reads it
+        shown = self._shown(printer)
+        printer._display_status_object_updated({"message": "Print Resumed"})
+        assert shown == []
+
+    def test_new_message_after_snapshot_is_shown(self, printer) -> None:
+        shown = self._shown(printer)
+        printer._display_status_object_updated({"message": None})
+        printer._display_status_object_updated({"message": "Priming"})
+        assert shown == ["Priming"]
+
+    def test_same_snapshot_after_reconnect_is_not_shown(self, printer) -> None:
+        shown = self._shown(printer)
+        printer._display_status_object_updated({"message": "Print Resumed"})
+        printer._display_status_object_updated({"message": "Print Resumed"})
+        assert shown == []
+
+    def test_klippy_restart_rearms_the_snapshot(self, printer) -> None:
+        shown = self._shown(printer)
+        printer._display_status_object_updated({"message": ""})
+        printer.on_klippy_status("startup")
+        printer._display_status_object_updated({"message": "Print Resumed"})
+        assert shown == []
