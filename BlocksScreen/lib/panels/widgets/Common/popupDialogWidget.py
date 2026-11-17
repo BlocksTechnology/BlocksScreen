@@ -1,8 +1,11 @@
 import enum
+import logging
 from collections import deque
 
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+logger = logging.getLogger(__name__)
 
 
 class Popup(QtWidgets.QDialog):
@@ -21,10 +24,17 @@ class Popup(QtWidgets.QDialog):
         WARNING = QtGui.QColor("#E7E147")
         ERROR = QtGui.QColor("#CA4949")
 
+    # Lets the tap that closed one banner finish before the next one can appear.
+    NEXT_MESSAGE_DELAY_MS = 300
+
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.timeout_timer = QtCore.QTimer(self)
         self.timeout_timer.setSingleShot(True)
+        self.next_message_timer = QtCore.QTimer(self)
+        self.next_message_timer.setSingleShot(True)
+        self.next_message_timer.setInterval(Popup.NEXT_MESSAGE_DELAY_MS)
+        self.next_message_timer.timeout.connect(self._on_next_message_due)
         self.messages: deque = deque()
         self.isShown = False
         self.persistent_notifications: deque = deque()
@@ -71,8 +81,15 @@ class Popup(QtWidgets.QDialog):
         self.slide_out_animation.stop()
         # Forget the text so the same error raised again later still pops up.
         self.text_label.clear()
-        # Deferred: showing the next message from inside a hide event re-enters Qt.
-        QtCore.QTimer.singleShot(0, self._add_popup)
+        # Never from inside the hide event (re-enters Qt); delayed so the closing
+        # tap can't dismiss the next banner, which Qt would do for a Popup window.
+        if self.messages:
+            self.next_message_timer.start()
+
+    def _on_next_message_due(self) -> None:
+        """Show the message queued behind the one that was just hidden."""
+        logger.debug("popup: showing queued message, %d queued", len(self.messages))
+        self._add_popup()
 
     def _calculate_target_geometry(self) -> QtCore.QRect:
         """Calculate on end posisition rect for popup"""
@@ -162,7 +179,7 @@ class Popup(QtWidgets.QDialog):
     def _add_popup(self) -> None:
         """Add popup to queue"""
         # hideEvent calls back here, so a queued message waits for the current one.
-        if self.isShown:
+        if self.isShown or self.next_message_timer.isActive():
             return
 
         if (
