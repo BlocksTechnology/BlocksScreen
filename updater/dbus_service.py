@@ -6,6 +6,7 @@ import asyncio
 import dataclasses
 import json
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from functools import partial
 from pathlib import Path
@@ -23,12 +24,21 @@ _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
 _FETCH_RETRY_INTERVAL_S = 300.0
 _RECONCILE_RETRY_S = 5.0
 _BOOT_DELAY_S = 3.0
+# Past this uptime a start is a deploy or crash restart: nothing left to settle.
+_BOOT_WINDOW_S = 120.0
 _SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
 _DEPLOY_POLL_S = 1.0
 # Moonraker answers 503 while printing, updating or before its first refresh.
 _MOONRAKER_SYNC_RETRY_S = 60.0
 # A print can refuse it for hours; the next periodic check is up to a day away.
 _MOONRAKER_SYNC_RETRY_MAX_S = 600.0
+
+
+def _boot_delay_s() -> float:
+    """Startup settle delay, only while the system itself is still booting."""
+    if time.clock_gettime(time.CLOCK_BOOTTIME) < _BOOT_WINDOW_S:
+        return _BOOT_DELAY_S
+    return 0.0
 
 
 class DbusProgressCallback:
@@ -339,7 +349,7 @@ class UpdaterInterface(
 
     async def _periodic_status_check(self) -> None:
         """Provision once; emit status per poll, sooner on fetch failure or deferral."""
-        await asyncio.sleep(_BOOT_DELAY_S)
+        await asyncio.sleep(_boot_delay_s())
         while True:
             try:
                 if not self._provisioned:
