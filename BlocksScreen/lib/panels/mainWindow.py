@@ -132,6 +132,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._popup_toggle: bool = False
         self._update_in_progress: bool = False
         self._post_update_reconnect: bool = False
+        # Latest loadscreen request made before this window was first shown.
+        self._early_loadscreen: tuple[bool, str] | None = None
         self._reconnect_retries: int = 0
         self._reconnect_timer = QtCore.QTimer(self)
         self._reconnect_timer.setSingleShot(False)
@@ -294,7 +296,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updater_worker.provisioning_changed.connect(
             self.update_page.handle_provisioning_changed
         )
-        self.updater_worker.replay_busy()
         self.updater_worker.daemon_unavailable.connect(self.on_updater_unavailable)
         self.updater_worker.daemon_unavailable.connect(
             self.update_page.handle_daemon_unavailable
@@ -313,8 +314,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.request_cancel.connect(self.updater_worker.trigger_cancel)
         self.update_page.update_available.connect(self.on_update_available)
         self.update_page.call_load_panel.connect(self.show_loadscreen)
-        # Connect-time busy=False may beat this wiring; deferred until loadwidget exists.
-        QtCore.QTimer.singleShot(0, self.update_page.hold_for_deploy)
         self.update_page.disable_popups.connect(self.popup_toggle)
         self.update_page.update_back_btn.clicked.connect(self.update_page.hide)
         self.updater_worker.step_complete.connect(self.update_page.handle_step_complete)
@@ -384,6 +383,32 @@ class MainWindow(QtWidgets.QMainWindow):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
         self.conn_window.show()
+        # Last: the daemon may report busy before any slot or the loadscreen exists.
+        self.updater_worker.replay_busy()
+        self.update_page.hold_for_deploy()
+
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
+        """Apply a loadscreen request that arrived before the window was shown."""
+        super().showEvent(a0)
+        if self._early_loadscreen is not None:
+            # The show event precedes the native map, so wait for the next loop pass.
+            QtCore.QTimer.singleShot(0, self._flush_early_loadscreen)
+
+    def _flush_early_loadscreen(self) -> None:
+        """Show or hide the loadscreen as the last pre-show request asked."""
+        if self._early_loadscreen is None:
+            return
+        show, msg = self._early_loadscreen
+        self._early_loadscreen = None
+        self._apply_loadscreen(show, msg)
+
+    def _apply_loadscreen(self, show: bool, msg: str) -> None:
+        """Set the loadscreen message and visibility."""
+        self.loadwidget.set_status_message(msg)
+        if show:
+            self.loadscreen.show()
+        else:
+            self.loadscreen.hide()
 
     @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
@@ -447,11 +472,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 if not self.utilitiesPanel.isVisible():
                     return
 
-        self.loadwidget.set_status_message(msg)
-        if show:
-            self.loadscreen.show()
-        else:
-            self.loadscreen.hide()
+        if not self.isVisible():
+            # No window manager on the device: a popup mapped first stays under us.
+            self._early_loadscreen = (show, msg)
+            return
+        self._early_loadscreen = None
+        self._apply_loadscreen(show, msg)
 
     @QtCore.pyqtSlot(bool, name="show-update-page")
     def show_update_page(self, fullscreen: bool):
