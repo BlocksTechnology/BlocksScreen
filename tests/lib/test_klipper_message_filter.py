@@ -579,7 +579,16 @@ def test_unloaded_print_start_maps_to_rule(text: str) -> None:
     assert rule.severity == Severity.ERROR
 
 
-def test_unloaded_resume_is_not_a_refused_print() -> None:
-    text = "Machine is unloaded, please load filament before resuming."
-    rule = match_message(MessageSource.GCODE_ERROR, text)
-    assert rule is None or rule.display != "Print Not Started"
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Error evaluating 'gcode_macro RESUME:gcode': gcode.CommandError: "
+        "Machine is unloaded, please load filament before resuming.",
+        "Machine is unloaded, please load filament before resuming.",
+    ],
+)
+def test_unloaded_resume_maps_to_resume_rule(text: str) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, macro_error_text(text))
+    assert rule is not None
+    assert rule.display == "Print Not Resumed"
+    assert rule.severity == Severity.ERROR
