@@ -496,6 +496,13 @@ RULES: tuple[MessageRule, ...] = (
     ),
     MessageRule(
         source=MessageSource.GCODE_ERROR,
+        matcher=_sub("before resuming"),
+        display="Print Not Resumed",
+        hint="Load filament, then resume the print",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
         matcher=_sub("filament runout"),
         display="Filament Runout",
         hint="Load new filament",
