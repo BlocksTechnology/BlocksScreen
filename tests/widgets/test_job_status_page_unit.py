@@ -381,6 +381,29 @@ class TestStartPurgeHold:
         self._feed(widget, 0.8, 35.5)
         assert widget.layer_display_button.text() == "0"
 
+    def test_missing_first_layer_height_releases_on_the_bed(self, widget):
+        self._start(widget)
+        del widget.file_metadata["first_layer_height"]
+        self._feed(widget, 0.8, 35.5)
+        assert widget.layer_display_button.text() == "0"
+        self._feed(widget, 0.2, 36.5)
+        assert widget.layer_display_button.text() != "0"
+        self._feed(widget, 2.0, 200.0)
+        assert widget.layer_display_button.text() == "11"
+
+    def test_slicer_z_offset_releases_on_the_bed(self, widget):
+        self._start(widget)
+        self._feed(widget, 0.8, 35.5)
+        self._feed(widget, 0.21, 36.5)  # first layer printed 0.01 above metadata
+        assert widget.layer_display_button.text() != "0"
+
+    def test_hold_gives_up_after_the_purge_window(self, widget):
+        self._start(widget)
+        self._feed(widget, 0.8, 35.5)
+        widget.on_print_stats_update("print_duration", 61.0)
+        self._feed(widget, 0.8, 40.0)
+        assert widget.layer_display_button.text() == "4"
+
 
 class TestPauseResumePrint:
     """pause_resume_print toggles state and emits the right signal."""

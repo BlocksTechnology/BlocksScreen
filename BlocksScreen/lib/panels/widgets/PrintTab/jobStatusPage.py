@@ -66,6 +66,8 @@ class JobStatusWidget(QtWidgets.QWidget):
     _print_duration: float = 0.0
     # Klipper updates print_duration ~4 Hz, a first reading this deep means a mid-print join.
     _JOINED_MIDPRINT_S: typing.ClassVar[float] = 30.0
+    # RF50 KAMP purge ends ~22 s into print_duration; past this the hold must not stick.
+    _PURGE_HOLD_MAX_S: typing.ClassVar[float] = 60.0
     _VALID_STATES: typing.ClassVar[frozenset[str]] = frozenset({"printing"})
     _INVALID_STATES: typing.ClassVar[frozenset[str]] = frozenset(
         {"cancelled", "complete", "error", "standby"}
@@ -459,18 +461,22 @@ class JobStatusWidget(QtWidgets.QWidget):
         layer_height = float(meta.get("layer_height", 0) or 0)
         if layer_height <= 0:
             return self._displayed_layer
-        layer = calculate_current_layer(
-            z_position=self._last_z,
-            layer_height=layer_height,
-            first_layer_height=float(meta.get("first_layer_height", 0) or 0),
-            max_layers=self._max_layers(),
-        )
+        first_layer_height = float(meta.get("first_layer_height", 0) or 0)
         if not self._first_layer_reached:
             # print_duration starts at the start purge (KAMP LINE_PURGE, Z 0.8): wait for the bed.
-            if layer > 1:
+            first_z = first_layer_height or layer_height
+            if (
+                self._last_z >= first_z + layer_height / 2
+                and self._print_duration < self._PURGE_HOLD_MAX_S
+            ):
                 return self._displayed_layer
             self._first_layer_reached = True
-        return layer
+        return calculate_current_layer(
+            z_position=self._last_z,
+            layer_height=layer_height,
+            first_layer_height=first_layer_height,
+            max_layers=self._max_layers(),
+        )
 
     def _refresh_layer_display(self) -> None:
         """Render current/total layer: Klipper's current_layer wins, else the Z estimate.
