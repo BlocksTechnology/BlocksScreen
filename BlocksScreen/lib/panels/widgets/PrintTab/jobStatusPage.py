@@ -64,10 +64,6 @@ class JobStatusWidget(QtWidgets.QWidget):
     file_metadata: dict | None = None
     total_layers = "?"
     _print_duration: float = 0.0
-    # Klipper updates print_duration ~4 Hz, a first reading this deep means a mid-print join.
-    _JOINED_MIDPRINT_S: typing.ClassVar[float] = 30.0
-    # RF50 KAMP purge ends ~22 s into print_duration; past this the hold must not stick.
-    _PURGE_HOLD_MAX_S: typing.ClassVar[float] = 60.0
     _VALID_STATES: typing.ClassVar[frozenset[str]] = frozenset({"printing"})
     _INVALID_STATES: typing.ClassVar[frozenset[str]] = frozenset(
         {"cancelled", "complete", "error", "standby"}
@@ -102,6 +98,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._awaiting_resume = False
         self._resume_baseline = 0.0
         self._first_layer_reached = False
+        self._start_line_pos: float | None = None
         self._setup_ui()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -248,6 +245,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._gcode_end_byte = 0
         self._print_duration = 0.0
         self._first_layer_reached = False
+        self._start_line_pos = None
         self.layer_display_button.setText("0")
         self.layer_display_button.secondary_text = "?"
         self.print_time_display_button.setText("?")
@@ -357,6 +355,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._filament_peak = 0.0
             self._print_duration = 0.0
             self._first_layer_reached = False
+            self._start_line_pos = None
             self.file_metadata = None
         # Send Event on Print state
         event_class_name = "Print" + event_state.capitalize()
@@ -414,8 +413,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         elif isinstance(value, float):
             # print_duration + filament_used tracked regardless of visibility (gate Z fallback)
             if "print_duration" in field:
-                if self._print_duration == 0 and value > self._JOINED_MIDPRINT_S:
-                    self._first_layer_reached = True  # restart/reconnect mid-print
                 self._print_duration = value
             elif "filament_used" in field:
                 self._filament_used = value
@@ -474,12 +471,10 @@ class JobStatusWidget(QtWidgets.QWidget):
             return self._displayed_layer
         first_layer_height = float(meta.get("first_layer_height", 0) or 0)
         if not self._first_layer_reached:
-            # print_duration starts at the start purge (KAMP LINE_PURGE, Z 0.8): wait for the bed.
-            first_z = first_layer_height or layer_height
-            if (
-                self._last_z >= first_z + layer_height / 2
-                and self._print_duration < self._PURGE_HOLD_MAX_S
-            ):
+            # First extrusion (MMU load, KAMP purge) is inside PRINT_START; file_position moves when it returns.
+            if self._start_line_pos is None:
+                self._start_line_pos = self._file_position
+            if self._file_position <= self._start_line_pos:
                 return self._displayed_layer
             self._first_layer_reached = True
         return calculate_current_layer(
