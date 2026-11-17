@@ -665,7 +665,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_content_widget.setTabEnabled(
             self.main_content_widget.indexOf(self.utilitiesTab), True
         )
-        self.header_main_layout.setEnabled(True)
         return all(
             [
                 not self.main_content_widget.isTabEnabled(
@@ -674,7 +673,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 not self.main_content_widget.isTabEnabled(
                     self.main_content_widget.indexOf(self.utilitiesTab)
                 ),
-                not self.header_main_layout.isEnabled(),
             ]
         )
 
@@ -695,7 +693,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_content_widget.setTabEnabled(
             self.main_content_widget.indexOf(self.utilitiesTab), False
         )
-        self.header_main_layout.setEnabled(False)
         return all(
             [
                 not self.main_content_widget.isTabEnabled(
@@ -704,7 +701,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 not self.main_content_widget.isTabEnabled(
                     self.main_content_widget.indexOf(self.utilitiesTab)
                 ),
-                not self.header_main_layout.isEnabled(),
             ]
         )
 
@@ -838,8 +834,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def set_ui_lock(self, locked: bool) -> None:
         """Lock or unlock navigation during calibration.
 
-        Disables all tabs except controlTab (where calibration lives) and
-        the header, so the user cannot navigate away mid-calibration.
+        Disables all tabs except controlTab (where calibration lives), so the
+        user cannot navigate away mid-calibration.
         """
         for tab in (
             self.printTab,
@@ -849,7 +845,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.main_content_widget.setTabEnabled(
                 self.main_content_widget.indexOf(tab), not locked
             )
-        self.header_main_layout.setEnabled(not locked)
 
     @QtCore.pyqtSlot(str, str, name="track_print_state")
     def _track_print_state(self, field: str, value: str) -> None:
