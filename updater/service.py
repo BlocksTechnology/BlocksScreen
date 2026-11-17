@@ -1339,6 +1339,10 @@ class UpdateService:
         except OSError:
             return None
 
+    def followup_pending(self) -> bool:
+        """True while the last BlocksScreen update left a follow-up marker."""
+        return self._followup_path.exists()
+
     async def deploy_running(self) -> bool:
         """True while the flag is set and the path unit is armed or install-updater runs."""
         if not self.deploy_pending():

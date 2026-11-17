@@ -87,6 +87,7 @@ def svc():
     mock_svc.reconcile_if_pending = AsyncMock()
     mock_svc.sync_moonraker = AsyncMock(return_value=True)
     mock_svc.deploy_pending = MagicMock(return_value=False)
+    mock_svc.followup_pending = MagicMock(return_value=False)
     # Units stay live while the flag is set unless a test says otherwise.
     mock_svc.deploy_running = AsyncMock(side_effect=lambda: mock_svc.deploy_pending())
     mock_svc.deploy_flag_stamp = MagicMock(return_value=1)
@@ -107,6 +108,8 @@ def svc():
     s._provisioning = False
     s._provisioned = False
     s._followed_up = False
+    s._followup_hold = False
+    s._followup_running = False
     s._boot_pass_done = True
     s._deploy_hold = None
     s._capped_flag = None
