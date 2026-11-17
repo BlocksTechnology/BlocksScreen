@@ -592,3 +592,27 @@ def test_unloaded_resume_maps_to_resume_rule(text: str) -> None:
     assert rule is not None
     assert rule.display == "Print Not Resumed"
     assert rule.severity == Severity.ERROR
+
+
+_HH_PICKUP = (
+    "MMU issue detected. Print will be paused\n"
+    "Reason: Load sequence failed because:\n"
+    "Couldn't pick up filament at gate (gate endstop didn't trigger)\n"
+    "Gate marked as empty. Use 'MMU_GATE_MAP GATE=0 AVAILABLE=1' to reset.\n"
+    "Occured when changing tool: > T0"
+)
+
+
+@pytest.mark.parametrize(
+    "text, display",
+    [
+        (_HH_PICKUP, "Filament Not Picked Up"),
+        ("Load sequence failed because:\nSome other reason", "Filament Load Failed"),
+        ("Unload sequence failed because:\nSome reason", "Filament Unload Failed"),
+    ],
+)
+def test_happy_hare_load_failures_map_to_rules(text: str, display: str) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, macro_error_text(text))
+    assert rule is not None
+    assert rule.display == display
+    assert rule.severity == Severity.ERROR
