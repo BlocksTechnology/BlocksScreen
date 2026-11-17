@@ -130,6 +130,8 @@ class UpdaterInterface(
         self._provisioning: bool = False
         self._provisioned: bool = False
         self._followed_up: bool = False
+        # Keeps busy up from boot or deploy end until _followup_pass has run or deferred.
+        self._followup_hold: bool = False
         # request_status waits for the boot pass, so a client never sees pre-install status.
         self._boot_pass_done: bool = False
         self._deploy_hold: asyncio.Task | None = None
@@ -155,6 +157,10 @@ class UpdaterInterface(
         if self._svc.deploy_pending():
             self._busy = True
             self._deploy_hold = self._spawn(self._hold_for_deploy(), name="deploy_hold")
+        # Same for the follow-up the update left: the status fetch runs before its pass.
+        if self._svc.followup_pending():
+            self._busy = True
+            self._followup_hold = True
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
@@ -225,7 +231,13 @@ class UpdaterInterface(
                     self._hold_for_deploy(), name="deploy_hold"
                 )
             busy = True
-        self._emit_busy(busy)
+        self._emit_busy(busy or self._followup_hold)
+
+    def _end_followup_hold(self) -> None:
+        """Drop the follow-up hold; busy falls unless a deploy hold still owns it."""
+        if self._followup_hold:
+            self._followup_hold = False
+            self._set_busy(False)
 
     def _emit_busy(self, busy: bool) -> None:
         """Emit busy_changed only on state transitions to avoid redundant signals."""
@@ -287,7 +299,13 @@ class UpdaterInterface(
             self._deploy_hold = None
         # A provisioning pass that started under the hold still owns busy.
         if not self._provisioning:
-            self._emit_busy(busy=False)
+            # Hand busy straight to the follow-up the update left, no gap between them.
+            if self._provisioned and not self._followed_up:
+                self._followup_hold = (
+                    self._followup_hold or self._svc.followup_pending()
+                )
+            if not self._followup_hold:
+                self._emit_busy(busy=False)
             # The follow-up skipped while the hold owned busy: run it now, not at the next poll.
             if self._provisioned and not self._followed_up:
                 self._spawn(self._followup_pass(), name="followup_after_deploy")
@@ -381,7 +399,12 @@ class UpdaterInterface(
 
     async def _followup_pass(self) -> None:
         """After provisioning, apply manifest changes the previous daemon could not see."""
-        if not self._provisioned or self._followed_up or self._busy:
+        if (
+            not self._provisioned
+            or self._followed_up
+            or (self._busy and not self._followup_hold)
+        ):
+            self._end_followup_hold()
             return
         try:
             retry, ran = await self._svc.run_followup(self._set_busy)
@@ -390,6 +413,8 @@ class UpdaterInterface(
         except Exception as exc:  # noqa: BLE001
             _log.error("followup pass failed: %s", exc, exc_info=True)
             retry, ran = False, False
+        finally:
+            self._end_followup_hold()
         self._followed_up = not retry
         # A failed try that will retry sweeps apt once the follow-up settles.
         if not ran or retry:
