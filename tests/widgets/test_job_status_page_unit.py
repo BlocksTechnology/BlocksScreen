@@ -274,6 +274,68 @@ class TestOnGcodeMoveUpdate:
         assert widget.layer_display_button.text() == "3"
 
 
+class TestFilamentPeakGate:
+    """Only filament past its peak redraws the Z layer; pause retract at park Z must not."""
+
+    def _printing_at_layer_4(self, widget):
+        """Print running at Z 0.8 (layer 4) with 10 mm of filament used."""
+        widget.show()
+        widget.file_metadata = {
+            "object_height": 10.0,
+            "layer_height": 0.2,
+            "first_layer_height": 0.2,
+        }
+        widget._handle_print_state("printing")
+        widget._print_duration = 10.0
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.2, 0])  # first layer
+        widget.on_print_stats_update("filament_used", 5.0)
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 0])
+        widget.on_print_stats_update("filament_used", 10.0)
+        assert widget.layer_display_button.text() == "4"
+
+    def test_pause_retract_at_park_z_keeps_layer(self, widget):
+        """RF50 PAUSE retracts and lifts before PAUSE_BASE, state still printing."""
+        self._printing_at_layer_4(widget)
+        widget.on_gcode_move_update("gcode_position", [0, 0, 15.8, 0])
+        widget.on_print_stats_update("filament_used", 7.0)
+        assert widget.layer_display_button.text() == "4"
+
+    def test_unretract_at_park_z_keeps_layer(self, widget):
+        self._printing_at_layer_4(widget)
+        widget.on_gcode_move_update("gcode_position", [0, 0, 15.8, 0])
+        widget.on_print_stats_update("filament_used", 7.0)
+        widget.on_print_stats_update("filament_used", 10.0)
+        assert widget.layer_display_button.text() == "4"
+
+    def test_extrusion_past_peak_redraws(self, widget):
+        self._printing_at_layer_4(widget)
+        widget.on_print_stats_update("filament_used", 7.0)
+        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
+        widget.on_print_stats_update("filament_used", 10.5)
+        assert widget.layer_display_button.text() == "5"
+
+    def test_resume_keeps_peak(self, widget):
+        """paused -> printing must not reset the peak, or the unretract at park Z redraws."""
+        self._printing_at_layer_4(widget)
+        widget.on_print_stats_update("filament_used", 7.0)
+        widget._handle_print_state("paused")
+        widget.on_gcode_move_update("gcode_position", [0, 0, 15.8, 0])
+        widget._handle_print_state("printing")
+        widget.on_print_stats_update("filament_used", 10.0)
+        assert widget.layer_display_button.text() == "4"
+
+    def test_reconnect_resets_peak(self, widget):
+        """A stale peak from a missed print end must not hold the new print at 0."""
+        widget._filament_peak = 500.0
+        widget._internal_print_status = ""
+        self._printing_at_layer_4(widget)
+
+    def test_standby_resets_peak(self, widget):
+        self._printing_at_layer_4(widget)
+        widget._handle_print_state("standby")
+        assert widget._filament_peak == 0.0
+
+
 class TestVirtualSdcardUpdate:
     """virtual_sdcard_update sets progress bard, guarded by visibility."""
 

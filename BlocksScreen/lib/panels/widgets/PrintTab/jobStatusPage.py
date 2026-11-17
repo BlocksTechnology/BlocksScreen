@@ -89,6 +89,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._displayed_layer = 0
         self._last_z = 0.0
         self._filament_used = 0.0
+        self._filament_peak = 0.0
         self._file_position = 0.0
         self._raw_progress = 0.0
         self._gcode_start_byte = 0
@@ -235,6 +236,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._displayed_layer = 0
         self._last_z = 0.0
         self._filament_used = 0.0
+        self._filament_peak = 0.0
         self._file_position = 0.0
         self._raw_progress = 0.0
         self._gcode_start_byte = 0
@@ -310,6 +312,8 @@ class JobStatusWidget(QtWidgets.QWidget):
             )
             if self._internal_print_status != "printing":
                 self._awaiting_resume = True
+                if self._internal_print_status != "paused":
+                    self._filament_peak = 0.0  # fresh start or reconnect, not a resume
                 self._resume_baseline = self._file_position
             elif not self._awaiting_resume:
                 self.pause_printing_btn.setEnabled(True)
@@ -344,6 +348,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.pause_printing_btn.setEnabled(True)
             self._last_z = 0.0
             self._filament_used = 0.0
+            self._filament_peak = 0.0
             self._print_duration = 0.0
             self.file_metadata = None
         # Send Event on Print state
@@ -405,7 +410,9 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self._print_duration = value
             elif "filament_used" in field:
                 self._filament_used = value
-                if value > 0:
+                # Only new material redraws: pause retract/unretract at park Z must not.
+                if value > self._filament_peak:
+                    self._filament_peak = value
                     self._refresh_layer_display()
             elif self.isVisible() and "total_duration" in field:
                 _time = estimate_print_time(int(value))
