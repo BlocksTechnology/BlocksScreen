@@ -307,6 +307,14 @@ RULES: tuple[MessageRule, ...] = (
         hint="Check the filament path, then load again",
         severity=Severity.ERROR,
     ),
+    # Klipper's TOOL= range check: the file calls a tool past the last gate.
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re(r"\btool must have maximum of \d+"),
+        display="Tool Not Available",
+        hint="The file uses more tools than this printer has, slice it again",
+        severity=Severity.ERROR,
+    ),
     # Same clog/tangle word Happy Hare reports and Mainsail's FlowGuard meter shows.
     MessageRule(
         source=MessageSource.GCODE_ERROR,

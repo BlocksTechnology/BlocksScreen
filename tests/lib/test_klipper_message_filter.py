@@ -609,9 +609,14 @@ _HH_PICKUP = (
         (_HH_PICKUP, "Filament Not Picked Up"),
         ("Load sequence failed because:\nSome other reason", "Filament Load Failed"),
         ("Unload sequence failed because:\nSome reason", "Filament Unload Failed"),
+        (
+            "Error on 'MMU_CHANGE_TOOL TOOL=1 NEXT_POS=\"165.375,250.375\" ; T1': "
+            "TOOL must have maximum of 0",
+            "Tool Not Available",
+        ),
     ],
 )
-def test_happy_hare_load_failures_map_to_rules(text: str, display: str) -> None:
+def test_happy_hare_errors_map_to_rules(text: str, display: str) -> None:
     rule = match_message(MessageSource.GCODE_ERROR, macro_error_text(text))
     assert rule is not None
     assert rule.display == display
