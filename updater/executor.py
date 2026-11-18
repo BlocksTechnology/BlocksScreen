@@ -494,7 +494,7 @@ _GIT_CORRUPT_SIGNATURES = (
     "inflate: data stream error",
 )
 
-# Transient transport failures (offline, DNS, timeout); these heal on their own.
+# Transport failures (offline, DNS, timeout, HTTP/TLS refusals): no update fixes these.
 _GIT_NETWORK_SIGNATURES = (
     "could not resolve host",
     "unable to access",

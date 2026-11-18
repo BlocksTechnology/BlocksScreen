@@ -37,6 +37,7 @@ from updater.executor import (
     git_get_hash,
     git_has_corruption,
     git_is_dirty,
+    git_is_network_error,
     git_pull,
     git_remote_reachable,
     git_remote_url,
@@ -544,6 +545,38 @@ class TestGitFetch:
             "extra",
             "origin",
         ]
+
+    @pytest.mark.asyncio
+    async def test_unreachable_origin_reads_as_network_error(self, tmp_path):
+        """Real git output from a fetch whose host never resolves (.invalid, RFC 6761)."""
+        repo = tmp_path / "repo"
+        assert (await _run(["git", "init", "-q", str(repo)], timeout=10.0))[0]
+        url = "https://bs-offline.invalid/repo.git"
+        assert (
+            await _run(["git", "remote", "add", "origin", url], cwd=repo, timeout=10.0)
+        )[0]
+        ok, out = await git_fetch(repo, prune_remotes=False)
+        assert not ok
+        assert git_is_network_error(out), out
+
+    @pytest.mark.parametrize(
+        ("output", "expected"),
+        [
+            (
+                "fatal: unable to access 'u': The requested URL returned error: 403",
+                True,
+            ),
+            (
+                "fatal: unable to access 'u': SSL certificate problem: not yet valid",
+                True,
+            ),
+            ("timed out after 120.0s", True),
+            ("fatal: --atomic can only be used when fetching from one remote", False),
+            ("error: object file .git/objects/ab/cd is empty", False),
+        ],
+    )
+    def test_network_error_classifier(self, output, expected):
+        assert git_is_network_error(output) is expected
 
     @pytest.mark.asyncio
     async def test_none_path_returns_false(self):
