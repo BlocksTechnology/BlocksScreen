@@ -79,6 +79,9 @@ components:
     type: git
     path: ~/crowsnest
     url: https://github.com/mainsail-crew/crowsnest
+    branch: master
+    # Tip of v4 master (v4.2.0 + changelog), the fleet's version; upstream's default branch is the v5 rewrite.
+    version: cf936dabdcf6a3d1eb0138d8eea9044745b40db6
     service: crowsnest.service
     reset_mode: hard
     order: 20
