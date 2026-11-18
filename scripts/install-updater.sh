@@ -237,11 +237,26 @@ fi
 if [[ ! -L "$_BOOTSTRAP_DEST" ]]; then
     sudo systemctl link --no-reload "$_BOOTSTRAP_SRC"
 fi
-# Each implicit reload costs ~0.3 s on a Pi: one explicit reload covers the deploy and bootstrap units.
+
+echo_info "Installing BlocksScreen-clock timer ..."
+for _unit in BlocksScreen-clock.service BlocksScreen-clock.timer; do
+    if [[ -f "/etc/systemd/system/$_unit" && ! -L "/etc/systemd/system/$_unit" ]]; then
+        sudo rm "/etc/systemd/system/$_unit"
+    fi
+    if [[ ! -L "/etc/systemd/system/$_unit" ]]; then
+        sudo systemctl link --no-reload "$SCRIPT_PATH/$_unit"
+    fi
+done
+# Each implicit reload costs ~0.3 s on a Pi: one explicit reload covers the deploy, bootstrap and clock units.
 sudo systemctl daemon-reload
 sudo systemctl enable --now --no-reload BlocksScreen-deploy.path
 echo_ok "BlocksScreen-deploy path unit installed"
 echo_ok "BlocksScreen-bootstrap service installed (symlink)"
+if sudo systemctl enable --now --no-reload BlocksScreen-clock.timer; then
+    echo_ok "BlocksScreen-clock timer installed (symlink)"
+else
+    echo_warn "BlocksScreen-clock timer not enabled; clock heals only via NTP"
+fi
 
 echo_info "Installing post-merge hook ..."
 chmod +x "$SCRIPT_PATH/post-merge"

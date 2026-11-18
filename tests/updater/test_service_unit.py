@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 import updater.service as updater_service
-from updater.models import ComponentConfig, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, ComponentConfig, ComponentStatus
 from updater.service import LoggingCallback, UpdateService
 
 
@@ -3212,7 +3212,7 @@ class TestPreflightFetch:
             svc = UpdateService()
             svc._components = comps
             offline = await svc._preflight_fetch(comps)
-        assert offline == set()
+        assert offline == {}
         assert set(svc._fetch_times) == {"klipper", "moonraker"}
 
     @pytest.mark.asyncio
@@ -3225,7 +3225,7 @@ class TestPreflightFetch:
             svc = UpdateService()
             svc._components = comps
             offline = await svc._preflight_fetch(comps)
-        assert offline == {"klipper", "moonraker"}
+        assert offline == {"klipper": "timeout", "moonraker": "timeout"}
 
     @pytest.mark.asyncio
     async def test_corrupt_repo_is_not_treated_as_offline(self, tmp_path):
@@ -3237,7 +3237,7 @@ class TestPreflightFetch:
             svc = UpdateService()
             svc._components = comps
             offline = await svc._preflight_fetch(comps)
-        assert offline == set()
+        assert offline == {}
         assert "klipper" not in svc._fetch_times  # left for the per-component flow
 
     @pytest.mark.asyncio
@@ -3248,7 +3248,7 @@ class TestPreflightFetch:
             svc._components = [comp]
             svc._fetch_times["klipper"] = time.monotonic()
             offline = await svc._preflight_fetch([comp])
-        assert offline == set()
+        assert offline == {}
         mock_fetch.assert_not_called()
 
     @pytest.mark.asyncio
@@ -3257,7 +3257,9 @@ class TestPreflightFetch:
         online_comp = self._git(tmp_path, "moonraker")
         cb = MagicMock()
         with (
-            patch.object(UpdateService, "_preflight_fetch", return_value={"klipper"}),
+            patch.object(
+                UpdateService, "_preflight_fetch", return_value={"klipper": "timeout"}
+            ),
             patch.object(
                 UpdateService, "_run_git_batch", return_value=True
             ) as mock_batch,
@@ -3271,6 +3273,22 @@ class TestPreflightFetch:
         )
         batched = [c.name for c in mock_batch.call_args.args[0]]
         assert batched == ["moonraker"]
+
+    @pytest.mark.asyncio
+    async def test_update_all_reports_unsynced_clock(self, tmp_path):
+        comp = self._git(tmp_path, "klipper")
+        cb = MagicMock()
+        offline = {
+            "klipper": f"{CLOCK_UNSYNCED}: fatal: certificate verification failed"
+        }
+        with (
+            patch.object(UpdateService, "_preflight_fetch", return_value=offline),
+            patch.object(UpdateService, "_run_git_batch", return_value=True),
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            assert await svc.update_all({"klipper"}) is False
+        cb.on_error.assert_called_once_with("klipper", CLOCK_UNSYNCED)
 
 
 class TestDeferredRestart:
@@ -3770,7 +3788,7 @@ class TestNonRepoComponent:
 
         with patch("updater.service.git_fetch", side_effect=fake_fetch):
             svc = UpdateService(callback=MagicMock())
-            assert await svc._preflight_fetch([good, bad]) == set()
+            assert await svc._preflight_fetch([good, bad]) == {}
         assert fetched == ["klipper"]
 
     @pytest.mark.asyncio

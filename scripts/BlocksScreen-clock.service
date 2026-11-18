@@ -1,0 +1,10 @@
+[Unit]
+Description=BlocksScreen clock fallback (HTTP Date while NTP is unsynced)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'exec /bin/bash "$(dirname "$(readlink -f /etc/systemd/system/BlocksScreen-clock.service)")/bs-clock-sync.sh"'
+StandardOutput=journal
+StandardError=journal

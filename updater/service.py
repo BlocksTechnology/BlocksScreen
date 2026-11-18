@@ -35,6 +35,7 @@ from updater.executor import (
     classify_apt_error,
     disable_service,
     enable_service,
+    explain_fetch_error,
     git_checkout,
     git_clone,
     git_fetch,
@@ -67,7 +68,7 @@ from updater.models import DEPLOY_FLAG as _DEPLOY_FLAG
 from updater.models import DEPLOY_LIVE_STATES as _DEPLOY_LIVE_STATES
 from updater.models import DEPLOY_PATH_UNIT as _DEPLOY_PATH_UNIT
 from updater.models import DEPLOY_UNITS as _DEPLOY_UNITS
-from updater.models import ComponentConfig, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
 # name -> pre-update hash; present at boot = revert those repos.
@@ -536,13 +537,16 @@ class UpdateService:
         return False
 
     async def _filter_offline_batch(
-        self, batch: list[ComponentConfig], offline: set[str]
+        self, batch: list[ComponentConfig], offline: dict[str, str]
     ) -> bool:
         """Drop offline components from the batch, erroring each individually."""
         ok = True
         for c in [c for c in batch if c.name in offline]:
             batch.remove(c)
-            ok = self._cb_error_done(c.name, "network error during pre-flight fetch")
+            reason = "network error during pre-flight fetch"
+            if offline[c.name].startswith(CLOCK_UNSYNCED):
+                reason = CLOCK_UNSYNCED
+            ok = self._cb_error_done(c.name, reason)
         return ok
 
     async def _filter_nonrepo_batch(self, batch: list[ComponentConfig]) -> bool:
@@ -783,15 +787,15 @@ class UpdateService:
 
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig]
-    ) -> set[str]:
-        """Fetch every existing git component up-front (network phase)."""
+    ) -> dict[str, str]:
+        """Fetch every git component up-front; return the offline ones with their error."""
         # Non-repos excluded: their fetch failure does not mean offline.
         targets = [
             c
             for c in sorted_components
             if c.kind == "git" and c.path is not None and is_git_repo(c.path)
         ]
-        offline: set[str] = set()
+        offline: dict[str, str] = {}
         for c in targets:
             now = time.monotonic()
             async with self._git_lock:
@@ -803,7 +807,7 @@ class UpdateService:
                 async with self._git_lock:
                     self._fetch_times[c.name] = now
             elif not await git_has_corruption(c.path, hint=err):
-                offline.add(c.name)
+                offline[c.name] = explain_fetch_error(err)
         if offline:
             self._log.error(
                 "update_all: pre-flight fetch failed for %s - continuing without them",

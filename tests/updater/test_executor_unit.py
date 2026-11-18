@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from updater.models import CLOCK_UNSYNCED
 from updater.executor import (
     _moonraker_call,
     moonraker_refresh_repo,
@@ -46,6 +47,7 @@ from updater.executor import (
     git_prune_extra_remotes,
     git_untracked_paths,
     enable_service,
+    explain_fetch_error,
     klipper_printing,
     restart_service,
     restart_service_noblock,
@@ -512,6 +514,27 @@ class TestGitPruneExtraRemotes:
         with patch("asyncio.create_subprocess_exec", exec_mock):
             await git_prune_extra_remotes(tmp_path)
         assert exec_mock.call_count == 1
+
+
+_TLS_ERR = "fatal: server certificate verification failed. CAfile: none CRLfile: none"
+
+
+@pytest.mark.parametrize(
+    ("output", "synced", "clock"),
+    [
+        (_TLS_ERR, False, True),
+        (_TLS_ERR, True, False),
+        ("fatal: timed out", False, False),
+    ],
+)
+def test_explain_fetch_error(tmp_path, output, synced, clock):
+    flag = tmp_path / "synchronized"
+    if synced:
+        flag.touch()
+    with patch("updater.executor._CLOCK_SYNCED_FLAG", flag):
+        result = explain_fetch_error(output)
+    assert result.startswith(CLOCK_UNSYNCED) is clock
+    assert result.endswith(output)
 
 
 class TestGitFetch:

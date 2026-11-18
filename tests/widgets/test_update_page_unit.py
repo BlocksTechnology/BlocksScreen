@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from updater.models import PRINTER_BUSY, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, PRINTER_BUSY, ComponentStatus
 
 _UP_MOD = "BlocksScreen.lib.panels.widgets.MainWindow.updatePage"
 
@@ -150,6 +150,16 @@ class TestVersionString:
     def test_system_returns_updates_available(self, page):
         s = _make_status(kind="system", packages_upgradable=12)
         assert page._version_string(s) == "updates available"
+
+    @pytest.mark.parametrize(
+        ("error", "label"),
+        [
+            (f"{CLOCK_UNSYNCED}: fatal", "clock not synchronized"),
+            ("fatal", "status error"),
+        ],
+    )
+    def test_error_label(self, page, error, label):
+        assert page._version_string(_make_status(error=error)) == label
 
 
 class TestBuildCards:

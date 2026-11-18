@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 from updater.locking import restart_sentinel_path
-from updater.models import ComponentStatus
+from updater.models import CLOCK_UNSYNCED, ComponentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +241,7 @@ async def _git_status_preflight(
         result, output = await git_fetch(path, prune_remotes=False)
         if not result:
             logger.error("Failed at git_fetch operation, %s", output)
-            return "", ComponentStatus(name=name, error=output)
+            return "", ComponentStatus(name=name, error=explain_fetch_error(output))
     current_hash = await git_get_hash(path)
     if current_hash == "":
         logger.error("Failed at git_hash operation")
@@ -478,6 +478,20 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
     if "index.lock" in err and _clear_stale_git_index_lock(path):
         return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
     return (ok, err)
+
+
+# Created by timesyncd on its first NTP sync each boot (systemd-timesyncd(8)).
+_CLOCK_SYNCED_FLAG = Path("/run/systemd/timesync/synchronized")
+# gnutls (Debian git) reports a bad certificate date only as a generic verify failure.
+_GIT_TLS_SIGNATURES = ("certificate verification failed", "ssl certificate problem")
+
+
+def explain_fetch_error(output: str) -> str:
+    """Prefix a TLS fetch failure with the clock cause while NTP has not synced."""
+    low = output.lower()
+    if any(k in low for k in _GIT_TLS_SIGNATURES) and not _CLOCK_SYNCED_FLAG.exists():
+        return f"{CLOCK_UNSYNCED}: {output}"
+    return output
 
 
 # Narrow corruption signatures: "not a git repository" etc. must not match.
