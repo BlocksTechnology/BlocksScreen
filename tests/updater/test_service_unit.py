@@ -200,6 +200,32 @@ class TestCheckStatus:
         assert skip_fetch is True
 
     @pytest.mark.asyncio
+    async def test_breaker_cooldown_keeps_last_fetch_error(self, tmp_path: Path):
+        """A press during the fetch cooldown must still see the repo as dirty."""
+        fake_path = tmp_path / "mainsail-config"
+        fake_path.mkdir()
+        component = ComponentConfig(name="mainsail-config", kind="git", path=fake_path)
+        failed = ComponentStatus(name="mainsail-config", error="fatal: --atomic")
+        clean = ComponentStatus(name="mainsail-config")
+        with (
+            patch(
+                "updater.service.load_components", return_value=([component], 3600.0)
+            ),
+            patch(
+                "updater.service.check_git_status", side_effect=[failed, clean, clean]
+            ) as mock_check,
+        ):
+            svc = UpdateService()
+            await svc.check_status()
+            cooled = await svc.check_status()
+            assert mock_check.call_args.args[-1] is True
+            assert cooled["mainsail-config"].error == "fatal: --atomic"
+            assert cooled["mainsail-config"].needs_update
+            healed = await svc.check_status(force=True)
+        assert healed["mainsail-config"].error is None
+        assert not svc.has_fetch_failures() and not svc._fetch_errors
+
+    @pytest.mark.asyncio
     async def test_printing_skips_apt_list_refresh(self):
         with patch("updater.service.apt_update", AsyncMock()) as mock_update:
             await UpdateService()._refresh_apt_lists(force=True, printing=True)

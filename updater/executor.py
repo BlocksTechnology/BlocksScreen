@@ -415,12 +415,13 @@ async def _prune_broken_refs(path: Path, output: str) -> bool:
 async def git_fetch(
     path: Path | None, *, prune_remotes: bool = True
 ) -> tuple[bool, str]:
-    """Fetch all remotes for the repo at path."""
+    """Fetch origin for the repo at path (the only remote updates read)."""
     if path is None:
         return (False, "path does not exist")
     if prune_remotes:
         await git_prune_extra_remotes(path)
-    cmd = [GIT, "fetch", "--all", "--atomic", "--prune"]
+    # Not --all: with an extra remote --atomic refuses to run, failing every status fetch.
+    cmd = [GIT, "fetch", "--atomic", "--prune", "origin"]
     ok, out = await _run(cmd, cwd=path, timeout=60.0)
     if ok or "reference broken" not in out:
         return (ok, out)

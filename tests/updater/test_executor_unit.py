@@ -526,6 +526,26 @@ class TestGitFetch:
         assert ok is True
 
     @pytest.mark.asyncio
+    async def test_status_fetch_ignores_extra_remote(self, tmp_path):
+        """An extra remote must not fail the non-pruning status fetch (--all + --atomic)."""
+        repo, origin = tmp_path / "repo", tmp_path / "origin.git"
+        assert (await _run(["git", "init", "-q", "--bare", str(origin)], timeout=10.0))[
+            0
+        ]
+        assert (await _run(["git", "init", "-q", str(repo)], timeout=10.0))[0]
+        for name, url in (("origin", origin), ("extra", tmp_path / "missing.git")):
+            ok, _ = await _run(
+                ["git", "remote", "add", name, str(url)], cwd=repo, timeout=10.0
+            )
+            assert ok
+        ok, out = await git_fetch(repo, prune_remotes=False)
+        assert ok, out
+        assert (await _run(["git", "remote"], cwd=repo, timeout=10.0))[1].split() == [
+            "extra",
+            "origin",
+        ]
+
+    @pytest.mark.asyncio
     async def test_none_path_returns_false(self):
         ok, _ = await git_fetch(None)
         assert ok is False

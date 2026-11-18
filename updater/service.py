@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import json
 import logging
 import os
@@ -274,6 +275,8 @@ class UpdateService:
         # -inf: monotonic() may start near 0 on a fresh boot, faking a recent refresh.
         self._apt_list_time: float = float("-inf")
         self._fetch_backoff: dict[str, _Backoff] = {}
+        # Last fetch error per repo, re-reported while its breaker skips the fetch.
+        self._fetch_errors: dict[str, str] = {}
         # Per repo, the HEAD Moonraker last failed to record (no upstream, offline).
         self._moonraker_unreadable: dict[str, str] = {}
         self._state_path = _STATE_PATH
@@ -333,6 +336,18 @@ class UpdateService:
             ok, err = await apt_update()
         if not ok:
             self._log.warning("apt list refresh failed: %s", err)
+
+    def _record_fetch_result(self, name: str, now: float, error: str | None) -> None:
+        """Stamp a fetch success (closing the breaker) or trip the breaker on failure."""
+        if error is None:
+            self._fetch_times[name] = now
+            self._fetch_backoff.pop(name, None)
+            self._fetch_errors.pop(name, None)
+            return
+        self._fetch_errors[name] = error
+        self._fetch_backoff.setdefault(
+            name, _Backoff(_FETCH_BACKOFF_BASE_S, _FETCH_BACKOFF_MAX_S)
+        ).trip()
 
     def has_fetch_failures(self) -> bool:
         """True while any component's git fetch is failing (entry is popped on success)."""
@@ -408,16 +423,14 @@ class UpdateService:
                 status = await check_git_status(
                     c.name, c.path, c.branch, c.version, skip_fetch
                 )
-                if not skip_fetch:
-                    async with self._git_lock:
-                        if status.error is None:
-                            self._fetch_times[c.name] = now
-                            self._fetch_backoff.pop(c.name, None)
-                        else:
-                            self._fetch_backoff.setdefault(
-                                c.name,
-                                _Backoff(_FETCH_BACKOFF_BASE_S, _FETCH_BACKOFF_MAX_S),
-                            ).trip()
+                async with self._git_lock:
+                    if not skip_fetch:
+                        self._record_fetch_result(c.name, now, status.error)
+                    elif status.error is None and c.name in self._fetch_errors:
+                        # Else a press during the cooldown sees "no dirty" and never heals it.
+                        status = dataclasses.replace(
+                            status, error=self._fetch_errors[c.name]
+                        )
             results[c.name] = status
 
         gathered = await asyncio.gather(
@@ -801,7 +814,7 @@ class UpdateService:
             ok, err = await git_fetch(c.path)
             if ok:
                 async with self._git_lock:
-                    self._fetch_times[c.name] = now
+                    self._record_fetch_result(c.name, now, None)
             elif not await git_has_corruption(c.path, hint=err):
                 offline.add(c.name)
         if offline:
