@@ -494,6 +494,26 @@ _GIT_CORRUPT_SIGNATURES = (
     "inflate: data stream error",
 )
 
+# Transient transport failures (offline, DNS, timeout); these heal on their own.
+_GIT_NETWORK_SIGNATURES = (
+    "could not resolve host",
+    "unable to access",
+    "failed to connect",
+    "connection timed out",
+    "connection refused",
+    "network is unreachable",
+    "temporary failure in name resolution",
+    "could not read from remote repository",
+    "timed out after",
+)
+
+
+def git_is_network_error(output: str) -> bool:
+    """True if git output reads as a transient network failure, not a repo fault."""
+    low = output.lower()
+    return any(k in low for k in _GIT_NETWORK_SIGNATURES)
+
+
 # Quarantine dir inside .git/objects so it never appears as untracked.
 _QUARANTINE_DIRNAME = "objects-corrupt"
 _GIT_OBJ_PATH_RE = re.compile(r"objects/([0-9a-f]{2})/([0-9a-f]{38})")

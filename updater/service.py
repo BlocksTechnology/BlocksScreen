@@ -42,6 +42,7 @@ from updater.executor import (
     git_get_current_branch,
     git_get_hash,
     git_has_corruption,
+    git_is_network_error,
     git_pull,
     git_ref_hash,
     git_remote_reachable,
@@ -344,7 +345,11 @@ class UpdateService:
             self._fetch_backoff.pop(name, None)
             self._fetch_errors.pop(name, None)
             return
-        self._fetch_errors[name] = error
+        if git_is_network_error(error):
+            # Offline is not an update: never re-report it while the breaker skips.
+            self._fetch_errors.pop(name, None)
+        else:
+            self._fetch_errors[name] = error
         self._fetch_backoff.setdefault(
             name, _Backoff(_FETCH_BACKOFF_BASE_S, _FETCH_BACKOFF_MAX_S)
         ).trip()
@@ -426,7 +431,7 @@ class UpdateService:
                 async with self._git_lock:
                     if not skip_fetch:
                         self._record_fetch_result(c.name, now, status.error)
-                    elif status.error is None and c.name in self._fetch_errors:
+                    elif not status.needs_update and c.name in self._fetch_errors:
                         # Else a press during the cooldown sees "no dirty" and never heals it.
                         status = dataclasses.replace(
                             status, error=self._fetch_errors[c.name]

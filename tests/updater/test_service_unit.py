@@ -226,6 +226,37 @@ class TestCheckStatus:
         assert not svc.has_fetch_failures() and not svc._fetch_errors
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("error", "cooled"),
+        [
+            ("fatal: unable to access 'x': Could not resolve host: github.com", {}),
+            ("fatal: --atomic", {"commits_behind": 2}),
+        ],
+    )
+    async def test_breaker_cooldown_carry_skips(
+        self, tmp_path: Path, error: str, cooled: dict
+    ):
+        """Offline errors are never carried, and a carry never hides a real update."""
+        fake_path = tmp_path / "klipper"
+        fake_path.mkdir()
+        component = ComponentConfig(name="klipper", kind="git", path=fake_path)
+        side = [
+            ComponentStatus(name="klipper", error=error),
+            ComponentStatus(name="klipper", **cooled),
+        ]
+        with (
+            patch(
+                "updater.service.load_components", return_value=([component], 3600.0)
+            ),
+            patch("updater.service.check_git_status", side_effect=side),
+        ):
+            svc = UpdateService()
+            await svc.check_status()
+            status = (await svc.check_status())["klipper"]
+        assert status.error is None
+        assert status.commits_behind == cooled.get("commits_behind", 0)
+
+    @pytest.mark.asyncio
     async def test_printing_skips_apt_list_refresh(self):
         with patch("updater.service.apt_update", AsyncMock()) as mock_update:
             await UpdateService()._refresh_apt_lists(force=True, printing=True)
