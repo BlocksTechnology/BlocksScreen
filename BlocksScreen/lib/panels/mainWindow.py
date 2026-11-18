@@ -384,16 +384,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.reset_tab_indexes()
         self.conn_window.show()
         # Last: the daemon may report busy before any slot or the loadscreen exists.
-        _logger.info(
-            "OVTEST init end: replaying busy, window visible=%s", self.isVisible()
-        )
         self.updater_worker.replay_busy()
-        _logger.info("OVTEST hold_for_deploy -> %s", self.update_page.hold_for_deploy())
+        self.update_page.hold_for_deploy()
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """Apply a loadscreen request that arrived before the window was shown."""
         super().showEvent(a0)
-        _logger.info("OVTEST showEvent: early=%s", self._early_loadscreen)
         if self._early_loadscreen is not None:
             # The show event precedes the native map, so wait for the next loop pass.
             QtCore.QTimer.singleShot(0, self._flush_early_loadscreen)
@@ -404,12 +400,10 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         show, msg = self._early_loadscreen
         self._early_loadscreen = None
-        _logger.info("OVTEST flush early loadscreen show=%s msg=%r", show, msg)
         self._apply_loadscreen(show, msg)
 
     def _apply_loadscreen(self, show: bool, msg: str) -> None:
         """Set the loadscreen message and visibility."""
-        _logger.info("OVTEST apply loadscreen show=%s msg=%r", show, msg)
         self.loadwidget.set_status_message(msg)
         if show:
             self.loadscreen.show()
@@ -481,9 +475,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.isVisible():
             # No window manager on the device: a popup mapped first stays under us.
             self._early_loadscreen = (show, msg)
-            _logger.info(
-                "OVTEST loadscreen deferred until shown: show=%s msg=%r", show, msg
-            )
             return
         self._early_loadscreen = None
         self._apply_loadscreen(show, msg)

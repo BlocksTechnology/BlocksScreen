@@ -245,11 +245,6 @@ class UpdaterWorker(QtCore.QObject):
 
     def replay_busy(self) -> None:
         """Re-emit busy state once slots are wired; the connect-time emit can fire before they are."""
-        _log.info(
-            "OVTEST replay_busy: busy=%s provisioning=%s",
-            self._last_busy,
-            self._last_provisioning,
-        )
         if self._last_provisioning:
             self.provisioning_changed.emit(True)
         if self._last_busy:
