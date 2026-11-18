@@ -1,10 +1,12 @@
 [Unit]
-Description=BlocksScreen clock fallback (HTTP Date while NTP is unsynced)
+Description=BlocksScreen clock fallback (HTTPS Date while NTP is unsynced)
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=oneshot
+# Oneshot has no default start timeout; a hung run would block the timer.
+TimeoutStartSec=90
 ExecStart=/bin/bash -c 'exec /bin/bash "$(dirname "$(readlink -f /etc/systemd/system/BlocksScreen-clock.service)")/bs-clock-sync.sh"'
 StandardOutput=journal
 StandardError=journal

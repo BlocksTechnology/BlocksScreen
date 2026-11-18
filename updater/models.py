@@ -14,7 +14,7 @@ DEPLOY_UNITS = ("BlocksScreen-deploy.path", "BlocksScreen-deploy.service")
 DEPLOY_LIVE_STATES = frozenset({"active", "activating", "deactivating", "reloading"})
 # error() reason for a run refused while Klipper is printing or not answering.
 PRINTER_BUSY = "printer is busy"
-# Error prefix for a TLS fetch failure while NTP has not synced this boot.
+# Error prefix for a TLS failure while the clock is unverified.
 CLOCK_UNSYNCED = "system clock not synchronized"
 
 

@@ -1,49 +1,100 @@
 #!/usr/bin/env bash
-# Steps the clock from an HTTP Date header while NTP is unsynced; boxes have no RTC and blocked NTP never heals.
+# Sets the clock from authenticated HTTPS Date headers when NTP cannot sync (no RTC battery).
 set -euo pipefail
 
-SYNC_FLAG=${BS_CLOCK_SYNC_FLAG:-/run/systemd/timesync/synchronized}
-# The apt mirrors: already reachable for updates and, unlike github.com, send Date over plain HTTP.
-read -ra HOSTS <<<"${BS_CLOCK_HOSTS:-http://deb.debian.org http://archive.raspberrypi.com}"
+# Read by updater/executor.py to tell a clock fault from a network fault.
+MARKER=${BS_CLOCK_MARKER:-/run/blocksscreen-clock-verified}
+# Per-box kill switch; outside the repo so updates keep it.
+DISABLE_FILE=${BS_CLOCK_DISABLE_FILE:-/etc/blocksscreen-clock.disabled}
+# Independent operators; entry form name[=addr:port].
+read -ra SOURCES <<<"${BS_CLOCK_SOURCES:-github.com deb.debian.org www.cloudflare.com www.google.com}"
+CAFILE=${BS_CLOCK_CAFILE:-}
+MOONRAKER=${BS_MOONRAKER_URL:-http://127.0.0.1:7125}
+# Restored forward-only at boot, so a backward step must be saved here too.
+TIMESYNC_CLOCK=${BS_CLOCK_TIMESYNC_FILE:-/var/lib/systemd/timesync/clock}
+# Per source; worst case run = sources x this.
+TIMEOUT_S=${BS_CLOCK_TIMEOUT:-8}
 MIN_STEP_S=120
+# Agreement window between the two sources.
+AGREE_S=5
 BS_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 IMF_RE='^[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT$'
 
 log() { echo "[bs-clock-sync] $*"; }
 
-# Plain HTTP on purpose: TLS cannot validate while the clock is wrong.
-_http_epoch() {
-    local hdr
-    hdr=$(curl -sSI --max-time 10 "$1" 2>/dev/null | tr -d '\r' | sed -n 's/^[Dd]ate: //p;T;q') || return 1
-    [[ $hdr =~ $IMF_RE ]] || return 1
-    date -u -d "$hdr" +%s
+# Chain and hostname always verified; callers choose the cert date check.
+_tls() {
+    local name=$1 addr=$2
+    shift 2
+    # openssl does not fall back from a dead IPv6 route.
+    timeout "$TIMEOUT_S" openssl s_client -4 -connect "$addr" -servername "$name" \
+        -verify_hostname "$name" -verify_return_error ${CAFILE:+-CAfile "$CAFILE"} "$@"
 }
 
-[[ -e $SYNC_FLAG ]] && exit 0
+# Cert dates are skipped on fetch: the local clock is the thing in doubt.
+_https_offset() {
+    local name=${1%%=*} addr=${1#*=} hdr remote out
+    [[ $1 == *=* ]] || addr="$name:443"
+    hdr=$(printf 'HEAD / HTTP/1.1\r\nHost: %s\r\nUser-Agent: BlocksScreen-clock\r\nConnection: close\r\n\r\n' "$name" |
+        _tls "$name" "$addr" -quiet -no_check_time 2>/dev/null |
+        tr -d '\r' | sed -n '/^$/q;s/^date: //Ip;T;q') || true
+    [[ $hdr =~ $IMF_RE ]] || return 1
+    remote=$(date -u -d "$hdr" +%s) || return 1
+    # tlsdate --leap: the cert must be valid at the claimed time.
+    out=$(_tls "$name" "$addr" -attime "$remote" </dev/null 2>&1) || true
+    [[ $out == *"Verify return code: 0 (ok)"* ]] || return 1
+    echo $((remote - $(date -u +%s)))
+}
 
-remote="" source_host=""
-for host in "${HOSTS[@]}"; do
-    if remote=$(_http_epoch "$host"); then
-        source_host=$host
-        break
-    fi
+_printing() {
+    curl -s --max-time 5 "$MOONRAKER/printer/objects/query?print_stats=state" 2>/dev/null |
+        grep -qE '"state": ?"(printing|paused)"'
+}
+
+[[ -e $DISABLE_FILE ]] && exit 0
+[[ $(timedatectl show -p NTPSynchronized --value 2>/dev/null) == yes ]] && exit 0
+# Once per boot is enough.
+[[ -e $MARKER ]] && exit 0
+
+# First two agreeing sources win; one bad source can neither block nor move the clock.
+offsets=()
+step=""
+for src in "${SOURCES[@]}"; do
+    off=$(_https_offset "$src") || continue
+    for prev in "${offsets[@]}"; do
+        d=$((prev - off))
+        if ((${d#-} <= AGREE_S)); then
+            step=$((prev < off ? prev : off))
+            break 2
+        fi
+    done
+    offsets+=("$off")
 done
-[[ -n $source_host ]] || exit 0
-
-# Never step before the installed code's commit time, so a bogus header cannot rewind far.
-floor=${BS_CLOCK_FLOOR:-$(git -c safe.directory="$BS_PATH" -C "$BS_PATH" log -1 --format=%ct 2>/dev/null || echo 0)}
-if ((remote < floor)); then
-    log "ignoring $source_host date $remote: older than BlocksScreen HEAD ($floor)"
+if [[ -z $step ]]; then
+    log "no 2 of ${#offsets[@]} answering sources agree within ${AGREE_S} s; clock unchanged"
     exit 0
 fi
 
-now=$(date -u +%s)
-step=$((remote - now))
-if ((${step#-} < MIN_STEP_S)); then
-    exit 0
+if ((${step#-} >= MIN_STEP_S)); then
+    target=$(($(date -u +%s) + step))
+    # Floor: the installed commit time.
+    floor=${BS_CLOCK_FLOOR:-$(git -c safe.directory="$BS_PATH" -C "$BS_PATH" log -1 --format=%ct 2>/dev/null || echo 0)}
+    if ((target < floor)); then
+        log "ignoring source date $target: older than BlocksScreen HEAD ($floor)"
+        exit 0
+    fi
+    # Moonraker job history uses wall time.
+    if _printing; then
+        log "print in progress; clock step of ${step} s deferred"
+        exit 0
+    fi
+    date -u -s "@$target" >/dev/null
+    log "clock stepped by ${step} s"
+    if command -v fake-hwclock >/dev/null; then
+        fake-hwclock save >/dev/null 2>&1 || true
+    fi
+    if [[ -e $TIMESYNC_CLOCK ]]; then
+        touch "$TIMESYNC_CLOCK" || true
+    fi
 fi
-date -u -s "@$remote" >/dev/null
-log "clock stepped by ${step} s from $source_host"
-if command -v fake-hwclock >/dev/null; then
-    fake-hwclock save >/dev/null 2>&1 || true
-fi
+date -u +%s >"$MARKER"

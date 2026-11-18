@@ -807,7 +807,7 @@ class UpdateService:
                 async with self._git_lock:
                     self._fetch_times[c.name] = now
             elif not await git_has_corruption(c.path, hint=err):
-                offline[c.name] = explain_fetch_error(err)
+                offline[c.name] = await explain_fetch_error(err)
         if offline:
             self._log.error(
                 "update_all: pre-flight fetch failed for %s - continuing without them",
@@ -2280,7 +2280,7 @@ class UpdateService:
                 self._log.error("%s: fetch failed: %s", component.name, error)
                 # connectivity-only fsck can miss it; pass the fetch error as hint.
                 if not await git_has_corruption(component.path, hint=error):
-                    if explain_fetch_error(error).startswith(CLOCK_UNSYNCED):
+                    if (await explain_fetch_error(error)).startswith(CLOCK_UNSYNCED):
                         return (False, CLOCK_UNSYNCED)
                     return (False, "network")
                 self._log.warning("%s: corrupt repo, repairing", component.name)

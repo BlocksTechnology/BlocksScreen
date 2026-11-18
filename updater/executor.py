@@ -46,6 +46,8 @@ _PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9+\-.]*$")
 
 _HOOKS_DIR = Path(__file__).parent / "hooks"
 _STALE_LOCK_AGE_THRESHOLD_S = 10.0
+# A lock written before a backward clock step has a negative age and never goes stale.
+_FUTURE_LOCK_AGE_S = -60.0
 
 
 def _clear_stale_git_index_lock(path: Path) -> bool:
@@ -55,7 +57,7 @@ def _clear_stale_git_index_lock(path: Path) -> bool:
         return True
     try:
         age_s = time.time() - lock_path.stat().st_mtime
-        if age_s >= _STALE_LOCK_AGE_THRESHOLD_S:
+        if age_s >= _STALE_LOCK_AGE_THRESHOLD_S or age_s < _FUTURE_LOCK_AGE_S:
             logger.warning("clearing stale index.lock (age %.1fs) from %s", age_s, path)
             lock_path.unlink()
             return True
@@ -241,7 +243,9 @@ async def _git_status_preflight(
         result, output = await git_fetch(path, prune_remotes=False)
         if not result:
             logger.error("Failed at git_fetch operation, %s", output)
-            return "", ComponentStatus(name=name, error=explain_fetch_error(output))
+            return "", ComponentStatus(
+                name=name, error=await explain_fetch_error(output)
+            )
     current_hash = await git_get_hash(path)
     if current_hash == "":
         logger.error("Failed at git_hash operation")
@@ -415,6 +419,17 @@ async def _prune_broken_refs(path: Path, output: str) -> bool:
 async def git_fetch(
     path: Path | None, *, prune_remotes: bool = True
 ) -> tuple[bool, str]:
+    """Fetch the repo at path; retry once after healing the clock on a clock-caused TLS failure."""
+    ok, out = await _git_fetch_once(path, prune_remotes=prune_remotes)
+    if not ok and (await explain_fetch_error(out)).startswith(CLOCK_UNSYNCED):
+        if await heal_clock():
+            return await _git_fetch_once(path, prune_remotes=prune_remotes)
+    return (ok, out)
+
+
+async def _git_fetch_once(
+    path: Path | None, *, prune_remotes: bool = True
+) -> tuple[bool, str]:
     """Fetch all remotes for the repo at path."""
     if path is None:
         return (False, "path does not exist")
@@ -480,16 +495,58 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
     return (ok, err)
 
 
-# Created by timesyncd on its first NTP sync each boot (systemd-timesyncd(8)).
-_CLOCK_SYNCED_FLAG = Path("/run/systemd/timesync/synchronized")
-# gnutls (Debian git) reports a bad certificate date only as a generic verify failure.
+# Written by scripts/bs-clock-sync.sh once the clock is verified this boot.
+CLOCK_VERIFIED_MARKER = Path("/run/blocksscreen-clock-verified")
+CLOCK_SYNC_UNIT = "BlocksScreen-clock.service"
+# Concurrent fetches share one clock-sync run; a failed run is retried after this window.
+_CLOCK_HEAL_LOCK = asyncio.Lock()
+_CLOCK_HEAL_RETRY_S = 60.0
+_clock_heal = {"last": float("-inf")}
+# gnutls (Debian git) reports a bad certificate date as a generic verify failure.
 _GIT_TLS_SIGNATURES = ("certificate verification failed", "ssl certificate problem")
+# apt Release date errors caused by a wrong local clock.
+_APT_CLOCK_SIGNATURES = ("is expired", "is not valid yet")
 
 
-def explain_fetch_error(output: str) -> str:
-    """Prefix a TLS fetch failure with the clock cause while NTP has not synced."""
+async def ntp_synchronized() -> bool:
+    """Return the kernel NTP sync flag; unknown counts as synced."""
+    try:
+        ok, out = await _run(
+            ["timedatectl", "show", "-p", "NTPSynchronized", "--value"], timeout=5.0
+        )
+    except OSError:
+        return True
+    return not ok or out.strip() != "no"
+
+
+async def heal_clock() -> bool:
+    """Run the clock-sync unit now; return True once the clock is verified."""
+    async with _CLOCK_HEAL_LOCK:
+        if CLOCK_VERIFIED_MARKER.exists():
+            return True
+        if time.monotonic() - _clock_heal["last"] < _CLOCK_HEAL_RETRY_S:
+            return False
+        _clock_heal["last"] = time.monotonic()
+        ok, err = await _run([SUDO, SYSTEMCTL, "start", CLOCK_SYNC_UNIT], timeout=60.0)
+        if not ok:
+            logger.warning("clock sync via %s failed: %s", CLOCK_SYNC_UNIT, err.strip())
+        trusted = CLOCK_VERIFIED_MARKER.exists() or await ntp_synchronized()
+        logger.info(
+            "clock sync ran: clock %s", "trusted" if trusted else "still unverified"
+        )
+        return trusted
+
+
+async def explain_fetch_error(
+    output: str, signatures: tuple[str, ...] = _GIT_TLS_SIGNATURES
+) -> str:
+    """Prefix a date-related fetch failure with the clock cause while the clock is unverified."""
     low = output.lower()
-    if any(k in low for k in _GIT_TLS_SIGNATURES) and not _CLOCK_SYNCED_FLAG.exists():
+    if (
+        any(k in low for k in signatures)
+        and not CLOCK_VERIFIED_MARKER.exists()
+        and not await ntp_synchronized()
+    ):
         return f"{CLOCK_UNSYNCED}: {output}"
     return output
 
@@ -962,8 +1019,14 @@ def classify_apt_error(err: str) -> str:
 
 
 async def apt_update() -> tuple[bool, str]:
-    """Run apt-get update to refresh package lists."""
-    return await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
+    """Refresh package lists; retry once after healing the clock on a Release date error."""
+    ok, out = await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
+    if not ok and (await explain_fetch_error(out, _APT_CLOCK_SIGNATURES)).startswith(
+        CLOCK_UNSYNCED
+    ):
+        if await heal_clock():
+            return await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
+    return (ok, out)
 
 
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
