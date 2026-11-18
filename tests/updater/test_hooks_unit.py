@@ -443,3 +443,110 @@ class TestBlocksScreenHook:
         )
         assert not sentinel.exists()
         assert followup.exists()
+
+
+RF50_HOOK = HOOK.parent / "RF50-Klipper.sh"
+
+
+@pytest.fixture
+def rf50_home(tmp_path: Path) -> Path:
+    home = tmp_path / "home"
+    cam = tmp_path / "dev" / "cam0"
+    cam.parent.mkdir()
+    cam.write_text("")
+    repo = home / "RF50-Klipper"
+    repo.mkdir(parents=True)
+    (repo / "crowsnest.conf").write_text(f"[cam 1]\ndevice: {cam}  # by-id\n")
+    conf = home / "printer_data" / "config" / "crowsnest.conf"
+    conf.parent.mkdir(parents=True)
+    conf.write_text("[cam 1]\ndevice: /dev/video0\n")
+    return home
+
+
+def _run_rf50_hook(
+    tmp_path: Path, home: Path, **extra: str
+) -> subprocess.CompletedProcess:
+    return _run_hh_hook(
+        tmp_path,
+        home,
+        hook=RF50_HOOK,
+        COMPONENT_PATH=str(home / "RF50-Klipper"),
+        **extra,
+    )
+
+
+def _rf50_conf(home: Path) -> Path:
+    return home / "printer_data" / "config" / "crowsnest.conf"
+
+
+class TestRF50KlipperHook:
+    def test_installs_backs_up_and_restarts(self, tmp_path, rf50_home):
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        conf = _rf50_conf(rf50_home)
+        assert not conf.is_symlink()
+        assert (
+            conf.read_text()
+            == (rf50_home / "RF50-Klipper" / "crowsnest.conf").read_text()
+        )
+        backups = list((rf50_home / ".rf50_backups").iterdir())
+        assert [b.read_text() for b in backups] == ["[cam 1]\ndevice: /dev/video0\n"]
+        assert _sudo_calls(tmp_path) == ["-n systemctl restart crowsnest.service"]
+
+    def test_back_to_back_runs_keep_every_backup(self, tmp_path, rf50_home):
+        conf = _rf50_conf(rf50_home)
+        _run_rf50_hook(tmp_path, rf50_home)
+        conf.write_text("second\n")
+        _run_rf50_hook(tmp_path, rf50_home)
+        backups = (rf50_home / ".rf50_backups").iterdir()
+        assert sorted(b.read_text() for b in backups) == [
+            "[cam 1]\ndevice: /dev/video0\n",
+            "second\n",
+        ]
+
+    def test_restart_argv_matches_sudoers_rule(self, tmp_path, rf50_home):
+        _run_rf50_hook(tmp_path, rf50_home)
+        manifest = (HOOK.parents[2] / "updater" / "components.yaml").read_text()
+        assert re.search(r"^\s*service: crowsnest\.service$", manifest, re.M)
+        assert _sudo_calls(tmp_path) == ["-n systemctl restart crowsnest.service"]
+
+    def test_up_to_date_is_noop(self, tmp_path, rf50_home):
+        _run_rf50_hook(tmp_path, rf50_home)
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert len(_sudo_calls(tmp_path)) == 1
+        assert len(list((rf50_home / ".rf50_backups").iterdir())) == 1
+
+    def test_missing_camera_keeps_local_conf(self, tmp_path, rf50_home):
+        (tmp_path / "dev" / "cam0").unlink()
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert _rf50_conf(rf50_home).read_text() == "[cam 1]\ndevice: /dev/video0\n"
+        assert _sudo_calls(tmp_path) == []
+
+    def test_symlinked_conf_is_replaced_by_copy(self, tmp_path, rf50_home):
+        conf = _rf50_conf(rf50_home)
+        conf.unlink()
+        conf.symlink_to(rf50_home / "RF50-Klipper" / "crowsnest.conf")
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert conf.is_file() and not conf.is_symlink()
+        assert len(_sudo_calls(tmp_path)) == 1
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            {"BS_UPDATER_PRINTING": "1"},
+            {"BS_UPDATER_PENDING_RESTARTS": "crowsnest.service klipper.service"},
+        ],
+    )
+    def test_installs_without_restart(self, tmp_path, rf50_home, extra):
+        result = _run_rf50_hook(tmp_path, rf50_home, **extra)
+        assert result.returncode == 0, result.stderr
+        assert "by-id" in _rf50_conf(rf50_home).read_text()
+        assert _sudo_calls(tmp_path) == []
+
+    def test_failed_restart_warns(self, tmp_path, rf50_home):
+        result = _run_rf50_hook(tmp_path, rf50_home, SUDO_RC="1")
+        assert result.returncode == 0, result.stderr
+        assert "WARN: could not restart" in result.stdout

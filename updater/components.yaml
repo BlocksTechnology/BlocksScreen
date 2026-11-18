@@ -79,6 +79,9 @@ components:
     type: git
     path: ~/crowsnest
     url: https://github.com/mainsail-crew/crowsnest
+    branch: master
+    # v4.2.0: upstream HEAD is now v5, a rewrite whose config needs migrating.
+    version: cf936dabdcf6a3d1eb0138d8eea9044745b40db6
     service: crowsnest.service
     reset_mode: hard
     order: 20
