@@ -273,6 +273,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.object_updated.connect(self.amu_manager.on_object_updated)
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.ws.klippy_state_signal.connect(self.amu_manager.on_klippy_state)
+        self.ws.server_components_signal.connect(self.amu_manager.on_server_components)
+        self.amu_manager.show_notification.connect(self.show_notifications)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
