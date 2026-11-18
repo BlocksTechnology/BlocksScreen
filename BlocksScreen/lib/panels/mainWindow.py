@@ -1175,8 +1175,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if rule.severity == Severity.IGNORE:
                 return True
             if rule.severity == Severity.ERROR:
-                self.show_loadscreen(False, "", True)
-                self.in_case_error.emit()
+                self._clear_overlay_for_error()
 
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
@@ -1187,10 +1186,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_notifications.emit(
                 source_id, text, Severity.ERROR.value, show_popup
             )
-            self.show_loadscreen(False, "", True)
-            self.in_case_error.emit()
+            self._clear_overlay_for_error()
             return True
         return False
+
+    def _clear_overlay_for_error(self) -> None:
+        """Drop the loading overlay for an error unless an update holds it."""
+        if not (self._update_in_progress or self._post_update_reconnect):
+            self.show_loadscreen(False, "", True)
+        self.in_case_error.emit()
 
     @QtCore.pyqtSlot(str, str, int, bool)
     def _on_probe_notification(
