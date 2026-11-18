@@ -430,12 +430,13 @@ async def git_fetch(
 async def _git_fetch_once(
     path: Path | None, *, prune_remotes: bool = True
 ) -> tuple[bool, str]:
-    """Fetch all remotes for the repo at path."""
+    """Fetch origin for the repo at path (the only remote updates read)."""
     if path is None:
         return (False, "path does not exist")
     if prune_remotes:
         await git_prune_extra_remotes(path)
-    cmd = [GIT, "fetch", "--all", "--atomic", "--prune"]
+    # Not --all: with an extra remote --atomic refuses to run, failing every status fetch.
+    cmd = [GIT, "fetch", "--atomic", "--prune", "origin"]
     ok, out = await _run(cmd, cwd=path, timeout=60.0)
     if ok or "reference broken" not in out:
         return (ok, out)
@@ -563,6 +564,26 @@ _GIT_CORRUPT_SIGNATURES = (
     "unable to unpack",
     "inflate: data stream error",
 )
+
+# Transport failures (offline, DNS, timeout, HTTP/TLS refusals): no update fixes these.
+_GIT_NETWORK_SIGNATURES = (
+    "could not resolve host",
+    "unable to access",
+    "failed to connect",
+    "connection timed out",
+    "connection refused",
+    "network is unreachable",
+    "temporary failure in name resolution",
+    "could not read from remote repository",
+    "timed out after",
+)
+
+
+def git_is_network_error(output: str) -> bool:
+    """True if git output reads as a transient network failure, not a repo fault."""
+    low = output.lower()
+    return any(k in low for k in _GIT_NETWORK_SIGNATURES)
+
 
 # Quarantine dir inside .git/objects so it never appears as untracked.
 _QUARANTINE_DIRNAME = "objects-corrupt"
