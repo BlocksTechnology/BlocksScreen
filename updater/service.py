@@ -698,6 +698,9 @@ class UpdateService:
                 )
                 if not recorded:
                     await asyncio.to_thread(self._clear_followup)
+                # First try only: a retry must not rerun hooks that already ran.
+                if tries == 0:
+                    await self._run_new_hooks(base, dirty)
                 if not dirty:
                     return False, False
                 self._log.info(
@@ -738,6 +741,60 @@ class UpdateService:
         dirty = {n for n in changed if n in statuses and statuses[n].needs_update}
         self._log.info("followup: changed=%s dirty=%s", sorted(changed), sorted(dirty))
         return dirty
+
+    async def _new_hook_targets(
+        self, base: str, skip: set[str]
+    ) -> list[ComponentConfig]:
+        """Installed components whose hook the BlocksScreen update added since base."""
+        ui = next((c for c in self._components if c.name == _UI_COMPONENT), None)
+        if ui is None or ui.path is None:
+            return []
+        head = await git_get_hash(ui.path)
+        found = []
+        for c in self._components:
+            if (
+                c.name == _UI_COMPONENT
+                or c.name in skip
+                or c.path is None
+                or not c.path.exists()
+            ):
+                continue
+            hook = f"updater/hooks/{c.name}.sh"
+            if await git_show_file(ui.path, head, hook) and not await git_show_file(
+                ui.path, base, hook
+            ):
+                found.append(c)
+        return found
+
+    async def _run_new_hooks(self, base: str, dirty: set[str]) -> None:
+        """Run hooks the update added once: their component updated before they existed."""
+        targets = await self._new_hook_targets(base, dirty)
+        if not targets:
+            return
+        # Dirty components update next and restart their own services.
+        pending = " ".join(
+            sorted(c.service for c in self._components if c.name in dirty and c.service)
+        )
+        for c in targets:
+            new_hash = await git_get_hash(c.path)
+            if not new_hash:
+                continue
+            self._log.info("followup: running new hook for %s", c.name)
+            try:
+                # prev == new: no code changed now, so hash-gated restarts stay off.
+                ok, err = await run_hook(
+                    c.name,
+                    c.path,
+                    new_hash,
+                    new_hash,
+                    timeout=HOOK_TIMEOUT,
+                    extra_env={"BS_UPDATER_PENDING_RESTARTS": pending},
+                )
+            except Exception:  # noqa: BLE001
+                self._log.warning("followup: %s hook raised", c.name, exc_info=True)
+                continue
+            if not ok:
+                self._log.warning("followup: %s hook failed: %s", c.name, err)
 
     async def _followup_reachable(self, names: set[str]) -> bool:
         """True when every target's remote answers."""

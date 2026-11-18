@@ -93,13 +93,16 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" -- updater/ 
     fi
 fi
 
-# Manifest changed: the restarted daemon applies the changed entries in the same Update.
-if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
+# Manifest changed or a hook added: the restarted daemon applies the changed entries
+# and runs the new hooks in the same Update.
+_new_hooks=$(git -C "$COMPONENT_PATH" diff --name-only --diff-filter=A "$PREV_HASH" "$NEW_HASH" \
+    -- updater/hooks/ 2>/dev/null || true)
+if [ -n "$_new_hooks" ] || ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- updater/components.yaml 2>/dev/null; then
     _followup="${HOME}/.cache/blockscreen/updater_followup"
     # Oldest base wins across chained updates; the try count resets.
     _base=$(head -n1 "$_followup" 2>/dev/null || true)
     mkdir -p "$(dirname "$_followup")"
     printf '%s\n' "${_base:-$PREV_HASH}" >"$_followup.tmp" && mv -f "$_followup.tmp" "$_followup"
-    echo "[hook:BlocksScreen] components.yaml changed - follow-up queued"
+    echo "[hook:BlocksScreen] components.yaml or hooks changed - follow-up queued"
 fi

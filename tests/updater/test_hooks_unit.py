@@ -418,6 +418,18 @@ class TestBlocksScreenHook:
         assert sentinel.read_text().split() == ["code"]
         assert not followup.exists()
 
+    def test_added_hook_queues_followup(self, tmp_path, ui_repo):
+        prev = _commit(ui_repo, {"updater/hooks/a.sh": "1\n"})
+        new = _commit(ui_repo, {"updater/hooks/b.sh": "1\n"})
+        _, followup = self._run(tmp_path, ui_repo, prev, new)
+        assert followup.read_text().strip() == prev
+
+    def test_edited_hook_queues_no_followup(self, tmp_path, ui_repo):
+        prev = _commit(ui_repo, {"updater/hooks/a.sh": "1\n"})
+        new = _commit(ui_repo, {"updater/hooks/a.sh": "2\n"})
+        _, followup = self._run(tmp_path, ui_repo, prev, new)
+        assert not followup.exists()
+
     def test_non_updater_change_does_nothing(self, tmp_path, ui_repo):
         prev = _commit(ui_repo, {"BlocksScreen/a.py": "1\n"})
         new = _commit(ui_repo, {"BlocksScreen/a.py": "2\n"})
