@@ -479,6 +479,15 @@ def _rf50_conf(home: Path) -> Path:
     return home / "printer_data" / "config" / "crowsnest.conf"
 
 
+def _rf50_backups(home: Path) -> list[Path]:
+    return sorted((home / ".rf50_backups").glob("crowsnest.conf.*"))
+
+
+def _change_template(home: Path, line: str) -> None:
+    template = home / "RF50-Klipper" / "crowsnest.conf"
+    template.write_text(template.read_text() + line)
+
+
 class TestRF50KlipperHook:
     def test_installs_backs_up_and_restarts(self, tmp_path, rf50_home):
         result = _run_rf50_hook(tmp_path, rf50_home)
@@ -489,7 +498,7 @@ class TestRF50KlipperHook:
             conf.read_text()
             == (rf50_home / "RF50-Klipper" / "crowsnest.conf").read_text()
         )
-        backups = list((rf50_home / ".rf50_backups").iterdir())
+        backups = _rf50_backups(rf50_home)
         assert [b.read_text() for b in backups] == ["[cam 1]\ndevice: /dev/video0\n"]
         assert _sudo_calls(tmp_path) == ["-n systemctl restart crowsnest.service"]
 
@@ -497,12 +506,26 @@ class TestRF50KlipperHook:
         conf = _rf50_conf(rf50_home)
         _run_rf50_hook(tmp_path, rf50_home)
         conf.write_text("second\n")
+        _change_template(rf50_home, "max_fps: 15\n")
         _run_rf50_hook(tmp_path, rf50_home)
-        backups = (rf50_home / ".rf50_backups").iterdir()
-        assert sorted(b.read_text() for b in backups) == [
+        assert sorted(b.read_text() for b in _rf50_backups(rf50_home)) == [
             "[cam 1]\ndevice: /dev/video0\n",
             "second\n",
         ]
+
+    def test_local_edits_kept_until_template_changes(self, tmp_path, rf50_home):
+        conf = _rf50_conf(rf50_home)
+        _run_rf50_hook(tmp_path, rf50_home)
+        conf.write_text(conf.read_text() + "resolution: 640x480\n")
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert "resolution: 640x480" in conf.read_text()
+        assert len(_sudo_calls(tmp_path)) == 1
+        _change_template(rf50_home, "max_fps: 15\n")
+        _run_rf50_hook(tmp_path, rf50_home)
+        assert "resolution: 640x480" not in conf.read_text()
+        assert "max_fps: 15" in conf.read_text()
+        assert len(_rf50_backups(rf50_home)) == 2
 
     def test_restart_argv_matches_sudoers_rule(self, tmp_path, rf50_home):
         _run_rf50_hook(tmp_path, rf50_home)
@@ -515,12 +538,25 @@ class TestRF50KlipperHook:
         result = _run_rf50_hook(tmp_path, rf50_home)
         assert result.returncode == 0, result.stderr
         assert len(_sudo_calls(tmp_path)) == 1
-        assert len(list((rf50_home / ".rf50_backups").iterdir())) == 1
+        assert len(_rf50_backups(rf50_home)) == 1
 
     def test_missing_camera_keeps_local_conf(self, tmp_path, rf50_home):
         (tmp_path / "dev" / "cam0").unlink()
         result = _run_rf50_hook(tmp_path, rf50_home)
         assert result.returncode == 0, result.stderr
+        assert _rf50_conf(rf50_home).read_text() == "[cam 1]\ndevice: /dev/video0\n"
+        assert _sudo_calls(tmp_path) == []
+
+    def test_current_by_path_template_is_skipped(self, tmp_path, rf50_home):
+        (rf50_home / "RF50-Klipper" / "crowsnest.conf").write_text(
+            "[cam 1]\n"
+            "#device: /dev/video0                     # See Log for available ...\n"
+            "device: /dev/v4l/by-path/platform-xhci-hcd.4.auto-usb-0:1.4:1.0"
+            "-video-index0\n"
+        )
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert "by-path/platform-xhci-hcd.4" in result.stdout
         assert _rf50_conf(rf50_home).read_text() == "[cam 1]\ndevice: /dev/video0\n"
         assert _sudo_calls(tmp_path) == []
 

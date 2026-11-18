@@ -28,8 +28,21 @@ if [ -z "$_dev" ] || [ ! -e "$_dev" ]; then
     exit 0
 fi
 
+# Hash of the last installed template; local edits are kept until the template changes.
+_state="$_home/.rf50_backups/.crowsnest.conf.template"
+_sum=$(sha256sum "$_src" | cut -d' ' -f1)
+_record() {
+    mkdir -p "$(dirname "$_state")" && printf '%s\n' "$_sum" >"$_state" ||
+        echo "[hook:RF50-Klipper] WARN: could not record the installed template"
+}
+if [ -e "$_dst" ] && [ "$(cat "$_state" 2>/dev/null)" = "$_sum" ]; then
+    echo "[hook:RF50-Klipper] template unchanged - local crowsnest.conf kept"
+    exit 0
+fi
+
 # A copy, not a link: a rollback resets the repo without rerunning this hook.
 if [ -f "$_dst" ] && [ ! -L "$_dst" ] && cmp -s "$_src" "$_dst"; then
+    _record
     echo "[hook:RF50-Klipper] crowsnest.conf up to date"
     exit 0
 fi
@@ -56,6 +69,7 @@ if ! cp "$_src" "$_dst.bs-tmp" || ! mv -f "$_dst.bs-tmp" "$_dst"; then
     echo "[hook:RF50-Klipper] WARN: could not install $_dst"
     exit 0
 fi
+_record
 echo "[hook:RF50-Klipper] installed $_dst"
 
 if [[ " ${BS_UPDATER_PENDING_RESTARTS:-} " == *" crowsnest.service "* ]]; then
