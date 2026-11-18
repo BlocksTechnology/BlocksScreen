@@ -714,6 +714,8 @@ IGNORED_RULE = MessageRule(
 _IGNORED: tuple[re.Pattern, ...] = (
     re.compile(r"REMOVED log_path=", re.I),
     re.compile(r"Alert: Automatically heating extruder to gatemap temp", re.I),
+    # Happy Hare Spoolman calls made before Moonraker loads mmu_server.
+    re.compile(r"Remote method 'spoolman_\w+' not registered", re.I),
     # add more patterns as needed,
 )
 

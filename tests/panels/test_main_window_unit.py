@@ -487,3 +487,19 @@ def test_own_console_echo_is_not_shown_twice(line, pops) -> None:
         win, "notify_gcode_response", {"params": [line]}, None
     )
     assert win._emit_filtered_notification.called is pops
+
+
+@pytest.mark.parametrize(
+    ("update", "reconnect", "drops"),
+    [(False, False, True), (True, False, False), (False, True, False)],
+)
+def test_error_keeps_the_update_overlay(update, reconnect, drops) -> None:
+    win = SimpleNamespace(
+        _update_in_progress=update,
+        _post_update_reconnect=reconnect,
+        show_loadscreen=MagicMock(),
+        in_case_error=MagicMock(),
+    )
+    MainWindow._clear_overlay_for_error(win)
+    assert win.show_loadscreen.called is drops
+    win.in_case_error.emit.assert_called_once()

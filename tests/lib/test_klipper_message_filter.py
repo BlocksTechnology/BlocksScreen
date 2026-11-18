@@ -621,3 +621,11 @@ def test_happy_hare_errors_map_to_rules(text: str, display: str) -> None:
     assert rule is not None
     assert rule.display == display
     assert rule.severity == Severity.ERROR
+
+
+def test_spoolman_remote_method_missing_is_ignored() -> None:
+    text = (
+        "Error while pushing gate map to spoolman: "
+        "Remote method 'spoolman_push_gate_map' not registered"
+    )
+    assert match_message(MessageSource.GCODE_ERROR, text).severity == Severity.IGNORE
