@@ -330,7 +330,10 @@ def _make_update_overlay_window() -> SimpleNamespace:
         controlPanel=None,
         printPanel=None,
         utilitiesPanel=None,
+        isVisible=lambda: True,
+        _early_loadscreen=None,
     )
+    win._apply_loadscreen = MethodType(MainWindow._apply_loadscreen, win)
     win.ws.api.restart_service.return_value = True
     return win
 
@@ -352,6 +355,28 @@ def test_update_overlay_dismiss_retries_deferred_restart(
 
     assert win.ws.api.restart_service.call_count == restarts
     assert win._device_restart_pending is (restarts == 0)
+
+
+def test_update_overlay_before_first_show_waits_for_window() -> None:
+    # UI started mid-update: the busy replay lands before main_window.show().
+    win = _make_update_overlay_window()
+    visible = False
+    win.isVisible = lambda: visible
+    win._flush_early_loadscreen = MethodType(MainWindow._flush_early_loadscreen, win)
+
+    MainWindow.show_loadscreen(win, True, "Update in progress ...")
+    win.loadscreen.show.assert_not_called()
+
+    visible = True
+    win._flush_early_loadscreen()
+    win.loadwidget.set_status_message.assert_called_once_with("Update in progress ...")
+    win.loadscreen.show.assert_called_once()
+
+    # A request made after the show wins over a stale pre-show one.
+    win._early_loadscreen = (False, "")
+    MainWindow.show_loadscreen(win, True, "Finishing installation ...")
+    win._flush_early_loadscreen()
+    win.loadscreen.hide.assert_not_called()
 
 
 @pytest.mark.parametrize("state", ["ready", "shutdown", "disconnected"])
