@@ -3,7 +3,8 @@
 set -euo pipefail
 
 SYNC_FLAG=${BS_CLOCK_SYNC_FLAG:-/run/systemd/timesync/synchronized}
-read -ra HOSTS <<<"${BS_CLOCK_HOSTS:-http://github.com http://deb.debian.org}"
+# The apt mirrors: already reachable for updates and, unlike github.com, send Date over plain HTTP.
+read -ra HOSTS <<<"${BS_CLOCK_HOSTS:-http://deb.debian.org http://archive.raspberrypi.com}"
 MIN_STEP_S=120
 BS_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 IMF_RE='^[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT$'

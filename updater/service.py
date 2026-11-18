@@ -2280,6 +2280,8 @@ class UpdateService:
                 self._log.error("%s: fetch failed: %s", component.name, error)
                 # connectivity-only fsck can miss it; pass the fetch error as hint.
                 if not await git_has_corruption(component.path, hint=error):
+                    if explain_fetch_error(error).startswith(CLOCK_UNSYNCED):
+                        return (False, CLOCK_UNSYNCED)
                     return (False, "network")
                 self._log.warning("%s: corrupt repo, repairing", component.name)
                 rok, rmsg = await git_repair(component.path)
@@ -2463,7 +2465,7 @@ class UpdateService:
         if not stage_ok:
             # Pre-checkout failures leave the tree untouched: no revert, no restart.
             if (
-                stage_reason in ("network", "corrupt")
+                stage_reason in ("network", "corrupt", CLOCK_UNSYNCED)
                 or "not found" in stage_reason
                 or "refusing" in stage_reason
             ):

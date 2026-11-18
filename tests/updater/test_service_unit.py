@@ -350,11 +350,17 @@ class TestGitUpdate:
             yield
 
     @pytest.mark.asyncio
-    async def test_fetch_failure_reports_network_without_rollback(self):
+    @pytest.mark.parametrize(
+        ("prefix", "reason"), [("", "network"), (f"{CLOCK_UNSYNCED}: ", CLOCK_UNSYNCED)]
+    )
+    async def test_fetch_failure_reports_network_without_rollback(self, prefix, reason):
         # Nothing is checked out before the fetch: no revert, no service restart.
         cb = MagicMock()
         with (
             patch("pathlib.Path.exists", return_value=True),
+            patch(
+                "updater.service.explain_fetch_error", side_effect=lambda e: prefix + e
+            ),
             patch("updater.service.git_get_hash", return_value="abc123"),
             patch("updater.service.git_fetch", return_value=(False, "timeout")),
             patch("updater.service.git_has_corruption", return_value=False),
@@ -368,7 +374,7 @@ class TestGitUpdate:
         assert result is False
         mock_reset.assert_not_called()
         cb.on_rollback.assert_not_called()
-        cb.on_error.assert_called_once_with("klipper", "network")
+        cb.on_error.assert_called_once_with("klipper", reason)
         cb.on_component_done.assert_called_once_with("klipper", False)
 
     @pytest.mark.asyncio
