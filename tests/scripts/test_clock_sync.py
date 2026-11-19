@@ -175,8 +175,6 @@ def _run(
     print_state: str | None = "standby",
     verified: bool = False,
     disabled: bool = False,
-    enabled: bool = False,
-    timer: bool = False,
     syncs_mid_run: bool = False,
 ) -> tuple[str, str, bool, bool]:
     """Run the script; return (stdout, date -s args, marker, touched)."""
@@ -187,8 +185,6 @@ def _run(
         marker.write_text(_marker())
     if disabled:
         (tmp_path / "disabled").touch()
-    if enabled:
-        (tmp_path / "enabled").touch()
     clock.touch()
     os.utime(clock, (0, 0))
     entries = []
@@ -232,14 +228,10 @@ def _run(
     for f in shim.iterdir():
         f.chmod(0o755)
     env = {
-        **{k: v for k, v in os.environ.items() if k != "TRIGGER_UNIT"},
-        # systemd sets this only on timer-started runs.
-        **({"TRIGGER_UNIT": "BlocksScreen-clock.timer"} if timer else {}),
+        **os.environ,
         "PATH": f"{shim}:{os.environ.get('PATH', '')}",
         "BS_CLOCK_MARKER": str(marker),
         "BS_CLOCK_DISABLE_FILE": str(tmp_path / "disabled"),
-        "BS_CLOCK_ENABLE_FILE": str(tmp_path / "enabled"),
-        "BS_CLOCK_SHADOW_MARKER": str(tmp_path / "shadow"),
         "BS_CLOCK_SOURCES": " ".join(entries),
         "BS_CLOCK_CAFILE": tls["cafile"],
         "BS_CLOCK_TIMESYNC_FILE": str(clock),
@@ -365,37 +357,6 @@ def test_stale_marker_does_not_block_a_heal(tmp_path: Path, tls, stale: str) -> 
     wall, boot = map(int, (tmp_path / "verified").read_text().split())
     assert abs(wall - time.time()) < 5
     assert abs(boot - time.clock_gettime(time.CLOCK_BOOTTIME)) < 5
-
-
-def test_shadow_mode_logs_but_never_steps(tmp_path: Path, tls) -> None:
-    """A timer run without the opt-in file only logs; the clock stays unverified."""
-    out, set_args, marker, touched = _run(tmp_path, tls, [_AHEAD] * 2, timer=True)
-    assert set_args == "" and not touched and not marker
-    assert "shadow mode: would step" in out
-
-
-def test_shadow_mode_verifies_a_good_clock(tmp_path: Path, tls) -> None:
-    """A clock already within the step threshold is verified even in shadow mode."""
-    sources = [("ok", 30), ("ok", 31)]
-    _, set_args, marker, _ = _run(tmp_path, tls, sources, timer=True)
-    assert set_args == "" and marker
-
-
-def test_shadow_mode_reports_once_per_boot(tmp_path: Path, tls) -> None:
-    """A repeat shadow run contacts no source; opting in afterwards still steps."""
-    _run(tmp_path, tls, [_AHEAD] * 2, timer=True)
-    out, set_args, _, _ = _run(tmp_path, tls, [_AHEAD] * 2, timer=True)
-    assert _SEEN == set() and "shadow" not in out and set_args == ""
-    _, set_args, marker, _ = _run(tmp_path, tls, [_AHEAD] * 2, timer=True, enabled=True)
-    assert "@" in set_args and marker
-
-
-def test_updater_run_steps_without_opt_in(tmp_path: Path, tls) -> None:
-    """An updater-started run heals during the soak, even after a shadow report."""
-    _run(tmp_path, tls, [_AHEAD] * 2, timer=True)
-    out, set_args, marker, touched = _run(tmp_path, tls, [_AHEAD] * 2)
-    assert "@" in set_args and "clock stepped" in out
-    assert marker and touched
 
 
 def test_step_is_the_mean_of_the_agreeing_pair(tmp_path: Path, tls) -> None:

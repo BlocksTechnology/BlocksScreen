@@ -6,10 +6,6 @@ set -euo pipefail
 MARKER=${BS_CLOCK_MARKER:-/run/blocksscreen-clock-verified}
 # Kill switch; outside the repo so updates keep it.
 DISABLE_FILE=${BS_CLOCK_DISABLE_FILE:-/etc/blocksscreen-clock.disabled}
-# Opt-in for timer runs during the soak; without it a timer run only logs the step.
-ENABLE_FILE=${BS_CLOCK_ENABLE_FILE:-/etc/blocksscreen-clock.enabled}
-# Shadow mode reports once per boot.
-SHADOW_MARKER=${BS_CLOCK_SHADOW_MARKER:-/run/blocksscreen-clock-shadow}
 # Independent operators with sub-second Date headers; entry: name[=addr:port].
 read -ra SOURCES <<<"${BS_CLOCK_SOURCES:-deb.debian.org www.cloudflare.com www.google.com www.apple.com}"
 CAFILE=${BS_CLOCK_CAFILE:-}
@@ -79,10 +75,6 @@ _ntp_synced() {
 [[ -e $DISABLE_FILE ]] && exit 0
 _ntp_synced && exit 0
 _marker_valid && exit 0
-# systemd 252+ sets TRIGGER_UNIT only for timer runs; an updater run means a bad clock blocks an update.
-shadow=false
-[[ ! -e $ENABLE_FILE && -n ${TRIGGER_UNIT:-} ]] && shadow=true
-$shadow && [[ -e $SHADOW_MARKER ]] && exit 0
 
 # First two agreeing sources win; one bad source can neither block nor move the clock.
 offsets=()
@@ -109,11 +101,6 @@ if ((${step#-} >= MIN_STEP_S)); then
     floor=${BS_CLOCK_FLOOR:-$(git -c safe.directory="$BS_PATH" -C "$BS_PATH" log -1 --format=%ct 2>/dev/null || echo 0)}
     if ((target < floor)); then
         log "ignoring source date $target: older than BlocksScreen HEAD ($floor)"
-        exit 0
-    fi
-    if $shadow; then
-        log "shadow mode: would step clock by ${step} s; create $ENABLE_FILE to apply"
-        touch "$SHADOW_MARKER"
         exit 0
     fi
     # Moonraker job history uses wall time.
