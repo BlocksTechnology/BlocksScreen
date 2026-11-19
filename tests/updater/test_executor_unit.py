@@ -523,6 +523,22 @@ class TestGitPruneExtraRemotes:
 _TLS_ERR = "fatal: server certificate verification failed. CAfile: none CRLfile: none"
 
 
+class _GatedFetch:
+    """Fetch stub: /slow fails only once the gate opens, like a fetch outlasting a heal."""
+
+    def __init__(self) -> None:
+        self.gate = asyncio.Event()
+        self.calls: dict[str, int] = {}
+
+    async def __call__(self, path: Path, **_: object) -> tuple[bool, str]:
+        n = self.calls[str(path)] = self.calls.get(str(path), 0) + 1
+        if n > 1:
+            return (True, "")
+        if str(path) == "/slow":
+            await self.gate.wait()
+        return (False, _TLS_ERR)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("output", "synced", "verified", "clock"),
@@ -633,6 +649,24 @@ class TestClockHeal:
         ):
             assert await heal_clock() is False
         assert _clock_heal["last"] >= seen[0]
+
+    @pytest.mark.asyncio
+    async def test_failure_outlasting_a_concurrent_heal_retries(self, _fresh):
+        """A fetch that fails after another fetch healed the clock still retries."""
+        fetch = _GatedFetch()
+        run = AsyncMock(
+            side_effect=lambda *a, **k: _fresh.touch() or fetch.gate.set() or (True, "")
+        )
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            slow = asyncio.create_task(git_fetch(Path("/slow")))
+            await asyncio.sleep(0)
+            assert await git_fetch(Path("/fast")) == (True, "")
+            assert await slow == (True, "")
+        assert run.await_count == 1
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(

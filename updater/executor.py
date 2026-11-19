@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import http.client
 import json
 import logging
@@ -11,7 +12,7 @@ import signal
 import sys
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
@@ -419,12 +420,11 @@ async def _prune_broken_refs(path: Path, output: str) -> bool:
 async def git_fetch(
     path: Path | None, *, prune_remotes: bool = True
 ) -> tuple[bool, str]:
-    """Fetch the repo at path; retry once after healing the clock on a clock-caused TLS failure."""
-    ok, out = await _git_fetch_once(path, prune_remotes=prune_remotes)
-    if not ok and (await explain_fetch_error(out)).startswith(CLOCK_UNSYNCED):
-        if await heal_clock():
-            return await _git_fetch_once(path, prune_remotes=prune_remotes)
-    return (ok, out)
+    """Fetch the repo at path; retry once after a clock heal on a clock-caused TLS failure."""
+    return await _retry_after_clock_heal(
+        functools.partial(_git_fetch_once, path, prune_remotes=prune_remotes),
+        _GIT_TLS_SIGNATURES,
+    )
 
 
 async def _git_fetch_once(
@@ -506,7 +506,7 @@ _CLOCK_HEAL_LOCK = asyncio.Lock()
 _CLOCK_HEAL_RETRY_S = 60.0
 # Longer than the unit's TimeoutStartSec, so systemd ends a hung run first.
 CLOCK_HEAL_WAIT_S = 95.0
-_clock_heal = {"last": float("-inf")}
+_clock_heal = {"last": float("-inf"), "healed": 0}
 # gnutls (Debian git) reports a bad certificate date as a generic verify failure.
 _GIT_TLS_SIGNATURES = ("certificate verification failed", "ssl certificate problem")
 # apt Release date errors caused by a wrong local clock.
@@ -544,7 +544,26 @@ async def heal_clock() -> bool:
         logger.info(
             "clock sync ran: clock %s", "trusted" if trusted else "still unverified"
         )
+        if trusted:
+            _clock_heal["healed"] += 1
         return trusted
+
+
+async def _retry_after_clock_heal(
+    op: Callable[[], Awaitable[tuple[bool, str]]], signatures: tuple[str, ...]
+) -> tuple[bool, str]:
+    """Run op; retry once if its date failure was healed by this call or a concurrent one."""
+    healed = _clock_heal["healed"]
+    ok, out = await op()
+    if ok or not any(k in out.lower() for k in signatures):
+        return (ok, out)
+    # A heal that finished while op ran has already verified the clock, so explain sees no fault.
+    if _clock_heal["healed"] != healed:
+        return await op()
+    if (await explain_fetch_error(out, signatures)).startswith(CLOCK_UNSYNCED):
+        if await heal_clock():
+            return await op()
+    return (ok, out)
 
 
 async def explain_fetch_error(
@@ -1049,14 +1068,11 @@ def classify_apt_error(err: str) -> str:
 
 
 async def apt_update() -> tuple[bool, str]:
-    """Refresh package lists; retry once after healing the clock on a Release date error."""
-    ok, out = await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
-    if not ok and (await explain_fetch_error(out, _APT_CLOCK_SIGNATURES)).startswith(
-        CLOCK_UNSYNCED
-    ):
-        if await heal_clock():
-            return await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
-    return (ok, out)
+    """Refresh package lists; retry once after a clock heal on a Release date error."""
+    return await _retry_after_clock_heal(
+        functools.partial(_run, _apt_cmd("update"), timeout=120.0, env=_apt_env()),
+        _APT_CLOCK_SIGNATURES,
+    )
 
 
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
