@@ -603,6 +603,9 @@ def spoolman_home(tmp_path: Path) -> Path:
     _git(repo, "add", ".")
     (repo / "Spoolman" / ".venv").mkdir(parents=True)
     (repo / "Spoolman" / "release_info.json").write_text(_RELEASE_INFO)
+    (repo / "Spoolman" / ".env").write_text(
+        "#SPOOLMAN_DIR_DATA=/home/pi/spoolman_data\n"
+    )
     (repo / "uv").mkdir()
     for name in ("uv", "uvx"):
         (repo / "uv" / name).write_text("")
@@ -667,6 +670,32 @@ class TestSpoolmanHook:
         assert result.returncode == 0, result.stdout + result.stderr
         assert (repo / "Spoolman" / "release_info.json").exists()
         assert (repo / "uv" / "uv").exists()
+
+    def test_git_failure_keeps_leftovers(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        (repo / ".git" / "index").write_bytes(b"corrupt")
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "Spoolman").is_dir()
+        assert (repo / "uv").is_dir()
+
+    @pytest.mark.parametrize(
+        ("rel", "text"),
+        [
+            ("data/spoolman.db", ""),
+            ("backups/spoolman.db.1", ""),
+            (".env", "SPOOLMAN_DIR_DATA=/home/blocks/Spoolman/Spoolman/data\n"),
+            (".env", "export SPOOLMAN_DIR_BACKUPS=/srv/bk\n"),
+        ],
+    )
+    def test_keeps_release_dir_with_data(self, tmp_path, spoolman_home, rel, text):
+        release = spoolman_home / "Spoolman" / "Spoolman"
+        (release / rel).parent.mkdir(parents=True, exist_ok=True)
+        (release / rel).write_text(text)
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (release / rel).exists()
+        assert "kept Spoolman/" in result.stdout
 
     def test_keeps_symlinked_dir(self, tmp_path, spoolman_home):
         repo = spoolman_home / "Spoolman"

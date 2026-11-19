@@ -56,15 +56,24 @@ fi
 _unit_dir=$(systemctl show -P WorkingDirectory Spoolman.service 2>/dev/null || true)
 for _left in Spoolman uv; do
     _dir="$COMPONENT_PATH/$_left"
-    if [ ! -d "$_dir" ] || [ -L "$_dir" ] || [ "$_unit_dir" = "$_dir" ] ||
-        git -C "$COMPONENT_PATH" ls-files --error-unmatch -- "$_left" >/dev/null 2>&1; then
+    if [ ! -d "$_dir" ] || [ -L "$_dir" ] || [ "$_unit_dir" = "$_dir" ]; then
+        continue
+    fi
+    # Fail closed: a git error (128, e.g. dubious ownership or a corrupt index) must not read as untracked.
+    if ! _tracked=$(git -C "$COMPONENT_PATH" ls-files -- "$_left" 2>/dev/null) || [ -n "$_tracked" ]; then
         continue
     fi
     # Only the exact installer fingerprints; anything else in there is not ours to delete.
     case $_left in
     Spoolman) grep -qs '"project_name": "Spoolman"' "$_dir/release_info.json" || continue ;;
-    uv) [ -z "$(find "$_dir" -mindepth 1 ! -name uv ! -name uvx -print -quit)" ] || continue ;;
+    uv) _extra=$(find "$_dir" -mindepth 1 ! -name uv ! -name uvx -print -quit 2>/dev/null) && [ -z "$_extra" ] || continue ;;
     esac
+    # The fingerprint proves origin, not emptiness: a spool database (or its backups) is never deleted.
+    if ! _db=$(find "$_dir" -name '*.db*' -print -quit 2>/dev/null) || [ -n "$_db" ] ||
+        grep -qsE '^[[:space:]]*(export[[:space:]]+)?SPOOLMAN_DIR_(DATA|BACKUPS)=' "$_dir/.env"; then
+        echo "[hook:Spoolman] kept $_left/: may hold Spoolman data"
+        continue
+    fi
     if rm -rf --one-file-system -- "$_dir"; then
         echo "[hook:Spoolman] removed unused factory leftover $_left/"
     else
