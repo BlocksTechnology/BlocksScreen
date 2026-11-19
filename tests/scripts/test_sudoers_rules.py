@@ -144,3 +144,8 @@ class TestWrapperValidation:
         # Passes validation, then fails at apt (no root): anything but exit 2.
         res = self._run("upgrade", "libstdc++6", "python3.11-dev")
         assert res.returncode != 2
+
+
+def test_clock_heal_argv_matches_a_rule():
+    argv = [executor.SYSTEMCTL, "start", executor.CLOCK_SYNC_UNIT]
+    assert " ".join(argv) in _expanded_rules()

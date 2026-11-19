@@ -9,11 +9,11 @@ import hashlib
 import logging
 import os
 import pathlib
-import shutil
 import subprocess
 import sys
 import threading
-from unittest.mock import MagicMock, patch
+from datetime import datetime
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -26,7 +26,10 @@ _BS_DIR = os.path.abspath(
 if _BS_DIR not in sys.path:
     sys.path.append(_BS_DIR)
 
+_CONFIGURATOR = "BlocksScreen.tools.configuration_manager.configurator"
+
 from BlocksScreen.tools.configuration_manager.configurator import (  # noqa: E402
+    SAVE_CONFIG_BACKUPS_KEPT,
     SV_CONFIG_MARKER,
     ConfigManager,
     check_broken_symlinks,
@@ -752,6 +755,20 @@ class TestMergeCfgMarker:
         result.read_string(tgt.read_text())
         assert result.get("section", "opt") == "from_repo"
 
+    def test_target_no_marker_strips_keys_the_source_block_owns(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(
+            tmp_path / "src_printer.cfg",
+            "[probe]\nz_offset: 2.0\nspeed: 5\n"
+            + SV_CONFIG_MARKER
+            + "\n#*# [probe]\n#*# z_offset = 1.0\n",
+        )
+        tgt = _write(tmp_path / "tgt_printer.cfg", "[probe]\nspeed: 5\n")
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
+        lines = tgt.read_text().splitlines()
+        assert "#z_offset: 2.0" in lines and "speed: 5" in lines
+        assert "#*# z_offset = 1.0" in lines
+
     def test_src_with_marker_target_also_with_marker(self, tmp_path):
         mgr = _make_manager(tmp_path)
         src = _write(
@@ -947,6 +964,32 @@ class TestMergeCfgMarker:
         assert "canbus_uuid: 456" in merged
         assert "canbus_uuid: 123" not in merged
         assert "/tmp/klipper_host_mcu" not in merged
+
+    def test_save_config_keys_stay_commented_in_header(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        src = _write(
+            tmp_path / "src_printer.cfg",
+            "[input_shaper]\nshaper_freq_x: 57.0\nshaper_type_x: mzv\n"
+            "[bed_mesh]\nspeed: 100\nzero_ref: 1,\n  2\n",
+        )
+        save = (
+            SV_CONFIG_MARKER + "\n#*# DO NOT EDIT THIS BLOCK OR BELOW.\n#*#\n"
+            "#*# [input_shaper]\n#*# shaper_freq_x = 108.8\n"
+            "#*# [bed_mesh]\n#*# zero_ref = 3,\n#*# \t4\n"
+        )
+        tgt = _write(
+            tmp_path / "tgt_printer.cfg",
+            "[input_shaper]\n#shaper_freq_x: 57.0\nshaper_type_x: mzv\n"
+            "[bed_mesh]\nspeed: 100\n#zero_ref: 1,\n#  2\n" + save,
+        )
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
+        merged = tgt.read_text()
+        header = merged[: merged.index(SV_CONFIG_MARKER)]
+        assert "#shaper_freq_x: 57.0\nshaper_type_x: mzv\n" in header
+        assert "speed: 100\n#zero_ref: 1,\n#  2\n" in header
+        assert merged.endswith(save)
+        assert mgr.merge_cfg(src, target_file=tgt, marker=SV_CONFIG_MARKER) is True
+        assert tgt.read_text() == merged
 
 
 # =========================================================================
@@ -1151,3 +1194,79 @@ class TestSync:
         mgr.repo = tmp_path / "ghost_repo"
         mgr.sync()
         assert len(caplog.records) > 0
+
+
+class TestPruneSaveConfigBackups:
+    def test_keeps_newest_and_ignores_other_files(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        names = [f"printer-202611{d:02d}_120000.cfg" for d in range(1, 13)]
+        for name in names:
+            _write(mgr.config_dir / name, "[g]\n")
+        keep = [
+            "printer.cfg",
+            "printer-old.cfg",
+            "macros-20261101_120000.cfg",
+            "printer-20261399_120000.cfg",
+        ]
+        for name in keep:
+            _write(mgr.config_dir / name, "[g]\n")
+        mgr._prune_save_config_backups()
+        left = sorted(p.name for p in mgr.config_dir.iterdir())
+        assert left == sorted(names[-SAVE_CONFIG_BACKUPS_KEPT:] + keep)
+
+    def test_early_stamped_newer_save_is_spared(self, tmp_path):
+        # Pre-NTP boot: the newest save is stamped before the last session's saves.
+        mgr = _make_manager(tmp_path)
+        cluster = [f"printer-20261110_1200{m:02d}.cfg" for m in range(10)]
+        early, old = "printer-20261110_115500.cfg", "printer-20261101_120000.cfg"
+        for name in [*cluster, early, old]:
+            _write(mgr.config_dir / name, "[g]\n")
+        mgr._prune_save_config_backups()
+        left = sorted(p.name for p in mgr.config_dir.iterdir())
+        assert left == sorted([*cluster, early])
+
+    @staticmethod
+    def _seed(mgr, stamps):
+        for stamp in stamps:
+            _write(mgr.config_dir / f"printer-{stamp}.cfg", "[g]\n")
+
+    @staticmethod
+    def _left(mgr):
+        return sorted(p.name[8:23] for p in mgr.config_dir.iterdir())
+
+    def test_unsynced_clock_behind_stamps_skips_prune(self, tmp_path, monkeypatch):
+        # Offline box lost its clock: the newest save is stamped at the image date.
+        monkeypatch.setattr(_CONFIGURATOR + "._CLOCK_SYNCED_FLAG", tmp_path / "nope")
+        mgr = _make_manager(tmp_path)
+        stamps = [f"20261110_1200{m:02d}" for m in range(10)] + ["20250601_120000"]
+        self._seed(mgr, stamps)
+        mgr._prune_save_config_backups(now=datetime(2025, 6, 1, 13))
+        assert self._left(mgr) == sorted(stamps)
+
+    def test_synced_clock_keeps_future_stamps_out_of_the_count(
+        self, tmp_path, monkeypatch
+    ):
+        # Clock ran ahead for some saves, then NTP corrected it.
+        flag = _write(tmp_path / "synchronized", "")
+        monkeypatch.setattr(_CONFIGURATOR + "._CLOCK_SYNCED_FLAG", flag)
+        mgr = _make_manager(tmp_path)
+        future = [f"20300101_0000{m:02d}" for m in range(10)]
+        real = [f"202611{d:02d}_120000" for d in range(1, 13)]
+        self._seed(mgr, future + real)
+        mgr._prune_save_config_backups(now=datetime(2026, 11, 13, 15))
+        assert self._left(mgr) == sorted(future + real[2:])
+
+    def test_stamps_within_slack_ahead_still_prune(self, tmp_path, monkeypatch):
+        # Power cut: fake-hwclock restored an hour-old clock, prune runs unsynced.
+        monkeypatch.setattr(_CONFIGURATOR + "._CLOCK_SYNCED_FLAG", tmp_path / "nope")
+        mgr = _make_manager(tmp_path)
+        cluster = [f"20261113_1400{m:02d}" for m in range(10)]
+        self._seed(mgr, [*cluster, "20261101_120000"])
+        mgr._prune_save_config_backups(now=datetime(2026, 11, 13, 13))
+        assert self._left(mgr) == cluster
+
+    def test_under_limit_deletes_nothing(self, tmp_path):
+        mgr = _make_manager(tmp_path)
+        _write(mgr.config_dir / "printer-20261101_120000.cfg", "[g]\n")
+        mgr._prune_save_config_backups()
+        assert (mgr.config_dir / "printer-20261101_120000.cfg").exists()

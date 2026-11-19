@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import typing
 from collections import deque
 
@@ -10,8 +9,10 @@ from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
 from lib.klipper_message_filter import (
+    CONSOLE_ECHO_PREFIX,
     MessageSource,
     Severity,
+    macro_error_text,
     match_message,
 )
 from lib.klippy_status import KlippyStatus
@@ -44,10 +45,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
-
-_MACRO_ERROR_RE = re.compile(
-    r"Error evaluating 'gcode_macro ([^:]+):gcode'.*CommandError", re.IGNORECASE
-)
 
 
 def api_handler(func):
@@ -135,6 +132,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._popup_toggle: bool = False
         self._update_in_progress: bool = False
         self._post_update_reconnect: bool = False
+        # Latest loadscreen request made before this window was first shown.
+        self._early_loadscreen: tuple[bool, str] | None = None
         self._reconnect_retries: int = 0
         self._reconnect_timer = QtCore.QTimer(self)
         self._reconnect_timer.setSingleShot(False)
@@ -195,6 +194,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.usb_manager.usb_unmounted.connect(
             self.printPanel.filesPage_widget.on_usb_removed
         )
+        self.usb_manager.usb_unmounted.connect(self.printPanel.on_usb_removed)
         if not os.environ.get("BLOCKSCREEN_DEV"):
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
@@ -217,6 +217,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_notifications.connect(self.notiPage.new_notication)
 
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
+        self.printPanel.request_forget_pages.connect(self.forget_pages)
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
@@ -272,6 +273,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.object_updated.connect(self.amu_manager.on_object_updated)
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.ws.klippy_state_signal.connect(self.amu_manager.on_klippy_state)
+        self.ws.server_components_signal.connect(self.amu_manager.on_server_components)
+        self.amu_manager.show_notification.connect(self.show_notifications)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
@@ -295,7 +298,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updater_worker.provisioning_changed.connect(
             self.update_page.handle_provisioning_changed
         )
-        self.updater_worker.replay_busy()
         self.updater_worker.daemon_unavailable.connect(self.on_updater_unavailable)
         self.updater_worker.daemon_unavailable.connect(
             self.update_page.handle_daemon_unavailable
@@ -383,6 +385,32 @@ class MainWindow(QtWidgets.QMainWindow):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
         self.conn_window.show()
+        # Last: the daemon may report busy before any slot or the loadscreen exists.
+        self.updater_worker.replay_busy()
+        self.update_page.hold_for_deploy()
+
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
+        """Apply a loadscreen request that arrived before the window was shown."""
+        super().showEvent(a0)
+        if self._early_loadscreen is not None:
+            # The show event precedes the native map, so wait for the next loop pass.
+            QtCore.QTimer.singleShot(0, self._flush_early_loadscreen)
+
+    def _flush_early_loadscreen(self) -> None:
+        """Show or hide the loadscreen as the last pre-show request asked."""
+        if self._early_loadscreen is None:
+            return
+        show, msg = self._early_loadscreen
+        self._early_loadscreen = None
+        self._apply_loadscreen(show, msg)
+
+    def _apply_loadscreen(self, show: bool, msg: str) -> None:
+        """Set the loadscreen message and visibility."""
+        self.loadwidget.set_status_message(msg)
+        if show:
+            self.loadscreen.show()
+        else:
+            self.loadscreen.hide()
 
     @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
@@ -420,6 +448,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
+                if not show:
+                    # A boot-sync restart deferred by the update has no other retry.
+                    QtCore.QTimer.singleShot(0, self._try_device_config_restart)
             if (
                 not show
                 and self._post_update_reconnect
@@ -443,11 +474,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 if not self.utilitiesPanel.isVisible():
                     return
 
-        self.loadwidget.set_status_message(msg)
-        if show:
-            self.loadscreen.show()
-        else:
-            self.loadscreen.hide()
+        if not self.isVisible():
+            # No window manager on the device: a popup mapped first stays under us.
+            self._early_loadscreen = (show, msg)
+            return
+        self._early_loadscreen = None
+        self._apply_loadscreen(show, msg)
 
     @QtCore.pyqtSlot(bool, name="show-update-page")
     def show_update_page(self, fullscreen: bool):
@@ -661,7 +693,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_content_widget.setTabEnabled(
             self.main_content_widget.indexOf(self.utilitiesTab), True
         )
-        self.header_main_layout.setEnabled(True)
         return all(
             [
                 not self.main_content_widget.isTabEnabled(
@@ -670,7 +701,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 not self.main_content_widget.isTabEnabled(
                     self.main_content_widget.indexOf(self.utilitiesTab)
                 ),
-                not self.header_main_layout.isEnabled(),
             ]
         )
 
@@ -691,7 +721,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_content_widget.setTabEnabled(
             self.main_content_widget.indexOf(self.utilitiesTab), False
         )
-        self.header_main_layout.setEnabled(False)
         return all(
             [
                 not self.main_content_widget.isTabEnabled(
@@ -700,7 +729,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 not self.main_content_widget.isTabEnabled(
                     self.main_content_widget.indexOf(self.utilitiesTab)
                 ),
-                not self.header_main_layout.isEnabled(),
             ]
         )
 
@@ -834,8 +862,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def set_ui_lock(self, locked: bool) -> None:
         """Lock or unlock navigation during calibration.
 
-        Disables all tabs except controlTab (where calibration lives) and
-        the header, so the user cannot navigate away mid-calibration.
+        Disables all tabs except controlTab (where calibration lives), so the
+        user cannot navigate away mid-calibration.
         """
         for tab in (
             self.printTab,
@@ -845,7 +873,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.main_content_widget.setTabEnabled(
                 self.main_content_widget.indexOf(tab), not locked
             )
-        self.header_main_layout.setEnabled(not locked)
 
     @QtCore.pyqtSlot(str, str, name="track_print_state")
     def _track_print_state(self, field: str, value: str) -> None:
@@ -1004,6 +1031,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
 
+    @QtCore.pyqtSlot(int, list, name="forget-pages")
+    def forget_pages(self, tab_index: int, panels: list[int]) -> None:
+        """Drop back-history entries of pages whose content is gone."""
+        kept: list[list[int]] = []
+        for entry in self.index_stack:
+            gone = entry[0] == tab_index and entry[1] in panels
+            if not gone and (not kept or kept[-1] != entry):  # no Back to the same page
+                kept.append(entry)
+        self.index_stack.clear()
+        self.index_stack.extend(kept)
+
     @QtCore.pyqtSlot(name="bo-start-websocket-connection")
     def bo_start_websocket_connection(self) -> None:
         """Starts the Websocket connection with moonraker"""
@@ -1011,31 +1049,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.try_connection()
 
     def messageReceivedEvent(self, event: events.WebSocketMessageReceived) -> None:
-        """Helper method that handles dispatching websocket
-        event messages to their respective handlers
-
-        Args:
-            event (events.WebSocketMessageReceivedEvent): The message event with all its contents
-
-        Raises:
-            Exception: When a klippy status change comes from the
-            websocket, tries to send another event
-            corresponding to the incoming status.
-            If the QApplication instance is of type
-            None raises an exception because the event
-            cannot be sent.
-        """
+        """Dispatch a websocket message to the handler for its method's route."""
         _method = event.method
         _data = event.data
         _metadata = event.metadata
         if not _method:
             return
-        if not _data:
+        if _method.startswith("notify_klippy_"):
+            route = "notify_klippy"
+        elif not _data:
             return
-        api_reference = _method.split(".")
-        if "klippy" in _method:
-            api_reference = "notify_klippy"
-        method_handle = f"_handle_{api_reference[0]}_message"
+        else:
+            route = _method.split(".")[0]
+        method_handle = f"_handle_{route}_message"
         if hasattr(self, method_handle):
             obj = getattr(self, method_handle)
             if callable(obj):
@@ -1063,7 +1089,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if "ok" in data:
             return
         if "update" in method:
-            if ("status" or "refresh") in method:
+            # Same behaviour as the old ("status" or "refresh"), which never matched refresh
+            if "status" in method:
                 self.on_update_message.emit(dict(data))
 
     @api_handler
@@ -1104,51 +1131,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_notify_klippy_message(self, method, data, metadata) -> None:
-        """Handle websocket notifications for klippy events"""
-        _split = method.split("_")
-        if len(_split) > 2:
-            status_type = _split[2]
-            _state_upper = status_type[0].upper()
-            _state_call = f"{_state_upper}{status_type[1:]}"
-            _logger.debug(
-                "Notify_klippy_ %s Received from object subscription.",
-                str(_state_call),
-            )
-            self.klippy_status.on_klippy_notify(status_type)
-            if hasattr(events, f"Klippy{_state_call}"):
-                _klippy_event_callback = getattr(
-                    events,
-                    f"Klippy{_state_call}",
-                )
-                if callable(_klippy_event_callback):
-                    try:
-                        _event = _klippy_event_callback(data="")
-                        instance = QtWidgets.QApplication.instance()
-                        if not isinstance(_event, QtCore.QEvent):
-                            return
-                        if instance:
-                            _logger.info("Event %s sent", str(_klippy_event_callback))
-                            instance.postEvent(self, _event)
-                        else:
-                            raise Exception("QApplication.instance is None type.")
-                    except Exception as e:
-                        _logger.debug(
-                            "Unable to send internal klippy %s notification: %s",
-                            str(_state_call),
-                            str(e),
-                        )
-            if not self._popup_toggle and status_type in (
-                "shutdown",
-                "error",
-                "disconnected",
-            ):
-                self._emit_filtered_notification(
-                    MessageSource.KLIPPY_STATE,
-                    status_type,
-                    source_id="klippy_state",
-                    fallback=False,
-                    show_popup=True,
-                )
+        """Route notify_klippy_* to KlippyStatus (KlipperScreen notification_handler)."""
+        state = method.removeprefix("notify_klippy_")
+        try:
+            self.klippy_status.on_klippy_notify(state)
+        except Exception:
+            # Raised out of a Qt event override, PyQt6 aborts the whole app.
+            _logger.exception("KlippyStatus failed on notify_klippy_%s", state)
 
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
@@ -1159,21 +1148,19 @@ class MainWindow(QtWidgets.QMainWindow):
     def _handle_notify_service_state_changed_message(
         self, method, data, metadata
     ) -> None:
-        """Handle websocket service messages"""
+        """Notify only when a service fails; routine start/stop transitions are noise."""
         entry = data.get("params")
-        if entry:
-            if self._popup_toggle:
-                return
-            service_entry: dict = entry[0]
-            service_name, service_info = service_entry.popitem()
-            self.show_notifications.emit(
-                "mainwindow",
-                str(
-                    f"{service_name} service changed state to \n{service_info.get('sub_state')}"
-                ),
-                1,
-                False,
-            )
+        if not entry or self._popup_toggle:
+            return
+        # Mainsail stores these silently and KlipperScreen ignores them: every boot and restart emits several.
+        for service_name, service_info in entry[0].items():
+            if service_info.get("active_state") == "failed":
+                self.show_notifications.emit(
+                    "mainwindow",
+                    f"{service_name} service failed",
+                    Severity.WARNING.value,
+                    False,
+                )
 
     def _emit_filtered_notification(
         self,
@@ -1190,8 +1177,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if rule.severity == Severity.IGNORE:
                 return True
             if rule.severity == Severity.ERROR:
-                self.show_loadscreen(False, "", True)
-                self.in_case_error.emit()
+                self._clear_overlay_for_error()
 
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
@@ -1202,10 +1188,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_notifications.emit(
                 source_id, text, Severity.ERROR.value, show_popup
             )
-            self.show_loadscreen(False, "", True)
-            self.in_case_error.emit()
+            self._clear_overlay_for_error()
             return True
         return False
+
+    def _clear_overlay_for_error(self) -> None:
+        """Drop the loading overlay for an error unless an update holds it."""
+        if not (self._update_in_progress or self._post_update_reconnect):
+            self.show_loadscreen(False, "", True)
+        self.in_case_error.emit()
 
     @QtCore.pyqtSlot(str, str, int, bool)
     def _on_probe_notification(
@@ -1249,10 +1240,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
             elif _gcode_msg_type == "!!":
+                if _message.startswith(CONSOLE_ECHO_PREFIX):
+                    return  # PrintTab showed it already; the echo is for other clients
                 source = MessageSource.GCODE_ERROR
-                m = _MACRO_ERROR_RE.search(_message)
-                if m:
-                    _message = f"macro failed: {m.group(1)}"
+                _message = macro_error_text(_message)
 
             else:
                 return
@@ -1287,11 +1278,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if "does not exist" in lower_text:
             self.printPanel.filesPage_widget.on_directory_error()
 
+        # A refused API print start carries the full "Error evaluating ..." text.
+        shown = macro_error_text(text)
         if not self._emit_filtered_notification(
-            MessageSource.MOONRAKER_ERROR, text, fallback=False, show_popup=True
+            MessageSource.MOONRAKER_ERROR, shown, fallback=False, show_popup=True
         ):
             self._emit_filtered_notification(
-                MessageSource.GCODE_ERROR, text, fallback=True, show_popup=True
+                MessageSource.GCODE_ERROR, shown, fallback=True, show_popup=True
             )
         _logger.error(text)
 

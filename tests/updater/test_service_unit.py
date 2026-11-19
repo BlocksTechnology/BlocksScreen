@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 import updater.service as updater_service
-from updater.models import ComponentConfig, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, ComponentConfig, ComponentStatus
 from updater.service import LoggingCallback, UpdateService
 
 
@@ -200,6 +200,100 @@ class TestCheckStatus:
         assert skip_fetch is True
 
     @pytest.mark.asyncio
+    async def test_breaker_cooldown_keeps_last_fetch_error(self, tmp_path: Path):
+        """A press during the fetch cooldown must still see the repo as dirty."""
+        fake_path = tmp_path / "mainsail-config"
+        fake_path.mkdir()
+        component = ComponentConfig(name="mainsail-config", kind="git", path=fake_path)
+        failed = ComponentStatus(name="mainsail-config", error="fatal: --atomic")
+        clean = ComponentStatus(name="mainsail-config")
+        with (
+            patch(
+                "updater.service.load_components", return_value=([component], 3600.0)
+            ),
+            patch(
+                "updater.service.check_git_status", side_effect=[failed, clean, clean]
+            ) as mock_check,
+        ):
+            svc = UpdateService()
+            await svc.check_status()
+            cooled = await svc.check_status()
+            assert mock_check.call_args.args[-1] is True
+            assert cooled["mainsail-config"].error == "fatal: --atomic"
+            assert cooled["mainsail-config"].needs_update
+            healed = await svc.check_status(force=True)
+        assert healed["mainsail-config"].error is None
+        assert not svc.has_fetch_failures() and not svc._fetch_errors
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("error", "cooled"),
+        [
+            ("fatal: unable to access 'x': Could not resolve host: github.com", {}),
+            ("fatal: --atomic", {"commits_behind": 2}),
+        ],
+    )
+    async def test_breaker_cooldown_carry_skips(
+        self, tmp_path: Path, error: str, cooled: dict
+    ):
+        """Offline errors are never carried, and a carry never hides a real update."""
+        fake_path = tmp_path / "klipper"
+        fake_path.mkdir()
+        component = ComponentConfig(name="klipper", kind="git", path=fake_path)
+        side = [
+            ComponentStatus(name="klipper", error=error),
+            ComponentStatus(name="klipper", **cooled),
+        ]
+        with (
+            patch(
+                "updater.service.load_components", return_value=([component], 3600.0)
+            ),
+            patch("updater.service.check_git_status", side_effect=side),
+        ):
+            svc = UpdateService()
+            await svc.check_status()
+            status = (await svc.check_status())["klipper"]
+        assert status.error is None
+        assert status.commits_behind == cooled.get("commits_behind", 0)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("clock_ok", "kept"), [(False, True), (True, False)])
+    async def test_breaker_cooldown_carries_clock_error_until_fixed(
+        self, tmp_path: Path, clock_ok: bool, kept: bool
+    ):
+        """A clock error stays up through the cooldown; a fixed clock fetches at once."""
+        components = []
+        for name in ("klipper", "moonraker"):
+            (tmp_path / name).mkdir()
+            components.append(
+                ComponentConfig(name=name, kind="git", path=tmp_path / name)
+            )
+        error = (
+            f"{CLOCK_UNSYNCED}: fatal: unable to access 'x': "
+            "server certificate verification failed"
+        )
+        failed = ComponentStatus(name="klipper", error=error)
+        git = AsyncMock(
+            side_effect=[failed, failed] + [ComponentStatus(name="klipper")] * 2
+        )
+        ntp = AsyncMock(return_value=False)
+        with (
+            patch("updater.service.load_components", return_value=(components, 3600.0)),
+            patch("updater.service.check_git_status", git),
+            patch("updater.executor.clock_verified", return_value=clock_ok),
+            patch("updater.executor.ntp_synchronized", ntp),
+        ):
+            svc = UpdateService()
+            await svc.check_status()
+            ntp.reset_mock()
+            status = (await svc.check_status())["klipper"]
+        assert (status.error == error) is kept
+        assert status.needs_update is kept
+        # Fixed clock: the breaker is cleared and the second refresh fetches.
+        assert git.await_args_list[2].args[4] is kept
+        assert ntp.await_count == (0 if clock_ok else 1)
+
+    @pytest.mark.asyncio
     async def test_printing_skips_apt_list_refresh(self):
         with patch("updater.service.apt_update", AsyncMock()) as mock_update:
             await UpdateService()._refresh_apt_lists(force=True, printing=True)
@@ -262,6 +356,37 @@ class TestCheckStatus:
             await svc.check_status(force=True)
         mock_update.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_fresh_outside_apt_refresh_skips_apt_update(self, apt_lists_partial):
+        """The previous daemon refreshed seconds ago: the restarted one must not redo it."""
+        apt_lists_partial.mkdir()
+        with patch("updater.service.apt_update", AsyncMock()) as mock_update:
+            await UpdateService()._refresh_apt_lists(force=True, printing=False)
+        mock_update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_old_outside_apt_refresh_still_runs_apt_update(self):
+        """Outside evidence only counts for minutes; a failed old refresh cannot mute 24 h."""
+        old = time.monotonic() - updater_service._APT_LIST_FORCE_TTL_S - 1
+        with (
+            patch("updater.service._apt_lists_refreshed_at", return_value=old),
+            patch(
+                "updater.service.apt_update", AsyncMock(return_value=(True, ""))
+            ) as mock_update,
+        ):
+            await UpdateService()._refresh_apt_lists(force=False, printing=False)
+        mock_update.assert_awaited_once()
+
+    @pytest.mark.parametrize("offset", [-10 * 365 * 86_400.0, 3600.0])
+    def test_apt_refresh_stamp_outside_this_boot_is_ignored(
+        self, apt_lists_partial, offset
+    ):
+        """An mtime from an earlier boot or the future (clock stepped) proves nothing."""
+        apt_lists_partial.mkdir()
+        stamp = time.time() + offset
+        os.utime(apt_lists_partial, (stamp, stamp))
+        assert updater_service._apt_lists_refreshed_at() == float("-inf")
+
 
 class TestStateFile:
     @pytest.mark.asyncio
@@ -319,11 +444,17 @@ class TestGitUpdate:
             yield
 
     @pytest.mark.asyncio
-    async def test_fetch_failure_reports_network_without_rollback(self):
+    @pytest.mark.parametrize(
+        ("prefix", "reason"), [("", "network"), (f"{CLOCK_UNSYNCED}: ", CLOCK_UNSYNCED)]
+    )
+    async def test_fetch_failure_reports_network_without_rollback(self, prefix, reason):
         # Nothing is checked out before the fetch: no revert, no service restart.
         cb = MagicMock()
         with (
             patch("pathlib.Path.exists", return_value=True),
+            patch(
+                "updater.service.explain_fetch_error", side_effect=lambda e: prefix + e
+            ),
             patch("updater.service.git_get_hash", return_value="abc123"),
             patch("updater.service.git_fetch", return_value=(False, "timeout")),
             patch("updater.service.git_has_corruption", return_value=False),
@@ -337,7 +468,7 @@ class TestGitUpdate:
         assert result is False
         mock_reset.assert_not_called()
         cb.on_rollback.assert_not_called()
-        cb.on_error.assert_called_once_with("klipper", "network")
+        cb.on_error.assert_called_once_with("klipper", reason)
         cb.on_component_done.assert_called_once_with("klipper", False)
 
     @pytest.mark.asyncio
@@ -2392,6 +2523,30 @@ class TestProvisionMissing:
         on_busy.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_probes_run_concurrently(self, tmp_path, reachable):
+        """Every probe is in flight at once; only the reachable component clones."""
+        both = asyncio.Event()
+        started: list[str] = []
+
+        async def probe(url: str) -> bool:
+            started.append(url)
+            if len(started) == 2:
+                both.set()
+            await both.wait()  # a sequential loop deadlocks here
+            return url.endswith("/Spoolman")
+
+        reachable.side_effect = probe
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            spoolman = self._comp(tmp_path)
+            svc._components = [spoolman, self._comp(tmp_path, name="Happy-Hare")]
+            assert await asyncio.wait_for(svc.provision_missing(), 2.0) is True
+        mock_prov.assert_called_once_with(spoolman)
+
+    @pytest.mark.asyncio
     async def test_late_wifi_installs_on_retry(self, tmp_path, reachable):
         reachable.side_effect = [False, True]
         with (
@@ -3157,7 +3312,7 @@ class TestPreflightFetch:
             svc = UpdateService()
             svc._components = comps
             offline = await svc._preflight_fetch(comps)
-        assert offline == set()
+        assert offline == {}
         assert set(svc._fetch_times) == {"klipper", "moonraker"}
 
     @pytest.mark.asyncio
@@ -3170,7 +3325,7 @@ class TestPreflightFetch:
             svc = UpdateService()
             svc._components = comps
             offline = await svc._preflight_fetch(comps)
-        assert offline == {"klipper", "moonraker"}
+        assert offline == {"klipper": "timeout", "moonraker": "timeout"}
 
     @pytest.mark.asyncio
     async def test_corrupt_repo_is_not_treated_as_offline(self, tmp_path):
@@ -3182,7 +3337,7 @@ class TestPreflightFetch:
             svc = UpdateService()
             svc._components = comps
             offline = await svc._preflight_fetch(comps)
-        assert offline == set()
+        assert offline == {}
         assert "klipper" not in svc._fetch_times  # left for the per-component flow
 
     @pytest.mark.asyncio
@@ -3193,7 +3348,7 @@ class TestPreflightFetch:
             svc._components = [comp]
             svc._fetch_times["klipper"] = time.monotonic()
             offline = await svc._preflight_fetch([comp])
-        assert offline == set()
+        assert offline == {}
         mock_fetch.assert_not_called()
 
     @pytest.mark.asyncio
@@ -3202,7 +3357,9 @@ class TestPreflightFetch:
         online_comp = self._git(tmp_path, "moonraker")
         cb = MagicMock()
         with (
-            patch.object(UpdateService, "_preflight_fetch", return_value={"klipper"}),
+            patch.object(
+                UpdateService, "_preflight_fetch", return_value={"klipper": "timeout"}
+            ),
             patch.object(
                 UpdateService, "_run_git_batch", return_value=True
             ) as mock_batch,
@@ -3216,6 +3373,22 @@ class TestPreflightFetch:
         )
         batched = [c.name for c in mock_batch.call_args.args[0]]
         assert batched == ["moonraker"]
+
+    @pytest.mark.asyncio
+    async def test_update_all_reports_unsynced_clock(self, tmp_path):
+        comp = self._git(tmp_path, "klipper")
+        cb = MagicMock()
+        offline = {
+            "klipper": f"{CLOCK_UNSYNCED}: fatal: certificate verification failed"
+        }
+        with (
+            patch.object(UpdateService, "_preflight_fetch", return_value=offline),
+            patch.object(UpdateService, "_run_git_batch", return_value=True),
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            assert await svc.update_all({"klipper"}) is False
+        cb.on_error.assert_called_once_with("klipper", CLOCK_UNSYNCED)
 
 
 class TestDeferredRestart:
@@ -3715,7 +3888,7 @@ class TestNonRepoComponent:
 
         with patch("updater.service.git_fetch", side_effect=fake_fetch):
             svc = UpdateService(callback=MagicMock())
-            assert await svc._preflight_fetch([good, bad]) == set()
+            assert await svc._preflight_fetch([good, bad]) == {}
         assert fetched == ["klipper"]
 
     @pytest.mark.asyncio
@@ -4215,3 +4388,66 @@ class TestPinnedCheckoutIsEnforced:
         assert _git_run(repo, "rev-parse", "HEAD") == shas["pin"]
         assert _git_run(repo, "branch", "--show-current") == "v3"
         assert _git_run(repo, "status", "--porcelain", "--untracked-files=no") == ""
+
+
+class TestSyncMoonraker:
+    @pytest.mark.asyncio
+    async def test_refreshes_only_repos_moonraker_has_stale(self, tmp_path):
+        head, old = "b" * 40, "a" * 40
+        svc = UpdateService()
+        svc._components = [
+            ComponentConfig(name=n, kind="git", path=tmp_path / n, order=i)
+            for i, n in enumerate(("BlocksScreen", "klipper", "Happy-Hare"))
+        ] + [ComponentConfig(name="system", kind="apt", order=9)]
+        recorded = {"BlocksScreen": old, "klipper": head, "system": old}
+        refresh = AsyncMock(return_value=head)
+        with (
+            patch("updater.service.moonraker_repo_hashes", return_value=recorded),
+            patch("updater.service.moonraker_refresh_repo", refresh),
+            patch("updater.service.git_get_hash", return_value=head),
+        ):
+            assert await svc.sync_moonraker() is True
+        refresh.assert_awaited_once_with("BlocksScreen")
+
+    @pytest.mark.asyncio
+    async def test_refused_or_unreachable_asks_for_retry(self, tmp_path):
+        svc = UpdateService()
+        svc._components = [
+            ComponentConfig(name="klipper", kind="git", path=tmp_path, order=1)
+        ]
+        with (
+            patch("updater.service.moonraker_repo_hashes", return_value=None),
+        ):
+            assert await svc.sync_moonraker() is False
+        with (
+            patch(
+                "updater.service.moonraker_repo_hashes",
+                return_value={"klipper": "a" * 40},
+            ),
+            patch("updater.service.moonraker_refresh_repo", return_value=None),
+            patch("updater.service.git_get_hash", return_value="b" * 40),
+        ):
+            assert await svc.sync_moonraker() is False
+
+    @pytest.mark.asyncio
+    async def test_unrecorded_head_gives_up_until_head_moves(self, tmp_path):
+        # No upstream or offline: Moonraker answers but records "?", retrying is futile.
+        svc = UpdateService()
+        svc._components = [
+            ComponentConfig(name="klipper", kind="git", path=tmp_path, order=1)
+        ]
+        refresh = AsyncMock(return_value="?")
+        heads = ["b" * 40, "b" * 40, "c" * 40]
+        with (
+            patch(
+                "updater.service.moonraker_repo_hashes",
+                return_value={"klipper": "?"},
+            ),
+            patch("updater.service.moonraker_refresh_repo", refresh),
+            patch("updater.service.git_get_hash", side_effect=heads),
+        ):
+            assert await svc.sync_moonraker() is True
+            assert await svc.sync_moonraker() is True
+            assert refresh.await_count == 1
+            assert await svc.sync_moonraker() is True
+        assert refresh.await_count == 2

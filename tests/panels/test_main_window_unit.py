@@ -1,5 +1,6 @@
 """Unit test for MainWindow._on_klippy_state auto-restart guard"""
 
+from collections import deque
 from types import MethodType, SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -316,3 +317,189 @@ def test_cancel_page_leaves_loadscreen_alone() -> None:
 
     win.loadscreen.hide.assert_not_called()
     win.cancelpage.show.assert_called_once()
+
+
+def _make_update_overlay_window() -> SimpleNamespace:
+    update_page = object()
+    win = _make_device_window(
+        _update_in_progress=True,
+        _post_update_reconnect=False,
+        update_page=update_page,
+        sender=lambda: update_page,
+        filamentPanel=None,
+        controlPanel=None,
+        printPanel=None,
+        utilitiesPanel=None,
+        isVisible=lambda: True,
+        _early_loadscreen=None,
+    )
+    win._apply_loadscreen = MethodType(MainWindow._apply_loadscreen, win)
+    win.ws.api.restart_service.return_value = True
+    return win
+
+
+@pytest.mark.parametrize("show, restarts", [(False, 1), (True, 0)])
+def test_update_overlay_dismiss_retries_deferred_restart(
+    monkeypatch, show, restarts
+) -> None:
+    # On the first update the boot sync's restart is deferred and nothing else retries it.
+    monkeypatch.setattr(
+        "BlocksScreen.lib.panels.mainWindow.QtCore.QTimer.singleShot",
+        lambda _ms, fn: fn(),
+    )
+    win = _make_update_overlay_window()
+    win.request_klipper_restart()
+    win.ws.api.restart_service.assert_not_called()
+
+    MainWindow.show_loadscreen(win, show, "")
+
+    assert win.ws.api.restart_service.call_count == restarts
+    assert win._device_restart_pending is (restarts == 0)
+
+
+def test_update_overlay_before_first_show_waits_for_window() -> None:
+    # UI started mid-update: the busy replay lands before main_window.show().
+    win = _make_update_overlay_window()
+    visible = False
+    win.isVisible = lambda: visible
+    win._flush_early_loadscreen = MethodType(MainWindow._flush_early_loadscreen, win)
+
+    MainWindow.show_loadscreen(win, True, "Update in progress ...")
+    win.loadscreen.show.assert_not_called()
+
+    visible = True
+    win._flush_early_loadscreen()
+    win.loadwidget.set_status_message.assert_called_once_with("Update in progress ...")
+    win.loadscreen.show.assert_called_once()
+
+    # A request made after the show wins over a stale pre-show one.
+    win._early_loadscreen = (False, "")
+    MainWindow.show_loadscreen(win, True, "Finishing installation ...")
+    win._flush_early_loadscreen()
+    win.loadscreen.hide.assert_not_called()
+
+
+@pytest.mark.parametrize("state", ["ready", "shutdown", "disconnected"])
+def test_notify_klippy_reaches_klippy_status(state) -> None:
+    # Old route rebound api_reference to a str, so [0] gave "n": _handle_n_message
+    win = SimpleNamespace(klippy_status=MagicMock())
+    win._handle_notify_klippy_message = MethodType(
+        MainWindow._handle_notify_klippy_message, win
+    )
+    method = f"notify_klippy_{state}"
+    event = SimpleNamespace(method=method, data={"method": method}, metadata=None)
+
+    MainWindow.messageReceivedEvent(win, event)
+
+    win.klippy_status.on_klippy_notify.assert_called_once_with(state)
+
+
+def _route_win() -> SimpleNamespace:
+    win = SimpleNamespace(klippy_status=MagicMock(), _handle_server_message=MagicMock())
+    win._handle_notify_klippy_message = MethodType(
+        MainWindow._handle_notify_klippy_message, win
+    )
+    return win
+
+
+def test_notify_klippy_routes_without_data() -> None:
+    win = _route_win()
+    event = SimpleNamespace(method="notify_klippy_ready", data={}, metadata=None)
+    MainWindow.messageReceivedEvent(win, event)
+    win.klippy_status.on_klippy_notify.assert_called_once_with("ready")
+
+
+def test_other_methods_route_by_namespace() -> None:
+    win = _route_win()
+    event = SimpleNamespace(method="server.files.list", data={"x": 1}, metadata="m")
+    MainWindow.messageReceivedEvent(win, event)
+    win._handle_server_message.assert_called_once_with(
+        "server.files.list", {"x": 1}, "m"
+    )
+    win.klippy_status.on_klippy_notify.assert_not_called()
+
+
+def test_klippy_status_error_does_not_escape_the_event() -> None:
+    win = _route_win()
+    win.klippy_status.on_klippy_notify.side_effect = RuntimeError("render")
+    event = SimpleNamespace(method="notify_klippy_shutdown", data={}, metadata=None)
+    MainWindow.messageReceivedEvent(win, event)
+
+
+def test_forget_pages_drops_only_that_tabs_entries() -> None:
+    win = SimpleNamespace(index_stack=deque([[0, 1], [2, 3], [0, 3], [0, 4]], maxlen=4))
+    MainWindow.forget_pages(win, 0, [3, 4])
+    assert list(win.index_stack) == [[0, 1], [2, 3]]
+    assert win.index_stack.maxlen == 4
+
+
+def test_forget_pages_collapses_back_to_the_same_page() -> None:
+    win = SimpleNamespace(index_stack=deque([[0, 1], [0, 3], [0, 1], [2, 0]], maxlen=4))
+    MainWindow.forget_pages(win, 0, [3])
+    assert list(win.index_stack) == [[0, 1], [2, 0]]
+
+
+@pytest.mark.parametrize(
+    ("method", "emits"),
+    [("machine.update.status", True), ("machine.update.refresh", False)],
+)
+def test_only_status_reply_emits(method, emits) -> None:
+    # Pins the old ("status" or "refresh") behaviour, which never matched refresh
+    win = SimpleNamespace(on_update_message=MagicMock())
+    MainWindow._handle_machine_message(win, method, {"version_info": {}}, None)
+    assert win.on_update_message.emit.called is emits
+
+
+@pytest.mark.parametrize(
+    ("active_state", "sub_state", "notifies"),
+    [
+        ("active", "running", False),
+        ("inactive", "dead", False),
+        ("failed", "failed", True),
+    ],
+)
+def test_service_state_notifies_only_on_failure(
+    active_state, sub_state, notifies
+) -> None:
+    win = SimpleNamespace(_popup_toggle=False, show_notifications=MagicMock())
+    params = [{"klipper": {"active_state": active_state, "sub_state": sub_state}}]
+    MainWindow._handle_notify_service_state_changed_message(
+        win, "notify_service_state_changed", {"params": params}, None
+    )
+    assert win.show_notifications.emit.called is notifies
+
+
+@pytest.mark.parametrize(
+    ("line", "pops"),
+    [
+        ("!! BlocksScreen: USB print refused: No filament", False),
+        ("!! Machine is unloaded, please load the machine", True),
+    ],
+)
+def test_own_console_echo_is_not_shown_twice(line, pops) -> None:
+    # PrintTab already showed what it echoes; other clients still get the `!!` line.
+    win = SimpleNamespace(
+        gcode_response={list: MagicMock()},
+        _popup_toggle=False,
+        _emit_filtered_notification=MagicMock(),
+    )
+    MainWindow._handle_notify_gcode_response_message(
+        win, "notify_gcode_response", {"params": [line]}, None
+    )
+    assert win._emit_filtered_notification.called is pops
+
+
+@pytest.mark.parametrize(
+    ("update", "reconnect", "drops"),
+    [(False, False, True), (True, False, False), (False, True, False)],
+)
+def test_error_keeps_the_update_overlay(update, reconnect, drops) -> None:
+    win = SimpleNamespace(
+        _update_in_progress=update,
+        _post_update_reconnect=reconnect,
+        show_loadscreen=MagicMock(),
+        in_case_error=MagicMock(),
+    )
+    MainWindow._clear_overlay_for_error(win)
+    assert win.show_loadscreen.called is drops
+    win.in_case_error.emit.assert_called_once()

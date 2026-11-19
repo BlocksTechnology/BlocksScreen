@@ -867,8 +867,8 @@ class TestPrintStartRefusal:
         "sensors",
         [
             {},
-            {"toolhead": True, "mmu_pre_gate": True},
-            {"toolhead": None, "mmu_pre_gate": None},
+            {"toolhead": True, "mmu_gate": True, "mmu_pre_gate": True},
+            {"toolhead": None, "mmu_gate": None, "mmu_pre_gate": None},
         ],
     )
     def test_loaded_missing_or_disabled_allows(self, manager, sensors) -> None:
@@ -878,17 +878,88 @@ class TestPrintStartRefusal:
     # .151 2026-10-21 11:10:20: toolhead False with both pre-gates True raised PRINT_START.
     def test_toolhead_empty_refuses(self, manager) -> None:
         manager.update_mmu_state(
-            _status(sensors={"toolhead": False, "mmu_pre_gate": True})
+            _status(sensors={"toolhead": False, "mmu_gate": True, "mmu_pre_gate": True})
         )
         assert "toolhead" in manager.print_start_refusal()
 
-    def test_pre_gate_empty_refuses(self, manager) -> None:
+    # HH parks unloaded filament before the gate sensor: gate False, pre-gate True.
+    def test_gate_empty_refuses(self, manager) -> None:
         manager.update_mmu_state(
-            _status(sensors={"toolhead": None, "mmu_pre_gate": False})
+            _status(sensors={"toolhead": None, "mmu_gate": False, "mmu_pre_gate": True})
         )
-        assert "gate" in manager.print_start_refusal()
+        assert "past the gate" in manager.print_start_refusal()
+
+    # An empty gate names the gate even though every downstream sensor is empty too.
+    def test_pre_gate_empty_refuses_first(self, manager) -> None:
+        manager.update_mmu_state(
+            _status(
+                sensors={"toolhead": False, "mmu_gate": False, "mmu_pre_gate": False}
+            )
+        )
+        assert "selected gate" in manager.print_start_refusal()
 
     def test_klippy_disconnect_drops_refusal(self, manager) -> None:
         manager.update_mmu_state(_status(sensors={"toolhead": False}))
         manager.on_klippy_state("shutdown")
         assert manager.print_start_refusal() == ""
+
+
+class TestMMUServerMissing:
+    @staticmethod
+    def _run(manager, qtbot, *steps: tuple[str, object]) -> list[str]:
+        manager._mmu_server_timer.setInterval(10)
+        warnings: list[str] = []
+        manager.show_notification.connect(
+            lambda _o, msg, _p, _pop: warnings.append(msg)
+        )
+        for kind, value in steps:
+            if kind == "components":
+                manager.on_server_components(value)
+            elif kind == "mmu":
+                manager.update_mmu_state(value)
+            else:
+                manager.on_klippy_state(value)
+        qtbot.wait(50)
+        return warnings
+
+    def test_missing_mmu_server_warns_once(self, manager, qtbot) -> None:
+        steps = [("components", ["spoolman"]), ("mmu", _status())]
+        warnings = self._run(manager, qtbot, *steps)
+        manager.on_server_components(["spoolman"])
+        qtbot.wait(50)
+        assert len(warnings) == 1
+
+    @pytest.mark.parametrize(
+        "steps",
+        [
+            [("components", ["spoolman", "mmu_server"]), ("mmu", _status())],
+            [("components", ["spoolman"]), ("mmu", _status(spoolman_support="off"))],
+            [("mmu", _status())],
+            # Update: the updater links mmu_server and restarts Moonraker in the grace.
+            [
+                ("components", ["spoolman"]),
+                ("mmu", _status()),
+                ("components", ["spoolman", "mmu_server"]),
+            ],
+            [("components", ["spoolman"]), ("mmu", _status()), ("klippy", "startup")],
+        ],
+        ids=[
+            "loaded",
+            "spoolman-off",
+            "no-server-info",
+            "linked-in-grace",
+            "klippy-down",
+        ],
+    )
+    def test_no_warning(self, manager, qtbot, steps) -> None:
+        assert self._run(manager, qtbot, *steps) == []
+
+    def test_warns_again_after_mmu_server_returns_and_drops(
+        self, manager, qtbot
+    ) -> None:
+        steps = [("components", ["mmu_server"]), ("mmu", _status()), ("components", [])]
+        warnings = self._run(manager, qtbot, *steps)
+        manager.on_server_components(["mmu_server"])
+        manager.on_server_components([])
+        qtbot.wait(50)
+        assert len(warnings) == 2

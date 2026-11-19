@@ -45,6 +45,24 @@ def printing():
         yield m
 
 
+@pytest.fixture(autouse=True)
+def apt_lists_partial(tmp_path):
+    """Host apt state never leaks in; tests create or touch this path to simulate a refresh."""
+    path = tmp_path / "apt-lists-partial"
+    with patch("updater.service._APT_LISTS_PARTIAL", path):
+        yield path
+
+
+@pytest.fixture(autouse=True)
+def moonraker():
+    """Moonraker unreachable; never dials the host's real :7125."""
+    with (
+        patch("updater.service.moonraker_repo_hashes", AsyncMock(return_value=None)),
+        patch("updater.service.moonraker_refresh_repo", AsyncMock(return_value=None)),
+    ):
+        yield
+
+
 @pytest.fixture
 def svc():
     """UpdaterDbusService with mocked UpdateService and signals."""
@@ -67,7 +85,9 @@ def svc():
     mock_svc.daemon_restart_pending = False
     mock_svc.reconcile = AsyncMock(return_value=True)
     mock_svc.reconcile_if_pending = AsyncMock()
+    mock_svc.sync_moonraker = AsyncMock(return_value=True)
     mock_svc.deploy_pending = MagicMock(return_value=False)
+    mock_svc.followup_pending = MagicMock(return_value=False)
     # Units stay live while the flag is set unless a test says otherwise.
     mock_svc.deploy_running = AsyncMock(side_effect=lambda: mock_svc.deploy_pending())
     mock_svc.deploy_flag_stamp = MagicMock(return_value=1)
@@ -88,6 +108,8 @@ def svc():
     s._provisioning = False
     s._provisioned = False
     s._followed_up = False
+    s._followup_hold = False
+    s._followup_running = False
     s._boot_pass_done = True
     s._deploy_hold = None
     s._capped_flag = None
@@ -95,6 +117,8 @@ def svc():
     s._closing = False
     s._status_check_in_progress = False
     s._status_pending = False
+    s._moonraker_sync = None
+    s._git_guard = asyncio.Lock()
     s.busy_changed = MagicMock()
     s.provisioning_changed = MagicMock()
     s.status_ready = MagicMock()

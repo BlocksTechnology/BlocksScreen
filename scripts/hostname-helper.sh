@@ -69,37 +69,54 @@ install_service() {
     as_root systemctl enable set-hostname.service
 }
 
+ensure_hosts_entry() {
+    local want="$1" file="${2:-/etc/hosts}" fixed
+    # Collapse to one 127.0.1.1 line: the Release-2.0 script prepended another on every boot.
+    fixed="$(awk -v h="$want" '
+        /^127\.0\.1\.1[[:space:]]/ { if (!done) print "127.0.1.1\t" h; done = 1; next }
+        { print }
+        END { if (!done) print "127.0.1.1\t" h }' "$file")"
+    if [ "$fixed" = "$(cat "$file")" ]; then
+        return 0
+    fi
+    echo_info "Rewriting the 127.0.1.1 entry in $file..."
+    printf '%s\n' "$fixed" | as_root tee "$file" >/dev/null
+}
+
 set_hostname() {
     local want="$1" current
     # Reading the file avoids hostnamectl, which needs a D-Bus that does not exist this early in boot.
     current="$(tr -d '[:space:]' </etc/hostname 2>/dev/null || true)"
     if [ "$current" = "$want" ]; then
         echo_ok "Hostname already set to $want. No action needed"
-        return 0
-    fi
-    echo_info "Setting hostname to $want..."
-    printf '%s\n' "$want" | as_root tee /etc/hostname >/dev/null
-    # hostname(1) calls sethostname(2) directly, so it needs no D-Bus and no reboot to take effect.
-    as_root hostname "$want" 2>/dev/null || true
-    # Rewrite the mapping in place, the old script prepended a fresh 127.0.1.1 line on every rename.
-    if grep -q '^127\.0\.1\.1[[:space:]]' /etc/hosts 2>/dev/null; then
-        as_root sed -i "s/^127\.0\.1\.1[[:space:]].*/127.0.1.1\t$want/" /etc/hosts
     else
-        printf '127.0.1.1\t%s\n' "$want" | as_root tee -a /etc/hosts >/dev/null
+        echo_info "Setting hostname to $want..."
+        printf '%s\n' "$want" | as_root tee /etc/hostname >/dev/null
+        # hostname(1) calls sethostname(2) directly, so it needs no D-Bus and no reboot to take effect.
+        as_root hostname "$want" 2>/dev/null || true
     fi
+    # Runs on unchanged hostnames too, so boxes updated from Release-2.0 shed their duplicate lines.
+    ensure_hosts_entry "$want"
 }
 
-echo_info "Script running on $SCRIPT_PATH..."
-install_service
-$INSTALL_ONLY && exit 0
+main() {
+    echo_info "Script running on $SCRIPT_PATH..."
+    install_service
+    $INSTALL_ONLY && exit 0
 
-SERIAL="$(awk '/^Serial/ {print $3; exit}' /proc/cpuinfo 2>/dev/null || true)"
-# A blank serial would name every board BLOCKS-RF50-, which is the collision this script exists to prevent.
-case "$SERIAL" in
-    '' | *[!0-9a-fA-F]* | 0000000000000000)
-        echo_error "No usable CPU serial in /proc/cpuinfo, leaving hostname unchanged"
-        exit 0
-        ;;
-esac
+    SERIAL="$(awk '/^Serial/ {print $3; exit}' /proc/cpuinfo 2>/dev/null || true)"
+    # A blank serial would name every board BLOCKS-RF50-, which is the collision this script exists to prevent.
+    case "$SERIAL" in
+        '' | *[!0-9a-fA-F]* | 0000000000000000)
+            echo_error "No usable CPU serial in /proc/cpuinfo, leaving hostname unchanged"
+            exit 0
+            ;;
+    esac
 
-set_hostname "$BRAND_PREFIX-$MODEL-$SERIAL"
+    set_hostname "$BRAND_PREFIX-$MODEL-$SERIAL"
+}
+
+# Sourcing (tests) only defines the functions.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main
+fi

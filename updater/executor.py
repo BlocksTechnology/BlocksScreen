@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import http.client
 import json
 import logging
@@ -11,12 +12,12 @@ import signal
 import sys
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from updater.locking import restart_sentinel_path
-from updater.models import ComponentStatus
+from updater.models import CLOCK_UNSYNCED, ComponentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ DPKG = "/usr/bin/dpkg"
 # Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
 APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
 KLIPPY_SOCK = Path("~/printer_data/comms/klippy.sock").expanduser()
+MOONRAKER_HOST, MOONRAKER_PORT = "127.0.0.1", 7125
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_SHA_RE = re.compile(r"^[a-f0-9]{7,40}$")
@@ -45,6 +47,8 @@ _PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9+\-.]*$")
 
 _HOOKS_DIR = Path(__file__).parent / "hooks"
 _STALE_LOCK_AGE_THRESHOLD_S = 10.0
+# A lock written before a backward clock step has a negative age and never goes stale.
+_FUTURE_LOCK_AGE_S = -60.0
 
 
 def _clear_stale_git_index_lock(path: Path) -> bool:
@@ -54,7 +58,7 @@ def _clear_stale_git_index_lock(path: Path) -> bool:
         return True
     try:
         age_s = time.time() - lock_path.stat().st_mtime
-        if age_s >= _STALE_LOCK_AGE_THRESHOLD_S:
+        if age_s >= _STALE_LOCK_AGE_THRESHOLD_S or age_s < _FUTURE_LOCK_AGE_S:
             logger.warning("clearing stale index.lock (age %.1fs) from %s", age_s, path)
             lock_path.unlink()
             return True
@@ -240,7 +244,9 @@ async def _git_status_preflight(
         result, output = await git_fetch(path, prune_remotes=False)
         if not result:
             logger.error("Failed at git_fetch operation, %s", output)
-            return "", ComponentStatus(name=name, error=output)
+            return "", ComponentStatus(
+                name=name, error=await explain_fetch_error(output)
+            )
     current_hash = await git_get_hash(path)
     if current_hash == "":
         logger.error("Failed at git_hash operation")
@@ -414,12 +420,23 @@ async def _prune_broken_refs(path: Path, output: str) -> bool:
 async def git_fetch(
     path: Path | None, *, prune_remotes: bool = True
 ) -> tuple[bool, str]:
-    """Fetch all remotes for the repo at path."""
+    """Fetch the repo at path; retry once after a clock heal on a clock-caused TLS failure."""
+    return await _retry_after_clock_heal(
+        functools.partial(_git_fetch_once, path, prune_remotes=prune_remotes),
+        _GIT_TLS_SIGNATURES,
+    )
+
+
+async def _git_fetch_once(
+    path: Path | None, *, prune_remotes: bool = True
+) -> tuple[bool, str]:
+    """Fetch origin for the repo at path (the only remote updates read)."""
     if path is None:
         return (False, "path does not exist")
     if prune_remotes:
         await git_prune_extra_remotes(path)
-    cmd = [GIT, "fetch", "--all", "--atomic", "--prune"]
+    # Not --all: with an extra remote --atomic refuses to run, failing every status fetch.
+    cmd = [GIT, "fetch", "--atomic", "--prune", "origin"]
     ok, out = await _run(cmd, cwd=path, timeout=60.0)
     if ok or "reference broken" not in out:
         return (ok, out)
@@ -479,6 +496,106 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
     return (ok, err)
 
 
+# Written by scripts/bs-clock-sync.sh as "<wall s> <boot s>".
+CLOCK_VERIFIED_MARKER = Path("/run/blocksscreen-clock-verified")
+CLOCK_SYNC_UNIT = "BlocksScreen-clock.service"
+# Kill switch for both the timer and the updater heal.
+CLOCK_HEAL_DISABLED = Path("/etc/blocksscreen-clock.disabled")
+# Concurrent fetches share one run; a failed run is retried after this window.
+_CLOCK_HEAL_LOCK = asyncio.Lock()
+_CLOCK_HEAL_RETRY_S = 60.0
+# Longer than the unit's TimeoutStartSec, so systemd ends a hung run first.
+CLOCK_HEAL_WAIT_S = 95.0
+_clock_heal = {"last": float("-inf"), "healed": 0}
+# gnutls (Debian git) reports a bad certificate date as a generic verify failure.
+_GIT_TLS_SIGNATURES = ("certificate verification failed", "ssl certificate problem")
+_APT_CLOCK_SIGNATURES = ("is expired", "is not valid yet")
+# Matches MIN_STEP_S in bs-clock-sync.sh (test_step_threshold_matches_marker_jump).
+_CLOCK_MARKER_JUMP_S = 120
+
+
+def clock_verified() -> bool:
+    """Return True while the marker exists and no clock jump has voided it."""
+    try:
+        wall, boot = (int(v) for v in CLOCK_VERIFIED_MARKER.read_text().split())
+    except (OSError, ValueError):
+        return False
+    since_boot = time.clock_gettime(time.CLOCK_BOOTTIME) - boot
+    return abs((time.time() - wall) - since_boot) < _CLOCK_MARKER_JUMP_S
+
+
+async def ntp_synchronized() -> bool:
+    """Return the kernel NTP sync flag; unknown counts as synced."""
+    try:
+        ok, out = await _run(
+            ["timedatectl", "show", "-p", "NTPSynchronized", "--value"], timeout=5.0
+        )
+    except OSError:
+        return True
+    return not ok or out.strip() != "no"
+
+
+async def clock_trusted() -> bool:
+    """Return True once the heal verified the clock or NTP synced it."""
+    return clock_verified() or await ntp_synchronized()
+
+
+async def heal_clock() -> bool:
+    """Run the clock-sync unit now; return True once the clock is verified."""
+    async with _CLOCK_HEAL_LOCK:
+        if clock_verified():
+            return True
+        if CLOCK_HEAL_DISABLED.exists():
+            return False
+        if time.monotonic() - _clock_heal["last"] < _CLOCK_HEAL_RETRY_S:
+            return False
+        ok, err = await _run(
+            [SUDO, SYSTEMCTL, "start", CLOCK_SYNC_UNIT], timeout=CLOCK_HEAL_WAIT_S
+        )
+        # Stamped after the run so a slow run cannot re-trigger the heal per repo.
+        _clock_heal["last"] = time.monotonic()
+        if not ok:
+            logger.warning("clock sync via %s failed: %s", CLOCK_SYNC_UNIT, err.strip())
+        trusted = await clock_trusted()
+        logger.info(
+            "clock sync ran: clock %s", "trusted" if trusted else "still unverified"
+        )
+        if trusted:
+            _clock_heal["healed"] += 1
+        return trusted
+
+
+async def _retry_after_clock_heal(
+    op: Callable[[], Awaitable[tuple[bool, str]]], signatures: tuple[str, ...]
+) -> tuple[bool, str]:
+    """Run op; retry once if a clock heal fixed its date failure."""
+    healed = _clock_heal["healed"]
+    ok, out = await op()
+    if ok or not any(k in out.lower() for k in signatures):
+        return (ok, out)
+    # A concurrent heal already verified the clock, so explain_fetch_error sees no fault.
+    if _clock_heal["healed"] != healed:
+        return await op()
+    if (await explain_fetch_error(out, signatures)).startswith(CLOCK_UNSYNCED):
+        if await heal_clock():
+            return await op()
+    return (ok, out)
+
+
+async def explain_fetch_error(
+    output: str, signatures: tuple[str, ...] = _GIT_TLS_SIGNATURES
+) -> str:
+    """Prefix a date-related fetch failure with CLOCK_UNSYNCED while the clock is unverified."""
+    low = output.lower()
+    if (
+        any(k in low for k in signatures)
+        and not clock_verified()
+        and not await ntp_synchronized()
+    ):
+        return f"{CLOCK_UNSYNCED}: {output}"
+    return output
+
+
 # Narrow corruption signatures: "not a git repository" etc. must not match.
 _GIT_CORRUPT_SIGNATURES = (
     "corrupt",
@@ -491,6 +608,26 @@ _GIT_CORRUPT_SIGNATURES = (
     "unable to unpack",
     "inflate: data stream error",
 )
+
+# Transport failures (offline, DNS, timeout, HTTP/TLS refusals): no update fixes these.
+_GIT_NETWORK_SIGNATURES = (
+    "could not resolve host",
+    "unable to access",
+    "failed to connect",
+    "connection timed out",
+    "connection refused",
+    "network is unreachable",
+    "temporary failure in name resolution",
+    "could not read from remote repository",
+    "timed out after",
+)
+
+
+def git_is_network_error(output: str) -> bool:
+    """True if git output reads as a transient network failure, not a repo fault."""
+    low = output.lower()
+    return any(k in low for k in _GIT_NETWORK_SIGNATURES)
+
 
 # Quarantine dir inside .git/objects so it never appears as untracked.
 _QUARANTINE_DIRNAME = "objects-corrupt"
@@ -947,8 +1084,11 @@ def classify_apt_error(err: str) -> str:
 
 
 async def apt_update() -> tuple[bool, str]:
-    """Run apt-get update to refresh package lists."""
-    return await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
+    """Refresh package lists; retry once after a clock heal on a Release date error."""
+    return await _retry_after_clock_heal(
+        functools.partial(_run, _apt_cmd("update"), timeout=120.0, env=_apt_env()),
+        _APT_CLOCK_SIGNATURES,
+    )
 
 
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
@@ -1069,6 +1209,49 @@ def _http_probe(url: str) -> bool:
         return False
     finally:
         conn.close()
+
+
+def _moonraker_call(method: str, path: str, timeout: float) -> object:
+    """One blocking loopback Moonraker request; its result on a 2xx, else None."""
+    conn = http.client.HTTPConnection(MOONRAKER_HOST, MOONRAKER_PORT, timeout=timeout)
+    try:
+        conn.request(method, path)
+        resp = conn.getresponse()
+        body = resp.read()
+        if not 200 <= resp.status < 300:
+            logger.debug("moonraker %s %s: HTTP %d", method, path, resp.status)
+            return None
+        return json.loads(body)["result"]
+    except (OSError, http.client.HTTPException, ValueError, LookupError, TypeError):
+        return None
+    finally:
+        conn.close()
+
+
+async def moonraker_repo_hashes() -> dict[str, str] | None:
+    """Commit (or "?") Moonraker last recorded per git repo; None if unreachable."""
+    result = await asyncio.to_thread(
+        _moonraker_call, "GET", "/machine/update/status", 5.0
+    )
+    info = result.get("version_info") if isinstance(result, dict) else None
+    if not isinstance(info, dict):
+        return None
+    return {
+        name: entry["current_hash"]
+        for name, entry in info.items()
+        if isinstance(entry, dict) and isinstance(entry.get("current_hash"), str)
+    }
+
+
+async def moonraker_refresh_repo(name: str) -> str | None:
+    """Make Moonraker re-read one repo; the hash it now records, None if refused."""
+    # The refresh runs a git fetch, so allow far more than a status read.
+    path = "/machine/update/refresh?" + urlencode({"name": name})
+    result = await asyncio.to_thread(_moonraker_call, "POST", path, 120.0)
+    info = result.get("version_info") if isinstance(result, dict) else None
+    entry = info.get(name) if isinstance(info, dict) else None
+    current = entry.get("current_hash") if isinstance(entry, dict) else None
+    return current if isinstance(current, str) else None
 
 
 async def klipper_printing(

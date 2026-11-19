@@ -30,6 +30,13 @@ CONFIG_PATH: Path = Path("~/printer_data/config/printer.cfg").expanduser()
 # HH job detection never ends these (only complete/error); MMU_PRINT_END parks only on complete.
 _STALE_JOB_STATES: tuple[str, ...] = ("cancelled", "standby")
 _STALE_JOB_GRACE_MS: int = 5000
+# Outlasts an update, where Klipper restarts before the updater links mmu_server.
+_MMU_SERVER_GRACE_MS: int = 300_000
+_MMU_SERVER_MISSING_MSG: str = (
+    "Spoolman sync unavailable: Moonraker did not load the Happy Hare component.\n"
+    "Spool usage is not being recorded. Contact support."
+)
+_WARNING_PRIORITY: int = 2
 
 
 def _gcode_value(value: object) -> str:
@@ -60,6 +67,10 @@ class AMUManager(QtCore.QObject):
         int, bool, name="pre-gate-changed"
     )
 
+    show_notification: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, int, bool, name="show-notification"
+    )
+
     def __init__(self, ws: MoonWebSocket, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._config_toggler = ConfigToggler(CONFIG_PATH)
@@ -71,6 +82,12 @@ class AMUManager(QtCore.QObject):
         self._stale_job_timer.setSingleShot(True)
         self._stale_job_timer.setInterval(_STALE_JOB_GRACE_MS)
         self._stale_job_timer.timeout.connect(self._end_stale_mmu_job)
+        self._moonraker_components: frozenset[str] | None = None
+        self._mmu_server_warned = False
+        self._mmu_server_timer = QtCore.QTimer(self)
+        self._mmu_server_timer.setSingleShot(True)
+        self._mmu_server_timer.setInterval(_MMU_SERVER_GRACE_MS)
+        self._mmu_server_timer.timeout.connect(self._warn_mmu_server_missing)
 
     def _gate_map(self, gate: int, **params: object) -> bool:
         """Emit MMU_GATE_MAP for one gate; False when no gate is selected yet."""
@@ -240,13 +257,17 @@ class AMUManager(QtCore.QObject):
         return ""
 
     def print_start_refusal(self) -> str:
-        """Return why RF50-Klipper print_start.cfg would refuse to start, or ""."""
+        """Return why RF50-Klipper SDCARD_PRINT_FILE would refuse to start, or ""."""
         sensors = self._mmu_state.sensors if self._mmu_state is not None else {}
         # The macro tests `== False`: a missing or disabled (None) sensor passes.
-        if sensors.get("toolhead") is False:
-            return "No filament at the toolhead. Load filament before printing."
         if sensors.get("mmu_pre_gate") is False:
             return "No filament in the selected gate. Load filament before printing."
+        if sensors.get("mmu_gate") is False:
+            return (
+                "Filament is not loaded past the gate. Load filament before printing."
+            )
+        if sensors.get("toolhead") is False:
+            return "No filament at the toolhead. Load filament before printing."
         return ""
 
     def _selected_gate_unloaded(self) -> GateInfo | None:
@@ -329,6 +350,7 @@ class AMUManager(QtCore.QObject):
             self._mmu_state = state
         self.mmu_state_changed.emit(self._mmu_state)
         self._check_stale_mmu_job()
+        self._check_mmu_server()
 
     def on_object_updated(
         self, object_type: str, object_name: str, values: dict
@@ -366,6 +388,44 @@ class AMUManager(QtCore.QObject):
             )
             self.run_gcode_signal.emit(f"MMU_PRINT_END STATE={self._print_state}")
 
+    @QtCore.pyqtSlot(list, name="on-server-components")
+    def on_server_components(self, components: list) -> None:
+        """Track Moonraker's loaded components for the mmu_server check."""
+        self._moonraker_components = frozenset(components)
+        self._check_mmu_server()
+
+    def _is_mmu_server_missing(self) -> bool:
+        """Return True when Happy Hare uses Spoolman but Moonraker lacks mmu_server."""
+        state = self._mmu_state
+        return (
+            state is not None
+            and state.spoolman_support is not SpoolmanSupport.OFF
+            and self._moonraker_components is not None
+            and "mmu_server" not in self._moonraker_components
+        )
+
+    def _check_mmu_server(self) -> None:
+        """Arm the missing-mmu_server warning; re-allow it once mmu_server loads."""
+        if self._is_mmu_server_missing():
+            if not (self._mmu_server_warned or self._mmu_server_timer.isActive()):
+                self._mmu_server_timer.start()
+            return
+        self._mmu_server_timer.stop()
+        if self._moonraker_components and "mmu_server" in self._moonraker_components:
+            self._mmu_server_warned = False
+
+    def _warn_mmu_server_missing(self) -> None:
+        """Warn once that Happy Hare's Spoolman calls fail without mmu_server."""
+        if not self._is_mmu_server_missing():
+            return
+        self._mmu_server_warned = True
+        logger.warning(
+            "Moonraker has no mmu_server component; Happy Hare Spoolman calls fail"
+        )
+        self.show_notification.emit(
+            "amu", _MMU_SERVER_MISSING_MSG, _WARNING_PRIORITY, True
+        )
+
     def on_pre_gate_update(self, values: dict, name: str) -> None:
         """Track one pre-gate switch; the mmu aggregate hides unselected gates."""
         if not name.startswith("mmu_pre_gate_"):
@@ -392,3 +452,4 @@ class AMUManager(QtCore.QObject):
             return
         self._mmu_state = None
         self.mmu_state_changed.emit(None)
+        self._mmu_server_timer.stop()

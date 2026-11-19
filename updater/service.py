@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import json
 import logging
 import os
@@ -35,12 +36,15 @@ from updater.executor import (
     classify_apt_error,
     disable_service,
     enable_service,
+    clock_trusted,
+    explain_fetch_error,
     git_checkout,
     git_clone,
     git_fetch,
     git_get_current_branch,
     git_get_hash,
     git_has_corruption,
+    git_is_network_error,
     git_pull,
     git_ref_hash,
     git_remote_reachable,
@@ -52,6 +56,8 @@ from updater.executor import (
     is_git_repo,
     is_service_active,
     klipper_printing,
+    moonraker_refresh_repo,
+    moonraker_repo_hashes,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -61,7 +67,11 @@ from updater.executor import (
     wait_for_service_active,
 )
 from updater.locking import process_lock, restart_sentinel_path
-from updater.models import ComponentConfig, ComponentStatus
+from updater.models import DEPLOY_FLAG as _DEPLOY_FLAG
+from updater.models import DEPLOY_LIVE_STATES as _DEPLOY_LIVE_STATES
+from updater.models import DEPLOY_PATH_UNIT as _DEPLOY_PATH_UNIT
+from updater.models import DEPLOY_UNITS as _DEPLOY_UNITS
+from updater.models import CLOCK_UNSYNCED, ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
 # name -> pre-update hash; present at boot = revert those repos.
@@ -82,6 +92,8 @@ _APT_PERMANENT_COOLDOWN_S = 3600.0
 # apt-get update TTL on the poll, and the floor between forced refreshes.
 _APT_LIST_TTL_S = 86_400.0
 _APT_LIST_FORCE_TTL_S = 300.0
+# apt-get update rewrites partial/ even when no index changed; installs leave it alone.
+_APT_LISTS_PARTIAL = Path("/var/lib/apt/lists/partial")
 _FETCH_BACKOFF_BASE_S = 30.0
 _FETCH_BACKOFF_MAX_S = 900.0
 
@@ -125,6 +137,19 @@ def _move_untracked(src: Path, dst: Path, entries: list[str]) -> list[str]:
         except OSError:
             failed.append(rel)
     return failed
+
+
+def _apt_lists_refreshed_at() -> float:
+    """Monotonic time of this boot's last apt-get update by any process, else -inf."""
+    try:
+        mtime = _APT_LISTS_PARTIAL.stat().st_mtime
+    except OSError:
+        return float("-inf")
+    now_wall, now_mono = time.time(), time.monotonic()
+    # Before this boot, or the clock stepped since (no RTC until NTP): refresh.
+    if not now_wall - now_mono <= mtime <= now_wall:
+        return float("-inf")
+    return now_mono - (now_wall - mtime)
 
 
 class _Backoff:
@@ -179,13 +204,6 @@ _FORWARD_HEAL_BASE_S = 1800.0
 _FORWARD_HEAL_JITTER_S = 300.0
 _OFFLINE_PROVISION_TRIES = 6  # ~30 min of 300s polls, for late Wi-Fi
 _FOLLOWUP_TRIES = 3  # counted in the marker, so a crash or reboot mid-try still counts
-
-# Watched by BlocksScreen-deploy.path: install-updater.sh runs in its own cgroup.
-_DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
-_DEPLOY_PATH_UNIT = Path("/etc/systemd/system/BlocksScreen-deploy.path")
-_DEPLOY_UNITS = ("BlocksScreen-deploy.path", "BlocksScreen-deploy.service")
-# A failed/stopped path unit never fires, so its stale flag is not a running deploy.
-_DEPLOY_LIVE_STATES = frozenset({"active", "activating", "deactivating", "reloading"})
 
 
 class ProgressCallback(Protocol):
@@ -260,6 +278,10 @@ class UpdateService:
         # -inf: monotonic() may start near 0 on a fresh boot, faking a recent refresh.
         self._apt_list_time: float = float("-inf")
         self._fetch_backoff: dict[str, _Backoff] = {}
+        # Last fetch error per repo, re-reported while its breaker skips the fetch.
+        self._fetch_errors: dict[str, str] = {}
+        # Per repo, the HEAD Moonraker last failed to record (no upstream, offline).
+        self._moonraker_unreadable: dict[str, str] = {}
         self._state_path = _STATE_PATH
         self._inflight_path = _INFLIGHT_PATH
         self._history_path = _HISTORY_PATH
@@ -298,10 +320,15 @@ class UpdateService:
         """Run apt-get update: the upgradable count reads local lists and is stale without it."""
         now = time.monotonic()
         ttl = _APT_LIST_FORCE_TTL_S if force else _APT_LIST_TTL_S
+        last = self._apt_list_time
+        # Each Update restarts this daemon; trust a fresh outside refresh, never an old one.
+        seen = _apt_lists_refreshed_at()
+        if now - seen < _APT_LIST_FORCE_TTL_S:
+            last = max(last, seen)
         # A held lock = an update is running, and it refreshes the lists itself.
         if (
             printing
-            or (now - self._apt_list_time) < ttl
+            or (now - last) < ttl
             or self._apt_backoff.cooling_down()
             or self._apt_lock.locked()
         ):
@@ -313,14 +340,74 @@ class UpdateService:
         if not ok:
             self._log.warning("apt list refresh failed: %s", err)
 
+    def _record_fetch_result(self, name: str, now: float, error: str | None) -> None:
+        """Stamp a fetch success (closing the breaker) or trip the breaker on failure."""
+        if error is None:
+            self._fetch_times[name] = now
+            self._fetch_backoff.pop(name, None)
+            self._fetch_errors.pop(name, None)
+            return
+        if git_is_network_error(error) and not error.startswith(CLOCK_UNSYNCED):
+            # Offline is not an update: never re-report it while the breaker skips.
+            self._fetch_errors.pop(name, None)
+        else:
+            self._fetch_errors[name] = error
+        self._fetch_backoff.setdefault(
+            name, _Backoff(_FETCH_BACKOFF_BASE_S, _FETCH_BACKOFF_MAX_S)
+        ).trip()
+
     def has_fetch_failures(self) -> bool:
         """True while any component's git fetch is failing (entry is popped on success)."""
         return bool(self._fetch_backoff)
+
+    async def sync_moonraker(self) -> bool:
+        """Make Moonraker re-read repos whose HEAD moved; False = retry later."""
+        # Moonraker restores repo state from its DB and re-reads git only every
+        # refresh_interval (git_deploy.initialize), so our updates look like "behind".
+        recorded = await moonraker_repo_hashes()
+        if recorded is None:
+            return False
+        for c in self._components:
+            if c.kind != "git" or c.name not in recorded:
+                continue
+            head = await git_get_hash(c.path)
+            if (
+                not head
+                or head == recorded[c.name]
+                or self._moonraker_unreadable.get(c.name) == head
+            ):
+                continue
+            now = await moonraker_refresh_repo(c.name)
+            if now is None:
+                # Refused or down: the other repos would fail the same way.
+                return False
+            if now == head:
+                self._log.info(
+                    "Moonraker refreshed %s: %s -> %s",
+                    c.name,
+                    recorded[c.name][:8],
+                    head[:8],
+                )
+            else:
+                # Retrying cannot help until HEAD moves again.
+                self._moonraker_unreadable[c.name] = head
+                self._log.warning(
+                    "Moonraker cannot read %s at %s (recorded %s)",
+                    c.name,
+                    head[:8],
+                    now[:8],
+                )
+        return True
 
     async def check_status(self, force: bool = False) -> dict[str, ComponentStatus]:
         """Concurrently check status of all components."""
         results: dict[str, ComponentStatus] = {}
         printing = await klipper_printing()
+        # Checked once per refresh, and only while a clock error is carried.
+        clock_fixed = (
+            any(e.startswith(CLOCK_UNSYNCED) for e in self._fetch_errors.values())
+            and await clock_trusted()
+        )
 
         async def _check_one(c: ComponentConfig) -> None:
             """Fetch and record one component's status into the results dict."""
@@ -336,6 +423,13 @@ class UpdateService:
             else:
                 now = time.monotonic()
                 async with self._git_lock:
+                    if clock_fixed and self._fetch_errors.get(c.name, "").startswith(
+                        CLOCK_UNSYNCED
+                    ):
+                        # Healed: fetch now, not after the backoff, so the update shows.
+                        self._fetch_errors.pop(c.name)
+                        self._fetch_backoff.pop(c.name, None)
+                        self._fetch_times.pop(c.name, None)
                     last = self._fetch_times.get(c.name, float("-inf"))
                     breaker = self._fetch_backoff.get(c.name)
                     skip_fetch = printing or (
@@ -348,16 +442,14 @@ class UpdateService:
                 status = await check_git_status(
                     c.name, c.path, c.branch, c.version, skip_fetch
                 )
-                if not skip_fetch:
-                    async with self._git_lock:
-                        if status.error is None:
-                            self._fetch_times[c.name] = now
-                            self._fetch_backoff.pop(c.name, None)
-                        else:
-                            self._fetch_backoff.setdefault(
-                                c.name,
-                                _Backoff(_FETCH_BACKOFF_BASE_S, _FETCH_BACKOFF_MAX_S),
-                            ).trip()
+                async with self._git_lock:
+                    if not skip_fetch:
+                        self._record_fetch_result(c.name, now, status.error)
+                    elif not status.needs_update and c.name in self._fetch_errors:
+                        # Else a press during the cooldown sees "no dirty" and never heals it.
+                        status = dataclasses.replace(
+                            status, error=self._fetch_errors[c.name]
+                        )
             results[c.name] = status
 
         gathered = await asyncio.gather(
@@ -476,13 +568,16 @@ class UpdateService:
         return False
 
     async def _filter_offline_batch(
-        self, batch: list[ComponentConfig], offline: set[str]
+        self, batch: list[ComponentConfig], offline: dict[str, str]
     ) -> bool:
         """Drop offline components from the batch, erroring each individually."""
         ok = True
         for c in [c for c in batch if c.name in offline]:
             batch.remove(c)
-            ok = self._cb_error_done(c.name, "network error during pre-flight fetch")
+            reason = "network error during pre-flight fetch"
+            if offline[c.name].startswith(CLOCK_UNSYNCED):
+                reason = CLOCK_UNSYNCED
+            ok = self._cb_error_done(c.name, reason)
         return ok
 
     async def _filter_nonrepo_batch(self, batch: list[ComponentConfig]) -> bool:
@@ -530,18 +625,26 @@ class UpdateService:
     async def _unattended_provisions(self) -> tuple[list[ComponentConfig], bool]:
         """Missing components to install unprompted, and whether an offline one should retry."""
         state = await asyncio.to_thread(self._read_state)
-        todo: list[ComponentConfig] = []
-        offline = False
+        probe: list[ComponentConfig] = []
         for c in self._missing_provisions():
             comp = state.get(c.name)
             if isinstance(comp, dict) and comp.get("provision_failed"):
                 self._log.info("%s: last install failed - waiting for Update", c.name)
-            elif not await git_remote_reachable(c.url or ""):
+            else:
+                probe.append(c)
+        # Concurrent: offline, each probe runs to its 15 s timeout.
+        reachable = await asyncio.gather(
+            *(git_remote_reachable(c.url or "") for c in probe)
+        )
+        todo: list[ComponentConfig] = []
+        offline = False
+        for c, ok in zip(probe, reachable, strict=True):
+            if ok:
+                todo.append(c)
+            else:
                 # Offline devices must never sit behind the install overlay.
                 self._log.info("%s: remote unreachable - not installing", c.name)
                 offline = True
-            else:
-                todo.append(c)
         if offline:
             self._offline_provision_tries += 1
             if self._offline_provision_tries >= _OFFLINE_PROVISION_TRIES:
@@ -715,15 +818,15 @@ class UpdateService:
 
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig]
-    ) -> set[str]:
-        """Fetch every existing git component up-front (network phase)."""
+    ) -> dict[str, str]:
+        """Fetch every git component up-front; return the offline ones with their error."""
         # Non-repos excluded: their fetch failure does not mean offline.
         targets = [
             c
             for c in sorted_components
             if c.kind == "git" and c.path is not None and is_git_repo(c.path)
         ]
-        offline: set[str] = set()
+        offline: dict[str, str] = {}
         for c in targets:
             now = time.monotonic()
             async with self._git_lock:
@@ -733,9 +836,9 @@ class UpdateService:
             ok, err = await git_fetch(c.path)
             if ok:
                 async with self._git_lock:
-                    self._fetch_times[c.name] = now
+                    self._record_fetch_result(c.name, now, None)
             elif not await git_has_corruption(c.path, hint=err):
-                offline.add(c.name)
+                offline[c.name] = await explain_fetch_error(err)
         if offline:
             self._log.error(
                 "update_all: pre-flight fetch failed for %s - continuing without them",
@@ -1270,6 +1373,10 @@ class UpdateService:
             return _DEPLOY_FLAG.stat().st_mtime_ns
         except OSError:
             return None
+
+    def followup_pending(self) -> bool:
+        """True while the last BlocksScreen update left a follow-up marker."""
+        return self._followup_path.exists()
 
     async def deploy_running(self) -> bool:
         """True while the flag is set and the path unit is armed or install-updater runs."""
@@ -2204,6 +2311,8 @@ class UpdateService:
                 self._log.error("%s: fetch failed: %s", component.name, error)
                 # connectivity-only fsck can miss it; pass the fetch error as hint.
                 if not await git_has_corruption(component.path, hint=error):
+                    if (await explain_fetch_error(error)).startswith(CLOCK_UNSYNCED):
+                        return (False, CLOCK_UNSYNCED)
                     return (False, "network")
                 self._log.warning("%s: corrupt repo, repairing", component.name)
                 rok, rmsg = await git_repair(component.path)
@@ -2387,7 +2496,7 @@ class UpdateService:
         if not stage_ok:
             # Pre-checkout failures leave the tree untouched: no revert, no restart.
             if (
-                stage_reason in ("network", "corrupt")
+                stage_reason in ("network", "corrupt", CLOCK_UNSYNCED)
                 or "not found" in stage_reason
                 or "refusing" in stage_reason
             ):

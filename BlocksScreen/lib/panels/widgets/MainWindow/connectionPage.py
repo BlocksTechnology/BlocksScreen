@@ -27,6 +27,14 @@ class ConnectionState(enum.StrEnum):
     KLIPPER_SHUTDOWN = "klipper_shutdown"
 
 
+class _RestartPhase(enum.Enum):
+    """User-started restart behind the overlay."""
+
+    IDLE = enum.auto()
+    FIRMWARE = enum.auto()  # Escalates to a Klipper service restart at 30 s
+    KLIPPER = enum.auto()
+
+
 class ConnectionPage(QtWidgets.QFrame):
     """Connection and Klipper status screen with restart controls."""
 
@@ -51,16 +59,20 @@ class ConnectionPage(QtWidgets.QFrame):
         "then press 'Firmware Restart' to recover."
     )
 
-    _ESTOP_TEXT: typing.Final[str] = (
+    _BUTTON_ESTOP_TEXT: typing.Final[str] = (
         "Emergency stop activated.\nRelease the emergency button, then\n"
         "press 'Firmware Restart' to recover."
     )
+    # M112 and Moonraker emergency_stop are software stops: no button to release.
+    _SOFTWARE_ESTOP_TEXT: typing.Final[str] = (
+        "Emergency stop activated.\nPress 'Firmware Restart' to recover."
+    )
 
     _REASON_MAP: typing.ClassVar[dict[str, str]] = {
-        "m112 command": _ESTOP_TEXT,
-        "printers emergency button pressed": _ESTOP_TEXT,
-        "printer emergency button pressed": _ESTOP_TEXT,
-        "webhooks request": "Emergency stop activated.",
+        "m112 command": _SOFTWARE_ESTOP_TEXT,
+        "printers emergency button pressed": _BUTTON_ESTOP_TEXT,
+        "printer emergency button pressed": _BUTTON_ESTOP_TEXT,
+        "webhooks request": _SOFTWARE_ESTOP_TEXT,
         "lost communication with mcu": "Lost communication with the MCU.",
         "timer too close": "MCU overload\nCommunication timing failure.\nPress 'Firmware Restart' to recover.",
         "adc out of range": "Temperature sensor fault.",
@@ -146,9 +158,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.dot_count: int = 0
         self.conn_toggle: bool = True
         self._klippy_state: str = ""
-        self._firmware_restarting_pending: bool = False
-        self._last_restart_was_firmware: bool = False
-        self._escalated_to_klipper_restart: bool = False
+        self._restart: _RestartPhase = _RestartPhase.IDLE
 
         self.dot_timer = QtCore.QTimer(self)
         self.dot_timer.setInterval(1000)
@@ -173,7 +183,7 @@ class ConnectionPage(QtWidgets.QFrame):
     @property
     def manual_restart_pending(self) -> bool:
         """True while a user-initiated restart (firmware or printer) is in flight."""
-        return self._firmware_restarting_pending
+        return self._restart is not _RestartPhase.IDLE
 
     def _set_state(self, state: ConnectionState, context: str = "") -> None:
         """Update connection state and refresh the UI accordingly."""
@@ -200,7 +210,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self._update_restart_label(state)
 
     def _stop_restart_overlay(self) -> None:
-        self._firmware_restarting_pending = False
+        self._restart = _RestartPhase.IDLE
         self._restart_10s_timer.stop()
         self._restart_30s_timer.stop()
         self.call_load_panel.emit(False, "", False)
@@ -236,14 +246,9 @@ class ConnectionPage(QtWidgets.QFrame):
         )
 
     @staticmethod
-    def _normalize_shutdown_lines(raw: str) -> str:
-        line = ConnectionPage._strip_shutdown_prefix(raw)
-        return line.lower().replace("'", "").replace("’", "")
-
-    @staticmethod
     def _clean_shutdown_context(raw: str) -> str:
         line = ConnectionPage._strip_shutdown_prefix(raw)
-        lower = ConnectionPage._normalize_shutdown_lines(line)
+        lower = line.lower().replace("'", "").replace("’", "")
         if lower in ConnectionPage._SHUTDOWN_NOISE:
             return ""
         if lower.startswith("command request") and (
@@ -267,9 +272,7 @@ class ConnectionPage(QtWidgets.QFrame):
 
     def _on_restart_clicked(self) -> None:
         is_firmware = self._state in self._FIRMWARE_RESTART_STATES
-        self._last_restart_was_firmware = is_firmware
-        self._escalated_to_klipper_restart = False
-        self._firmware_restarting_pending = True
+        self._restart = _RestartPhase.FIRMWARE if is_firmware else _RestartPhase.KLIPPER
         self.call_load_panel.emit(
             True,
             "Restarting firmware…" if is_firmware else "Restarting printer…",
@@ -286,10 +289,11 @@ class ConnectionPage(QtWidgets.QFrame):
         self.call_load_panel.emit(True, "Still restarting, please wait…", False)
 
     def _on_restart_30s_elapsed(self) -> None:
-        if self._last_restart_was_firmware and not self._escalated_to_klipper_restart:
-            self._escalated_to_klipper_restart = True
-            self.call_load_panel.emit(True, "Restarting printer...", False)
+        if self._restart is _RestartPhase.FIRMWARE:
+            self._restart = _RestartPhase.KLIPPER
+            self.call_load_panel.emit(True, "Restarting printer…", False)
             self.restart_klipper_clicked.emit()
+            self._restart_10s_timer.start()
             self._restart_30s_timer.start()
             return
         self._stop_restart_overlay()
@@ -307,7 +311,7 @@ class ConnectionPage(QtWidgets.QFrame):
         """Show the KlippyStatus triple; the only Klipper/link input of this page."""
         prev, self._klippy_state = self._klippy_state, state
         if link != "connected":
-            if link == "lost" and self._firmware_restarting_pending:
+            if link == "lost" and self.manual_restart_pending:
                 self._stop_restart_overlay()
             self._set_state(
                 self._LINK_STATE_MAP.get(link, ConnectionState.DISCONNECTED)
@@ -318,19 +322,18 @@ class ConnectionPage(QtWidgets.QFrame):
             logger.warning("Unknown Klipper state: %s", state)
         failed = mapped in self._FIRMWARE_RESTART_STATES
         # Only a new failure ends a restart
-        if self._firmware_restarting_pending and failed and state != prev:
+        if self.manual_restart_pending and failed and state != prev:
             self._stop_restart_overlay()
         if mapped == ConnectionState.KLIPPER_DISCONNECTED and (
-            self._firmware_restarting_pending
+            self.manual_restart_pending
             or self._state == ConnectionState.KLIPPER_SHUTDOWN
         ):
             return  # Keep the shutdown screen through a restart (#220)
         self._set_state(mapped, self._build_reason(message) if failed else "")
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
-        """Refresh update status, close overlays and announce the page."""
+        """Close overlays and announce the page."""
         if self.conn_toggle:
-            self.ws.api.refresh_update_status()
             self.call_load_panel.emit(False, "", False)
             self.call_cancel_panel.emit(False)
         # Top-level popups (e.g. filament load) would stay above this child frame.

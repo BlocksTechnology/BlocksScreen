@@ -87,3 +87,96 @@ def test_reset_view_model_clears_dot(page, qtbot):
     with qtbot.waitSignal(page.has_new_notification, timeout=200) as blocker:
         page.reset_view_model()
     assert blocker.args == [False]
+
+
+def test_error_popup_stays_longer_than_info(page):
+    page.new_notication(message="boom", priority=3, popup=True)
+    page.new_notication(message="hello", priority=1, popup=True)
+    timeouts = [c.kwargs["timeout"] for c in page.popup.new_message.call_args_list]
+    assert timeouts == [10000, 3000]
+
+
+_Popup = sys.modules["lib.panels.widgets.Common.popupDialogWidget"].Popup
+
+
+@pytest.fixture
+def popup(qtbot):
+    p = _Popup(None)
+    qtbot.addWidget(p)
+    return p
+
+
+def test_popup_repeat_while_shown_is_dropped(popup):
+    popup.new_message(message="Print Not Started")
+    popup.new_message(message="Print Not Started")
+    assert popup.isShown
+    assert len(popup.messages) == 0
+
+
+def test_popup_repeat_while_queued_is_dropped(popup):
+    popup.new_message(message="first")
+    popup.new_message(message="second")
+    popup.new_message(message="second")
+    assert [m["message"] for m in popup.messages] == ["second"]
+
+
+def test_popup_same_message_after_dismiss_shows_again(popup):
+    popup.new_message(message="Print Not Started")
+    popup.slide_in_animation.stop()  # slide-out only runs after slide-in ends
+    popup.hide()
+    assert not popup.isShown
+    popup.new_message(message="Print Not Started")
+    assert popup.isShown
+    assert popup.text_label.text() == "Print Not Started"
+
+
+def test_popup_repeat_while_sliding_out_shows_after_hide(popup, qtbot):
+    popup.new_message(message="Print Not Started")
+    popup.slide_in_animation.stop()
+    popup.slide_out_animation.start()
+    popup.new_message(message="Print Not Started")
+    assert [m["message"] for m in popup.messages] == ["Print Not Started"]
+    popup.hide()
+    qtbot.waitUntil(lambda: popup.isShown, timeout=1000)
+    assert popup.text_label.text() == "Print Not Started"
+
+
+def test_popup_outside_tap_close_then_repeat_shows(popup):
+    popup.new_message(message="Print Not Started")
+    popup.close()  # Qt closes a WindowType.Popup on any tap outside it
+    assert not popup.isShown
+    popup.new_message(message="Print Not Started")
+    assert popup.isVisible()
+    assert popup.text_label.text() == "Print Not Started"
+
+
+def test_popup_repeat_while_shown_rearms_timeout(popup):
+    popup.new_message(message="Print Not Started", timeout=10000)
+    popup.timeout_timer = MagicMock()
+    popup.timeout_timer.isActive.return_value = False  # still sliding in
+    popup.new_message(message="Print Not Started")
+    popup.timeout_timer.start.assert_not_called()
+    popup.timeout_timer.isActive.return_value = True
+    popup.new_message(message="Print Not Started")
+    popup.timeout_timer.start.assert_called_once_with()
+
+
+def test_popup_queued_message_waits_after_outside_tap_close(popup, qtbot):
+    popup.new_message(_Popup.MessageType.ERROR, "A")
+    popup.new_message(_Popup.MessageType.ERROR, "B")
+    popup.close()  # the tap that closes A must not also close B
+    QtWidgets.QApplication.processEvents()
+    assert not popup.isShown
+    qtbot.waitUntil(lambda: popup.isShown, timeout=2000)
+    assert popup.text_label.text() == "B"
+
+
+def test_popup_message_arriving_in_delay_window_waits(popup, qtbot):
+    popup.new_message(_Popup.MessageType.ERROR, "A")
+    popup.new_message(_Popup.MessageType.ERROR, "B")
+    popup.close()
+    popup.new_message(_Popup.MessageType.ERROR, "C")
+    assert not popup.isShown
+    qtbot.waitUntil(lambda: popup.isShown, timeout=2000)
+    assert popup.text_label.text() == "B"
+    assert [m["message"] for m in popup.messages] == ["C"]

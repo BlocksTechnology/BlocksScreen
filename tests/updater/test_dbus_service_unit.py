@@ -1,6 +1,7 @@
 import asyncio
 import json
 from contextlib import nullcontext
+from functools import partial
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -313,6 +314,7 @@ class TestPollIntervalUsage:
             pytest.raises(asyncio.CancelledError),
         ):
             await svc._periodic_status_check()
+        sleeps.pop(0)  # startup settle delay, 0 or _BOOT_DELAY_S by uptime
         return sleeps
 
     @pytest.mark.asyncio
@@ -326,7 +328,7 @@ class TestPollIntervalUsage:
 
         sleeps = await self._record_sleeps(svc)
 
-        assert sleeps == [3.0, dbus_service._FETCH_RETRY_INTERVAL_S]
+        assert sleeps == [dbus_service._FETCH_RETRY_INTERVAL_S]
 
     @pytest.mark.asyncio
     async def test_periodic_check_keeps_full_interval_when_healthy(self, svc):
@@ -337,7 +339,7 @@ class TestPollIntervalUsage:
 
         sleeps = await self._record_sleeps(svc)
 
-        assert sleeps == [3.0, 86_400.0]
+        assert sleeps == [86_400.0]
 
     @pytest.mark.asyncio
     async def test_periodic_check_never_lengthens_a_short_poll_interval(self, svc):
@@ -348,16 +350,17 @@ class TestPollIntervalUsage:
 
         sleeps = await self._record_sleeps(svc)
 
-        assert sleeps == [3.0, 42.0]
+        assert sleeps == [42.0]
 
 
 class TestBootNotBusy:
     @staticmethod
-    def _build(deploy_pending: bool):
+    def _build(deploy_pending: bool, followup_pending: bool = False):
         from updater import dbus_service
 
         mock_svc = MagicMock()
         mock_svc.deploy_pending = MagicMock(return_value=deploy_pending)
+        mock_svc.followup_pending = MagicMock(return_value=followup_pending)
         with (
             patch.object(dbus_service, "UpdateService", return_value=mock_svc),
             patch.object(
@@ -378,6 +381,11 @@ class TestBootNotBusy:
         built = self._build(deploy_pending=True)
         assert built._busy is True
         assert built._boot_pass_done is False
+
+    def test_busy_at_construction_with_pending_followup(self):
+        """No deploy flag but a follow-up marker: busy must already be up when clients connect."""
+        built = self._build(deploy_pending=False, followup_pending=True)
+        assert (built._busy, built._followup_hold) == (True, True)
 
 
 class TestDeployHold:
@@ -554,6 +562,15 @@ class TestStatusAfterBootPass:
             await task
 
 
+@pytest.mark.parametrize(("uptime", "want"), [(15.0, 3.0), (900.0, 0.0)])
+def test_boot_delay_only_while_booting(uptime, want):
+    """Deploy restarts long after boot skip the settle delay."""
+    from updater import dbus_service
+
+    with patch.object(dbus_service.time, "clock_gettime", return_value=uptime):
+        assert dbus_service._boot_delay_s() == want
+
+
 @pytest.mark.usefixtures("reconciled")
 class TestBootProvision:
     @pytest.mark.asyncio
@@ -593,12 +610,14 @@ class TestBootProvision:
             if len(sleeps) > polls:
                 raise asyncio.CancelledError
 
+        # The resync task's own sleeps would land in the poll intervals.
+        svc._schedule_moonraker_sync = MagicMock()
         with (
             patch.object(dbus_service.asyncio, "sleep", fake_sleep),
             pytest.raises(asyncio.CancelledError),
         ):
             await svc._periodic_status_check()
-        assert sleeps.pop(0) == dbus_service._BOOT_DELAY_S
+        sleeps.pop(0)  # startup settle delay, 0 or _BOOT_DELAY_S by uptime
         return sleeps
 
     @pytest.mark.asyncio
@@ -679,6 +698,171 @@ class TestBootProvision:
         svc._svc.run_followup = AsyncMock(side_effect=RuntimeError("boom"))
         await svc._followup_pass()
         assert svc._followed_up is True
+
+
+@pytest.mark.usefixtures("reconciled")
+class TestFollowupHold:
+    """Busy stays up from daemon start through the follow-up pass, then drops once."""
+
+    @staticmethod
+    def _emitted(svc) -> list[bool]:
+        return [c.args[0][0] for c in svc.busy_changed.emit.call_args_list]
+
+    @staticmethod
+    def _hold(svc) -> None:
+        svc._busy = True
+        svc._followup_hold = True
+
+    @staticmethod
+    async def _provision(on_busy) -> bool:
+        on_busy(True)
+        on_busy(False)
+        return False
+
+    async def _followup(self, svc, seen, on_busy) -> tuple[bool, bool]:
+        seen.append((svc._busy, self._emitted(svc)))
+        on_busy(True)
+        on_busy(False)
+        return False, True
+
+    @pytest.mark.asyncio
+    async def test_boot_pass_keeps_busy_up_until_followup_done(self, svc):
+        """The provisioning and status passes before the follow-up must not unlock the UI."""
+        seen: list[tuple[bool, list[bool]]] = []
+        self._hold(svc)
+        svc._svc.poll_interval = 86_400.0
+        svc._svc.provision_missing = self._provision
+        svc._svc.run_followup = partial(self._followup, svc, seen)
+        await TestBootProvision()._run_polls(svc, polls=1)
+        assert seen == [(True, [])]
+        assert self._emitted(svc) == [False]
+        assert svc._followup_hold is False
+
+    @pytest.mark.asyncio
+    async def test_deferred_followup_releases_busy(self, svc):
+        """A print defers the follow-up: busy must not stay up for the whole print."""
+        self._hold(svc)
+        svc._provisioned = True
+        svc._svc.run_followup = AsyncMock(return_value=(True, False))
+        await svc._followup_pass()
+        assert (svc._busy, svc._followup_hold) == (False, False)
+        assert self._emitted(svc) == [False]
+        assert svc._followed_up is False
+
+    @pytest.mark.asyncio
+    async def test_failed_followup_releases_busy(self, svc):
+        self._hold(svc)
+        svc._provisioned = True
+        svc._svc.run_followup = AsyncMock(side_effect=RuntimeError("boom"))
+        await svc._followup_pass()
+        assert (svc._busy, svc._followup_hold) == (False, False)
+
+    @pytest.mark.asyncio
+    async def test_unprovisioned_boot_releases_busy(self, svc):
+        """Provisioning deferred: the follow-up cannot run, so the hold must not outlive the pass."""
+        self._hold(svc)
+        svc._provisioned = False
+        await svc._followup_pass()
+        svc._svc.run_followup.assert_not_awaited()
+        assert (svc._busy, svc._followup_hold) == (False, False)
+
+    @pytest.mark.asyncio
+    async def test_no_followup_leaves_busy_alone(self, svc):
+        """Without a marker nothing is held and no busy signal is emitted."""
+        svc._provisioned = True
+        await svc._followup_pass()
+        assert (svc._busy, svc._followup_hold) == (False, False)
+        svc.busy_changed.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_deploy_hold_end_hands_busy_to_followup(self, svc, monkeypatch):
+        """The deploy hold ending must not open a gap before the follow-up takes busy."""
+        from updater import dbus_service
+
+        seen: list[tuple[bool, list[bool]]] = []
+        monkeypatch.setattr(dbus_service, "_DEPLOY_POLL_S", 0.01)
+        svc._provisioned = True
+        svc._svc.run_followup = partial(self._followup, svc, seen)
+        svc._svc.followup_pending.return_value = True
+        svc._svc.deploy_pending.return_value = True
+        svc._busy = True
+        svc._set_busy(False)
+        await asyncio.sleep(0.03)
+        svc._svc.deploy_pending.return_value = False
+        await asyncio.sleep(0.05)
+        assert seen == [(True, [])]
+        assert self._emitted(svc) == [False]
+        assert svc._followup_hold is False
+
+    @pytest.mark.asyncio
+    async def test_deploy_hold_end_without_followup_still_releases(
+        self, svc, monkeypatch
+    ):
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_DEPLOY_POLL_S", 0.01)
+        svc._provisioned = True
+        svc._svc.deploy_pending.return_value = True
+        svc._busy = True
+        svc._set_busy(False)
+        svc._svc.deploy_pending.return_value = False
+        await asyncio.sleep(0.05)
+        assert self._emitted(svc) == [False]
+
+    @staticmethod
+    async def _blocking_followup(gate, calls, on_busy) -> tuple[bool, bool]:
+        calls.append(len(calls))
+        if len(calls) > 1:
+            # The real one defers here: process_lock is held by the first pass.
+            return True, False
+        on_busy(True)
+        await gate.wait()
+        on_busy(False)
+        return False, True
+
+    @pytest.mark.asyncio
+    async def test_second_pass_during_followup_keeps_busy_up(self, svc):
+        """Periodic pass racing followup_after_deploy must not drop busy mid-apply."""
+        gate = asyncio.Event()
+        calls: list[int] = []
+        self._hold(svc)
+        svc._provisioned = True
+        svc._svc.run_followup = partial(self._blocking_followup, gate, calls)
+        first = asyncio.create_task(svc._followup_pass())
+        await asyncio.sleep(0)
+        await svc._followup_pass()
+        assert self._emitted(svc) == []
+        assert (svc._busy, svc._followup_hold, svc._followed_up) == (True, True, False)
+        gate.set()
+        await first
+        assert calls == [0]
+        assert self._emitted(svc) == [False]
+        assert svc._followed_up is True
+
+    @pytest.mark.asyncio
+    async def test_print_at_start_releases_the_hold(self, svc, printing):
+        """A marker left by a mid-print daemon restart must not cover the print."""
+        printing.return_value = True
+        self._hold(svc)
+        await svc._release_hold_if_printing()
+        assert (svc._busy, svc._followup_hold) == (False, False)
+        printing.assert_awaited_once_with(unanswered=True)
+
+    @pytest.mark.asyncio
+    async def test_idle_at_start_keeps_the_hold(self, svc):
+        self._hold(svc)
+        await svc._release_hold_if_printing()
+        assert (svc._busy, svc._followup_hold) == (True, True)
+        svc.busy_changed.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_print_check_leaves_a_running_followup_alone(self, svc, printing):
+        """Once the follow-up pass owns busy, its own finally releases it."""
+        printing.return_value = True
+        self._hold(svc)
+        svc._followup_running = True
+        await svc._release_hold_if_printing()
+        assert (svc._busy, svc._followup_hold) == (True, True)
 
 
 class TestProvisioningFlag:
@@ -937,3 +1121,85 @@ class TestShutdown:
         assert not task.done()
         release.set()
         await task
+
+
+class TestMoonrakerSync:
+    @pytest.mark.asyncio
+    async def test_busy_release_resyncs_once(self, svc):
+        from updater import dbus_service
+
+        svc._busy = True
+        with patch.object(dbus_service.asyncio, "sleep", AsyncMock()):
+            svc._set_busy(False)
+            svc._schedule_moonraker_sync()
+            await svc._moonraker_sync
+        svc._svc.sync_moonraker.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_retries_while_refused_and_skips_while_busy(self, svc):
+        from updater import dbus_service
+
+        svc._svc.sync_moonraker = AsyncMock(side_effect=[False, True])
+        busy_on_sleep = [False, True, False]
+
+        async def fake_sleep(_s):
+            svc._busy = busy_on_sleep.pop(0)
+
+        with patch.object(dbus_service.asyncio, "sleep", fake_sleep):
+            await svc._moonraker_sync_loop()
+        # Tries: refused, busy (skipped), then synced.
+        assert svc._svc.sync_moonraker.await_count == 2
+        assert busy_on_sleep == []
+
+    @pytest.mark.asyncio
+    async def test_update_started_while_waiting_for_guard_is_not_raced(self, svc):
+        from updater import dbus_service
+
+        svc._busy = False
+        svc._svc.sync_moonraker = AsyncMock(return_value=True)
+        sleeps = 0
+
+        async def fake_sleep(_s):
+            nonlocal sleeps
+            sleeps += 1
+            if sleeps == 2:
+                svc._busy = False
+
+        real_sleep = asyncio.sleep
+        await svc._git_guard.acquire()
+        with patch.object(dbus_service.asyncio, "sleep", fake_sleep):
+            task = asyncio.ensure_future(svc._moonraker_sync_loop())
+            await real_sleep(0)
+            # An update grabs busy while the loop waits on the guard.
+            svc._busy = True
+            svc._git_guard.release()
+            await task
+        assert sleeps == 2
+        svc._svc.sync_moonraker.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_keeps_retrying_through_a_long_print_with_capped_backoff(self, svc):
+        from updater import dbus_service
+
+        svc._busy = False
+        svc._svc.sync_moonraker = AsyncMock(side_effect=[False] * 20 + [True])
+        delays = []
+
+        async def fake_sleep(s):
+            delays.append(s)
+
+        with patch.object(dbus_service.asyncio, "sleep", fake_sleep):
+            await svc._moonraker_sync_loop()
+        assert svc._svc.sync_moonraker.await_count == 21
+        assert delays[:5] == [60.0, 120.0, 240.0, 480.0, 600.0]
+        assert max(delays) == 600.0
+
+    @pytest.mark.asyncio
+    async def test_status_check_waits_for_a_moonraker_refresh(self, svc):
+        await svc._git_guard.acquire()
+        task = asyncio.ensure_future(svc._emit_status())
+        await asyncio.sleep(0)
+        svc._svc.check_status.assert_not_awaited()
+        svc._git_guard.release()
+        await task
+        svc._svc.check_status.assert_awaited_once()

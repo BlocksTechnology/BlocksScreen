@@ -48,6 +48,8 @@ _deps_broken() {
 }
 # Every venv writer (also install-updater.sh, post-merge) flocks the venv dir: a probe mid-replace forces a reinstall.
 { exec 201<"$BSENV" && flock -w 900 201; } || echo "[bs-bootstrap] venv lock not acquired (busy 900s or no venv) - continuing unlocked"
+# Older installers ran pip as root; return those files to blocks before any pip-as-blocks run.
+[ -d "$BSENV" ] && find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
 # Repair the daemon's own dependency up front so an update can still run if the full set below fails.
 if ! _probe yaml; then
     _deps_broken PyYAML

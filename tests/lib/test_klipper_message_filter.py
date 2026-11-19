@@ -10,6 +10,7 @@ from BlocksScreen.lib.klipper_message_filter import (
     _INDEX,
     _re,
     _sub,
+    macro_error_text,
     match_message,
 )
 
@@ -448,6 +449,12 @@ def test_re_no_match() -> None:
             "Too Many LEDs",
             Severity.ERROR,
         ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Shutdown due to M112 command",
+            "Emergency Stop",
+            Severity.ERROR,
+        ),
         # GCODEs Errors - Kalico / Danger Klipper
         (
             MessageSource.GCODE_ERROR,
@@ -474,6 +481,22 @@ def test_match_message(
         assert rule is not None
         assert rule.display == expected_display
         assert rule.severity == expected_severity
+
+
+@pytest.mark.parametrize(
+    ("text", "names_button"),
+    [
+        ("Printers emergency button pressed", True),
+        ("Shutdown due to M112 command", False),
+        ("Shutdown due to webhooks request", False),
+    ],
+)
+def test_estop_rules_point_at_firmware_restart(text: str, names_button: bool) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, text)
+    assert rule is not None and rule.display == "Emergency Stop"
+    hint = rule.hint or ""
+    assert "Firmware Restart" in hint
+    assert ("E-stop" in hint) is names_button
 
 
 def test_match_message_case_insensitive() -> None:
@@ -521,3 +544,88 @@ def test_full_display_with_hint() -> None:
         severity=Severity.INFO,
     )
     assert rule.full_display == "Title\nAction"
+
+
+_UNLOADED = (
+    "Error evaluating 'gcode_macro PRINT_START:gcode': "
+    "gcode.CommandError: Machine is unloaded, please load the machine"
+)
+
+
+def test_macro_error_text_keeps_raised_reason() -> None:
+    assert macro_error_text(_UNLOADED) == "Machine is unloaded, please load the machine"
+
+
+def test_macro_error_text_without_reason_names_macro() -> None:
+    text = "Error evaluating 'gcode_macro FOO:gcode': gcode.CommandError:"
+    assert macro_error_text(text) == "macro failed: FOO"
+
+
+def test_macro_error_text_leaves_other_errors() -> None:
+    assert macro_error_text("Must home axis first") == "Must home axis first"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        macro_error_text(_UNLOADED),
+        "Machine is unloaded, please load filament before starting a print.",
+    ],
+)
+def test_unloaded_print_start_maps_to_rule(text: str) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, text)
+    assert rule is not None
+    assert rule.display == "Print Not Started"
+    assert rule.severity == Severity.ERROR
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Error evaluating 'gcode_macro RESUME:gcode': gcode.CommandError: "
+        "Machine is unloaded, please load filament before resuming.",
+        "Machine is unloaded, please load filament before resuming.",
+    ],
+)
+def test_unloaded_resume_maps_to_resume_rule(text: str) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, macro_error_text(text))
+    assert rule is not None
+    assert rule.display == "Print Not Resumed"
+    assert rule.severity == Severity.ERROR
+
+
+_HH_PICKUP = (
+    "MMU issue detected. Print will be paused\n"
+    "Reason: Load sequence failed because:\n"
+    "Couldn't pick up filament at gate (gate endstop didn't trigger)\n"
+    "Gate marked as empty. Use 'MMU_GATE_MAP GATE=0 AVAILABLE=1' to reset.\n"
+    "Occured when changing tool: > T0"
+)
+
+
+@pytest.mark.parametrize(
+    "text, display",
+    [
+        (_HH_PICKUP, "Filament Not Picked Up"),
+        ("Load sequence failed because:\nSome other reason", "Filament Load Failed"),
+        ("Unload sequence failed because:\nSome reason", "Filament Unload Failed"),
+        (
+            "Error on 'MMU_CHANGE_TOOL TOOL=1 NEXT_POS=\"165.375,250.375\" ; T1': "
+            "TOOL must have maximum of 0",
+            "Tool Not Available",
+        ),
+    ],
+)
+def test_happy_hare_errors_map_to_rules(text: str, display: str) -> None:
+    rule = match_message(MessageSource.GCODE_ERROR, macro_error_text(text))
+    assert rule is not None
+    assert rule.display == display
+    assert rule.severity == Severity.ERROR
+
+
+def test_spoolman_remote_method_missing_is_ignored() -> None:
+    text = (
+        "Error while pushing gate map to spoolman: "
+        "Remote method 'spoolman_push_gate_map' not registered"
+    )
+    assert match_message(MessageSource.GCODE_ERROR, text).severity == Severity.IGNORE
