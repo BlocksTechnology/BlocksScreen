@@ -8,8 +8,10 @@ MARKER=${BS_CLOCK_MARKER:-/run/blocksscreen-clock-verified}
 DISABLE_FILE=${BS_CLOCK_DISABLE_FILE:-/etc/blocksscreen-clock.disabled}
 # Opt-in while the fallback soaks; without it the run only logs the step it would make.
 ENABLE_FILE=${BS_CLOCK_ENABLE_FILE:-/etc/blocksscreen-clock.enabled}
-# Independent operators; entry form name[=addr:port].
-read -ra SOURCES <<<"${BS_CLOCK_SOURCES:-github.com deb.debian.org www.cloudflare.com www.google.com}"
+# Shadow mode reports once per boot so an NTP-blocked box stays off the network.
+SHADOW_MARKER=${BS_CLOCK_SHADOW_MARKER:-/run/blocksscreen-clock-shadow}
+# Independent operators with sub-second Date headers; entry form name[=addr:port].
+read -ra SOURCES <<<"${BS_CLOCK_SOURCES:-deb.debian.org www.cloudflare.com www.google.com www.apple.com}"
 CAFILE=${BS_CLOCK_CAFILE:-}
 MOONRAKER=${BS_MOONRAKER_URL:-http://127.0.0.1:7125}
 # Restored forward-only at boot, so a backward step must be saved here too.
@@ -35,17 +37,19 @@ _tls() {
 
 # Cert dates are skipped on fetch: the local clock is the thing in doubt.
 _https_offset() {
-    local name=${1%%=*} addr=${1#*=} hdr remote out
+    local name=${1%%=*} addr=${1#*=} hdr local_s remote out
     [[ $1 == *=* ]] || addr="$name:443"
     hdr=$(printf 'HEAD / HTTP/1.1\r\nHost: %s\r\nUser-Agent: BlocksScreen-clock\r\nConnection: close\r\n\r\n' "$name" |
         _tls "$name" "$addr" -quiet -no_check_time 2>/dev/null |
         tr -d '\r' | sed -n '/^$/q;s/^date: //Ip;T;q') || true
+    # Sampled after the first handshake; a later read biases the offset on slow links.
+    local_s=$(date -u +%s)
     [[ $hdr =~ $IMF_RE ]] || return 1
     remote=$(date -u -d "$hdr" +%s) || return 1
     # tlsdate --leap: the cert must be valid at the claimed time.
     out=$(_tls "$name" "$addr" -attime "$remote" </dev/null 2>&1) || true
     [[ $out == *"Verify return code: 0 (ok)"* ]] || return 1
-    echo $((remote - $(date -u +%s)))
+    echo $((remote - local_s))
 }
 
 _printing() {
@@ -57,6 +61,7 @@ _printing() {
 [[ $(timedatectl show -p NTPSynchronized --value 2>/dev/null) == yes ]] && exit 0
 # Once per boot is enough.
 [[ -e $MARKER ]] && exit 0
+[[ ! -e $ENABLE_FILE && -e $SHADOW_MARKER ]] && exit 0
 
 # First two agreeing sources win; one bad source can neither block nor move the clock.
 offsets=()
@@ -66,7 +71,7 @@ for src in "${SOURCES[@]}"; do
     for prev in "${offsets[@]}"; do
         d=$((prev - off))
         if ((${d#-} <= AGREE_S)); then
-            step=$((prev < off ? prev : off))
+            step=$(((prev + off) / 2))
             break 2
         fi
     done
@@ -87,6 +92,7 @@ if ((${step#-} >= MIN_STEP_S)); then
     fi
     if [[ ! -e $ENABLE_FILE ]]; then
         log "shadow mode: would step clock by ${step} s; create $ENABLE_FILE to apply"
+        touch "$SHADOW_MARKER"
         exit 0
     fi
     # Moonraker job history uses wall time.

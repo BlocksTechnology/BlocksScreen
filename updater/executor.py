@@ -533,10 +533,11 @@ async def heal_clock() -> bool:
             return False
         if time.monotonic() - _clock_heal["last"] < _CLOCK_HEAL_RETRY_S:
             return False
-        _clock_heal["last"] = time.monotonic()
         ok, err = await _run(
             [SUDO, SYSTEMCTL, "start", CLOCK_SYNC_UNIT], timeout=CLOCK_HEAL_WAIT_S
         )
+        # Stamped after the run so a slow run cannot re-trigger the heal per repo.
+        _clock_heal["last"] = time.monotonic()
         if not ok:
             logger.warning("clock sync via %s failed: %s", CLOCK_SYNC_UNIT, err.strip())
         trusted = CLOCK_VERIFIED_MARKER.exists() or await ntp_synchronized()

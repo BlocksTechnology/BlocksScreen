@@ -26,8 +26,8 @@ _ROOT = Path(__file__).resolve().parents[2]
 _SCRIPT = _ROOT / "scripts" / "bs-clock-sync.sh"
 _DAY = 86400
 _NAMES = [f"m{i}.test" for i in range(4)]
-# Host -> Date header to send ("" = none, _CLOSE = hang up).
-_DATES: dict[str, str] = {}
+# Host -> Date offset in s rendered per request, or raw header ("" = none, _CLOSE = hang up).
+_DATES: dict[str, int | str] = {}
 _SLOW: set[str] = set()
 # Hosts whose HEAD reached a server.
 _SEEN: set[str] = set()
@@ -45,6 +45,8 @@ class _DateHandler(BaseHTTPRequestHandler):
         if host in _SLOW:
             time.sleep(_TIMEOUT_S / 2)
         hdr = _DATES.get(host, "")
+        if isinstance(hdr, int):
+            hdr = formatdate(time.time() + hdr, usegmt=True)
         if hdr == _CLOSE:
             return
         self.send_response_only(200)
@@ -159,14 +161,10 @@ def tls(tmp_path_factory) -> dict[str, object]:
     return {"cafile": str(tmp / "ca.pem"), "ports": ports, "_keep": stall}
 
 
-def _http_date(offset_s: int) -> str:
-    return formatdate(time.time() + offset_s, usegmt=True)
-
-
 def _run(
     tmp_path: Path,
     tls: dict,
-    sources: Sequence[tuple[str, str | None]],
+    sources: Sequence[tuple[str, int | str | None]],
     *,
     synced: bool = False,
     floor: int = 0,
@@ -177,7 +175,7 @@ def _run(
 ) -> tuple[str, str, bool, bool]:
     """Run the script; return (stdout, date -s args, marker, touched)."""
     shim = tmp_path / "bin"
-    shim.mkdir()
+    shim.mkdir(exist_ok=True)
     log, marker, clock = tmp_path / "set.log", tmp_path / "verified", tmp_path / "clock"
     if verified:
         marker.touch()
@@ -203,7 +201,7 @@ def _run(
             hdr = _CLOSE if kind == "close" else hdr
             kind = "ok"
         port = 1 if kind == "down" else tls["ports"][kind]
-        _DATES[name] = hdr or ""
+        _DATES[name] = "" if hdr is None else hdr
         entries.append(f"{name}=127.0.0.1:{port}")
     # None = Moonraker unreachable.
     (shim / "curl").write_text(
@@ -227,6 +225,7 @@ def _run(
         "BS_CLOCK_MARKER": str(marker),
         "BS_CLOCK_DISABLE_FILE": str(tmp_path / "disabled"),
         "BS_CLOCK_ENABLE_FILE": str(tmp_path / "enabled"),
+        "BS_CLOCK_SHADOW_MARKER": str(tmp_path / "shadow"),
         "BS_CLOCK_SOURCES": " ".join(entries),
         "BS_CLOCK_CAFILE": tls["cafile"],
         "BS_CLOCK_TIMESYNC_FILE": str(clock),
@@ -242,7 +241,7 @@ def _run(
     return res.stdout, set_args, marker.exists(), clock.stat().st_mtime > 0
 
 
-_AHEAD = ("ok", _http_date(_DAY))
+_AHEAD = ("ok", _DAY)
 
 
 @pytest.mark.parametrize(
@@ -253,16 +252,16 @@ _AHEAD = ("ok", _http_date(_DAY))
         ([_AHEAD] * 2, {"disabled": True}),
         ([("down", None)] * 2, {}),
         ([_AHEAD, ("down", None), ("down", None)], {}),
-        ([_AHEAD, ("ok", _http_date(2 * _DAY)), ("ok", _http_date(3 * _DAY))], {}),
+        ([_AHEAD, ("ok", 2 * _DAY), ("ok", 3 * _DAY)], {}),
         ([("ok", "garbage")] * 2, {}),
-        ([("ok", _http_date(-_DAY))] * 2, {"floor": int(time.time())}),
+        ([("ok", -_DAY)] * 2, {"floor": int(time.time())}),
         ([_AHEAD] * 2, {"print_state": "printing"}),
         ([_AHEAD] * 2, {"print_state": "paused"}),
         # Only the chain and name checks stand between a forged Date and the clock.
-        ([_AHEAD, ("rogue", _http_date(_DAY))], {}),
-        ([_AHEAD, ("wronghost", _http_date(_DAY))], {}),
+        ([_AHEAD, ("rogue", _DAY)], {}),
+        ([_AHEAD, ("wronghost", _DAY)], {}),
         # A key whose cert expired cannot vouch for a date past its validity.
-        ([("expired", _http_date(10 * _DAY))] * 2, {}),
+        ([("expired", 10 * _DAY)] * 2, {}),
         ([("stall", None)] * 4, {}),
         ([("dns", None)] * 2, {}),
         ([_AHEAD, ("close", None), ("nohdr", None)], {}),
@@ -294,7 +293,7 @@ def test_clock_left_alone(tmp_path: Path, tls, sources, kwargs) -> None:
 
 
 def test_clock_close_enough_is_verified(tmp_path: Path, tls) -> None:
-    sources = [("ok", _http_date(30)), ("ok", _http_date(31))]
+    sources = [("ok", 30), ("ok", 31)]
     _, set_args, marker, touched = _run(tmp_path, tls, sources)
     assert set_args == ""
     assert marker and not touched
@@ -309,7 +308,7 @@ def test_clock_close_enough_is_verified(tmp_path: Path, tls) -> None:
         # Box clock ahead: certs look expired. Box clock behind: certs look not yet valid.
         (-10 * _DAY, [("expired", 0), ("expired", 0)]),
         (10 * _DAY, [("notyet", 0), ("notyet", 0)]),
-        (-_DAY, [("down", None), ("ok", 0), ("ok", 0)]),  # github.com is source 1
+        (-_DAY, [("down", None), ("ok", 0), ("ok", 0)]),
         (5 * _DAY, [("stall", None), ("close", None), ("ok", 0), ("slow", 0)]),
         (7 * _DAY, [("dns", None), ("nohdr", None), ("ok", 0), ("ok", 0)]),
     ],
@@ -319,7 +318,7 @@ def test_clock_close_enough_is_verified(tmp_path: Path, tls) -> None:
         "years-ahead",
         "clock-ahead-certs-expired",
         "clock-behind-certs-notyet",
-        "github-down",
+        "first-down",
         "messy-stall-hangup-slow",
         "messy-dns-no-date",
     ],
@@ -328,13 +327,10 @@ def test_clock_stepped_when_two_agree(
     tmp_path: Path, tls, offset: int, sources
 ) -> None:
     start = time.time()
-    resolved = [
-        (k, None if extra is None else _http_date(offset + extra))
-        for k, extra in sources
-    ]
+    resolved = [(k, None if extra is None else offset + extra) for k, extra in sources]
     out, set_args, marker, touched = _run(tmp_path, tls, resolved)
     assert "@" in set_args, out
-    # Dates are fixed at setup, so the target lands between run start and end.
+    # The target lands between run start and end.
     target = int(set_args.split("@")[1]) - offset
     assert start - 2 <= target <= time.time() + 2
     assert "clock stepped" in out
@@ -350,14 +346,30 @@ def test_shadow_mode_logs_but_never_steps(tmp_path: Path, tls) -> None:
 
 def test_shadow_mode_verifies_a_good_clock(tmp_path: Path, tls) -> None:
     """A clock already within the step threshold is verified even in shadow mode."""
-    sources = [("ok", _http_date(30)), ("ok", _http_date(31))]
+    sources = [("ok", 30), ("ok", 31)]
     _, set_args, marker, _ = _run(tmp_path, tls, sources, enabled=False)
     assert set_args == "" and marker
 
 
+def test_shadow_mode_reports_once_per_boot(tmp_path: Path, tls) -> None:
+    """A repeat shadow run contacts no source; opting in afterwards still steps."""
+    _run(tmp_path, tls, [_AHEAD] * 2, enabled=False)
+    out, set_args, _, _ = _run(tmp_path, tls, [_AHEAD] * 2, enabled=False)
+    assert _SEEN == set() and "shadow" not in out and set_args == ""
+    _, set_args, marker, _ = _run(tmp_path, tls, [_AHEAD] * 2)
+    assert "@" in set_args and marker
+
+
+def test_step_is_the_mean_of_the_agreeing_pair(tmp_path: Path, tls) -> None:
+    """Neither source of the pair is preferred: the step lands between them."""
+    out, *_ = _run(tmp_path, tls, [("ok", _DAY), ("ok", _DAY + 4)])
+    step = int(re.search(r"clock stepped by (-?\d+) s", out)[1])
+    assert _DAY + 1 <= step <= _DAY + 3, out
+
+
 def test_unverified_peer_never_gets_the_request(tmp_path: Path, tls) -> None:
     """A rogue or wrong-host TLS peer is dropped at the handshake, before the HEAD is sent."""
-    _run(tmp_path, tls, [("rogue", _http_date(_DAY)), ("wronghost", _http_date(_DAY))])
+    _run(tmp_path, tls, [("rogue", _DAY), ("wronghost", _DAY)])
     assert _SEEN == set()
 
 

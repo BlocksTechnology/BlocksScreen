@@ -48,7 +48,9 @@ from updater.executor import (
     git_prune_extra_remotes,
     git_untracked_paths,
     enable_service,
+    _clock_heal,
     explain_fetch_error,
+    heal_clock,
     ntp_synchronized,
     klipper_printing,
     restart_service,
@@ -617,6 +619,20 @@ class TestClockHeal:
             assert await git_fetch(Path("/x")) == (False, _TLS_ERR)
         assert run.await_count == 1  # second failure inside the retry window
         assert fetch.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_window_starts_when_the_run_ends(self, _fresh):
+        """A run longer than the window must not let the next repo start another."""
+        seen: list[float] = []
+        run = AsyncMock(
+            side_effect=lambda *a, **k: seen.append(time.monotonic()) or (True, "")
+        )
+        with (
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await heal_clock() is False
+        assert _clock_heal["last"] >= seen[0]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
