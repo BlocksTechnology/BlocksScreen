@@ -510,7 +510,7 @@ _clock_heal = {"last": float("-inf"), "healed": 0}
 # gnutls (Debian git) reports a bad certificate date as a generic verify failure.
 _GIT_TLS_SIGNATURES = ("certificate verification failed", "ssl certificate problem")
 _APT_CLOCK_SIGNATURES = ("is expired", "is not valid yet")
-# Matches MIN_STEP_S in bs-clock-sync.sh.
+# Matches MIN_STEP_S in bs-clock-sync.sh (test_step_threshold_matches_marker_jump).
 _CLOCK_MARKER_JUMP_S = 120
 
 
@@ -535,6 +535,11 @@ async def ntp_synchronized() -> bool:
     return not ok or out.strip() != "no"
 
 
+async def clock_trusted() -> bool:
+    """Return True once the heal verified the clock or NTP synced it."""
+    return clock_verified() or await ntp_synchronized()
+
+
 async def heal_clock() -> bool:
     """Run the clock-sync unit now; return True once the clock is verified."""
     async with _CLOCK_HEAL_LOCK:
@@ -551,7 +556,7 @@ async def heal_clock() -> bool:
         _clock_heal["last"] = time.monotonic()
         if not ok:
             logger.warning("clock sync via %s failed: %s", CLOCK_SYNC_UNIT, err.strip())
-        trusted = clock_verified() or await ntp_synchronized()
+        trusted = await clock_trusted()
         logger.info(
             "clock sync ran: clock %s", "trusted" if trusted else "still unverified"
         )

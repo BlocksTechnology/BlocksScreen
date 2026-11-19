@@ -23,6 +23,7 @@ IMF_RE='^[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{
 
 log() { echo "[bs-clock-sync] $*"; }
 
+# Chain and hostname always verified; callers choose the cert date check.
 _tls() {
     local name=$1 addr=$2
     shift 2

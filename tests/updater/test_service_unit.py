@@ -261,31 +261,37 @@ class TestCheckStatus:
     async def test_breaker_cooldown_carries_clock_error_until_fixed(
         self, tmp_path: Path, clock_ok: bool, kept: bool
     ):
-        """A clock error stays up through the cooldown until the clock is fixed."""
-        fake_path = tmp_path / "klipper"
-        fake_path.mkdir()
-        component = ComponentConfig(name="klipper", kind="git", path=fake_path)
+        """A clock error stays up through the cooldown; a fixed clock fetches at once."""
+        components = []
+        for name in ("klipper", "moonraker"):
+            (tmp_path / name).mkdir()
+            components.append(
+                ComponentConfig(name=name, kind="git", path=tmp_path / name)
+            )
         error = (
             f"{CLOCK_UNSYNCED}: fatal: unable to access 'x': "
             "server certificate verification failed"
         )
-        side = [
-            ComponentStatus(name="klipper", error=error),
-            ComponentStatus(name="klipper"),
-        ]
+        failed = ComponentStatus(name="klipper", error=error)
+        git = AsyncMock(
+            side_effect=[failed, failed] + [ComponentStatus(name="klipper")] * 2
+        )
+        ntp = AsyncMock(return_value=False)
         with (
-            patch(
-                "updater.service.load_components", return_value=([component], 3600.0)
-            ),
-            patch("updater.service.check_git_status", side_effect=side),
+            patch("updater.service.load_components", return_value=(components, 3600.0)),
+            patch("updater.service.check_git_status", git),
             patch("updater.executor.clock_verified", return_value=clock_ok),
-            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor.ntp_synchronized", ntp),
         ):
             svc = UpdateService()
             await svc.check_status()
+            ntp.reset_mock()
             status = (await svc.check_status())["klipper"]
         assert (status.error == error) is kept
         assert status.needs_update is kept
+        # Fixed clock: the breaker is cleared and the second refresh fetches.
+        assert git.await_args_list[2].args[4] is kept
+        assert ntp.await_count == (0 if clock_ok else 1)
 
     @pytest.mark.asyncio
     async def test_printing_skips_apt_list_refresh(self):

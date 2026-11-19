@@ -311,8 +311,8 @@ def test_clock_close_enough_is_verified(tmp_path: Path, tls) -> None:
     ("offset", "sources"),
     [
         (30 * _DAY, [("ok", 0), ("down", None), ("ok", 0)]),
-        (-3600, [("ok", 0), ("ok", 400 * _DAY), ("ok", 0)]),
-        (-2 * 365 * _DAY, [("ok", 0), ("ok", 0)]),
+        (-3600, [("ok", 0), ("ok", 400 * _DAY), ("ok", 0)]),  # one source lying
+        (-2 * 365 * _DAY, [("ok", 0), ("ok", 0)]),  # clock years ahead
         # Box clock ahead: certs look expired. Box clock behind: certs look not yet valid.
         (-10 * _DAY, [("expired", 0), ("expired", 0)]),
         (10 * _DAY, [("notyet", 0), ("notyet", 0)]),
@@ -422,3 +422,13 @@ def test_timeouts_nest() -> None:
     unit_s = int(re.search(r"^TimeoutStartSec=(\d+)$", unit, re.M)[1])
     worst_s = 2 * len(sources) * per_conn + 5
     assert worst_s < unit_s < CLOCK_HEAL_WAIT_S
+
+
+def test_step_threshold_matches_marker_jump() -> None:
+    """The script's step threshold is the jump the updater treats as voiding the marker."""
+    from updater.executor import _CLOCK_MARKER_JUMP_S
+
+    script = _SCRIPT.read_text()
+    assert (
+        int(re.search(r"^MIN_STEP_S=(\d+)$", script, re.M)[1]) == _CLOCK_MARKER_JUMP_S
+    )

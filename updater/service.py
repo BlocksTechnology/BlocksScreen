@@ -36,6 +36,7 @@ from updater.executor import (
     classify_apt_error,
     disable_service,
     enable_service,
+    clock_trusted,
     explain_fetch_error,
     git_checkout,
     git_clone,
@@ -339,14 +340,6 @@ class UpdateService:
         if not ok:
             self._log.warning("apt list refresh failed: %s", err)
 
-    @staticmethod
-    async def _recheck_clock_error(status: ComponentStatus) -> ComponentStatus:
-        """Drop a carried clock error once the clock is verified or NTP-synced."""
-        raw = (status.error or "").removeprefix(f"{CLOCK_UNSYNCED}: ")
-        if (await explain_fetch_error(raw)).startswith(CLOCK_UNSYNCED):
-            return status
-        return dataclasses.replace(status, error=None)
-
     def _record_fetch_result(self, name: str, now: float, error: str | None) -> None:
         """Stamp a fetch success (closing the breaker) or trip the breaker on failure."""
         if error is None:
@@ -410,6 +403,11 @@ class UpdateService:
         """Concurrently check status of all components."""
         results: dict[str, ComponentStatus] = {}
         printing = await klipper_printing()
+        # Checked once per refresh, and only while a clock error is carried.
+        clock_fixed = (
+            any(e.startswith(CLOCK_UNSYNCED) for e in self._fetch_errors.values())
+            and await clock_trusted()
+        )
 
         async def _check_one(c: ComponentConfig) -> None:
             """Fetch and record one component's status into the results dict."""
@@ -425,6 +423,13 @@ class UpdateService:
             else:
                 now = time.monotonic()
                 async with self._git_lock:
+                    if clock_fixed and self._fetch_errors.get(c.name, "").startswith(
+                        CLOCK_UNSYNCED
+                    ):
+                        # Healed: fetch now, not after the backoff, so the update shows.
+                        self._fetch_errors.pop(c.name)
+                        self._fetch_backoff.pop(c.name, None)
+                        self._fetch_times.pop(c.name, None)
                     last = self._fetch_times.get(c.name, float("-inf"))
                     breaker = self._fetch_backoff.get(c.name)
                     skip_fetch = printing or (
@@ -445,12 +450,6 @@ class UpdateService:
                         status = dataclasses.replace(
                             status, error=self._fetch_errors[c.name]
                         )
-                if (
-                    skip_fetch
-                    and status.error
-                    and status.error.startswith(CLOCK_UNSYNCED)
-                ):
-                    status = await self._recheck_clock_error(status)
             results[c.name] = status
 
         gathered = await asyncio.gather(
