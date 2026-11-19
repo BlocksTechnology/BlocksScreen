@@ -39,7 +39,6 @@ class _DateHandler(BaseHTTPRequestHandler):
     """Answers HEAD with the Date header registered for the requested Host."""
 
     def do_HEAD(self) -> None:  # noqa: N802
-        """Send only a status line and the configured Date header."""
         host = self.headers.get("Host", "")
         _SEEN.add(host)
         if host in _SLOW:
@@ -269,10 +268,10 @@ _AHEAD = ("ok", _DAY)
         ([("ok", -_DAY)] * 2, {"floor": int(time.time())}),
         ([_AHEAD] * 2, {"print_state": "printing"}),
         ([_AHEAD] * 2, {"print_state": "paused"}),
-        # Only the chain and name checks stand between a forged Date and the clock.
+        # Only the chain and name checks stop a forged Date.
         ([_AHEAD, ("rogue", _DAY)], {}),
         ([_AHEAD, ("wronghost", _DAY)], {}),
-        # A key whose cert expired cannot vouch for a date past its validity.
+        # An expired cert cannot vouch for a date past its validity.
         ([("expired", 10 * _DAY)] * 2, {}),
         ([("stall", None)] * 4, {}),
         ([("dns", None)] * 2, {}),
@@ -317,8 +316,8 @@ def test_clock_close_enough_is_verified(tmp_path: Path, tls) -> None:
     ("offset", "sources"),
     [
         (30 * _DAY, [("ok", 0), ("down", None), ("ok", 0)]),
-        (-3600, [("ok", 0), ("ok", 400 * _DAY), ("ok", 0)]),  # one source lying
-        (-2 * 365 * _DAY, [("ok", 0), ("ok", 0)]),  # clock years ahead
+        (-3600, [("ok", 0), ("ok", 400 * _DAY), ("ok", 0)]),
+        (-2 * 365 * _DAY, [("ok", 0), ("ok", 0)]),
         # Box clock ahead: certs look expired. Box clock behind: certs look not yet valid.
         (-10 * _DAY, [("expired", 0), ("expired", 0)]),
         (10 * _DAY, [("notyet", 0), ("notyet", 0)]),
@@ -344,7 +343,6 @@ def test_clock_stepped_when_two_agree(
     resolved = [(k, None if extra is None else offset + extra) for k, extra in sources]
     out, set_args, marker, touched = _run(tmp_path, tls, resolved)
     assert "@" in set_args, out
-    # The target lands between run start and end.
     target = int(set_args.split("@")[1]) - offset
     assert start - 2 <= target <= time.time() + 2
     assert "clock stepped" in out

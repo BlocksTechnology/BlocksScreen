@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
-# Sets the clock from authenticated HTTPS Date headers when NTP cannot sync (no RTC battery).
+# Sets the clock from verified HTTPS Date headers when NTP cannot sync (no RTC battery).
 set -euo pipefail
 
 # Read by updater/executor.py to tell a clock fault from a network fault.
 MARKER=${BS_CLOCK_MARKER:-/run/blocksscreen-clock-verified}
-# Per-box kill switch; outside the repo so updates keep it.
+# Kill switch; outside the repo so updates keep it.
 DISABLE_FILE=${BS_CLOCK_DISABLE_FILE:-/etc/blocksscreen-clock.disabled}
-# Opt-in while the fallback soaks; without it the run only logs the step it would make.
+# Opt-in during the soak; without it a needed step is only logged.
 ENABLE_FILE=${BS_CLOCK_ENABLE_FILE:-/etc/blocksscreen-clock.enabled}
-# Shadow mode reports once per boot so an NTP-blocked box stays off the network.
+# Shadow mode reports once per boot.
 SHADOW_MARKER=${BS_CLOCK_SHADOW_MARKER:-/run/blocksscreen-clock-shadow}
-# Independent operators with sub-second Date headers; entry form name[=addr:port].
+# Independent operators with sub-second Date headers; entry: name[=addr:port].
 read -ra SOURCES <<<"${BS_CLOCK_SOURCES:-deb.debian.org www.cloudflare.com www.google.com www.apple.com}"
 CAFILE=${BS_CLOCK_CAFILE:-}
 MOONRAKER=${BS_MOONRAKER_URL:-http://127.0.0.1:7125}
 # Restored forward-only at boot, so a backward step must be saved here too.
 TIMESYNC_CLOCK=${BS_CLOCK_TIMESYNC_FILE:-/var/lib/systemd/timesync/clock}
-# Per TLS connection, two per source; worst case run = 2 x sources x this + 5 s.
+# Per TLS connection; worst case run = 2 x sources x this + 5 s.
 TIMEOUT_S=${BS_CLOCK_TIMEOUT:-8}
 # Also the clock jump that voids the verified marker.
 MIN_STEP_S=120
-# Agreement window between the two sources.
 AGREE_S=5
 BS_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 UPTIME_FILE=${BS_CLOCK_UPTIME_FILE:-/proc/uptime}
@@ -28,7 +27,6 @@ IMF_RE='^[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{
 
 log() { echo "[bs-clock-sync] $*"; }
 
-# Chain and hostname always verified; callers choose the cert date check.
 _tls() {
     local name=$1 addr=$2
     shift 2
@@ -37,7 +35,7 @@ _tls() {
         -verify_hostname "$name" -verify_return_error ${CAFILE:+-CAfile "$CAFILE"} "$@"
 }
 
-# Cert dates are skipped on fetch: the local clock is the thing in doubt.
+# Cert dates are skipped on fetch: the local clock is what is in doubt.
 _https_offset() {
     local name=${1%%=*} addr=${1#*=} hdr local_s remote out
     [[ $1 == *=* ]] || addr="$name:443"
@@ -104,7 +102,7 @@ fi
 
 if ((${step#-} >= MIN_STEP_S)); then
     target=$(($(date -u +%s) + step))
-    # Floor: the installed commit time.
+    # No real date predates the installed commit.
     floor=${BS_CLOCK_FLOOR:-$(git -c safe.directory="$BS_PATH" -C "$BS_PATH" log -1 --format=%ct 2>/dev/null || echo 0)}
     if ((target < floor)); then
         log "ignoring source date $target: older than BlocksScreen HEAD ($floor)"
@@ -120,7 +118,7 @@ if ((${step#-} >= MIN_STEP_S)); then
         log "print in progress; clock step of ${step} s deferred"
         exit 0
     fi
-    # NTP may have synced since the offset was measured; stepping on top would undo it.
+    # NTP may have synced since the offset was measured.
     if _ntp_synced; then
         log "NTP synchronized during the run; clock step of ${step} s skipped"
         exit 0

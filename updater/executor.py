@@ -496,14 +496,14 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
     return (ok, err)
 
 
-# Written by scripts/bs-clock-sync.sh as "<wall s> <boot s>" once the clock is verified.
+# Written by scripts/bs-clock-sync.sh as "<wall s> <boot s>".
 CLOCK_VERIFIED_MARKER = Path("/run/blocksscreen-clock-verified")
 CLOCK_SYNC_UNIT = "BlocksScreen-clock.service"
-# Opt-in while the fallback soaks; without it the updater never starts the unit.
+# Opt-in during the soak; without it the unit is never started.
 CLOCK_HEAL_ENABLED = Path("/etc/blocksscreen-clock.enabled")
-# Kill switch shared with bs-clock-sync.sh; wins over the opt-in.
+# Kill switch; overrides the opt-in.
 CLOCK_HEAL_DISABLED = Path("/etc/blocksscreen-clock.disabled")
-# Concurrent fetches share one clock-sync run; a failed run is retried after this window.
+# Concurrent fetches share one run; a failed run is retried after this window.
 _CLOCK_HEAL_LOCK = asyncio.Lock()
 _CLOCK_HEAL_RETRY_S = 60.0
 # Longer than the unit's TimeoutStartSec, so systemd ends a hung run first.
@@ -511,14 +511,13 @@ CLOCK_HEAL_WAIT_S = 95.0
 _clock_heal = {"last": float("-inf"), "healed": 0}
 # gnutls (Debian git) reports a bad certificate date as a generic verify failure.
 _GIT_TLS_SIGNATURES = ("certificate verification failed", "ssl certificate problem")
-# apt Release date errors caused by a wrong local clock.
 _APT_CLOCK_SIGNATURES = ("is expired", "is not valid yet")
-# Matches MIN_STEP_S in bs-clock-sync.sh: a larger jump since verification voids the marker.
+# Matches MIN_STEP_S in bs-clock-sync.sh.
 _CLOCK_MARKER_JUMP_S = 120
 
 
 def clock_verified() -> bool:
-    """Return True while the marker exists and the clock has not jumped since it was written."""
+    """Return True while the marker exists and no clock jump has voided it."""
     try:
         wall, boot = (int(v) for v in CLOCK_VERIFIED_MARKER.read_text().split())
     except (OSError, ValueError):
@@ -566,12 +565,12 @@ async def heal_clock() -> bool:
 async def _retry_after_clock_heal(
     op: Callable[[], Awaitable[tuple[bool, str]]], signatures: tuple[str, ...]
 ) -> tuple[bool, str]:
-    """Run op; retry once if its date failure was healed by this call or a concurrent one."""
+    """Run op; retry once if a clock heal fixed its date failure."""
     healed = _clock_heal["healed"]
     ok, out = await op()
     if ok or not any(k in out.lower() for k in signatures):
         return (ok, out)
-    # A heal that finished while op ran has already verified the clock, so explain sees no fault.
+    # A concurrent heal already verified the clock, so explain_fetch_error sees no fault.
     if _clock_heal["healed"] != healed:
         return await op()
     if (await explain_fetch_error(out, signatures)).startswith(CLOCK_UNSYNCED):
@@ -583,7 +582,7 @@ async def _retry_after_clock_heal(
 async def explain_fetch_error(
     output: str, signatures: tuple[str, ...] = _GIT_TLS_SIGNATURES
 ) -> str:
-    """Prefix a date-related fetch failure with the clock cause while the clock is unverified."""
+    """Prefix a date-related fetch failure with CLOCK_UNSYNCED while the clock is unverified."""
     low = output.lower()
     if (
         any(k in low for k in signatures)
