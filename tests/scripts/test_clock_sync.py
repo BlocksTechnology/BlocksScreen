@@ -11,7 +11,7 @@ import ssl
 import subprocess
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -128,24 +128,25 @@ def _cert(
     )  # fmt: skip
 
 
-def _serve(tmp: Path, tag: str) -> int:
-    """Start a TLS server for one cert in a daemon thread; return its port."""
+def _serve(tmp: Path, tag: str) -> ThreadingHTTPServer:
+    """Start a TLS server for one cert in a daemon thread."""
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.load_cert_chain(tmp / f"{tag}.pem", tmp / f"{tag}.key")
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), _DateHandler)
     httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    return httpd.server_address[1]
+    return httpd
 
 
 @pytest.fixture(scope="module")
-def tls(tmp_path_factory) -> dict[str, object]:
+def tls(tmp_path_factory) -> Iterator[dict[str, object]]:
     """CA file plus one server per cert kind: ok, expired, notyet (clock behind), rogue CA."""
     tmp = tmp_path_factory.mktemp("tls")
     _cert(tmp, "ca", "Test CA", None, (-3000, 3000))
     _cert(tmp, "rogueca", "Rogue CA", None, (-3000, 3000))
     ports = {}
+    servers = []
     for kind, issuer, days in (
         ("ok", "ca", (-1000, 1000)),
         ("expired", "ca", (-30, -1)),
@@ -153,11 +154,17 @@ def tls(tmp_path_factory) -> dict[str, object]:
         ("rogue", "rogueca", (-1000, 1000)),
     ):
         _cert(tmp, kind, _NAMES[0], issuer, days)
-        ports[kind] = _serve(tmp, kind)
+        servers.append(_serve(tmp, kind))
+        ports[kind] = servers[-1].server_address[1]
     # Accepts TCP, never answers the TLS hello.
     stall = socket.create_server(("127.0.0.1", 0))
     ports["stall"] = stall.getsockname()[1]
-    return {"cafile": str(tmp / "ca.pem"), "ports": ports, "_keep": stall}
+    yield {"cafile": str(tmp / "ca.pem"), "ports": ports}
+    # Left running, the server threads outlive the module into the Qt tests.
+    for httpd in servers:
+        httpd.shutdown()
+        httpd.server_close()
+    stall.close()
 
 
 def _marker(jump: int = 0) -> str:
