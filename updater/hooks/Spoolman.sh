@@ -52,6 +52,26 @@ if ! $_healthy; then
     exit 1
 fi
 
+# Factory images ran upstream scripts/install.sh in a nested release zip too, leaving ./Spoolman and its temp ./uv (~210 MB, unused).
+_unit_dir=$(systemctl show -P WorkingDirectory Spoolman.service 2>/dev/null || true)
+for _left in Spoolman uv; do
+    _dir="$COMPONENT_PATH/$_left"
+    if [ ! -d "$_dir" ] || [ -L "$_dir" ] || [ "$_unit_dir" = "$_dir" ] ||
+        git -C "$COMPONENT_PATH" ls-files --error-unmatch -- "$_left" >/dev/null 2>&1; then
+        continue
+    fi
+    # Only the exact installer fingerprints; anything else in there is not ours to delete.
+    case $_left in
+    Spoolman) grep -qs '"project_name": "Spoolman"' "$_dir/release_info.json" || continue ;;
+    uv) [ -z "$(find "$_dir" -mindepth 1 ! -name uv ! -name uvx -print -quit)" ] || continue ;;
+    esac
+    if rm -rf --one-file-system -- "$_dir"; then
+        echo "[hook:Spoolman] removed unused factory leftover $_left/"
+    else
+        echo "[hook:Spoolman] WARN: could not remove $_left/ - continuing"
+    fi
+done
+
 # The venv only exists as of this hook, so patch moonraker here: any earlier caller saw no venv and skipped.
 _home=$(dirname "$COMPONENT_PATH")
 _conf="$_home/printer_data/config/moonraker.conf"
