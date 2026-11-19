@@ -339,6 +339,14 @@ class UpdateService:
         if not ok:
             self._log.warning("apt list refresh failed: %s", err)
 
+    @staticmethod
+    async def _recheck_clock_error(status: ComponentStatus) -> ComponentStatus:
+        """Drop a carried clock error once the clock is verified or NTP-synced."""
+        raw = (status.error or "").removeprefix(f"{CLOCK_UNSYNCED}: ")
+        if (await explain_fetch_error(raw)).startswith(CLOCK_UNSYNCED):
+            return status
+        return dataclasses.replace(status, error=None)
+
     def _record_fetch_result(self, name: str, now: float, error: str | None) -> None:
         """Stamp a fetch success (closing the breaker) or trip the breaker on failure."""
         if error is None:
@@ -346,7 +354,7 @@ class UpdateService:
             self._fetch_backoff.pop(name, None)
             self._fetch_errors.pop(name, None)
             return
-        if git_is_network_error(error):
+        if git_is_network_error(error) and not error.startswith(CLOCK_UNSYNCED):
             # Offline is not an update: never re-report it while the breaker skips.
             self._fetch_errors.pop(name, None)
         else:
@@ -437,6 +445,12 @@ class UpdateService:
                         status = dataclasses.replace(
                             status, error=self._fetch_errors[c.name]
                         )
+                if (
+                    skip_fetch
+                    and status.error
+                    and status.error.startswith(CLOCK_UNSYNCED)
+                ):
+                    status = await self._recheck_clock_error(status)
             results[c.name] = status
 
         gathered = await asyncio.gather(

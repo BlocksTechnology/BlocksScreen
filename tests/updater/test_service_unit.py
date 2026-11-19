@@ -257,6 +257,37 @@ class TestCheckStatus:
         assert status.commits_behind == cooled.get("commits_behind", 0)
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(("clock_ok", "kept"), [(False, True), (True, False)])
+    async def test_breaker_cooldown_carries_clock_error_until_fixed(
+        self, tmp_path: Path, clock_ok: bool, kept: bool
+    ):
+        """A clock error stays up through the cooldown until the clock is fixed."""
+        fake_path = tmp_path / "klipper"
+        fake_path.mkdir()
+        component = ComponentConfig(name="klipper", kind="git", path=fake_path)
+        error = (
+            f"{CLOCK_UNSYNCED}: fatal: unable to access 'x': "
+            "server certificate verification failed"
+        )
+        side = [
+            ComponentStatus(name="klipper", error=error),
+            ComponentStatus(name="klipper"),
+        ]
+        with (
+            patch(
+                "updater.service.load_components", return_value=([component], 3600.0)
+            ),
+            patch("updater.service.check_git_status", side_effect=side),
+            patch("updater.executor.clock_verified", return_value=clock_ok),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+        ):
+            svc = UpdateService()
+            await svc.check_status()
+            status = (await svc.check_status())["klipper"]
+        assert (status.error == error) is kept
+        assert status.needs_update is kept
+
+    @pytest.mark.asyncio
     async def test_printing_skips_apt_list_refresh(self):
         with patch("updater.service.apt_update", AsyncMock()) as mock_update:
             await UpdateService()._refresh_apt_lists(force=True, printing=True)
