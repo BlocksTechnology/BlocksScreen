@@ -63,7 +63,7 @@ _boot_s() {
 # Marker = wall and boot time at verification; a later jump between them voids it.
 _marker_valid() {
     local wall boot d
-    read -r wall boot <"$MARKER" 2>/dev/null || return 1
+    read -r wall boot 2>/dev/null <"$MARKER" || return 1
     [[ $wall =~ ^[0-9]+$ && $boot =~ ^[0-9]+$ ]] || return 1
     d=$((($(date -u +%s) - wall) - ($(_boot_s) - boot)))
     ((${d#-} < MIN_STEP_S))
@@ -74,8 +74,12 @@ _printing() {
         grep -qE '"state": ?"(printing|paused)"'
 }
 
+_ntp_synced() {
+    [[ $(timedatectl show -p NTPSynchronized --value 2>/dev/null) == yes ]]
+}
+
 [[ -e $DISABLE_FILE ]] && exit 0
-[[ $(timedatectl show -p NTPSynchronized --value 2>/dev/null) == yes ]] && exit 0
+_ntp_synced && exit 0
 _marker_valid && exit 0
 [[ ! -e $ENABLE_FILE && -e $SHADOW_MARKER ]] && exit 0
 
@@ -114,6 +118,11 @@ if ((${step#-} >= MIN_STEP_S)); then
     # Moonraker job history uses wall time.
     if _printing; then
         log "print in progress; clock step of ${step} s deferred"
+        exit 0
+    fi
+    # NTP may have synced since the offset was measured; stepping on top would undo it.
+    if _ntp_synced; then
+        log "NTP synchronized during the run; clock step of ${step} s skipped"
         exit 0
     fi
     date -u -s "@$target" >/dev/null

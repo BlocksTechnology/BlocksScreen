@@ -177,6 +177,7 @@ def _run(
     verified: bool = False,
     disabled: bool = False,
     enabled: bool = True,
+    syncs_mid_run: bool = False,
 ) -> tuple[str, str, bool, bool]:
     """Run the script; return (stdout, date -s args, marker, touched)."""
     shim = tmp_path / "bin"
@@ -220,7 +221,13 @@ def _run(
         f'for a in "$@"; do [[ $a == -s ]] && {{ echo "$*" >>"{log}"; exit 0; }}; done\n'
         'exec /bin/date "$@"\n'
     )
-    (shim / "timedatectl").write_text(f"#!/bin/sh\necho {'yes' if synced else 'no'}\n")
+    ntp = (
+        f'#!/bin/sh\n[ -e "{tmp_path}/ntp.calls" ] && echo yes && exit 0\n'
+        f'touch "{tmp_path}/ntp.calls"; echo no\n'
+        if syncs_mid_run
+        else f"#!/bin/sh\necho {'yes' if synced else 'no'}\n"
+    )
+    (shim / "timedatectl").write_text(ntp)
     (shim / "fake-hwclock").write_text("#!/bin/sh\nexit 0\n")
     for f in shim.iterdir():
         f.chmod(0o755)
@@ -270,6 +277,7 @@ _AHEAD = ("ok", _DAY)
         ([("stall", None)] * 4, {}),
         ([("dns", None)] * 2, {}),
         ([_AHEAD, ("close", None), ("nohdr", None)], {}),
+        ([_AHEAD] * 2, {"syncs_mid_run": True}),
     ],
     ids=[
         "synced",
@@ -288,6 +296,7 @@ _AHEAD = ("ok", _DAY)
         "internet-hangs",
         "dns-fails",
         "hangup-and-no-date",
+        "ntp-synced-mid-run",
     ],
 )
 def test_clock_left_alone(tmp_path: Path, tls, sources, kwargs) -> None:
