@@ -668,6 +668,16 @@ class TestSpoolmanHook:
         assert (repo / "Spoolman" / "release_info.json").exists()
         assert (repo / "uv" / "uv").exists()
 
+    def test_keeps_symlinked_dir(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        target = tmp_path / "shared-uv"
+        (repo / "uv").rename(target)
+        (repo / "uv").symlink_to(target)
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "uv").is_symlink()
+        assert (target / "uv").exists()
+
     def test_unhealthy_install_keeps_leftovers(self, tmp_path, spoolman_home):
         repo = spoolman_home / "Spoolman"
         result = _run_spoolman_hook(tmp_path, spoolman_home, health="down")
