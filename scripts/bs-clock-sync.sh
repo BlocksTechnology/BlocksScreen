@@ -18,10 +18,12 @@ MOONRAKER=${BS_MOONRAKER_URL:-http://127.0.0.1:7125}
 TIMESYNC_CLOCK=${BS_CLOCK_TIMESYNC_FILE:-/var/lib/systemd/timesync/clock}
 # Per TLS connection, two per source; worst case run = 2 x sources x this + 5 s.
 TIMEOUT_S=${BS_CLOCK_TIMEOUT:-8}
+# Also the clock jump that voids the verified marker.
 MIN_STEP_S=120
 # Agreement window between the two sources.
 AGREE_S=5
 BS_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+UPTIME_FILE=${BS_CLOCK_UPTIME_FILE:-/proc/uptime}
 IMF_RE='^[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT$'
 
 log() { echo "[bs-clock-sync] $*"; }
@@ -52,6 +54,21 @@ _https_offset() {
     echo $((remote - local_s))
 }
 
+_boot_s() {
+    local up rest
+    read -r up rest <"$UPTIME_FILE"
+    echo "${up%.*}"
+}
+
+# Marker = wall and boot time at verification; a later jump between them voids it.
+_marker_valid() {
+    local wall boot d
+    read -r wall boot <"$MARKER" 2>/dev/null || return 1
+    [[ $wall =~ ^[0-9]+$ && $boot =~ ^[0-9]+$ ]] || return 1
+    d=$((($(date -u +%s) - wall) - ($(_boot_s) - boot)))
+    ((${d#-} < MIN_STEP_S))
+}
+
 _printing() {
     curl -s --max-time 5 "$MOONRAKER/printer/objects/query?print_stats=state" 2>/dev/null |
         grep -qE '"state": ?"(printing|paused)"'
@@ -59,8 +76,7 @@ _printing() {
 
 [[ -e $DISABLE_FILE ]] && exit 0
 [[ $(timedatectl show -p NTPSynchronized --value 2>/dev/null) == yes ]] && exit 0
-# Once per boot is enough.
-[[ -e $MARKER ]] && exit 0
+_marker_valid && exit 0
 [[ ! -e $ENABLE_FILE && -e $SHADOW_MARKER ]] && exit 0
 
 # First two agreeing sources win; one bad source can neither block nor move the clock.
@@ -109,4 +125,4 @@ if ((${step#-} >= MIN_STEP_S)); then
         touch "$TIMESYNC_CLOCK" || true
     fi
 fi
-date -u +%s >"$MARKER"
+echo "$(date -u +%s) $(_boot_s)" >"$MARKER"

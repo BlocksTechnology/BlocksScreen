@@ -496,11 +496,13 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
     return (ok, err)
 
 
-# Written by scripts/bs-clock-sync.sh once the clock is verified this boot.
+# Written by scripts/bs-clock-sync.sh as "<wall s> <boot s>" once the clock is verified.
 CLOCK_VERIFIED_MARKER = Path("/run/blocksscreen-clock-verified")
 CLOCK_SYNC_UNIT = "BlocksScreen-clock.service"
 # Opt-in while the fallback soaks; without it the updater never starts the unit.
 CLOCK_HEAL_ENABLED = Path("/etc/blocksscreen-clock.enabled")
+# Kill switch shared with bs-clock-sync.sh; wins over the opt-in.
+CLOCK_HEAL_DISABLED = Path("/etc/blocksscreen-clock.disabled")
 # Concurrent fetches share one clock-sync run; a failed run is retried after this window.
 _CLOCK_HEAL_LOCK = asyncio.Lock()
 _CLOCK_HEAL_RETRY_S = 60.0
@@ -511,6 +513,18 @@ _clock_heal = {"last": float("-inf"), "healed": 0}
 _GIT_TLS_SIGNATURES = ("certificate verification failed", "ssl certificate problem")
 # apt Release date errors caused by a wrong local clock.
 _APT_CLOCK_SIGNATURES = ("is expired", "is not valid yet")
+# Matches MIN_STEP_S in bs-clock-sync.sh: a larger jump since verification voids the marker.
+_CLOCK_MARKER_JUMP_S = 120
+
+
+def clock_verified() -> bool:
+    """Return True while the marker exists and the clock has not jumped since it was written."""
+    try:
+        wall, boot = (int(v) for v in CLOCK_VERIFIED_MARKER.read_text().split())
+    except (OSError, ValueError):
+        return False
+    since_boot = time.clock_gettime(time.CLOCK_BOOTTIME) - boot
+    return abs((time.time() - wall) - since_boot) < _CLOCK_MARKER_JUMP_S
 
 
 async def ntp_synchronized() -> bool:
@@ -527,9 +541,9 @@ async def ntp_synchronized() -> bool:
 async def heal_clock() -> bool:
     """Run the clock-sync unit now; return True once the clock is verified."""
     async with _CLOCK_HEAL_LOCK:
-        if CLOCK_VERIFIED_MARKER.exists():
+        if clock_verified():
             return True
-        if not CLOCK_HEAL_ENABLED.exists():
+        if CLOCK_HEAL_DISABLED.exists() or not CLOCK_HEAL_ENABLED.exists():
             return False
         if time.monotonic() - _clock_heal["last"] < _CLOCK_HEAL_RETRY_S:
             return False
@@ -540,7 +554,7 @@ async def heal_clock() -> bool:
         _clock_heal["last"] = time.monotonic()
         if not ok:
             logger.warning("clock sync via %s failed: %s", CLOCK_SYNC_UNIT, err.strip())
-        trusted = CLOCK_VERIFIED_MARKER.exists() or await ntp_synchronized()
+        trusted = clock_verified() or await ntp_synchronized()
         logger.info(
             "clock sync ran: clock %s", "trusted" if trusted else "still unverified"
         )
@@ -573,7 +587,7 @@ async def explain_fetch_error(
     low = output.lower()
     if (
         any(k in low for k in signatures)
-        and not CLOCK_VERIFIED_MARKER.exists()
+        and not clock_verified()
         and not await ntp_synchronized()
     ):
         return f"{CLOCK_UNSYNCED}: {output}"

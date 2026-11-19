@@ -161,6 +161,11 @@ def tls(tmp_path_factory) -> dict[str, object]:
     return {"cafile": str(tmp / "ca.pem"), "ports": ports, "_keep": stall}
 
 
+def _marker(jump: int = 0) -> str:
+    """Marker as the script writes it; jump = wall-clock jump since then."""
+    return f"{int(time.time()) - jump} {int(time.clock_gettime(time.CLOCK_BOOTTIME))}\n"
+
+
 def _run(
     tmp_path: Path,
     tls: dict,
@@ -178,7 +183,7 @@ def _run(
     shim.mkdir(exist_ok=True)
     log, marker, clock = tmp_path / "set.log", tmp_path / "verified", tmp_path / "clock"
     if verified:
-        marker.touch()
+        marker.write_text(_marker())
     if disabled:
         (tmp_path / "disabled").touch()
     if enabled:
@@ -335,6 +340,21 @@ def test_clock_stepped_when_two_agree(
     assert start - 2 <= target <= time.time() + 2
     assert "clock stepped" in out
     assert marker and touched
+
+
+@pytest.mark.parametrize(
+    "stale",
+    [_marker(30 * _DAY), _marker(-3600), "1700000000\n", ""],
+    ids=["clock-fell-back", "clock-jumped-ahead", "old-format", "empty"],
+)
+def test_stale_marker_does_not_block_a_heal(tmp_path: Path, tls, stale: str) -> None:
+    """A clock that jumped after verification is healed again and re-marked."""
+    (tmp_path / "verified").write_text(stale)
+    out, set_args, _, _ = _run(tmp_path, tls, [_AHEAD] * 2)
+    assert "@" in set_args, out
+    wall, boot = map(int, (tmp_path / "verified").read_text().split())
+    assert abs(wall - time.time()) < 5
+    assert abs(boot - time.clock_gettime(time.CLOCK_BOOTTIME)) < 5
 
 
 def test_shadow_mode_logs_but_never_steps(tmp_path: Path, tls) -> None:
