@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from updater.models import CLOCK_UNSYNCED
 from updater.executor import (
     _moonraker_call,
     moonraker_refresh_repo,
@@ -47,6 +48,11 @@ from updater.executor import (
     git_prune_extra_remotes,
     git_untracked_paths,
     enable_service,
+    _clock_heal,
+    clock_verified,
+    explain_fetch_error,
+    heal_clock,
+    ntp_synchronized,
     klipper_printing,
     restart_service,
     restart_service_noblock,
@@ -513,6 +519,257 @@ class TestGitPruneExtraRemotes:
         with patch("asyncio.create_subprocess_exec", exec_mock):
             await git_prune_extra_remotes(tmp_path)
         assert exec_mock.call_count == 1
+
+
+_TLS_ERR = "fatal: server certificate verification failed. CAfile: none CRLfile: none"
+
+
+def _mark_verified(marker: Path, jump: int = 0) -> None:
+    """Write the marker as bs-clock-sync does; jump = wall-clock jump since then."""
+    boot = int(time.clock_gettime(time.CLOCK_BOOTTIME))
+    marker.write_text(f"{int(time.time()) - jump} {boot}\n")
+
+
+class _GatedFetch:
+    """Fetch stub: /slow fails only once the gate opens, like a fetch outlasting a heal."""
+
+    def __init__(self) -> None:
+        self.gate = asyncio.Event()
+        self.calls: dict[str, int] = {}
+
+    async def __call__(self, path: Path, **_: object) -> tuple[bool, str]:
+        n = self.calls[str(path)] = self.calls.get(str(path), 0) + 1
+        if n > 1:
+            return (True, "")
+        if str(path) == "/slow":
+            await self.gate.wait()
+        return (False, _TLS_ERR)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("output", "synced", "verified", "clock"),
+    [
+        (_TLS_ERR, False, False, True),
+        (_TLS_ERR, True, False, False),
+        (_TLS_ERR, False, True, False),  # bs-clock-sync confirmed the clock
+        ("fatal: timed out", False, False, False),
+    ],
+)
+async def test_explain_fetch_error(tmp_path, output, synced, verified, clock):
+    marker = tmp_path / "verified"
+    if verified:
+        _mark_verified(marker)
+    with (
+        patch("updater.executor.CLOCK_VERIFIED_MARKER", marker),
+        patch("updater.executor.ntp_synchronized", AsyncMock(return_value=synced)),
+    ):
+        result = await explain_fetch_error(output)
+    assert result.startswith(CLOCK_UNSYNCED) is clock
+    assert result.endswith(output)
+
+
+@pytest.mark.parametrize(
+    ("content", "valid"),
+    [
+        ("now", True),
+        ("drift", True),  # under the jump threshold
+        ("back", False),
+        ("ahead", False),
+        ("1700000000\n", False),  # single field from an older script
+        ("garbage\n", False),
+        (None, False),
+    ],
+)
+def test_clock_verified(tmp_path, content, valid):
+    """The marker holds only while wall time has kept pace with boot time."""
+    marker = tmp_path / "verified"
+    jumps = {"now": 0, "drift": 60, "back": 30 * 86400, "ahead": -3600}
+    if content in jumps:
+        _mark_verified(marker, jumps[content])
+    elif content is not None:
+        marker.write_text(content)
+    with patch("updater.executor.CLOCK_VERIFIED_MARKER", marker):
+        assert clock_verified() is valid
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("run", "synced"),
+    [
+        ((True, "no\n"), False),
+        ((True, "yes\n"), True),
+        ((False, "Failed to connect to bus"), True),  # unknown never blames the clock
+        (FileNotFoundError("timedatectl"), True),
+    ],
+)
+async def test_ntp_synchronized(run, synced):
+    mock = (
+        AsyncMock(side_effect=run)
+        if isinstance(run, Exception)
+        else AsyncMock(return_value=run)
+    )
+    with patch("updater.executor._run", mock):
+        assert await ntp_synchronized() is synced
+
+
+class TestClockHeal:
+    @pytest.fixture(autouse=True)
+    def _fresh(self, tmp_path):
+        marker = tmp_path / "verified"
+        with (
+            patch("updater.executor.CLOCK_VERIFIED_MARKER", marker),
+            patch("updater.executor.CLOCK_HEAL_DISABLED", tmp_path / "disabled"),
+            patch.dict("updater.executor._clock_heal", {"last": float("-inf")}),
+        ):
+            yield marker
+
+    @pytest.mark.asyncio
+    async def test_kill_switch_never_starts_the_unit(self, tmp_path):
+        """With the kill switch the clock error is reported but nothing runs as root."""
+        (tmp_path / "disabled").touch()
+        fetch = AsyncMock(return_value=(False, _TLS_ERR))
+        run = AsyncMock()
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await git_fetch(Path("/x")) == (False, _TLS_ERR)
+        run.assert_not_called()
+        assert fetch.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_fetch_retries_after_heal(self, _fresh):
+        fetch = AsyncMock(side_effect=[(False, _TLS_ERR), (True, "")])
+        run = AsyncMock(
+            side_effect=lambda *a, **k: _mark_verified(_fresh) or (True, "")
+        )
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await git_fetch(Path("/x")) == (True, "")
+        assert run.call_args.args[0][-2:] == ["start", "BlocksScreen-clock.service"]
+        assert fetch.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_clock_jump_after_verification_heals_again(self, _fresh):
+        """A clock that went wrong again after a heal is relabelled and healed again."""
+        _mark_verified(_fresh, jump=30 * 86400)
+        fetch = AsyncMock(side_effect=[(False, _TLS_ERR), (True, "")])
+        run = AsyncMock(
+            side_effect=lambda *a, **k: _mark_verified(_fresh) or (True, "")
+        )
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert (await explain_fetch_error(_TLS_ERR)).startswith(CLOCK_UNSYNCED)
+            assert await git_fetch(Path("/x")) == (True, "")
+        assert run.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_unhealed_clock_keeps_error_and_rate_limits(self, _fresh):
+        fetch = AsyncMock(return_value=(False, _TLS_ERR))
+        run = AsyncMock(return_value=(True, ""))
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await git_fetch(Path("/x")) == (False, _TLS_ERR)
+            assert await git_fetch(Path("/x")) == (False, _TLS_ERR)
+        assert run.await_count == 1  # second failure inside the retry window
+        assert fetch.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_window_starts_when_the_run_ends(self, _fresh):
+        """A run longer than the window must not let the next repo start another."""
+        seen: list[float] = []
+        run = AsyncMock(
+            side_effect=lambda *a, **k: seen.append(time.monotonic()) or (True, "")
+        )
+        with (
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await heal_clock() is False
+        assert _clock_heal["last"] >= seen[0]
+
+    @pytest.mark.asyncio
+    async def test_failure_outlasting_a_concurrent_heal_retries(self, _fresh):
+        """A fetch that fails after another fetch healed the clock still retries."""
+        fetch = _GatedFetch()
+        run = AsyncMock(
+            side_effect=lambda *a, **k: (
+                _mark_verified(_fresh) or fetch.gate.set() or (True, "")
+            )
+        )
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            slow = asyncio.create_task(git_fetch(Path("/slow")))
+            await asyncio.sleep(0)
+            assert await git_fetch(Path("/fast")) == (True, "")
+            assert await slow == (True, "")
+        assert run.await_count == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "err",
+        [
+            "E: Release file for http://deb.debian.org/debian/dists/bookworm-updates/"
+            "InRelease is expired (invalid since 3d 2h). Updates for this repository "
+            "will not be applied.",
+            "E: Release file for http://archive.raspberrypi.com/debian/dists/bookworm/"
+            "InRelease is not valid yet (invalid for another 40d 1h). Updates for this "
+            "repository will not be applied.",
+        ],
+    )
+    async def test_apt_release_date_heals_and_retries(self, _fresh, err):
+        runs = [(False, err), (True, ""), (True, "Hit:1")]
+        run = AsyncMock(
+            side_effect=lambda cmd, **k: (
+                ("start" in cmd and _mark_verified(_fresh)) or runs.pop(0)
+            )
+        )
+        with (
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await apt_update() == (True, "Hit:1")
+        assert run.call_args_list[1].args[0][-2:] == [
+            "start",
+            "BlocksScreen-clock.service",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_apt_network_failure_never_heals(self, _fresh):
+        run = AsyncMock(return_value=(False, "E: Failed to fetch: Temporary failure"))
+        with (
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert (await apt_update())[0] is False
+        assert run.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_non_clock_failure_never_heals(self):
+        run = AsyncMock()
+        with (
+            patch(
+                "updater.executor._git_fetch_once",
+                AsyncMock(return_value=(False, "timeout")),
+            ),
+            patch("updater.executor._run", run),
+        ):
+            assert await git_fetch(Path("/x")) == (False, "timeout")
+        run.assert_not_called()
 
 
 class TestGitFetch:
@@ -1419,6 +1676,16 @@ class TestStaleIndexLockHandling:
         os.utime(lock_path, (st.st_atime, time.time() - 30))
         assert _clear_stale_git_index_lock(tmp_path) is True
         assert not lock_path.exists()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("skew", "cleared"), [(3600, True), (5, False)])
+    async def test_future_lock_after_clock_step_back(self, tmp_path, skew, cleared):
+        lock_path = tmp_path / ".git" / "index.lock"
+        lock_path.parent.mkdir(parents=True)
+        lock_path.touch()
+        os.utime(lock_path, (time.time(), time.time() + skew))
+        assert _clear_stale_git_index_lock(tmp_path) is cleared
+        assert lock_path.exists() is not cleared
 
     @pytest.mark.asyncio
     async def test_clear_stale_git_index_lock_preserves_fresh_lock(self, tmp_path):

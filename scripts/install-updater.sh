@@ -112,6 +112,8 @@ fi
 _emit_svc_rules BlocksScreen-updater.service
 # BlocksScreen MachineControl: host MCU start before a Klipper restart.
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl --no-block start klipper-mcu.service\n' >>"$SUDOERS_TMP"
+# Updater triggers the clock sync after a clock-caused fetch failure.
+printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl start BlocksScreen-clock.service\n' >>"$SUDOERS_TMP"
 # Spoolman enable rules: hooks/Spoolman.sh runs enable --now, args must match exactly.
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable Spoolman.service\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now Spoolman.service\n' >>"$SUDOERS_TMP"
@@ -237,11 +239,26 @@ fi
 if [[ ! -L "$_BOOTSTRAP_DEST" ]]; then
     sudo systemctl link --no-reload "$_BOOTSTRAP_SRC"
 fi
-# Each implicit reload costs ~0.3 s on a Pi: one explicit reload covers the deploy and bootstrap units.
+
+echo_info "Installing BlocksScreen-clock timer ..."
+for _unit in BlocksScreen-clock.service BlocksScreen-clock.timer; do
+    if [[ -f "/etc/systemd/system/$_unit" && ! -L "/etc/systemd/system/$_unit" ]]; then
+        sudo rm "/etc/systemd/system/$_unit"
+    fi
+    if [[ ! -L "/etc/systemd/system/$_unit" ]]; then
+        sudo systemctl link --no-reload "$SCRIPT_PATH/$_unit"
+    fi
+done
+# One reload for all units; each implicit reload costs ~0.3 s on a Pi.
 sudo systemctl daemon-reload
 sudo systemctl enable --now --no-reload BlocksScreen-deploy.path
 echo_ok "BlocksScreen-deploy path unit installed"
 echo_ok "BlocksScreen-bootstrap service installed (symlink)"
+if sudo systemctl enable --now --no-reload BlocksScreen-clock.timer; then
+    echo_ok "BlocksScreen-clock timer installed (symlink)"
+else
+    echo_warn "BlocksScreen-clock timer not enabled; clock heals only via NTP"
+fi
 
 echo_info "Installing post-merge hook ..."
 chmod +x "$SCRIPT_PATH/post-merge"

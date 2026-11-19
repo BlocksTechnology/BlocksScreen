@@ -36,6 +36,8 @@ from updater.executor import (
     classify_apt_error,
     disable_service,
     enable_service,
+    clock_trusted,
+    explain_fetch_error,
     git_checkout,
     git_clone,
     git_fetch,
@@ -69,7 +71,7 @@ from updater.models import DEPLOY_FLAG as _DEPLOY_FLAG
 from updater.models import DEPLOY_LIVE_STATES as _DEPLOY_LIVE_STATES
 from updater.models import DEPLOY_PATH_UNIT as _DEPLOY_PATH_UNIT
 from updater.models import DEPLOY_UNITS as _DEPLOY_UNITS
-from updater.models import ComponentConfig, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
 # name -> pre-update hash; present at boot = revert those repos.
@@ -345,7 +347,7 @@ class UpdateService:
             self._fetch_backoff.pop(name, None)
             self._fetch_errors.pop(name, None)
             return
-        if git_is_network_error(error):
+        if git_is_network_error(error) and not error.startswith(CLOCK_UNSYNCED):
             # Offline is not an update: never re-report it while the breaker skips.
             self._fetch_errors.pop(name, None)
         else:
@@ -401,6 +403,11 @@ class UpdateService:
         """Concurrently check status of all components."""
         results: dict[str, ComponentStatus] = {}
         printing = await klipper_printing()
+        # Checked once per refresh, and only while a clock error is carried.
+        clock_fixed = (
+            any(e.startswith(CLOCK_UNSYNCED) for e in self._fetch_errors.values())
+            and await clock_trusted()
+        )
 
         async def _check_one(c: ComponentConfig) -> None:
             """Fetch and record one component's status into the results dict."""
@@ -416,6 +423,13 @@ class UpdateService:
             else:
                 now = time.monotonic()
                 async with self._git_lock:
+                    if clock_fixed and self._fetch_errors.get(c.name, "").startswith(
+                        CLOCK_UNSYNCED
+                    ):
+                        # Healed: fetch now, not after the backoff, so the update shows.
+                        self._fetch_errors.pop(c.name)
+                        self._fetch_backoff.pop(c.name, None)
+                        self._fetch_times.pop(c.name, None)
                     last = self._fetch_times.get(c.name, float("-inf"))
                     breaker = self._fetch_backoff.get(c.name)
                     skip_fetch = printing or (
@@ -554,13 +568,16 @@ class UpdateService:
         return False
 
     async def _filter_offline_batch(
-        self, batch: list[ComponentConfig], offline: set[str]
+        self, batch: list[ComponentConfig], offline: dict[str, str]
     ) -> bool:
         """Drop offline components from the batch, erroring each individually."""
         ok = True
         for c in [c for c in batch if c.name in offline]:
             batch.remove(c)
-            ok = self._cb_error_done(c.name, "network error during pre-flight fetch")
+            reason = "network error during pre-flight fetch"
+            if offline[c.name].startswith(CLOCK_UNSYNCED):
+                reason = CLOCK_UNSYNCED
+            ok = self._cb_error_done(c.name, reason)
         return ok
 
     async def _filter_nonrepo_batch(self, batch: list[ComponentConfig]) -> bool:
@@ -801,15 +818,15 @@ class UpdateService:
 
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig]
-    ) -> set[str]:
-        """Fetch every existing git component up-front (network phase)."""
+    ) -> dict[str, str]:
+        """Fetch every git component up-front; return the offline ones with their error."""
         # Non-repos excluded: their fetch failure does not mean offline.
         targets = [
             c
             for c in sorted_components
             if c.kind == "git" and c.path is not None and is_git_repo(c.path)
         ]
-        offline: set[str] = set()
+        offline: dict[str, str] = {}
         for c in targets:
             now = time.monotonic()
             async with self._git_lock:
@@ -821,7 +838,7 @@ class UpdateService:
                 async with self._git_lock:
                     self._record_fetch_result(c.name, now, None)
             elif not await git_has_corruption(c.path, hint=err):
-                offline.add(c.name)
+                offline[c.name] = await explain_fetch_error(err)
         if offline:
             self._log.error(
                 "update_all: pre-flight fetch failed for %s - continuing without them",
@@ -2294,6 +2311,8 @@ class UpdateService:
                 self._log.error("%s: fetch failed: %s", component.name, error)
                 # connectivity-only fsck can miss it; pass the fetch error as hint.
                 if not await git_has_corruption(component.path, hint=error):
+                    if (await explain_fetch_error(error)).startswith(CLOCK_UNSYNCED):
+                        return (False, CLOCK_UNSYNCED)
                     return (False, "network")
                 self._log.warning("%s: corrupt repo, repairing", component.name)
                 rok, rmsg = await git_repair(component.path)
@@ -2477,7 +2496,7 @@ class UpdateService:
         if not stage_ok:
             # Pre-checkout failures leave the tree untouched: no revert, no restart.
             if (
-                stage_reason in ("network", "corrupt")
+                stage_reason in ("network", "corrupt", CLOCK_UNSYNCED)
                 or "not found" in stage_reason
                 or "refusing" in stage_reason
             ):

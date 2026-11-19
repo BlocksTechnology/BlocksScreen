@@ -20,6 +20,7 @@ from updater.models import (
     DEPLOY_HOLD_CAP_S,
     DEPLOY_LIVE_STATES,
     DEPLOY_PATH_UNIT,
+    CLOCK_UNSYNCED,
     DEPLOY_UNITS,
     PRINTER_BUSY,
     ComponentStatus,
@@ -196,6 +197,8 @@ class UpdatePage(QtWidgets.QWidget):
 
     def _version_string(self, status: ComponentStatus) -> str:
         if status.error:
+            if status.error.startswith(CLOCK_UNSYNCED):
+                return "clock not synchronized"
             return "status error"
         if status.kind in ("system", "apt"):
             return "updates available"
