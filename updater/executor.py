@@ -499,9 +499,7 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
 # Written by scripts/bs-clock-sync.sh as "<wall s> <boot s>".
 CLOCK_VERIFIED_MARKER = Path("/run/blocksscreen-clock-verified")
 CLOCK_SYNC_UNIT = "BlocksScreen-clock.service"
-# Opt-in during the soak; without it the unit is never started.
-CLOCK_HEAL_ENABLED = Path("/etc/blocksscreen-clock.enabled")
-# Kill switch; overrides the opt-in.
+# Kill switch; the timer's soak opt-in does not gate updater-started runs.
 CLOCK_HEAL_DISABLED = Path("/etc/blocksscreen-clock.disabled")
 # Concurrent fetches share one run; a failed run is retried after this window.
 _CLOCK_HEAL_LOCK = asyncio.Lock()
@@ -542,7 +540,7 @@ async def heal_clock() -> bool:
     async with _CLOCK_HEAL_LOCK:
         if clock_verified():
             return True
-        if CLOCK_HEAL_DISABLED.exists() or not CLOCK_HEAL_ENABLED.exists():
+        if CLOCK_HEAL_DISABLED.exists():
             return False
         if time.monotonic() - _clock_heal["last"] < _CLOCK_HEAL_RETRY_S:
             return False

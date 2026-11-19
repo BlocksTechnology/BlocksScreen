@@ -616,20 +616,18 @@ async def test_ntp_synchronized(run, synced):
 class TestClockHeal:
     @pytest.fixture(autouse=True)
     def _fresh(self, tmp_path):
-        marker, enabled = tmp_path / "verified", tmp_path / "enabled"
-        enabled.touch()
+        marker = tmp_path / "verified"
         with (
             patch("updater.executor.CLOCK_VERIFIED_MARKER", marker),
-            patch("updater.executor.CLOCK_HEAL_ENABLED", enabled),
             patch("updater.executor.CLOCK_HEAL_DISABLED", tmp_path / "disabled"),
             patch.dict("updater.executor._clock_heal", {"last": float("-inf")}),
         ):
             yield marker
 
     @pytest.mark.asyncio
-    async def test_not_opted_in_never_starts_the_unit(self, _fresh, tmp_path):
-        """Without the opt-in file the clock error is reported but nothing runs as root."""
-        (tmp_path / "enabled").unlink()
+    async def test_kill_switch_never_starts_the_unit(self, tmp_path):
+        """With the kill switch the clock error is reported but nothing runs as root."""
+        (tmp_path / "disabled").touch()
         fetch = AsyncMock(return_value=(False, _TLS_ERR))
         run = AsyncMock()
         with (
@@ -640,18 +638,6 @@ class TestClockHeal:
             assert await git_fetch(Path("/x")) == (False, _TLS_ERR)
         run.assert_not_called()
         assert fetch.await_count == 1
-
-    @pytest.mark.asyncio
-    async def test_kill_switch_beats_opt_in(self, tmp_path):
-        """The kill switch stops the updater starting the unit even when opted in."""
-        (tmp_path / "disabled").touch()
-        run = AsyncMock()
-        with (
-            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
-            patch("updater.executor._run", run),
-        ):
-            assert await heal_clock() is False
-        run.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_fetch_retries_after_heal(self, _fresh):
