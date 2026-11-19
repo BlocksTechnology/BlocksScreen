@@ -6,13 +6,15 @@ set -euo pipefail
 MARKER=${BS_CLOCK_MARKER:-/run/blocksscreen-clock-verified}
 # Per-box kill switch; outside the repo so updates keep it.
 DISABLE_FILE=${BS_CLOCK_DISABLE_FILE:-/etc/blocksscreen-clock.disabled}
+# Opt-in while the fallback soaks; without it the run only logs the step it would make.
+ENABLE_FILE=${BS_CLOCK_ENABLE_FILE:-/etc/blocksscreen-clock.enabled}
 # Independent operators; entry form name[=addr:port].
 read -ra SOURCES <<<"${BS_CLOCK_SOURCES:-github.com deb.debian.org www.cloudflare.com www.google.com}"
 CAFILE=${BS_CLOCK_CAFILE:-}
 MOONRAKER=${BS_MOONRAKER_URL:-http://127.0.0.1:7125}
 # Restored forward-only at boot, so a backward step must be saved here too.
 TIMESYNC_CLOCK=${BS_CLOCK_TIMESYNC_FILE:-/var/lib/systemd/timesync/clock}
-# Per source; worst case run = sources x this.
+# Per TLS connection, two per source; worst case run = 2 x sources x this + 5 s.
 TIMEOUT_S=${BS_CLOCK_TIMEOUT:-8}
 MIN_STEP_S=120
 # Agreement window between the two sources.
@@ -81,6 +83,10 @@ if ((${step#-} >= MIN_STEP_S)); then
     floor=${BS_CLOCK_FLOOR:-$(git -c safe.directory="$BS_PATH" -C "$BS_PATH" log -1 --format=%ct 2>/dev/null || echo 0)}
     if ((target < floor)); then
         log "ignoring source date $target: older than BlocksScreen HEAD ($floor)"
+        exit 0
+    fi
+    if [[ ! -e $ENABLE_FILE ]]; then
+        log "shadow mode: would step clock by ${step} s; create $ENABLE_FILE to apply"
         exit 0
     fi
     # Moonraker job history uses wall time.

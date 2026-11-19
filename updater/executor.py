@@ -499,9 +499,13 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
 # Written by scripts/bs-clock-sync.sh once the clock is verified this boot.
 CLOCK_VERIFIED_MARKER = Path("/run/blocksscreen-clock-verified")
 CLOCK_SYNC_UNIT = "BlocksScreen-clock.service"
+# Opt-in while the fallback soaks; without it the updater never starts the unit.
+CLOCK_HEAL_ENABLED = Path("/etc/blocksscreen-clock.enabled")
 # Concurrent fetches share one clock-sync run; a failed run is retried after this window.
 _CLOCK_HEAL_LOCK = asyncio.Lock()
 _CLOCK_HEAL_RETRY_S = 60.0
+# Longer than the unit's TimeoutStartSec, so systemd ends a hung run first.
+CLOCK_HEAL_WAIT_S = 95.0
 _clock_heal = {"last": float("-inf")}
 # gnutls (Debian git) reports a bad certificate date as a generic verify failure.
 _GIT_TLS_SIGNATURES = ("certificate verification failed", "ssl certificate problem")
@@ -525,10 +529,14 @@ async def heal_clock() -> bool:
     async with _CLOCK_HEAL_LOCK:
         if CLOCK_VERIFIED_MARKER.exists():
             return True
+        if not CLOCK_HEAL_ENABLED.exists():
+            return False
         if time.monotonic() - _clock_heal["last"] < _CLOCK_HEAL_RETRY_S:
             return False
         _clock_heal["last"] = time.monotonic()
-        ok, err = await _run([SUDO, SYSTEMCTL, "start", CLOCK_SYNC_UNIT], timeout=60.0)
+        ok, err = await _run(
+            [SUDO, SYSTEMCTL, "start", CLOCK_SYNC_UNIT], timeout=CLOCK_HEAL_WAIT_S
+        )
         if not ok:
             logger.warning("clock sync via %s failed: %s", CLOCK_SYNC_UNIT, err.strip())
         trusted = CLOCK_VERIFIED_MARKER.exists() or await ntp_synchronized()

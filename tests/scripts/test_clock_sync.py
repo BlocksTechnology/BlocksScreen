@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import socket
 import os
+import re
 import shutil
 import ssl
 import subprocess
@@ -16,10 +17,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.x509.oid import NameOID
 
 pytestmark = pytest.mark.skipif(
     shutil.which("openssl") is None, reason="needs the openssl CLI"
@@ -59,46 +56,82 @@ class _DateHandler(BaseHTTPRequestHandler):
         """Keep test output quiet."""
 
 
+_CA_CONF = """\
+[ca]
+default_ca = d
+[d]
+database = {tmp}/index.txt
+serial = {tmp}/serial
+new_certs_dir = {tmp}
+default_md = sha256
+policy = p
+unique_subject = no
+[p]
+commonName = supplied
+[v3_ca]
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,keyCertSign
+[leaf]
+basicConstraints = critical,CA:FALSE
+subjectAltName = {sans}
+"""
+
+
+def _openssl(*args: str | Path) -> None:
+    subprocess.run(["openssl", *map(str, args)], check=True, capture_output=True)
+
+
+def _asn1_time(days: int) -> str:
+    """UTCTime now+days, the -startdate/-enddate form OpenSSL 3.0 accepts."""
+    when = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=days)
+    return when.strftime("%y%m%d%H%M%SZ")
+
+
 def _cert(
-    subject: str,
-    key: ec.EllipticCurvePrivateKey,
-    issuer: tuple[str, ec.EllipticCurvePrivateKey] | None = None,
-    *,
-    days: tuple[int, int] = (-1, 1),
-) -> x509.Certificate:
-    """Build a CA cert (no issuer) or a leaf for _NAMES valid between now+days."""
-    now = dt.datetime.now(dt.timezone.utc)
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, subject)])
-    issuer_name, signer = (subject, key) if issuer is None else issuer
-    builder = (
-        x509.CertificateBuilder()
-        .subject_name(name)
-        .issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, issuer_name)]))
-        .public_key(key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(now + dt.timedelta(days=days[0]))
-        .not_valid_after(now + dt.timedelta(days=days[1]))
-        .add_extension(x509.BasicConstraints(ca=issuer is None, path_length=None), True)
+    tmp: Path, tag: str, subject: str, issuer: str | None, days: tuple[int, int]
+) -> None:
+    """Write tag.key and tag.pem: a self-signed CA (issuer None) or a leaf signed by issuer."""
+    conf = tmp / "ca.cnf"
+    if not conf.exists():
+        sans = ",".join(f"DNS:{n}" for n in _NAMES)
+        conf.write_text(_CA_CONF.format(tmp=tmp, sans=sans))
+        (tmp / "index.txt").touch()
+        (tmp / "serial").write_text("01\n")
+    key, csr = tmp / f"{tag}.key", tmp / f"{tag}.csr"
+    _openssl(
+        "genpkey",
+        "-algorithm",
+        "EC",
+        "-pkeyopt",
+        "ec_paramgen_curve:P-256",
+        "-out",
+        key,
     )
-    if issuer is not None:
-        sans = [x509.DNSName(n) for n in _NAMES]
-        builder = builder.add_extension(x509.SubjectAlternativeName(sans), False)
-    return builder.sign(signer, hashes.SHA256())
+    _openssl("req", "-new", "-key", key, "-subj", f"/CN={subject}", "-out", csr)
+    sign = (
+        ["-selfsign", "-keyfile", key, "-extensions", "v3_ca"]
+        if issuer is None
+        else [
+            "-cert",
+            tmp / f"{issuer}.pem",
+            "-keyfile",
+            tmp / f"{issuer}.key",
+            "-extensions",
+            "leaf",
+        ]
+    )
+    _openssl(
+        "ca", "-batch", "-notext", "-config", conf, "-in", csr,
+        "-out", tmp / f"{tag}.pem", "-startdate", _asn1_time(days[0]),
+        "-enddate", _asn1_time(days[1]), *sign,
+    )  # fmt: skip
 
 
-def _serve(tmp: Path, tag: str, cert: x509.Certificate, key) -> int:
+def _serve(tmp: Path, tag: str) -> int:
     """Start a TLS server for one cert in a daemon thread; return its port."""
-    pem = tmp / f"{tag}.pem"
-    pem.write_bytes(
-        cert.public_bytes(serialization.Encoding.PEM)
-        + key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        )
-    )
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ctx.load_cert_chain(pem)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    ctx.load_cert_chain(tmp / f"{tag}.pem", tmp / f"{tag}.key")
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), _DateHandler)
     httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -109,21 +142,17 @@ def _serve(tmp: Path, tag: str, cert: x509.Certificate, key) -> int:
 def tls(tmp_path_factory) -> dict[str, object]:
     """CA file plus one server per cert kind: ok, expired, notyet (clock behind), rogue CA."""
     tmp = tmp_path_factory.mktemp("tls")
-    ca_key, rogue_key = (
-        ec.generate_private_key(ec.SECP256R1()),
-        ec.generate_private_key(ec.SECP256R1()),
-    )
-    ca = _cert("Test CA", ca_key, days=(-3000, 3000))
-    (tmp / "ca.pem").write_bytes(ca.public_bytes(serialization.Encoding.PEM))
+    _cert(tmp, "ca", "Test CA", None, (-3000, 3000))
+    _cert(tmp, "rogueca", "Rogue CA", None, (-3000, 3000))
     ports = {}
     for kind, issuer, days in (
-        ("ok", ("Test CA", ca_key), (-1000, 1000)),
-        ("expired", ("Test CA", ca_key), (-30, -1)),
-        ("notyet", ("Test CA", ca_key), (1, 30)),
-        ("rogue", ("Rogue CA", rogue_key), (-1000, 1000)),
+        ("ok", "ca", (-1000, 1000)),
+        ("expired", "ca", (-30, -1)),
+        ("notyet", "ca", (1, 30)),
+        ("rogue", "rogueca", (-1000, 1000)),
     ):
-        key = ec.generate_private_key(ec.SECP256R1())
-        ports[kind] = _serve(tmp, kind, _cert(_NAMES[0], key, issuer, days=days), key)
+        _cert(tmp, kind, _NAMES[0], issuer, days)
+        ports[kind] = _serve(tmp, kind)
     # Accepts TCP, never answers the TLS hello.
     stall = socket.create_server(("127.0.0.1", 0))
     ports["stall"] = stall.getsockname()[1]
@@ -144,6 +173,7 @@ def _run(
     print_state: str | None = "standby",
     verified: bool = False,
     disabled: bool = False,
+    enabled: bool = True,
 ) -> tuple[str, str, bool, bool]:
     """Run the script; return (stdout, date -s args, marker, touched)."""
     shim = tmp_path / "bin"
@@ -153,6 +183,8 @@ def _run(
         marker.touch()
     if disabled:
         (tmp_path / "disabled").touch()
+    if enabled:
+        (tmp_path / "enabled").touch()
     clock.touch()
     os.utime(clock, (0, 0))
     entries = []
@@ -194,6 +226,7 @@ def _run(
         "PATH": f"{shim}:{os.environ.get('PATH', '')}",
         "BS_CLOCK_MARKER": str(marker),
         "BS_CLOCK_DISABLE_FILE": str(tmp_path / "disabled"),
+        "BS_CLOCK_ENABLE_FILE": str(tmp_path / "enabled"),
         "BS_CLOCK_SOURCES": " ".join(entries),
         "BS_CLOCK_CAFILE": tls["cafile"],
         "BS_CLOCK_TIMESYNC_FILE": str(clock),
@@ -308,6 +341,20 @@ def test_clock_stepped_when_two_agree(
     assert marker and touched
 
 
+def test_shadow_mode_logs_but_never_steps(tmp_path: Path, tls) -> None:
+    """Without the opt-in file a needed step is only logged; the clock stays unverified."""
+    out, set_args, marker, touched = _run(tmp_path, tls, [_AHEAD] * 2, enabled=False)
+    assert set_args == "" and not touched and not marker
+    assert "shadow mode: would step" in out
+
+
+def test_shadow_mode_verifies_a_good_clock(tmp_path: Path, tls) -> None:
+    """A clock already within the step threshold is verified even in shadow mode."""
+    sources = [("ok", _http_date(30)), ("ok", _http_date(31))]
+    _, set_args, marker, _ = _run(tmp_path, tls, sources, enabled=False)
+    assert set_args == "" and marker
+
+
 def test_unverified_peer_never_gets_the_request(tmp_path: Path, tls) -> None:
     """A rogue or wrong-host TLS peer is dropped at the handshake, before the HEAD is sent."""
     _run(tmp_path, tls, [("rogue", _http_date(_DAY)), ("wronghost", _http_date(_DAY))])
@@ -351,3 +398,16 @@ def test_clock_units_are_wired() -> None:
     for unit in ("BlocksScreen-clock.service", "BlocksScreen-clock.timer"):
         assert f"scripts/{unit}" in hook
         assert "scripts/" + unit.replace(".", "\\.") in post_merge
+
+
+def test_timeouts_nest() -> None:
+    """Script worst case fits the unit timeout, which fits the updater's wait."""
+    from updater.executor import CLOCK_HEAL_WAIT_S
+
+    script = _SCRIPT.read_text()
+    per_conn = int(re.search(r"TIMEOUT_S=\$\{BS_CLOCK_TIMEOUT:-(\d+)\}", script)[1])
+    sources = re.search(r'BS_CLOCK_SOURCES:-([^}"]+)\}', script)[1].split()
+    unit = (_ROOT / "scripts" / "BlocksScreen-clock.service").read_text()
+    unit_s = int(re.search(r"^TimeoutStartSec=(\d+)$", unit, re.M)[1])
+    worst_s = 2 * len(sources) * per_conn + 5
+    assert worst_s < unit_s < CLOCK_HEAL_WAIT_S
