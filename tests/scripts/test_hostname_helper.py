@@ -124,12 +124,20 @@ def test_identity_keygen_failure_keeps_keys_and_retries(
     assert not (cloned_root / _MARKER).exists()
 
 
-def test_unit_regenerates_only_at_boot() -> None:
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [("initializing", 0), ("starting", 1), ("running", 1), ("degraded", 1)],
+)
+def test_identity_only_before_basic_target(
+    tmp_path: Path, state: str, expected: int
+) -> None:
+    systemctl = tmp_path / "systemctl"
+    systemctl.write_text(f"#!/bin/sh\necho {state}\nexit 1\n")
+    systemctl.chmod(0o755)
     res = subprocess.run(
-        ["bash", "-c", f'source "{_HELPER}"; service_unit'],
+        ["bash", "-c", f'source "{_HELPER}"; early_boot'],
         capture_output=True,
-        text=True,
         timeout=10,
-        check=True,
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
     )
-    assert re.search(r"^ExecStart=\S+ --boot$", res.stdout, re.M)
+    assert res.returncode == expected

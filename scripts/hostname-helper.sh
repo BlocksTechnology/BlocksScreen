@@ -1,5 +1,5 @@
 #!/bin/bash
-# Give each board a hostname from its CPU serial and, at boot, its own machine identity.
+# Give each board a hostname from its CPU serial and, early in boot, its own machine identity.
 # Pass --install-only to refresh the unit without renaming the running system.
 
 set -eu
@@ -26,9 +26,7 @@ SCRIPT_PATH="$(readlink -f "$0")"
 BRAND_PREFIX="BLOCKS"
 MODEL="RF50"
 INSTALL_ONLY=false
-BOOT=false
 [ "${1:-}" = "--install-only" ] && INSTALL_ONLY=true
-[ "${1:-}" = "--boot" ] && BOOT=true
 
 # The unit already runs as root and sudo may not resolve this early in boot, so only escalate when needed.
 as_root() {
@@ -51,7 +49,7 @@ Wants=network-pre.target
 
 [Service]
 Type=oneshot
-ExecStart=$SCRIPT_PATH --boot
+ExecStart=$SCRIPT_PATH
 RemainAfterExit=yes
 
 [Install]
@@ -134,6 +132,11 @@ new_ssh_host_keys() {
     as_root rm -rf "$stage"
 }
 
+# Before basic.target nothing has read the identity; unlike a unit flag, this also works under old unit files.
+early_boot() {
+    [ "$(systemctl is-system-running 2>/dev/null || true)" = "initializing" ]
+}
+
 ensure_identity() {
     local serial="$1" root="${2:-}" marker
     marker="$root/var/lib/blocksscreen/identity-serial"
@@ -165,8 +168,7 @@ main() {
     esac
 
     set_hostname "$BRAND_PREFIX-$MODEL-$SERIAL"
-    # Only at boot, before NetworkManager, dbus and sshd read the identity.
-    $BOOT && ensure_identity "$SERIAL"
+    early_boot && ensure_identity "$SERIAL"
     return 0
 }
 
