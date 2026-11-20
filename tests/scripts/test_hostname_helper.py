@@ -58,6 +58,8 @@ def test_correct_file_is_left_alone(tmp_path: Path) -> None:
 _MACHINE_ID = Path("etc/machine-id")
 _DBUS_MACHINE_ID = Path("var/lib/dbus/machine-id")
 _HOST_KEY = Path("etc/ssh/ssh_host_ed25519_key.pub")
+_STALE_KEY = Path("etc/ssh/ssh_host_dsa_key")
+_NM_SECRET = Path("var/lib/NetworkManager/secret_key")
 _MARKER = Path("var/lib/blocksscreen/identity-serial")
 _IMAGE_ID = "0" * 31 + "1\n"
 _IMAGE_KEY = "ssh-ed25519 IMAGE-KEY root@image\n"
@@ -73,6 +75,7 @@ def cloned_root(tmp_path: Path) -> Path:
         (_MACHINE_ID, _IMAGE_ID),
         (_DBUS_MACHINE_ID, _IMAGE_ID),
         (_HOST_KEY, _IMAGE_KEY),
+        (_STALE_KEY, _IMAGE_KEY),
     ):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(content)
@@ -101,6 +104,7 @@ def test_identity_regenerates_once_per_serial(cloned_root: Path) -> None:
     host_key = (cloned_root / _HOST_KEY).read_text()
     assert host_key.startswith("ssh-ed25519 ") and host_key != _IMAGE_KEY
     assert not (cloned_root / "etc/ssh/.hostkeys-new").exists()
+    assert not (cloned_root / _STALE_KEY).exists()
     assert (cloned_root / _MARKER).read_text() == f"{_SERIAL}\n"
 
     _ensure_identity(cloned_root, _SERIAL)
@@ -119,9 +123,24 @@ def test_identity_keygen_failure_keeps_keys_and_retries(
     keygen = stubs / "ssh-keygen"
     keygen.write_text("#!/bin/sh\nexit 1\n")
     keygen.chmod(0o755)
-    _ensure_identity(cloned_root, _SERIAL, path=f"{stubs}:{os.environ['PATH']}")
-    assert (cloned_root / _HOST_KEY).read_text() == _IMAGE_KEY
-    assert not (cloned_root / _MARKER).exists()
+    for _ in range(2):
+        _ensure_identity(cloned_root, _SERIAL, path=f"{stubs}:{os.environ['PATH']}")
+        assert (cloned_root / _MACHINE_ID).read_text() == _IMAGE_ID
+        assert (cloned_root / _HOST_KEY).read_text() == _IMAGE_KEY
+        assert not (cloned_root / _MARKER).exists()
+
+
+@pytest.mark.parametrize(
+    ("key", "kept"), [("nm-v2:" + "a" * 32, True), ("a" * 32, False)], ids=["v2", "v1"]
+)
+def test_identity_drops_only_v1_nm_secret_key(
+    cloned_root: Path, key: str, kept: bool
+) -> None:
+    secret = cloned_root / _NM_SECRET
+    secret.parent.mkdir(parents=True)
+    secret.write_text(key)
+    _ensure_identity(cloned_root, _SERIAL)
+    assert secret.exists() == kept
 
 
 @pytest.mark.parametrize(

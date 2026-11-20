@@ -118,18 +118,33 @@ new_machine_id() {
     fi
 }
 
-new_ssh_host_keys() {
-    local root="$1" stage="$1/etc/ssh/.hostkeys-new"
-    command -v ssh-keygen >/dev/null || return 0
+stage_ssh_host_keys() {
+    local stage="$1"
     as_root rm -rf "$stage"
     if ! as_root mkdir -p "$stage/etc/ssh" || ! as_root ssh-keygen -A -f "$stage" >/dev/null; then
         as_root rm -rf "$stage"
-        echo_error "ssh-keygen failed, keeping the current SSH host keys"
+        echo_error "ssh-keygen failed, keeping the current identity"
         return 1
     fi
+}
+
+install_ssh_host_keys() {
+    local root="$1" stage="$2" key
+    # Key types ssh-keygen -A no longer makes would stay shared with every other board.
+    for key in "$root"/etc/ssh/ssh_host_*; do
+        [ -e "$stage/etc/ssh/${key##*/}" ] || as_root rm -f "$key" || return 1
+    done
     # Rename over the old keys so sshd never finds none.
     as_root mv -f "$stage"/etc/ssh/ssh_host_* "$root/etc/ssh/" || return 1
     as_root rm -rf "$stage"
+}
+
+# Only v2 keys ("nm-v2:") are hashed with the machine-id; NM writes a fresh v2 key when none exists.
+drop_v1_nm_secret_key() {
+    local key="$1/var/lib/NetworkManager/secret_key"
+    as_root test -f "$key" || return 0
+    [ "$(as_root head -c 6 "$key")" = "nm-v2:" ] && return 0
+    as_root rm -f "$key"
 }
 
 # Before basic.target nothing has read the identity; unlike a unit flag, this also works under old unit files.
@@ -138,18 +153,32 @@ early_boot() {
 }
 
 ensure_identity() {
-    local serial="$1" root="${2:-}" marker
+    local serial="$1" root="${2:-}" marker stage keys=false
     marker="$root/var/lib/blocksscreen/identity-serial"
+    stage="$root/etc/ssh/.hostkeys-new"
     # Cloned images share machine-id (NetworkManager's IPv6 address seed) and SSH host keys.
     if [ "$(cat "$marker" 2>/dev/null || true)" = "$serial" ]; then
         return 0
     fi
     echo_info "First boot on this board, regenerating machine-id and SSH host keys..."
-    # Without the marker, the next boot retries.
-    new_machine_id "$root" || return 0
-    new_ssh_host_keys "$root" || return 0
+    # Keys are staged first: a failure leaves the old identity whole, and without the marker the next boot retries.
+    if command -v ssh-keygen >/dev/null; then
+        stage_ssh_host_keys "$stage" || return 0
+        keys=true
+    fi
+    if ! new_machine_id "$root"; then
+        as_root rm -rf "$stage"
+        return 0
+    fi
+    if $keys; then
+        install_ssh_host_keys "$root" "$stage" || return 0
+    fi
+    drop_v1_nm_secret_key "$root" || return 0
+    # Flush the new identity before the marker that claims it.
+    sync
     as_root mkdir -p "$(dirname "$marker")"
     printf '%s\n' "$serial" | as_root tee "$marker" >/dev/null
+    sync
     echo_ok "Machine identity regenerated"
 }
 
