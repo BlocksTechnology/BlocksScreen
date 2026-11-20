@@ -1,5 +1,5 @@
 #!/bin/bash
-# Give each board a hostname derived from its CPU serial, before the network comes up.
+# Give each board a hostname from its CPU serial and, at boot, its own machine identity.
 # Pass --install-only to refresh the unit without renaming the running system.
 
 set -eu
@@ -26,7 +26,9 @@ SCRIPT_PATH="$(readlink -f "$0")"
 BRAND_PREFIX="BLOCKS"
 MODEL="RF50"
 INSTALL_ONLY=false
+BOOT=false
 [ "${1:-}" = "--install-only" ] && INSTALL_ONLY=true
+[ "${1:-}" = "--boot" ] && BOOT=true
 
 # The unit already runs as root and sudo may not resolve this early in boot, so only escalate when needed.
 as_root() {
@@ -49,7 +51,7 @@ Wants=network-pre.target
 
 [Service]
 Type=oneshot
-ExecStart=$SCRIPT_PATH
+ExecStart=$SCRIPT_PATH --boot
 RemainAfterExit=yes
 
 [Install]
@@ -99,6 +101,55 @@ set_hostname() {
     ensure_hosts_entry "$want"
 }
 
+new_machine_id() {
+    local root="$1" id tmp
+    id="$(tr -d '-' </proc/sys/kernel/random/uuid)"
+    if ! [[ "$id" =~ ^[0-9a-f]{32}$ ]]; then
+        echo_error "Could not generate a machine-id"
+        return 1
+    fi
+    # Atomic replace: an empty or missing machine-id makes systemd re-run first-boot presets.
+    tmp="$root/etc/.machine-id.new"
+    # Called from `||`, which disables set -e, so each step checks itself.
+    printf '%s\n' "$id" | as_root tee "$tmp" >/dev/null || return 1
+    as_root chmod 0444 "$tmp" || return 1
+    as_root mv -f "$tmp" "$root/etc/machine-id" || return 1
+    # A regular-file copy would keep the old id for dbus.
+    if [ -d "$root/var/lib/dbus" ]; then
+        as_root ln -sfn /etc/machine-id "$root/var/lib/dbus/machine-id" || return 1
+    fi
+}
+
+new_ssh_host_keys() {
+    local root="$1" stage="$1/etc/ssh/.hostkeys-new"
+    command -v ssh-keygen >/dev/null || return 0
+    as_root rm -rf "$stage"
+    if ! as_root mkdir -p "$stage/etc/ssh" || ! as_root ssh-keygen -A -f "$stage" >/dev/null; then
+        as_root rm -rf "$stage"
+        echo_error "ssh-keygen failed, keeping the current SSH host keys"
+        return 1
+    fi
+    # Rename over the old keys so sshd never finds none.
+    as_root mv -f "$stage"/etc/ssh/ssh_host_* "$root/etc/ssh/" || return 1
+    as_root rm -rf "$stage"
+}
+
+ensure_identity() {
+    local serial="$1" root="${2:-}" marker
+    marker="$root/var/lib/blocksscreen/identity-serial"
+    # Cloned images share machine-id (NetworkManager's IPv6 address seed) and SSH host keys.
+    if [ "$(cat "$marker" 2>/dev/null || true)" = "$serial" ]; then
+        return 0
+    fi
+    echo_info "First boot on this board, regenerating machine-id and SSH host keys..."
+    # Without the marker, the next boot retries.
+    new_machine_id "$root" || return 0
+    new_ssh_host_keys "$root" || return 0
+    as_root mkdir -p "$(dirname "$marker")"
+    printf '%s\n' "$serial" | as_root tee "$marker" >/dev/null
+    echo_ok "Machine identity regenerated"
+}
+
 main() {
     echo_info "Script running on $SCRIPT_PATH..."
     install_service
@@ -114,6 +165,9 @@ main() {
     esac
 
     set_hostname "$BRAND_PREFIX-$MODEL-$SERIAL"
+    # Only at boot, before NetworkManager, dbus and sshd read the identity.
+    $BOOT && ensure_identity "$SERIAL"
+    return 0
 }
 
 # Sourcing (tests) only defines the functions.

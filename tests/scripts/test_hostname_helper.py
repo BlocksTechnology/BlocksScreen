@@ -1,7 +1,10 @@
-"""Guard: hostname-helper.sh leaves exactly one 127.0.1.1 line in /etc/hosts."""
+"""Guard: hostname-helper.sh keeps /etc/hosts tidy and regenerates cloned identity."""
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -50,3 +53,75 @@ def test_correct_file_is_left_alone(tmp_path: Path) -> None:
     before = hosts.stat().st_mtime_ns
     assert "Rewriting" not in _ensure(hosts)
     assert hosts.stat().st_mtime_ns == before
+
+
+_CLONED_ID = "9c0eb5db83f14867bd94d9388132e18f\n"
+_OLD_KEY = "ssh-ed25519 AAAAold root@image\n"
+
+
+def _cloned_root(tmp_path: Path) -> Path:
+    """Build a fake root carrying the shared image identity."""
+    root = tmp_path / "root"
+    (root / "etc" / "ssh").mkdir(parents=True)
+    (root / "var" / "lib" / "dbus").mkdir(parents=True)
+    (root / "etc" / "machine-id").write_text(_CLONED_ID)
+    (root / "var" / "lib" / "dbus" / "machine-id").write_text(_CLONED_ID)
+    (root / "etc" / "ssh" / "ssh_host_ed25519_key.pub").write_text(_OLD_KEY)
+    return root
+
+
+def _identity(root: Path, serial: str, path: str | None = None) -> None:
+    """Source the helper with root writes stubbed out and run ensure_identity."""
+    script = f'source "{_HELPER}"; as_root() {{ "$@"; }}; ensure_identity "$1" "$2"'
+    env = {**os.environ, "PATH": path or os.environ["PATH"]}
+    subprocess.run(
+        ["bash", "-c", script, "bash", serial, str(root)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+        env=env,
+    )
+
+
+@pytest.mark.skipif(shutil.which("ssh-keygen") is None, reason="needs ssh-keygen")
+def test_identity_regenerates_once_per_serial(tmp_path: Path) -> None:
+    root = _cloned_root(tmp_path)
+    machine_id = root / "etc" / "machine-id"
+    _identity(root, "aaaa")
+    first = machine_id.read_text()
+    assert re.fullmatch(r"[0-9a-f]{32}\n", first) and first != _CLONED_ID
+    assert (
+        os.readlink(root / "var" / "lib" / "dbus" / "machine-id") == "/etc/machine-id"
+    )
+    pub = (root / "etc" / "ssh" / "ssh_host_ed25519_key.pub").read_text()
+    assert pub.startswith("ssh-ed25519 ") and pub != _OLD_KEY
+    assert not (root / "etc" / "ssh" / ".hostkeys-new").exists()
+    _identity(root, "aaaa")
+    assert machine_id.read_text() == first
+    # Same SD card in another board.
+    _identity(root, "bbbb")
+    assert machine_id.read_text() != first
+
+
+def test_identity_keygen_failure_keeps_keys_and_retries(tmp_path: Path) -> None:
+    root = _cloned_root(tmp_path)
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    keygen = stubs / "ssh-keygen"
+    keygen.write_text("#!/bin/sh\nexit 1\n")
+    keygen.chmod(0o755)
+    _identity(root, "aaaa", path=f"{stubs}:{os.environ['PATH']}")
+    assert (root / "etc" / "ssh" / "ssh_host_ed25519_key.pub").read_text() == _OLD_KEY
+    assert not (root / "var" / "lib" / "blocksscreen" / "identity-serial").exists()
+
+
+def test_unit_regenerates_only_at_boot() -> None:
+    res = subprocess.run(
+        ["bash", "-c", f'source "{_HELPER}"; service_unit'],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    assert re.search(r"^ExecStart=\S+ --boot$", res.stdout, re.M)
