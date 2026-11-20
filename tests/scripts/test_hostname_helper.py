@@ -60,7 +60,8 @@ _DBUS_MACHINE_ID = Path("var/lib/dbus/machine-id")
 _HOST_KEY = Path("etc/ssh/ssh_host_ed25519_key.pub")
 _STALE_KEY = Path("etc/ssh/ssh_host_dsa_key")
 _NM_SECRET = Path("var/lib/NetworkManager/secret_key")
-_MARKER = Path("var/lib/blocksscreen/identity-serial")
+_ID_MARKER = Path("var/lib/blocksscreen/identity-serial")
+_KEYS_MARKER = Path("var/lib/blocksscreen/hostkeys-serial")
 _IMAGE_ID = "0" * 31 + "1\n"
 _IMAGE_KEY = "ssh-ed25519 IMAGE-KEY root@image\n"
 _SERIAL = "1000000000000001"
@@ -95,7 +96,12 @@ def _ensure_identity(root: Path, serial: str, path: str | None = None) -> None:
     )
 
 
-@pytest.mark.skipif(shutil.which("ssh-keygen") is None, reason="needs ssh-keygen")
+_NEEDS_KEYGEN = pytest.mark.skipif(
+    shutil.which("ssh-keygen") is None, reason="needs ssh-keygen"
+)
+
+
+@_NEEDS_KEYGEN
 def test_identity_regenerates_once_per_serial(cloned_root: Path) -> None:
     _ensure_identity(cloned_root, _SERIAL)
     machine_id = (cloned_root / _MACHINE_ID).read_text()
@@ -105,7 +111,8 @@ def test_identity_regenerates_once_per_serial(cloned_root: Path) -> None:
     assert host_key.startswith("ssh-ed25519 ") and host_key != _IMAGE_KEY
     assert not (cloned_root / "etc/ssh/.hostkeys-new").exists()
     assert not (cloned_root / _STALE_KEY).exists()
-    assert (cloned_root / _MARKER).read_text() == f"{_SERIAL}\n"
+    assert (cloned_root / _ID_MARKER).read_text() == f"{_SERIAL}\n"
+    assert (cloned_root / _KEYS_MARKER).read_text() == f"{_SERIAL}\n"
 
     _ensure_identity(cloned_root, _SERIAL)
     assert (cloned_root / _MACHINE_ID).read_text() == machine_id
@@ -115,7 +122,8 @@ def test_identity_regenerates_once_per_serial(cloned_root: Path) -> None:
     assert (cloned_root / _MACHINE_ID).read_text() != machine_id
 
 
-def test_identity_keygen_failure_keeps_keys_and_retries(
+@_NEEDS_KEYGEN
+def test_identity_keygen_failure_retries_only_the_keys(
     cloned_root: Path, tmp_path: Path
 ) -> None:
     stubs = tmp_path / "bin"
@@ -123,22 +131,32 @@ def test_identity_keygen_failure_keeps_keys_and_retries(
     keygen = stubs / "ssh-keygen"
     keygen.write_text("#!/bin/sh\nexit 1\n")
     keygen.chmod(0o755)
-    for _ in range(2):
-        _ensure_identity(cloned_root, _SERIAL, path=f"{stubs}:{os.environ['PATH']}")
-        assert (cloned_root / _MACHINE_ID).read_text() == _IMAGE_ID
-        assert (cloned_root / _HOST_KEY).read_text() == _IMAGE_KEY
-        assert not (cloned_root / _MARKER).exists()
+    failing = f"{stubs}:{os.environ['PATH']}"
+    _ensure_identity(cloned_root, _SERIAL, path=failing)
+    machine_id = (cloned_root / _MACHINE_ID).read_text()
+    assert machine_id != _IMAGE_ID
+
+    _ensure_identity(cloned_root, _SERIAL, path=failing)
+    assert (cloned_root / _MACHINE_ID).read_text() == machine_id
+    assert (cloned_root / _HOST_KEY).read_text() == _IMAGE_KEY
+    assert not (cloned_root / _KEYS_MARKER).exists()
+
+    _ensure_identity(cloned_root, _SERIAL)
+    assert (cloned_root / _MACHINE_ID).read_text() == machine_id
+    assert (cloned_root / _HOST_KEY).read_text() != _IMAGE_KEY
 
 
 @pytest.mark.parametrize(
-    ("key", "kept"), [("nm-v2:" + "a" * 32, True), ("a" * 32, False)], ids=["v2", "v1"]
+    ("key", "kept"),
+    [(b"nm-v2:" + b"\xa5" * 32, True), (b"\0\xa5" * 16, False)],
+    ids=["v2", "v1-binary"],
 )
 def test_identity_drops_only_v1_nm_secret_key(
-    cloned_root: Path, key: str, kept: bool
+    cloned_root: Path, key: bytes, kept: bool
 ) -> None:
     secret = cloned_root / _NM_SECRET
     secret.parent.mkdir(parents=True)
-    secret.write_text(key)
+    secret.write_bytes(key)
     _ensure_identity(cloned_root, _SERIAL)
     assert secret.exists() == kept
 
