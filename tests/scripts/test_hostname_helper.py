@@ -55,65 +55,73 @@ def test_correct_file_is_left_alone(tmp_path: Path) -> None:
     assert hosts.stat().st_mtime_ns == before
 
 
-_CLONED_ID = "9c0eb5db83f14867bd94d9388132e18f\n"
-_OLD_KEY = "ssh-ed25519 AAAAold root@image\n"
+_MACHINE_ID = Path("etc/machine-id")
+_DBUS_MACHINE_ID = Path("var/lib/dbus/machine-id")
+_HOST_KEY = Path("etc/ssh/ssh_host_ed25519_key.pub")
+_MARKER = Path("var/lib/blocksscreen/identity-serial")
+_IMAGE_ID = "0" * 31 + "1\n"
+_IMAGE_KEY = "ssh-ed25519 IMAGE-KEY root@image\n"
+_SERIAL = "1000000000000001"
+_OTHER_SERIAL = "1000000000000002"
 
 
-def _cloned_root(tmp_path: Path) -> Path:
-    """Build a fake root carrying the shared image identity."""
+@pytest.fixture
+def cloned_root(tmp_path: Path) -> Path:
+    """Fake root filesystem carrying the identity shared by a cloned image."""
     root = tmp_path / "root"
-    (root / "etc" / "ssh").mkdir(parents=True)
-    (root / "var" / "lib" / "dbus").mkdir(parents=True)
-    (root / "etc" / "machine-id").write_text(_CLONED_ID)
-    (root / "var" / "lib" / "dbus" / "machine-id").write_text(_CLONED_ID)
-    (root / "etc" / "ssh" / "ssh_host_ed25519_key.pub").write_text(_OLD_KEY)
+    for rel, content in (
+        (_MACHINE_ID, _IMAGE_ID),
+        (_DBUS_MACHINE_ID, _IMAGE_ID),
+        (_HOST_KEY, _IMAGE_KEY),
+    ):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(content)
     return root
 
 
-def _identity(root: Path, serial: str, path: str | None = None) -> None:
+def _ensure_identity(root: Path, serial: str, path: str | None = None) -> None:
     """Source the helper with root writes stubbed out and run ensure_identity."""
     script = f'source "{_HELPER}"; as_root() {{ "$@"; }}; ensure_identity "$1" "$2"'
-    env = {**os.environ, "PATH": path or os.environ["PATH"]}
     subprocess.run(
         ["bash", "-c", script, "bash", serial, str(root)],
         capture_output=True,
         text=True,
         timeout=60,
         check=True,
-        env=env,
+        env={**os.environ, "PATH": path or os.environ["PATH"]},
     )
 
 
 @pytest.mark.skipif(shutil.which("ssh-keygen") is None, reason="needs ssh-keygen")
-def test_identity_regenerates_once_per_serial(tmp_path: Path) -> None:
-    root = _cloned_root(tmp_path)
-    machine_id = root / "etc" / "machine-id"
-    _identity(root, "aaaa")
-    first = machine_id.read_text()
-    assert re.fullmatch(r"[0-9a-f]{32}\n", first) and first != _CLONED_ID
-    assert (
-        os.readlink(root / "var" / "lib" / "dbus" / "machine-id") == "/etc/machine-id"
-    )
-    pub = (root / "etc" / "ssh" / "ssh_host_ed25519_key.pub").read_text()
-    assert pub.startswith("ssh-ed25519 ") and pub != _OLD_KEY
-    assert not (root / "etc" / "ssh" / ".hostkeys-new").exists()
-    _identity(root, "aaaa")
-    assert machine_id.read_text() == first
-    # Same SD card in another board.
-    _identity(root, "bbbb")
-    assert machine_id.read_text() != first
+def test_identity_regenerates_once_per_serial(cloned_root: Path) -> None:
+    _ensure_identity(cloned_root, _SERIAL)
+    machine_id = (cloned_root / _MACHINE_ID).read_text()
+    assert re.fullmatch(r"[0-9a-f]{32}\n", machine_id) and machine_id != _IMAGE_ID
+    assert os.readlink(cloned_root / _DBUS_MACHINE_ID) == "/etc/machine-id"
+    host_key = (cloned_root / _HOST_KEY).read_text()
+    assert host_key.startswith("ssh-ed25519 ") and host_key != _IMAGE_KEY
+    assert not (cloned_root / "etc/ssh/.hostkeys-new").exists()
+    assert (cloned_root / _MARKER).read_text() == f"{_SERIAL}\n"
+
+    _ensure_identity(cloned_root, _SERIAL)
+    assert (cloned_root / _MACHINE_ID).read_text() == machine_id
+
+    # Same SD card moved to another board.
+    _ensure_identity(cloned_root, _OTHER_SERIAL)
+    assert (cloned_root / _MACHINE_ID).read_text() != machine_id
 
 
-def test_identity_keygen_failure_keeps_keys_and_retries(tmp_path: Path) -> None:
-    root = _cloned_root(tmp_path)
+def test_identity_keygen_failure_keeps_keys_and_retries(
+    cloned_root: Path, tmp_path: Path
+) -> None:
     stubs = tmp_path / "bin"
     stubs.mkdir()
     keygen = stubs / "ssh-keygen"
     keygen.write_text("#!/bin/sh\nexit 1\n")
     keygen.chmod(0o755)
-    _identity(root, "aaaa", path=f"{stubs}:{os.environ['PATH']}")
-    assert (root / "etc" / "ssh" / "ssh_host_ed25519_key.pub").read_text() == _OLD_KEY
-    assert not (root / "var" / "lib" / "blocksscreen" / "identity-serial").exists()
+    _ensure_identity(cloned_root, _SERIAL, path=f"{stubs}:{os.environ['PATH']}")
+    assert (cloned_root / _HOST_KEY).read_text() == _IMAGE_KEY
+    assert not (cloned_root / _MARKER).exists()
 
 
 def test_unit_regenerates_only_at_boot() -> None:
