@@ -1,7 +1,10 @@
-"""Guard: hostname-helper.sh leaves exactly one 127.0.1.1 line in /etc/hosts."""
+"""Guard: hostname-helper.sh keeps /etc/hosts tidy and regenerates cloned identity."""
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -50,3 +53,128 @@ def test_correct_file_is_left_alone(tmp_path: Path) -> None:
     before = hosts.stat().st_mtime_ns
     assert "Rewriting" not in _ensure(hosts)
     assert hosts.stat().st_mtime_ns == before
+
+
+_MACHINE_ID = Path("etc/machine-id")
+_DBUS_MACHINE_ID = Path("var/lib/dbus/machine-id")
+_HOST_KEY = Path("etc/ssh/ssh_host_ed25519_key.pub")
+_STALE_KEY = Path("etc/ssh/ssh_host_dsa_key")
+_NM_SECRET = Path("var/lib/NetworkManager/secret_key")
+_ID_MARKER = Path("var/lib/blocksscreen/identity-serial")
+_KEYS_MARKER = Path("var/lib/blocksscreen/hostkeys-serial")
+_IMAGE_ID = "0" * 31 + "1\n"
+_IMAGE_KEY = "ssh-ed25519 IMAGE-KEY root@image\n"
+_SERIAL = "1000000000000001"
+_OTHER_SERIAL = "1000000000000002"
+
+
+@pytest.fixture
+def cloned_root(tmp_path: Path) -> Path:
+    """Fake root filesystem carrying the identity shared by a cloned image."""
+    root = tmp_path / "root"
+    for rel, content in (
+        (_MACHINE_ID, _IMAGE_ID),
+        (_DBUS_MACHINE_ID, _IMAGE_ID),
+        (_HOST_KEY, _IMAGE_KEY),
+        (_STALE_KEY, _IMAGE_KEY),
+    ):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(content)
+    return root
+
+
+def _ensure_identity(root: Path, serial: str, path: str | None = None) -> None:
+    """Source the helper with root writes stubbed out and run ensure_identity."""
+    script = f'source "{_HELPER}"; as_root() {{ "$@"; }}; ensure_identity "$1" "$2"'
+    subprocess.run(
+        ["bash", "-c", script, "bash", serial, str(root)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+        env={**os.environ, "PATH": path or os.environ["PATH"]},
+    )
+
+
+_NEEDS_KEYGEN = pytest.mark.skipif(
+    shutil.which("ssh-keygen") is None, reason="needs ssh-keygen"
+)
+
+
+@_NEEDS_KEYGEN
+def test_identity_regenerates_once_per_serial(cloned_root: Path) -> None:
+    _ensure_identity(cloned_root, _SERIAL)
+    machine_id = (cloned_root / _MACHINE_ID).read_text()
+    assert re.fullmatch(r"[0-9a-f]{32}\n", machine_id) and machine_id != _IMAGE_ID
+    assert os.readlink(cloned_root / _DBUS_MACHINE_ID) == "/etc/machine-id"
+    host_key = (cloned_root / _HOST_KEY).read_text()
+    assert host_key.startswith("ssh-ed25519 ") and host_key != _IMAGE_KEY
+    assert not (cloned_root / "etc/ssh/.hostkeys-new").exists()
+    assert not (cloned_root / _STALE_KEY).exists()
+    assert (cloned_root / _ID_MARKER).read_text() == f"{_SERIAL}\n"
+    assert (cloned_root / _KEYS_MARKER).read_text() == f"{_SERIAL}\n"
+
+    _ensure_identity(cloned_root, _SERIAL)
+    assert (cloned_root / _MACHINE_ID).read_text() == machine_id
+
+    # Same SD card moved to another board.
+    _ensure_identity(cloned_root, _OTHER_SERIAL)
+    assert (cloned_root / _MACHINE_ID).read_text() != machine_id
+
+
+@_NEEDS_KEYGEN
+def test_identity_keygen_failure_retries_only_the_keys(
+    cloned_root: Path, tmp_path: Path
+) -> None:
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    keygen = stubs / "ssh-keygen"
+    keygen.write_text("#!/bin/sh\nexit 1\n")
+    keygen.chmod(0o755)
+    failing = f"{stubs}:{os.environ['PATH']}"
+    _ensure_identity(cloned_root, _SERIAL, path=failing)
+    machine_id = (cloned_root / _MACHINE_ID).read_text()
+    assert machine_id != _IMAGE_ID
+
+    _ensure_identity(cloned_root, _SERIAL, path=failing)
+    assert (cloned_root / _MACHINE_ID).read_text() == machine_id
+    assert (cloned_root / _HOST_KEY).read_text() == _IMAGE_KEY
+    assert not (cloned_root / _KEYS_MARKER).exists()
+
+    _ensure_identity(cloned_root, _SERIAL)
+    assert (cloned_root / _MACHINE_ID).read_text() == machine_id
+    assert (cloned_root / _HOST_KEY).read_text() != _IMAGE_KEY
+
+
+@pytest.mark.parametrize(
+    ("key", "kept"),
+    [(b"nm-v2:" + b"\xa5" * 32, True), (b"\0\xa5" * 16, False)],
+    ids=["v2", "v1-binary"],
+)
+def test_identity_drops_only_v1_nm_secret_key(
+    cloned_root: Path, key: bytes, kept: bool
+) -> None:
+    secret = cloned_root / _NM_SECRET
+    secret.parent.mkdir(parents=True)
+    secret.write_bytes(key)
+    _ensure_identity(cloned_root, _SERIAL)
+    assert secret.exists() == kept
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [("initializing", 0), ("starting", 1), ("running", 1), ("degraded", 1)],
+)
+def test_identity_only_before_basic_target(
+    tmp_path: Path, state: str, expected: int
+) -> None:
+    systemctl = tmp_path / "systemctl"
+    systemctl.write_text(f"#!/bin/sh\necho {state}\nexit 1\n")
+    systemctl.chmod(0o755)
+    res = subprocess.run(
+        ["bash", "-c", f'source "{_HELPER}"; early_boot'],
+        capture_output=True,
+        timeout=10,
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+    )
+    assert res.returncode == expected
