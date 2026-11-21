@@ -54,7 +54,8 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _get(base_url: str, path: str, timeout: float) -> dict:
+def moonraker_get(base_url: str, path: str, timeout: float) -> dict:
+    """GET a Moonraker endpoint and return its `result` payload."""
     url = base_url.rstrip("/") + path
     if urllib.parse.urlsplit(url).scheme not in ("http", "https"):
         raise ValueError(f"unsupported Moonraker URL: {url}")
@@ -69,13 +70,15 @@ def _get(base_url: str, path: str, timeout: float) -> dict:
 
 def query_moonraker(base_url: str, timeout: float = 5.0) -> dict:
     """Return host version, klippy state and every `mcu*` object's version and chip."""
-    info = _get(base_url, "/printer/info", timeout)
-    objects = _get(base_url, "/printer/objects/list", timeout)["objects"]
+    info = moonraker_get(base_url, "/printer/info", timeout)
+    objects = moonraker_get(base_url, "/printer/objects/list", timeout)["objects"]
     sections = [o for o in objects if o == "mcu" or o.startswith("mcu ")]
     mcus: dict[str, dict] = {}
     if sections:
         query = "&".join(urllib.parse.quote(s) for s in sections)
-        status = _get(base_url, f"/printer/objects/query?{query}", timeout)["status"]
+        status = moonraker_get(base_url, f"/printer/objects/query?{query}", timeout)[
+            "status"
+        ]
         for section in sections:
             obj = status.get(section) or {}
             mcus[section] = {
@@ -91,7 +94,9 @@ def query_moonraker(base_url: str, timeout: float = 5.0) -> dict:
 
 def query_print_state(base_url: str, timeout: float = 5.0) -> str:
     """Return print_stats.state (standby, printing, paused, ...)."""
-    status = _get(base_url, "/printer/objects/query?print_stats=state", timeout)
+    status = moonraker_get(
+        base_url, "/printer/objects/query?print_stats=state", timeout
+    )
     return (status["status"].get("print_stats") or {}).get("state", "")
 
 
