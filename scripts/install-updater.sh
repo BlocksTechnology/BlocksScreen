@@ -26,6 +26,9 @@ _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 # shellcheck source=/dev/null
 . "$SCRIPT_PATH/bs-common.sh"
+_MOONRAKER_CONF="$_BSENV_HOME/printer_data/config/moonraker.conf"
+# Builds and service restarts starve the MCU mid-print (Timer too close): wait prints out, never an update.
+bs_wait_moonraker_idle "$_MOONRAKER_CONF" 0 || true
 
 # Venv-mutating commands run as blocks: root-owned dists break later pip-as-blocks runs.
 _as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
@@ -370,6 +373,8 @@ if [[ -d "$_DD_REPO/.git" ]]; then
         [[ "$(systemctl show --property=LoadState --value "$_DD_UNIT")" == "loaded" ]]; then
         echo_ok "DeviceDiscovery already set up"
     else
+        # A print can start while the venv steps above run.
+        bs_wait_moonraker_idle "$_MOONRAKER_CONF" 0 || true
         echo_info "Setting up DeviceDiscovery (first build can take several minutes) ..."
         if _setup_device_discovery; then
             echo_ok "DeviceDiscovery installed and started"

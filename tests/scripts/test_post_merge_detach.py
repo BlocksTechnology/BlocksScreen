@@ -128,6 +128,11 @@ def test_wait_holds_uncapped_while_printing_or_paused(tmp_path: Path) -> None:
     assert _wait(tmp_path, ["false"], cap=0, prints=prints) == (0, 1)
 
 
+def test_wait_cap_zero_never_blocks_on_a_moonraker_update(tmp_path: Path) -> None:
+    # install-updater's guard: rc 1 at once, so a Moonraker update never stalls the deploy.
+    assert _wait(tmp_path, ["true"] * 5, cap=0) == (1, 1)
+
+
 def _settle(
     tmp_path: Path, *, busy: str, pid_now: str, flag: bool = True
 ) -> tuple[bool, bool]:

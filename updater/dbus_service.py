@@ -292,7 +292,7 @@ class UpdaterInterface(
         )
 
     async def _hold_for_deploy(self) -> None:
-        """Hold busy while install-updater runs; release on exit, dead units or the cap."""
+        """Hold busy while install-updater runs; release on exit, dead units, a print or the cap."""
         _log.info("deploy flag set - holding busy until install-updater finishes")
         loop = asyncio.get_running_loop()
         deadline = loop.time() + _DEPLOY_HOLD_CAP_S
@@ -303,6 +303,11 @@ class UpdaterInterface(
                         "install-updater still running after %.0fs - releasing busy",
                         _DEPLOY_HOLD_CAP_S,
                     )
+                    self._capped_flag = self._svc.deploy_flag_stamp()
+                    break
+                # install-updater waits the print out; an overlay over it would hide Pause.
+                if await klipper_printing():
+                    _log.info("deploy waits for the print - releasing busy")
                     self._capped_flag = self._svc.deploy_flag_stamp()
                     break
                 await asyncio.sleep(_DEPLOY_POLL_S)

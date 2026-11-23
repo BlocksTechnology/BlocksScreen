@@ -454,6 +454,21 @@ class TestDeployHold:
         assert (svc._busy, svc._deploy_hold) == (False, None)
 
     @pytest.mark.asyncio
+    async def test_print_releases_hold_once(self, svc, monkeypatch, printing):
+        """install-updater waits the print out: the overlay must not hide Pause meanwhile."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_DEPLOY_POLL_S", 0.01)
+        svc._busy = True
+        svc._svc.deploy_pending.return_value = True
+        printing.return_value = True
+        svc._set_busy(False)
+        await asyncio.sleep(0.05)
+        assert (svc._busy, svc._deploy_hold) == (False, None)
+        svc._set_busy(False)
+        assert svc._deploy_hold is None, "the same flag must not re-cover the print"
+
+    @pytest.mark.asyncio
     async def test_hold_spawned_once(self, svc, monkeypatch):
         from updater import dbus_service
 
