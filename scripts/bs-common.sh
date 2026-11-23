@@ -6,13 +6,20 @@
 bs_migrate_moonraker_conf() {
     local conf="$1" tag="${2:-bs-common}" patched=false
     [ -f "$conf" ] || return 0
-    # Back up only a sane-looking conf: never overwrite a good .bak with a corrupt one.
-    if grep -q '^\[server\]' "$conf" 2>/dev/null; then
-        cp "$conf" "${conf}.bak" 2>/dev/null || true
+    if bs_heal_moonraker_conf "$conf" "$tag"; then
+        patched=true
+    fi
+    # Patching a torn conf would bury the damage under a fresh marker.
+    bs_moonraker_conf_torn "$conf" && return 0
+    # Back up only a conf that parses: never overwrite a good .bak with a corrupt one.
+    if bs_moonraker_conf_sane "$conf" && ! cmp -s "$conf" "${conf}.bak"; then
+        local bak_tmp
+        bak_tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" \
+            && { cp "$conf" "$bak_tmp" && _bs_replace_file "$bak_tmp" "${conf}.bak" || rm -f "$bak_tmp"; }
     fi
     # Gate on the section existing: else the sed no-ops but patched=true restarts moonraker every boot.
     if ! grep -q "enable_system_updates" "$conf" && grep -q '^\[update_manager\]$' "$conf"; then
-        sed -i '/^\[update_manager\]$/a enable_system_updates: False' "$conf"
+        _bs_conf_sed "$conf" '/^\[update_manager\]$/a enable_system_updates: False'
         patched=true
         echo "[$tag] moonraker.conf: disabled system apt upgrades"
     fi
@@ -20,14 +27,14 @@ bs_migrate_moonraker_conf() {
     local bs_um_section
     bs_um_section=$(sed -n '/^\[update_manager BlocksScreen\]/,/^\[/p' "$conf" 2>/dev/null)
     if printf '%s\n' "$bs_um_section" | grep -q "managed_services: klipper moonraker"; then
-        sed -i '/^\[update_manager BlocksScreen\]/,/^\[/ s/managed_services: klipper moonraker/managed_services: BlocksScreen/' "$conf"
+        _bs_conf_sed "$conf" '/^\[update_manager BlocksScreen\]/,/^\[/ s/managed_services: klipper moonraker/managed_services: BlocksScreen/'
         patched=true
         echo "[$tag] moonraker.conf: fixed BlocksScreen managed_services"
     fi
     # Old installers wrote primary_branch: master, which does not exist upstream;
     # moonraker refuses to manage a repo whose primary branch is gone.
     if printf '%s\n' "$bs_um_section" | grep -q "^primary_branch: master$"; then
-        sed -i '/^\[update_manager BlocksScreen\]/,/^\[/ s/^primary_branch: master$/primary_branch: main/' "$conf"
+        _bs_conf_sed "$conf" '/^\[update_manager BlocksScreen\]/,/^\[/ s/^primary_branch: master$/primary_branch: main/'
         patched=true
         echo "[$tag] moonraker.conf: fixed BlocksScreen primary_branch (master -> main)"
     fi
@@ -43,6 +50,71 @@ bs_migrate_moonraker_conf() {
     fi
     $patched && sudo systemctl restart moonraker.service 2>/dev/null || true
     return 0
+}
+
+# Durable replace: fsync the temp, rename it over $2, fsync the dir. A power cut keeps old or new, never NULs.
+_bs_replace_file() {
+    chmod --reference="$2" "$1" 2>/dev/null || true
+    sync "$1" && mv -f "$1" "$2" && sync "$(dirname "$2")" && return 0
+    rm -f "$1"
+    return 1
+}
+
+# Durable `sed -i` (which renames without fsync). $1 = file, $2 = sed script.
+_bs_conf_sed() {
+    local tmp
+    tmp="$(mktemp -p "$(dirname "$1")" ".$(basename "$1").XXXXXX")" || return 1
+    if sed "$2" "$1" >"$tmp"; then
+        _bs_replace_file "$tmp" "$1"
+    else
+        rm -f "$tmp"
+        return 1
+    fi
+}
+
+# True for the power-cut signature: empty, or data blocks lost behind a kept size (NUL bytes). $1 = file.
+bs_moonraker_conf_torn() {
+    [ -s "$1" ] || return 0
+    [ "$(tr -d '\000' <"$1" | wc -c)" != "$(wc -c <"$1")" ]
+}
+
+# True when $1 can serve as moonraker.conf: not torn, parses like Moonraker (configparser, no interpolation), has [server].
+bs_moonraker_conf_sane() {
+    [ -s "$1" ] && ! bs_moonraker_conf_torn "$1" || return 1
+    python3 - "$1" 2>/dev/null <<'PY'
+import configparser
+import sys
+
+parser = configparser.ConfigParser(interpolation=None)
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        parser.read_file(f)
+except (OSError, UnicodeDecodeError, configparser.Error):
+    sys.exit(1)
+sys.exit(0 if parser.has_section("server") else 1)
+PY
+}
+
+# Restore a torn moonraker.conf from the newest sane source: .bak, NULs stripped, Moonraker's .bkp. $1 conf, $2 tag.
+bs_heal_moonraker_conf() {
+    local conf="$1" tag="${2:-bs-common}" src tmp
+    [ -f "$conf" ] && bs_moonraker_conf_torn "$conf" || return 1
+    cp -f "$conf" "$(dirname "$conf")/.$(basename "$conf").torn" 2>/dev/null || true
+    tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" || return 1
+    for src in "${conf}.bak" stripped "$(dirname "$conf")/.$(basename "$conf").bkp"; do
+        if [ "$src" = stripped ]; then
+            tr -d '\000' <"$conf" >"$tmp" || continue
+        else
+            cp -f "$src" "$tmp" 2>/dev/null || continue
+        fi
+        if bs_moonraker_conf_sane "$tmp" && _bs_replace_file "$tmp" "$conf"; then
+            echo "[$tag] moonraker.conf: torn by a power cut, restored from $src"
+            return 0
+        fi
+    done
+    rm -f "$tmp"
+    echo "[$tag] moonraker.conf: torn by a power cut, no sane copy to restore"
+    return 1
 }
 
 # Point Moonraker at a locally-provisioned Spoolman so the UI's spoolman_proxy
@@ -61,8 +133,7 @@ bs_ensure_spoolman_moonraker() {
         rm -f "$tmp"
         return 1
     fi
-    chmod --reference="$conf" "$tmp" 2>/dev/null || true
-    mv -f "$tmp" "$conf"
+    _bs_replace_file "$tmp" "$conf" || return 1
     echo "[$tag] moonraker.conf: added [spoolman] (server: localhost:7912)"
     return 0
 }
@@ -198,7 +269,8 @@ bs_disable_overlapping_update_managers() {
     local tmp
     # Same-dir temp + atomic rename: a power cut can never truncate moonraker.conf.
     tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" || return 1
-    if awk -v owned="$owned" '
+    # The marker rides in the temp: an unsynced `>>` append left NULs in place of it (BUG-5).
+    if { awk -v owned="$owned" '
         BEGIN { n = split(owned, a, " "); for (i = 1; i <= n; i++) own[a[i]] = 1 }
         # A commented header also closes the section, else re-runs double-comment it.
         /^#*\[/ {
@@ -209,14 +281,12 @@ bs_disable_overlapping_update_managers() {
             }
         }
         { if (insec) print "#" $0; else print }
-    ' "$conf" > "$tmp"; then
-        chmod --reference="$conf" "$tmp" 2>/dev/null || true
-        mv -f "$tmp" "$conf"
+    ' "$conf" && printf '\n# %s applied by %s\n' "$mark" "$tag"; } > "$tmp"; then
+        _bs_replace_file "$tmp" "$conf" || return 1
     else
         rm -f "$tmp"
         return 1
     fi
-    printf '\n# %s applied by %s\n' "$mark" "$tag" >> "$conf"
     echo "[$tag] moonraker.conf: disabled Moonraker management of daemon-owned repos"
 }
 
