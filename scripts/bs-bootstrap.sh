@@ -40,6 +40,11 @@ REINSTALL=""
 _probe() { _as_blocks "$BSENV/bin/python3.11" -c 'import sys
 for n in sys.argv[1:]: assert len(dir(__import__(n, fromlist=["_"]))) > 15' "$@" >/dev/null 2>&1; }
 _pin() { grep -im1 "^$1[=><]" "$REQS"; }
+# pip's exit 0 is no proof (a truncated pip is a silent no-op); flush first so the sentinel never outlives the files.
+_reqs_verified() {
+    sync -f "$BSENV" 2>/dev/null || sync
+    _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" --pins "$REQS"
+}
 # Truncation is never limited to one package, so make step 3 rewrite the whole pinned set.
 _deps_broken() {
     echo "[bs-bootstrap] $1 missing or broken - reinstalling venv"
@@ -47,9 +52,19 @@ _deps_broken() {
     rm -f "$SENTINEL" "$ATTEMPT" 2>/dev/null || true
 }
 # Every venv writer (also install-updater.sh, post-merge) flocks the venv dir: a probe mid-replace forces a reinstall.
-{ exec 201<"$BSENV" && flock -w 900 201; } || echo "[bs-bootstrap] venv lock not acquired (busy 900s or no venv) - continuing unlocked"
+_VENV_LOCKED=0
+{ exec 201<"$BSENV" && flock -w 900 201 && _VENV_LOCKED=1; } || echo "[bs-bootstrap] venv lock not acquired (busy 900s or no venv) - continuing unlocked"
 # Older installers ran pip as root; return those files to blocks before any pip-as-blocks run.
 [ -d "$BSENV" ] && find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
+# RECORD-based scan: catches truncated pip/uv that the import probes never touch, repairs pip offline.
+# Locked only: a live pip upgrade stashes the old dist's files, which reads as truncation.
+# Exit 1 = damaged dists reinstalled (re-verify the set); 2 = reinstall pending offline, retried by the helper itself.
+_heal_rc=0
+[ "$_VENV_LOCKED" = 1 ] && { _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" || _heal_rc=$?; }
+if [ "$_heal_rc" = 1 ]; then
+    echo "[bs-bootstrap] truncated package healed - re-verifying the pinned set"
+    rm -f "$SENTINEL" "$ATTEMPT" 2>/dev/null || true
+fi
 # Repair the daemon's own dependency up front so an update can still run if the full set below fails.
 if ! _probe yaml; then
     _deps_broken PyYAML
@@ -78,7 +93,7 @@ _install_reqs() {
             --only-binary :all: \
             --no-binary sdbus,sdbus-networkmanager \
             --upgrade-strategy=only-if-needed \
-            -r "$BS_PATH/scripts/requirements.txt"; then
+            -r "$BS_PATH/scripts/requirements.txt" && _reqs_verified; then
             echo "$REQS_HASH" >"$SENTINEL"
             chown "$_BSENV_USER" "$SENTINEL" 2>/dev/null || true
             rm -f "$ATTEMPT" 2>/dev/null || true
