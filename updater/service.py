@@ -342,6 +342,8 @@ class UpdateService:
             or self._apt_lock.locked()
         ):
             return
+        if await self._apt_disk_low("apt list refresh"):
+            return
         # Stamp attempts, not successes: an offline box must not retry every refresh.
         self._apt_list_time = now
         async with self._apt_lock:
@@ -2838,6 +2840,14 @@ class UpdateService:
             finally:
                 os.close(fd)
 
+    async def _apt_disk_low(self, what: str) -> bool:
+        """True below MIN_FREE_MB: apt lists would eat the last free MB Klipper logs need."""
+        free_mb = await asyncio.to_thread(free_disk_mb)
+        if free_mb >= MIN_FREE_MB:
+            return False
+        self._log.info("%s skipped: %.0f MB free", what, free_mb)
+        return True
+
     async def background_apt_upgrade(self) -> None:
         """Run apt update + upgrade + autoremove silently after every Update click."""
         async with self._apt_lock:
@@ -2850,6 +2860,8 @@ class UpdateService:
             return
         if await klipper_printing():
             self._log.info("background apt upgrade skipped: printer is printing")
+            return
+        if await self._apt_disk_low("background apt upgrade"):
             return
         self._log.info("background apt upgrade: starting")
         ok, err = await apt_update()

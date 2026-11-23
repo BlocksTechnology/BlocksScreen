@@ -357,6 +357,15 @@ class TestCheckStatus:
         mock_update.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_refresh_skips_apt_update_on_full_disk(self, disk):
+        disk.free.return_value = 16.0
+        svc = UpdateService()
+        with patch("updater.service.apt_update", AsyncMock()) as mock_update:
+            await svc._refresh_apt_lists(force=True, printing=False)
+        mock_update.assert_not_awaited()
+        assert svc._apt_list_time == float("-inf"), "a skip must not stamp"
+
+    @pytest.mark.asyncio
     async def test_fresh_outside_apt_refresh_skips_apt_update(self, apt_lists_partial):
         """The previous daemon refreshed seconds ago: the restarted one must not redo it."""
         apt_lists_partial.mkdir()
@@ -3993,6 +4002,13 @@ class TestBackgroundAptUpgrade:
         printing.return_value = True
         with patch("updater.service.apt_update", AsyncMock()) as mock_update:
             await svc.background_apt_upgrade()
+        mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_full_disk_skips_upgrade(self, disk):
+        disk.free.return_value = 16.0
+        with patch("updater.service.apt_update", AsyncMock()) as mock_update:
+            await UpdateService().background_apt_upgrade()
         mock_update.assert_not_called()
 
 
