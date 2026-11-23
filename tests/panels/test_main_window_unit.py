@@ -26,6 +26,8 @@ def _make_fake_window(
         ws=MagicMock(connected=ws_connected),
         _try_device_config_restart=MagicMock(),
         _prompt_device_confirmation=MagicMock(),
+        _device_restart_pending=False,
+        _config_reload_on_ready=False,
     )
     win._begin_klipper_restart = MethodType(MainWindow._begin_klipper_restart, win)
     return win
@@ -147,6 +149,13 @@ def _make_device_window(**state) -> SimpleNamespace:
         _update_in_progress=False,
         _klipper_auto_restart_pending=False,
         _device_restart_pending=False,
+        _finish_screen_hold=False,
+        _reprint_hold=MagicMock(**{"isActive.return_value": False}),
+        _config_reload_on_ready=False,
+        _klippy_ready=True,
+        _post_update_reconnect=False,
+        _klipper_disconnect_grace=MagicMock(),
+        updater_worker=MagicMock(),
         _pending_device_confirm=[],
         _device_confirm_names=[],
         _klipper_restart_timeout=MagicMock(),
@@ -170,6 +179,9 @@ def _make_device_window(**state) -> SimpleNamespace:
         "_prompt_device_confirmation",
         "_on_device_config_accept",
         "_on_device_config_decline",
+        "_track_print_state",
+        "_on_klippy_state",
+        "_on_reprint_requested",
     ):
         setattr(win, name, MethodType(getattr(MainWindow, name), win))
     return win
@@ -220,12 +232,93 @@ class TestDeviceConfigRestart:
         assert win.ws.api.restart_service.call_count == 2
 
     def test_deferred_restart_runs_when_print_ends(self) -> None:
-        win = _make_device_window(_print_state="printing")
+        win = _make_device_window(_print_state="complete")
         win.request_klipper_restart()
-        win.ws.api.restart_service.assert_not_called()
-        win._print_state = "complete"
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+
+
+class TestDeviceRestartAfterJob:
+    """A job's end must keep its finished screen; the restart waits for the operator."""
+
+    def _finished(self, end_state: str = "complete") -> SimpleNamespace:
+        win = _make_device_window(_print_state="printing")
         win.ws.api.restart_service.return_value = True
+        win.request_klipper_restart()
+        win._track_print_state("state", end_state)
+        return win
+
+    @pytest.mark.parametrize("end_state", ["complete", "cancelled", "error"])
+    def test_held_while_finished_screen_open(self, end_state) -> None:
+        win = self._finished(end_state)
+        win.ws.api.restart_service.assert_not_called()
+        win._try_device_config_restart()  # e.g. the PrintComplete event retry
+        win.ws.api.restart_service.assert_not_called()
+
+    def test_runs_once_operator_dismisses(self) -> None:
+        win = self._finished()
+        win._track_print_state("state", "standby")  # SDCARD_RESET_FILE
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+        assert win._device_restart_pending is False
+
+    def test_reprint_standby_does_not_restart_under_new_job(self) -> None:
+        win = self._finished()
+        win._reprint_hold.isActive.return_value = True
+        win._on_reprint_requested("cube.gcode")
+        win._reprint_hold.start.assert_called_once()
+        win._track_print_state("state", "standby")
+        win._track_print_state("state", "printing")
+        win._reprint_hold.stop.assert_called_once()
+        win.ws.api.restart_service.assert_not_called()
+
+    def test_refused_reprint_restarts_after_hold(self) -> None:
+        win = self._finished()
+        win._reprint_hold.isActive.return_value = True
+        win._on_reprint_requested("cube.gcode")
+        win._track_print_state("state", "standby")
+        win.ws.api.restart_service.assert_not_called()
+        win._reprint_hold.isActive.return_value = False
+        win._try_device_config_restart()  # hold timeout
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+
+    def test_job_not_seen_running_restarts_at_once(self) -> None:
+        # UI started on a finished job: no screen to protect.
+        win = _make_device_window(_print_state="standby")
+        win.ws.api.restart_service.return_value = True
+        win._track_print_state("state", "complete")
+        win.request_klipper_restart()
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+
+
+class TestDeviceRestartAfterShutdown:
+    """A service restart cannot clear an MCU shutdown; the operator's Firmware Restart reloads the config."""
+
+    @pytest.mark.parametrize("change_first", [True, False])
+    def test_firmware_restart_loads_config_no_second_restart(
+        self, change_first
+    ) -> None:
+        win = _make_device_window()
+        win.ws.api.restart_service.return_value = True
+        if change_first:
+            win._print_state = "printing"
+            win.request_klipper_restart()
+            win._on_klippy_state("shutdown")
+        else:
+            win._on_klippy_state("shutdown")
+            win.request_klipper_restart()
+        win._print_state = "error"
         win._try_device_config_restart()
+        for state in ("disconnected", "startup", "ready"):
+            win._on_klippy_state(state)
+        win.ws.api.restart_service.assert_not_called()
+        assert win._device_restart_pending is False
+
+    def test_change_during_startup_still_restarts(self) -> None:
+        # Klipper may have read printer.cfg before the write: restart once ready.
+        win = _make_device_window()
+        win.ws.api.restart_service.return_value = True
+        win._on_klippy_state("shutdown")
+        win._on_klippy_state("startup")
+        win.request_klipper_restart()
         win.ws.api.restart_service.assert_called_once_with("klipper")
 
 

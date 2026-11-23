@@ -379,6 +379,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self._device_config_popup: BasePopup | None = None
         # printer.cfg changed for a device; Klipper must restart to load it.
         self._device_restart_pending = False
+        # A job just ended: the restart waits until the operator leaves its finished screen.
+        self._finish_screen_hold = False
+        # Reprint sends SDCARD_RESET_FILE first; its standby must not restart Klipper under the new job.
+        self._reprint_hold = QtCore.QTimer(self)
+        self._reprint_hold.setSingleShot(True)
+        self._reprint_hold.setInterval(30_000)
+        self._reprint_hold.timeout.connect(self._try_device_config_restart)
+        self.cancelpage.reprint_start.connect(self._on_reprint_requested)
+        # Shut down since the change: the operator's Firmware Restart re-reads printer.cfg.
+        self._config_reload_on_ready = False
         self.chamber_temp_display.hide()
 
         if self.config.has_section("server"):
@@ -513,6 +523,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self._klipper_disconnect_grace.start()
         else:
             self._klipper_disconnect_grace.stop()
+        if state == "shutdown":
+            self._config_reload_on_ready = self._device_restart_pending
+        elif state in ("ready", "error") and self._config_reload_on_ready:
+            self._config_reload_on_ready = False
+            if state == "ready" and self._device_restart_pending:
+                _logger.info("Firmware Restart loaded the new device config")
+                self._device_restart_pending = False
         if state == "shutdown":
             if self._update_in_progress:
                 _logger.warning("Klipper E-stop detected — cancelling active update")
@@ -815,6 +832,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def request_klipper_restart(self) -> None:
         """Restart Klipper as soon as it is safe (never during a job)."""
         self._device_restart_pending = True
+        self._config_reload_on_ready = self._klippy_state == "shutdown"
         self._try_device_config_restart()
 
     def _device_restart_blocked(self) -> str:
@@ -825,6 +843,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return "print state not known yet"
         if self._is_job_active() or self.print_status == "printing":
             return "a job is running"
+        if self._config_reload_on_ready:
+            # A service restart cannot clear an MCU shutdown, and E-stops never auto-recover.
+            return "Klipper is shut down, waiting for the operator's Firmware Restart"
+        if self._finish_screen_hold:
+            return "the print-finished screen is open"
+        if self._reprint_hold.isActive():
+            return "a reprint is starting"
         if self._update_in_progress:
             return "an update is running"
         if self._klipper_auto_restart_pending:
@@ -850,6 +875,11 @@ class MainWindow(QtWidgets.QMainWindow):
         _logger.info("Restarting Klipper to load the new device config")
         self._device_restart_pending = False
         self._begin_klipper_restart()
+
+    @QtCore.pyqtSlot(str, name="on-reprint-requested")
+    def _on_reprint_requested(self, _filename: str) -> None:
+        """Hold a pending Klipper restart until the reprint reports printing."""
+        self._reprint_hold.start()
 
     @QtCore.pyqtSlot(bool, name="toggle-popups")
     def popup_toggle(self, toggle: bool) -> None:
@@ -878,8 +908,16 @@ class MainWindow(QtWidgets.QMainWindow):
     def _track_print_state(self, field: str, value: str) -> None:
         """Track ``print_stats.state`` as the source of truth for job activity."""
         if field == "state":
+            was_active = self._is_job_active()
             self._print_state = value
             self._print_state_known = True
+            if value in ("complete", "cancelled", "error"):
+                self._finish_screen_hold = self._finish_screen_hold or was_active
+            else:
+                # Standby = finished screen dismissed (SDCARD_RESET_FILE) or Klipper restarted.
+                self._finish_screen_hold = False
+            if value == "printing":
+                self._reprint_hold.stop()
             if not self._is_job_active():
                 self._try_device_config_restart()
                 self._prompt_device_confirmation()
