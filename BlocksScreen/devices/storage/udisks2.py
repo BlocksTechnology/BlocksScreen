@@ -9,7 +9,7 @@ from collections.abc import Coroutine
 
 import sdbus
 from helper_methods import USB_FALLBACK_NAME, USB_LABEL_PREFIX, USB_LINK_PREFIXES
-from PyQt6 import QtCore
+from PyQt6 import QtCore, sip
 
 from .device import Device
 from .udisks2_dbus_async import (
@@ -25,6 +25,7 @@ from .udisks2_dbus_async import (
 UDisks2_service: str = "org.freedesktop.UDisks2"
 UDisks2_obj_path: str = "org/freedesktop/UDisks2"
 AlreadyMountedException = "org.freedesktop.UDisks2.Error.AlreadyMounted"
+_STOP_WAIT_MS = 5000
 
 _T = typing.TypeVar(name="_T")
 
@@ -223,18 +224,21 @@ class UDisksDBusAsync(QtCore.QThread):
 
         Requests cancellation of the tracked tasks from inside the loop thread
         and lets :meth:`run` unwind on its own, instead of stopping the loop
-        mid-future (which raised ``RuntimeError``). ``terminate`` is kept only
-        as a last-resort fallback if the thread fails to stop in time.
+        mid-future (which raised ``RuntimeError``). Never ``terminate``: it can
+        kill the thread while it holds the GIL and hang the app.
         """
         try:
             loop = self.loop
             if loop is not None and loop.is_running():
                 self.stop_event.set()
                 loop.call_soon_threadsafe(self._cancel_tasks)
-            if self.isRunning() and not self.wait(5000):
-                logging.warning("UDisks2 monitor did not stop in time; terminating")
-                self.terminate()
-                _ = self.wait()
+            if QtCore.QThread.currentThread() is self:
+                # In-thread call from monitor_dbus: run() finishes the teardown.
+                return
+            if self.isRunning() and not self.wait(_STOP_WAIT_MS):
+                logging.warning("UDisks2 monitor did not stop in time; detaching it")
+                self._detach()
+                return
             self._active = False
             for path in list(self.controlled_devs.keys()):
                 dev: Device = self.controlled_devs.pop(path)
@@ -244,6 +248,11 @@ class UDisksDBusAsync(QtCore.QThread):
             logging.error(
                 "Caught exception while trying to close Udisks2 monitor: %s", e
             )
+
+    def _detach(self) -> None:
+        """Orphan a monitor that will not stop, since deleting a running QThread aborts."""
+        self.setParent(None)
+        sip.transferto(self, None)
 
     async def monitor_dbus(self) -> None:
         """Schedule coroutines for UDisks2 signals `interfaces_added`, `interfaces_removed`
