@@ -14,6 +14,8 @@ from pathlib import Path
 
 _LOG = logging.getLogger("bs-venv-heal")
 _PIN = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s;#]+)")
+_CFG_HOME = re.compile(r"^home\s*=\s*\S", re.M)
+_CFG_ISOLATED = re.compile(r"^include-system-site-packages\s*=\s*false\s*$", re.M)
 
 
 def _site_packages() -> Path:
@@ -126,6 +128,33 @@ def _repair_pip(site: Path) -> bool:
     return _pip_works()
 
 
+def _venv_cfg_ok() -> bool:
+    """True while pyvenv.cfg isolates the venv; emptied by a cut, it lets system dists leak in."""
+    try:
+        text = Path(sys.prefix, "pyvenv.cfg").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return bool(_CFG_HOME.search(text) and _CFG_ISOLATED.search(text))
+
+
+def _repair_venv_cfg() -> bool:
+    """Rewrite pyvenv.cfg with CPython's own `venv --upgrade`, which leaves site-packages alone."""
+    subprocess.run(  # nosec B603
+        [
+            os.path.realpath(sys.executable),
+            "-m",
+            "venv",
+            "--upgrade",
+            "--without-pip",
+            sys.prefix,
+        ],
+        capture_output=True,
+        timeout=300,
+        check=False,
+    )
+    return _venv_cfg_ok()
+
+
 def _pending_file() -> Path:
     """Survives a failed (offline) reinstall: the broken dist-info is already gone by then."""
     return Path(sys.prefix, ".blockscreen-venv-reinstall")
@@ -151,10 +180,28 @@ def _write_pending(reqs: list[str]) -> None:
         fh.flush()
         os.fsync(fh.fileno())
     tmp.replace(_pending_file())
+    # The rename is only durable once its directory is synced (pip PR #12859).
+    dir_fd = os.open(tmp.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
 
 
 def heal() -> int:
     """0 = intact; 1 = damage handled this run (caller reinstalls its pins); 2 = repair still pending."""
+    if sys.prefix == sys.base_prefix:
+        _LOG.error(
+            "not inside a venv (pyvenv.cfg missing?) - refusing to touch %s", sys.prefix
+        )
+        return 2
+    rc = 0
+    if not _venv_cfg_ok():
+        _LOG.warning("pyvenv.cfg damaged - rewriting it")
+        if not _repair_venv_cfg():
+            _LOG.error("pyvenv.cfg repair failed")
+            return 2
+        rc = 1
     site = _site_packages()
     broken = broken_dists(site)
     pending = _read_pending()
@@ -167,7 +214,8 @@ def heal() -> int:
         # A working pip skips a dist-info with no valid METADATA and cannot uninstall one without RECORD.
         for _, dist_info in broken:
             _uninstall(dist_info)
-    rc = 1 if broken else 0
+    if broken:
+        rc = 1
     if not _pip_works():
         _LOG.warning("pip unusable - reinstalling it from the bundled wheel")
         if not _repair_pip(site):

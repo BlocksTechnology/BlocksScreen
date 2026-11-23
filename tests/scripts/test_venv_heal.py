@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "bs-venv-heal.py"
+_CFG = "home = /usr/bin\ninclude-system-site-packages = false\nversion = 3.11.2\n"
 
 
 @pytest.fixture
@@ -22,6 +23,7 @@ def heal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> types.ModuleType:
     monkeypatch.setattr(mod.sys, "prefix", str(venv))
     mod._site_packages().mkdir(parents=True)
     (venv / "bin").mkdir()
+    (venv / "pyvenv.cfg").write_text(_CFG)
     return mod
 
 
@@ -158,6 +160,44 @@ def test_broken_pip_is_repaired_before_reinstall(
     assert calls == []
     monkeypatch.setattr(heal, "_repair_pip", lambda _site: True)
     assert heal.heal() == 1
+
+
+@pytest.mark.parametrize(
+    "damaged",
+    [b"", b"\0" * 120, b"home = /usr/bin\n"],
+    ids=["empty", "nul", "no-isolation"],
+)
+def test_damaged_pyvenv_cfg_is_rewritten(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch, damaged: bytes
+) -> None:
+    cfg = Path(heal.sys.prefix, "pyvenv.cfg")
+    cfg.write_bytes(damaged)  # empty or no isolation line: system dist-packages leak in
+    calls = _fake_pip(monkeypatch, heal, rc=0)
+    assert heal.heal() == 2  # `venv --upgrade` did not fix it: nothing else runs
+    assert calls[-1][1:] == [
+        "-m",
+        "venv",
+        "--upgrade",
+        "--without-pip",
+        heal.sys.prefix,
+    ]
+
+    def run(_argv, **_kw):
+        cfg.write_text(_CFG)
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(heal, "subprocess", types.SimpleNamespace(run=run))
+    assert heal.heal() == 1
+    assert heal.heal() == 0
+
+
+def test_refuses_outside_a_venv(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _fake_pip(monkeypatch, heal, rc=0)
+    monkeypatch.setattr(heal.sys, "base_prefix", heal.sys.prefix)
+    assert heal.heal() == 2
+    assert calls == []
 
 
 def test_pins_installed(

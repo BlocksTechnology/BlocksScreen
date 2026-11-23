@@ -49,7 +49,7 @@ _reqs_current() {
 
 # pip's exit 0 is no proof (a truncated pip is a silent no-op); flush first so the sentinel never outlives the files.
 _reqs_verified() {
-    sync -f "$BSENV" 2>/dev/null || sync
+    sync -f "$BSENV" || return 1
     _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" --pins "$BS_PATH/scripts/requirements.txt"
 }
 

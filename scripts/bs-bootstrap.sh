@@ -42,7 +42,7 @@ for n in sys.argv[1:]: assert len(dir(__import__(n, fromlist=["_"]))) > 15' "$@"
 _pin() { grep -im1 "^$1[=><]" "$REQS"; }
 # pip's exit 0 is no proof (a truncated pip is a silent no-op); flush first so the sentinel never outlives the files.
 _reqs_verified() {
-    sync -f "$BSENV" 2>/dev/null || sync
+    sync -f "$BSENV" || return 1
     _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" --pins "$REQS"
 }
 # Truncation is never limited to one package, so make step 3 rewrite the whole pinned set.
