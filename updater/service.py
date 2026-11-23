@@ -38,6 +38,7 @@ from updater.executor import (
     enable_service,
     clock_trusted,
     explain_fetch_error,
+    free_disk_mb,
     git_checkout,
     git_clone,
     git_fetch,
@@ -58,6 +59,8 @@ from updater.executor import (
     klipper_printing,
     moonraker_refresh_repo,
     moonraker_repo_hashes,
+    purge_pycache,
+    reclaim_disk,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -71,7 +74,13 @@ from updater.models import DEPLOY_FLAG as _DEPLOY_FLAG
 from updater.models import DEPLOY_LIVE_STATES as _DEPLOY_LIVE_STATES
 from updater.models import DEPLOY_PATH_UNIT as _DEPLOY_PATH_UNIT
 from updater.models import DEPLOY_UNITS as _DEPLOY_UNITS
-from updater.models import CLOCK_UNSYNCED, ComponentConfig, ComponentStatus
+from updater.models import (
+    CLOCK_UNSYNCED,
+    DISK_FULL,
+    MIN_FREE_MB,
+    ComponentConfig,
+    ComponentStatus,
+)
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
 # name -> pre-update hash; present at boot = revert those repos.
@@ -470,6 +479,8 @@ class UpdateService:
         if component is None:
             self._log.error("update_component: unknown component %r", name)
             return self._cb_error_done(name, "unknown component")
+        if not await self._ensure_disk_space([component]):
+            return False
         if component.kind == "apt":
             return await self._run_apt_update(component)
         return await self._run_git_update(component)
@@ -481,7 +492,7 @@ class UpdateService:
             if names is None
             else [c for c in self._components if c.name in names]
         )
-        if not self._check_disk_space(components):
+        if not await self._ensure_disk_space(components):
             return False
         sorted_components = sorted(components, key=lambda c: c.order)
         offline = await self._preflight_fetch(sorted_components)
@@ -556,13 +567,19 @@ class UpdateService:
             )
         return ok
 
-    def _check_disk_space(self, components: list[ComponentConfig]) -> bool:
-        """Return False (and report on_error for each component) if free space < 200 MB."""
-        free_mb = shutil.disk_usage(Path.home()).free / 1_048_576
-        if free_mb >= 200:
+    async def _ensure_disk_space(self, components: list[ComponentConfig]) -> bool:
+        """Reclaim caches when space is short; refuse with DISK_FULL if still below MIN_FREE_MB."""
+        free_mb = await asyncio.to_thread(free_disk_mb)
+        if free_mb >= MIN_FREE_MB:
             return True
-        msg = f"insufficient disk space ({free_mb:.0f} MB free, need 200 MB)"
-        self._log.error("update_all: %s", msg)
+        self._log.warning("update: %.0f MB free, reclaiming caches", free_mb)
+        await reclaim_disk()
+        free_mb = await asyncio.to_thread(free_disk_mb)
+        if free_mb >= MIN_FREE_MB:
+            self._log.info("update: reclaim freed enough space (%.0f MB free)", free_mb)
+            return True
+        msg = f"{DISK_FULL}: {free_mb:.0f} MB free, {MIN_FREE_MB} MB needed"
+        self._log.error("update refused: %s", msg)
         for c in components:
             self._cb_error_done(c.name, msg)
         return False
@@ -1619,6 +1636,9 @@ class UpdateService:
 
     async def _handle_crash_loop(self, nrestarts: int) -> None:
         """Run one recovery rung for the UI, or saturate if the ladder is exhausted."""
+        if await self._disk_blocks_recovery():
+            self._rebaseline_samples(_UI_COMPONENT, nrestarts)
+            return
         state = await asyncio.to_thread(self._read_state)
         raw = state.get(_UI_COMPONENT, {}).get("fast_attempt", 0)
         current = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
@@ -1635,6 +1655,28 @@ class UpdateService:
         post = await get_service_nrestarts(_UI_SERVICE)
         self._rebaseline_samples(_UI_COMPONENT, post)
         await asyncio.sleep(_RECOVERY_SETTLE_S)
+
+    async def _disk_blocks_recovery(self) -> bool:
+        """Rung 0: drop UI bytecode and reclaim caches; True while the disk is too full to reset."""
+        component = next((c for c in self._components if c.name == _UI_COMPONENT), None)
+        if component is not None and component.path:
+            for sub in ("BlocksScreen", "updater"):
+                n = await asyncio.to_thread(purge_pycache, component.path / sub)
+                if n:
+                    self._log.info("self-heal: purged %d __pycache__ under %s", n, sub)
+        if await asyncio.to_thread(free_disk_mb) >= MIN_FREE_MB:
+            return False
+        await reclaim_disk()
+        free_mb = await asyncio.to_thread(free_disk_mb)
+        if free_mb >= MIN_FREE_MB:
+            return False
+        # A full disk is not a bad commit: a reset now would truncate the tree.
+        self._log.error(
+            "self-heal: %.0f MB free - skipping git recovery until space is freed",
+            free_mb,
+        )
+        self._history("recovery_disk_full", _UI_COMPONENT, ok=False)
+        return True
 
     async def forward_heal_ui(self) -> None:
         """Slowly re-check origin/main and re-attempt an upgrade once a fix ships."""

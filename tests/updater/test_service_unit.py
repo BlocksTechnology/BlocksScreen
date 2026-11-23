@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 import updater.service as updater_service
-from updater.models import CLOCK_UNSYNCED, ComponentConfig, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, DISK_FULL, ComponentConfig, ComponentStatus
 from updater.service import LoggingCallback, UpdateService
 
 
@@ -4451,3 +4451,61 @@ class TestSyncMoonraker:
             assert refresh.await_count == 1
             assert await svc.sync_moonraker() is True
         assert refresh.await_count == 2
+
+
+class TestDiskFull:
+    """A full disk cancels the update after a reclaim attempt and tells the UI why."""
+
+    def _comps(self, tmp_path: Path) -> list[ComponentConfig]:
+        path = tmp_path / "BlocksScreen"
+        (path / ".git").mkdir(parents=True)
+        return [
+            ComponentConfig(name="system", kind="apt", order=1),
+            ComponentConfig(name="BlocksScreen", kind="git", path=path, order=99),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_still_full_after_reclaim_cancels_with_disk_full(
+        self, tmp_path, disk
+    ):
+        disk.free.return_value = 50.0
+        errors: list[tuple[str, str]] = []
+        cb = MagicMock()
+        cb.on_error.side_effect = lambda n, r: errors.append((n, r))
+        with (
+            patch("updater.service.UpdateService._preflight_fetch") as m_fetch,
+            patch("updater.service.UpdateService._run_git_batch") as m_batch,
+            patch("updater.service.UpdateService._run_apt_update") as m_apt,
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = self._comps(tmp_path)
+            assert await svc.update_all() is False
+        disk.reclaim.assert_awaited_once()
+        m_fetch.assert_not_called()
+        m_batch.assert_not_called()
+        m_apt.assert_not_called()
+        assert [n for n, _ in errors] == ["system", "BlocksScreen"]
+        assert all(r.startswith(DISK_FULL) for _, r in errors)
+
+    @pytest.mark.asyncio
+    async def test_reclaim_frees_enough_proceeds(self, tmp_path, disk):
+        disk.free.side_effect = [50.0, 900.0]
+        with (
+            patch("updater.service.UpdateService._preflight_fetch", return_value={}),
+            patch("updater.service.UpdateService._run_git_batch") as m_batch,
+            patch("updater.service.UpdateService._run_apt_update"),
+        ):
+            svc = UpdateService()
+            svc._components = self._comps(tmp_path)
+            await svc.update_all()
+        disk.reclaim.assert_awaited_once()
+        m_batch.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_single_component_update_is_gated(self, tmp_path, disk):
+        disk.free.return_value = 50.0
+        with patch("updater.service.UpdateService._run_git_update") as m_git:
+            svc = UpdateService()
+            svc._components = self._comps(tmp_path)
+            assert await svc.update_component("BlocksScreen") is False
+        m_git.assert_not_called()

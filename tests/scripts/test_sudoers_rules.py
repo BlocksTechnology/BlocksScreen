@@ -42,6 +42,7 @@ def _daemon_apt_argvs() -> list[list[str]]:
         _apt_cmd("autoremove"),
         _apt_cmd("fix-broken"),
         _apt_cmd("dselect-upgrade"),
+        _apt_cmd("clean"),
     ]
 
 
@@ -134,6 +135,7 @@ class TestWrapperValidation:
             ["upgrade", "vim", "-oAPT::Update::Pre-Invoke::=x"],
             ["update", "extra"],  # fixed verbs take no args
             ["autoremove", "extra"],
+            ["clean", "extra"],
             ["set-selections", "extra"],
         ],
     )

@@ -1988,3 +1988,33 @@ class TestMoonrakerRepoHashes:
         with patch("updater.executor.http.client.HTTPConnection") as conn:
             conn.return_value.getresponse.return_value = resp
             assert _moonraker_call("GET", "/x", 1.0) == expected
+
+
+class TestDiskReclaim:
+    def test_purge_pycache_removes_truncated_bytecode(self, tmp_path):
+        from updater.executor import purge_pycache
+
+        cache = tmp_path / "pkg" / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "mod.cpython-311.pyc").write_bytes(b"\xa7\x0d\x0d\x0a" + b"\0" * 12)
+        (tmp_path / "pkg" / "mod.py").write_text("x = 1\n")
+        assert purge_pycache(tmp_path) == 1
+        assert not cache.exists()
+        assert (tmp_path / "pkg" / "mod.py").exists()
+
+    @pytest.mark.asyncio
+    async def test_reclaim_drops_caches_and_runs_apt_clean(self, tmp_path):
+        from updater.executor import reclaim_disk
+
+        pip, uv = tmp_path / "pip", tmp_path / "uv"
+        for d in (pip, uv):
+            (d / "wheels").mkdir(parents=True)
+        with (
+            patch("updater.executor._RECLAIM_DIRS", (pip, uv)),
+            patch(
+                "updater.executor._run", new_callable=AsyncMock, return_value=(True, "")
+            ) as mock_run,
+        ):
+            await reclaim_disk()
+        assert not pip.exists() and not uv.exists()
+        assert mock_run.call_args[0][0][-1] == "clean"

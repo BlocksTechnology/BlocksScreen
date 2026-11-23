@@ -21,6 +21,7 @@ from updater.models import (
     DEPLOY_LIVE_STATES,
     DEPLOY_PATH_UNIT,
     CLOCK_UNSYNCED,
+    DISK_FULL,
     DEPLOY_UNITS,
     PRINTER_BUSY,
     ComponentStatus,
@@ -127,6 +128,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._deploy_cap_timer.setInterval(int(DEPLOY_HOLD_CAP_S * 1000))
         self._deploy_cap_timer.timeout.connect(self._on_deploy_cap)
         self._update_confirm_popup: BasePopup | None = None
+        self._disk_full_popup: BasePopup | None = None
         self.show_loading(True)
 
     def _request_status_debounced(self) -> None:
@@ -623,7 +625,28 @@ class UpdatePage(QtWidgets.QWidget):
         if reason == PRINTER_BUSY:
             self._show_toast("Printer is busy or not responding. Try again later.")
             return
+        if reason.startswith(DISK_FULL):
+            self._show_disk_full(reason)
+            return
         self._show_toast(f"{name} update failed: {reason}. Tap refresh to retry.")
+
+    def _show_disk_full(self, reason: str) -> None:
+        """Open one popup that stays until tapped; the daemon sends it once per component."""
+        if self._disk_full_popup is not None and self._disk_full_popup.isVisible():
+            return
+        if self._disk_full_popup is not None:
+            self._disk_full_popup.deleteLater()
+        detail = reason.partition(":")[2].strip()
+        popup = BasePopup(self, floating=True)
+        popup.set_message(
+            "Update canceled: storage is full"
+            + (f" ({detail})" if detail else "")
+            + ".\nDelete some print files, then tap Update again."
+        )
+        popup.confirm_button_text("OK")
+        popup.cancel_button.hide()
+        self._disk_full_popup = popup
+        popup.open()
 
     def handle_update_rejected(self) -> None:
         """Daemon refused the request (already busy): drop the optimistic overlay and toast."""

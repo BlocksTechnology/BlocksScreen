@@ -168,6 +168,36 @@ bs_ensure_usb_max_current() {
     return 0
 }
 
+# Mirrors updater.models.MIN_FREE_MB: below it a tree reset or pyc write can truncate files.
+BS_MIN_FREE_MB=200
+
+# Free MiB on the filesystem holding $1.
+bs_free_mb() {
+    df -Pm "$1" 2>/dev/null | awk 'NR == 2 { print $4 }'
+}
+
+# Drop re-downloadable caches (pip, uv, apt archives); user data is never touched. $1 = home.
+bs_reclaim_disk() {
+    rm -rf "$1/.cache/pip" "$1/.cache/uv" 2>/dev/null || true
+    timeout 30 sudo -n /usr/local/sbin/bs-apt-helper clean >/dev/null 2>&1 || true
+}
+
+# Reclaim when short; true (0) while the disk is still below BS_MIN_FREE_MB. $1 = path, $2 = home.
+bs_disk_low() {
+    local free
+    free=$(bs_free_mb "$1")
+    [ -n "$free" ] || return 1
+    [ "$free" -ge "$BS_MIN_FREE_MB" ] && return 1
+    bs_reclaim_disk "$2"
+    free=$(bs_free_mb "$1")
+    [ -n "$free" ] && [ "$free" -lt "$BS_MIN_FREE_MB" ]
+}
+
+# Delete __pycache__ under each arg: CPython keeps a truncated .pyc from a full disk forever.
+bs_purge_pycache() {
+    find "$@" -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+}
+
 # True while a live updater daemon runs its UI recovery ladder (fast_attempt > 0, not saturated). $1 = state file, $2 = python.
 bs_selfheal_engaged() {
     local state="$1" py="$2"
