@@ -586,3 +586,130 @@ class TestRF50KlipperHook:
         result = _run_rf50_hook(tmp_path, rf50_home, SUDO_RC="1")
         assert result.returncode == 0, result.stderr
         assert "WARN: could not restart" in result.stdout
+
+
+SPOOLMAN_HOOK = HOOK.with_name("Spoolman.sh")
+_RELEASE_INFO = '{\n  "project_name": "Spoolman",\n  "version": "v0.26.0"\n}\n'
+
+
+@pytest.fixture
+def spoolman_home(tmp_path: Path) -> Path:
+    """A Spoolman clone carrying both factory leftovers."""
+    home = tmp_path / "home"
+    repo = home / "Spoolman"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "scripts" / "start.sh").write_text("")
+    _git(repo, "init", "-q")
+    _git(repo, "add", ".")
+    (repo / "Spoolman" / ".venv").mkdir(parents=True)
+    (repo / "Spoolman" / "release_info.json").write_text(_RELEASE_INFO)
+    (repo / "Spoolman" / ".env").write_text(
+        "#SPOOLMAN_DIR_DATA=/home/pi/spoolman_data\n"
+    )
+    (repo / "uv").mkdir()
+    for name in ("uv", "uvx"):
+        (repo / "uv" / name).write_text("")
+    return home
+
+
+def _run_spoolman_hook(
+    tmp_path: Path, home: Path, health: str = "healthy", unit_dir: str = ""
+) -> subprocess.CompletedProcess:
+    """Run Spoolman.sh with stub uv/curl/systemctl/sudo/sleep; no moonraker.conf."""
+    stub_bin = tmp_path / "stub-bin"
+    stub_bin.mkdir(exist_ok=True)
+    stubs = {
+        "curl": f'echo \'{{"status": "{health}"}}\'',
+        "systemctl": f'[ "$1" = show ] && echo "{unit_dir}"; exit 0',
+        "sudo": "exit 0",
+        "sleep": "exit 0",
+        "uv": "exit 0",
+    }
+    for name, body in stubs.items():
+        (stub_bin / name).write_text(f"#!/bin/bash\n{body}\n")
+        (stub_bin / name).chmod(0o755)
+    env = {
+        "PATH": f"{stub_bin}:{os.environ['PATH']}",
+        "HOME": str(home),
+        "COMPONENT_PATH": str(home / "Spoolman"),
+        "BLOCKSSCREEN_VENV": str(tmp_path / "no-venv"),
+    }
+    return subprocess.run(
+        ["bash", str(SPOOLMAN_HOOK)],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+class TestSpoolmanHook:
+    def test_removes_factory_leftovers(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert not (repo / "Spoolman").exists()
+        assert not (repo / "uv").exists()
+        assert (repo / "scripts" / "start.sh").exists()
+
+    def test_keeps_dirs_without_installer_fingerprint(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        (repo / "Spoolman" / "release_info.json").unlink()
+        (repo / "uv" / "notes.txt").write_text("mine")
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "Spoolman").is_dir()
+        assert (repo / "uv" / "notes.txt").exists()
+
+    def test_keeps_tracked_and_unit_dirs(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        _git(repo, "add", "uv")
+        result = _run_spoolman_hook(
+            tmp_path, spoolman_home, unit_dir=str(repo / "Spoolman")
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "Spoolman" / "release_info.json").exists()
+        assert (repo / "uv" / "uv").exists()
+
+    def test_git_failure_keeps_leftovers(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        (repo / ".git" / "index").write_bytes(b"corrupt")
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "Spoolman").is_dir()
+        assert (repo / "uv").is_dir()
+
+    @pytest.mark.parametrize(
+        ("rel", "text"),
+        [
+            ("data/spoolman.db", ""),
+            ("backups/spoolman.db.1", ""),
+            (".env", "SPOOLMAN_DIR_DATA=/home/blocks/Spoolman/Spoolman/data\n"),
+            (".env", "export SPOOLMAN_DIR_BACKUPS=/srv/bk\n"),
+        ],
+    )
+    def test_keeps_release_dir_with_data(self, tmp_path, spoolman_home, rel, text):
+        release = spoolman_home / "Spoolman" / "Spoolman"
+        (release / rel).parent.mkdir(parents=True, exist_ok=True)
+        (release / rel).write_text(text)
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (release / rel).exists()
+        assert "kept Spoolman/" in result.stdout
+
+    def test_keeps_symlinked_dir(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        target = tmp_path / "shared-uv"
+        (repo / "uv").rename(target)
+        (repo / "uv").symlink_to(target)
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "uv").is_symlink()
+        assert (target / "uv").exists()
+
+    def test_unhealthy_install_keeps_leftovers(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        result = _run_spoolman_hook(tmp_path, spoolman_home, health="down")
+        assert result.returncode == 1
+        assert (repo / "Spoolman").is_dir()
+        assert (repo / "uv").is_dir()
