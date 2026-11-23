@@ -126,7 +126,7 @@ async def _run(
     cwd: Path | None = None,
     env: dict[str, str] | None = None,
 ) -> tuple[bool, str]:
-    """Run a subprocess -> (success, stdout_or_stderr); timeout SIGTERM/5s/SIGKILL/5s, cancel SIGKILL/2s then re-raise."""
+    """Run a subprocess -> (success, stdout_or_stderr); timeout SIGTERM/5s/SIGKILL/5s, cancel SIGTERM/2s/SIGKILL/2s then re-raise."""
     proc = await asyncio.create_subprocess_exec(
         *[str(c) for c in cmd],
         cwd=cwd,
@@ -145,7 +145,9 @@ async def _run(
             await _reap(proc, signal.SIGKILL, 5.0)
         return False, f"timed out after {timeout}s"
     except asyncio.CancelledError:
-        await _reap(proc, signal.SIGKILL, 2.0)
+        # SIGKILL skips git's lockfile cleanup and strands .git/index.lock.
+        if not await _reap(proc, signal.SIGTERM, 2.0):
+            await _reap(proc, signal.SIGKILL, 2.0)
         raise
 
 

@@ -6,7 +6,10 @@ import asyncio
 import json
 import os
 import shutil
+import signal
+import subprocess
 import time
+from functools import partial
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,6 +17,7 @@ import pytest
 
 from updater.models import CLOCK_UNSYNCED
 from updater.executor import (
+    GIT,
     _moonraker_call,
     moonraker_refresh_repo,
     moonraker_repo_hashes,
@@ -159,15 +163,20 @@ class TestRun:
         assert killpg_mock.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_cancel_kills_process_and_reraises(self, tmp_path):
+    @pytest.mark.parametrize(
+        ("drains", "signals"),
+        [
+            ([(b"", b"")], [signal.SIGTERM]),
+            ([asyncio.TimeoutError, (b"", b"")], [signal.SIGTERM, signal.SIGKILL]),
+        ],
+    )
+    async def test_cancel_terminates_first_then_reraises(
+        self, tmp_path, drains, signals
+    ):
         proc = _make_proc(0)
         proc.returncode = None  # still running
         proc.pid = 1234
-
-        async def hang(*_a, **_kw):
-            raise asyncio.CancelledError
-
-        proc.communicate = hang
+        proc.communicate = AsyncMock(side_effect=[asyncio.CancelledError, *drains])
         with (
             patch(
                 "asyncio.create_subprocess_exec",
@@ -179,8 +188,38 @@ class TestRun:
         ):
             with pytest.raises(asyncio.CancelledError):
                 await _run(["/bin/sleep", "999"], timeout=5.0, cwd=tmp_path)
-        # Should call killpg once with SIGKILL on cancel
-        assert killpg_mock.call_count == 1
+        assert [c.args[1] for c in killpg_mock.call_args_list] == signals
+
+    @pytest.mark.asyncio
+    async def test_cancel_mid_git_write_leaves_no_index_lock(self, tmp_path):
+        """Regression: SIGKILL on cancel stranded .git/index.lock and blocked the revert."""
+        repo = tmp_path / "r"
+        (repo / "d").mkdir(parents=True)
+        git = partial(subprocess.run, cwd=repo, check=True, capture_output=True)
+        git([GIT, "init", "-q"])
+        trees = []
+        for tag in ("a", "b"):
+            for i in range(20000):
+                (repo / "d" / f"f{i}").write_text(f"{tag}{i}\n")
+            git([GIT, "add", "-A"])
+            trees.append(git([GIT, "write-tree"], text=True).stdout.strip())
+        git([GIT, "read-tree", "--reset", "-u", trees[0]])
+        lock = repo / ".git" / "index.lock"
+
+        task = asyncio.create_task(
+            _run([GIT, "read-tree", "--reset", "-u", trees[1]], timeout=60.0, cwd=repo)
+        )
+        while not lock.exists() and not task.done():
+            await asyncio.sleep(0.001)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert not lock.exists()
+        ok, err = await _run(
+            [GIT, "read-tree", "--reset", "-u", trees[0]], timeout=60.0, cwd=repo
+        )
+        assert ok, err
 
     @pytest.mark.asyncio
     async def test_timeout_returns_with_flooding_child(self, tmp_path):
