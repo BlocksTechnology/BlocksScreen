@@ -33,6 +33,11 @@ def restart_sentinel_path() -> Path:
     return _runtime_dir() / "updater-restart-needed"
 
 
+def code_hash_path() -> Path:
+    """Return where the daemon records the code it loaded, read by bs-bootstrap."""
+    return _runtime_dir() / "updater-code-hash"
+
+
 @contextlib.contextmanager
 def process_lock() -> Iterator[bool]:
     """Acquire the shared updater lock non-blocking; an OSError counts as not held."""

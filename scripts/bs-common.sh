@@ -1,8 +1,8 @@
 #!/bin/bash
-# Shared helpers sourced by BlocksScreen-start.sh and post-merge. Definitions
+# Shared helpers sourced by BlocksScreen-start.sh, bs-bootstrap.sh and post-merge. Definitions
 # only, no side effects. Callers run as `blocks` (NOPASSWD sudo on deployment).
 
-# Idempotently patch moonraker.conf. $1 = conf path, $2 = log tag.
+# Idempotently patch moonraker.conf. $1 = conf path, $2 = log tag, $3 = defer (sets BS_MOONRAKER_RESTART_OWED).
 bs_migrate_moonraker_conf() {
     local conf="$1" tag="${2:-bs-common}" patched=false
     [ -f "$conf" ] || return 0
@@ -41,7 +41,12 @@ bs_migrate_moonraker_conf() {
     if bs_ensure_asvc "${conf%/config/moonraker.conf}/moonraker.asvc" "$tag"; then
         patched=true
     fi
-    $patched && sudo systemctl restart moonraker.service 2>/dev/null || true
+    if [ "${3:-}" = defer ]; then
+        # shellcheck disable=SC2034  # read by the caller
+        BS_MOONRAKER_RESTART_OWED=$patched
+    else
+        $patched && sudo systemctl restart moonraker.service 2>/dev/null || true
+    fi
     return 0
 }
 
@@ -184,6 +189,90 @@ except (OSError, ValueError, AttributeError):
 n = comp.get("fast_attempt") if isinstance(comp, dict) else 0
 sys.exit(0 if type(n) is int and n > 0 else 1)
 PY
+}
+
+# True inside moonraker.service, where a Mainsail pull runs the hook. $1 = cgroup file (tests).
+bs_in_moonraker_cgroup() {
+    grep -q '/moonraker\.service$' "${1:-/proc/self/cgroup}" 2>/dev/null
+}
+
+# Hash of post-merge's install trigger files, stamped by install-updater.sh. $1 = scripts dir.
+bs_updater_install_hash() {
+    (cd "$1" 2>/dev/null && md5sum install-updater.sh bs-apt-helper.sh \
+        BlocksScreen-updater.service BlocksScreen-bootstrap.service \
+        BlocksScreen-clock.service BlocksScreen-clock.timer \
+        com.blockscreen.Updater.conf com.blockscreen.Updater.service \
+        requirements-pip.txt 2>/dev/null) | md5sum | cut -d' ' -f1
+}
+
+# True while an update batch or the deploy unit may run install-updater.sh.
+bs_updater_install_busy() {
+    local f
+    for f in /run/blockscreen/updater.lock "$_BSENV_HOME/.cache/blockscreen/updater.lock"; do
+        [ -e "$f" ] && ! flock -n "$f" true 2>/dev/null && return 0
+    done
+    systemctl is-active --quiet BlocksScreen-deploy.service 2>/dev/null
+}
+
+# Twin of updater.__main__.code_hash: updater/*.py + components.yaml, C-sorted. $1 = BS_PATH.
+bs_updater_code_hash() {
+    local f
+    for f in $(printf '%s\n' "$1"/updater/*.py "$1/updater/components.yaml" | LC_ALL=C sort); do
+        cat -- "$f" 2>/dev/null || true
+    done | sha256sum | cut -d' ' -f1
+}
+
+# True when the daemon has run >2 min on code other than what is on disk. $1 = BS_PATH.
+bs_updater_code_stale() {
+    local f want since now
+    since=$(systemctl show -p ActiveEnterTimestampMonotonic --value BlocksScreen-updater.service 2>/dev/null)
+    now=$(cut -d. -f1 /proc/uptime 2>/dev/null)
+    case "$since$now" in '' | *[!0-9]*) return 1 ;; esac
+    # A fresh daemon may not have recorded its hash yet.
+    [ "$since" -gt 0 ] && [ $((now - since / 1000000)) -ge 120 ] || return 1
+    want=$(bs_updater_code_hash "$1")
+    for f in /run/blockscreen/updater-code-hash "$_BSENV_HOME/.cache/blockscreen/updater-code-hash"; do
+        [ "$(cat "$f" 2>/dev/null)" = "$want" ] && return 1
+    done
+    return 0
+}
+
+# Wait out a Moonraker update (capped, rc 1) or a print (uncapped); unreachable = idle. $1 conf, $2 cap s.
+bs_wait_moonraker_idle() {
+    local url status waited=0
+    url="http://127.0.0.1:$(sed -n '/^\[server\]/,/^\[/ s/^port:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$1" 2>/dev/null | head -n1)"
+    [ "$url" = "http://127.0.0.1:" ] && url="${url}7125"
+    while :; do
+        # Captured, not piped to grep -q: under pipefail curl's SIGPIPE reads as idle.
+        status=$(curl -fsm 5 "$url/printer/objects/query?print_stats=state" 2>/dev/null) || status=""
+        case "$status" in *'"state": "printing"'* | *'"state":"printing"'* | *'"state": "paused"'* | *'"state":"paused"'*)
+            sleep 30
+            continue
+            ;;
+        esac
+        status=$(curl -fsm 5 "$url/machine/update/status" 2>/dev/null) || return 0
+        case "$status" in *'"busy": true'* | *'"busy":true'*) ;; *) return 0 ;; esac
+        [ "$waited" -ge "${2:-1800}" ] && return 1
+        sleep 5
+        waited=$((waited + 5))
+    done
+}
+
+# Restart moonraker for a conf patch once idle. $1 conf, $2 owed flag, $3 cap s, $4 pre-patch PID.
+bs_settle_moonraker_restart() {
+    [ -e "$2" ] || return 0
+    local pid="${4:-}"
+    [ -n "$pid" ] || pid=$(systemctl show -p MainPID --value moonraker.service 2>/dev/null)
+    if ! bs_wait_moonraker_idle "$1" "${3:-1800}"; then
+        echo "[bs-common] moonraker still updating - restart stays owed to the next start"
+        return 0
+    fi
+    # New PID = Moonraker already reloaded, e.g. at the end of Update All.
+    if [ "$(systemctl show -p MainPID --value moonraker.service 2>/dev/null)" = "$pid" ]; then
+        echo "[bs-common] restarting moonraker for the patched moonraker.conf"
+        sudo systemctl restart moonraker.service 2>/dev/null || true
+    fi
+    rm -f "$2"
 }
 
 # Disable Moonraker management of repos the BlocksScreen daemon now owns, so a

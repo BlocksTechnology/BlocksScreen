@@ -87,7 +87,6 @@ if [ -n "$_FB_W" ] && [ -n "$_FB_H" ] && [ "$_FB_W" -gt 0 ] 2>/dev/null; then
 fi
 git -C "$BS_PATH" config core.hooksPath scripts 2>/dev/null || true
 
-bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" BlocksScreen-start
 bs_ensure_install_state "$BS_PATH" "$BSENV" BlocksScreen-start
 bs_ensure_usb_max_current /boot/firmware/config.txt BlocksScreen-start || true
 
