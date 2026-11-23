@@ -52,9 +52,10 @@ bs_migrate_moonraker_conf() {
     return 0
 }
 
-# Durable replace: fsync the temp, rename it over $2, fsync the dir. A power cut keeps old or new, never NULs.
+# Durable replace keeping mode and owner like `sed -i`: fsync the temp, rename it over $2, fsync the dir. A power cut keeps old or new, never NULs.
 _bs_replace_file() {
     chmod --reference="$2" "$1" 2>/dev/null || true
+    chown --reference="$2" "$1" 2>/dev/null || true
     sync "$1" && mv -f "$1" "$2" && sync "$(dirname "$2")" && return 0
     rm -f "$1"
     return 1
