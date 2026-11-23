@@ -1,0 +1,16 @@
+[Unit]
+Description=BlocksScreen worktree integrity check
+After=local-fs.target
+Before=BlocksScreen-xorg.service BlocksScreen.service BlocksScreen-updater.service
+Before=BlocksScreen-deploy.service BlocksScreen-bootstrap.service BlocksScreen-clock.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=120
+ExecStart=/bin/bash /usr/local/lib/blocksscreen/bs-tree-guard.sh BS_DIR BS_PRIMARY_HOME
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

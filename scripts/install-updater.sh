@@ -24,6 +24,8 @@ BS_PATH=$(dirname "$SCRIPT_PATH")
 _BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
+# The tree may come from a checkout no one synced; a power cut before writeback empties its files.
+sync -f "$BS_PATH" || true
 
 # Venv-mutating commands run as blocks: root-owned dists break later pip-as-blocks runs.
 _as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
@@ -249,6 +251,17 @@ for _unit in BlocksScreen-clock.service BlocksScreen-clock.timer; do
         sudo systemctl link --no-reload "$SCRIPT_PATH/$_unit"
     fi
 done
+echo_info "Installing BlocksScreen-tree-guard service ..."
+# Outside the tree and a regular unit file: a power cut that empties the tree cannot empty its healer.
+sudo mkdir -p /usr/local/lib/blocksscreen
+_install_atomic 0755 "$SCRIPT_PATH/bs-tree-guard.sh" /usr/local/lib/blocksscreen/bs-tree-guard.sh
+GUARD_SVC=$(cat "$SCRIPT_PATH/BlocksScreen-tree-guard.service")
+GUARD_SVC=${GUARD_SVC//BS_DIR/$BS_PATH}
+GUARD_SVC=${GUARD_SVC//BS_PRIMARY_HOME/$_BSENV_HOME}
+echo "$GUARD_SVC" | sudo tee /etc/systemd/system/.BlocksScreen-tree-guard.service.new >/dev/null
+sudo mv -Tf /etc/systemd/system/.BlocksScreen-tree-guard.service.new /etc/systemd/system/BlocksScreen-tree-guard.service
+sudo systemctl enable --no-reload BlocksScreen-tree-guard.service
+
 # One reload for all units; each implicit reload costs ~0.3 s on a Pi.
 sudo systemctl daemon-reload
 sudo systemctl enable --now --no-reload BlocksScreen-deploy.path
@@ -383,6 +396,8 @@ fi
 # self-update added and touch the deploy flag again; restarting earlier could
 # let that happen mid-run, and BlocksScreen-deploy.service's ExecStartPost would
 # then delete the flag and drop the follow-up setup.
+# Same root filesystem: persists the units and the guard installed above.
+sync -f "$BS_PATH" || true
 sudo systemctl --no-block restart BlocksScreen-updater.service || true
 echo_ok "BlocksScreen-updater restart queued"
 

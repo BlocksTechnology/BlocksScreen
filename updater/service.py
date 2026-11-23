@@ -794,6 +794,12 @@ class UpdateService:
                 return fields[0], 0
             if len(fields) == 2 and fields[1].isdigit():
                 return fields[0], int(fields[1])
+        # A power cut can empty a marker whose write was never synced: the batch base survives it.
+        if not fields:
+            prev = self._read_state().get(_UI_COMPONENT, {}).get("prev_hash")
+            if _is_sha(prev):
+                self._log.warning("followup: empty marker, using base %s", prev[:8])
+                return prev, 0
         self._clear_followup()
         return "", 0
 

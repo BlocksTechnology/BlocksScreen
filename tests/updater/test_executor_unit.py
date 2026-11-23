@@ -1726,6 +1726,22 @@ class TestStaleIndexLockHandling:
         assert ok is True
         mock_clear.assert_called_once_with(Path("/x"))
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("rc", [0, 1])
+    async def test_git_reset_to_hash_syncs_only_on_success(self, rc):
+        proc = _make_proc(rc, b"", b"fatal: bad revision")
+        with (
+            patch("updater.executor.os.sync") as mock_sync,
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=proc,
+            ),
+        ):
+            ok, _msg = await git_reset_to_hash(Path("/x"), "abc123")
+        assert ok is (rc == 0)
+        assert mock_sync.call_count == (1 if rc == 0 else 0)
+
 
 class TestCorruptHeadHandling:
     @pytest.mark.asyncio

@@ -19,6 +19,9 @@ if [ -f "$SCRIPT_PATH/bs-common.sh" ]; then . "$SCRIPT_PATH/bs-common.sh"; fi
 
 bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" post-merge
 
+# Runs inside the pull: sync the new tree before anything acts on it.
+sync -f "$BS_PATH" || true
+
 changed=$(git -C "$BS_PATH" diff ORIG_HEAD HEAD --name-only 2>/dev/null || true)
 
 # Pre-flight: heavy prep before any restart; everything here is idempotent.
@@ -109,7 +112,7 @@ _record_or() {
     fi
 }
 
-if echo "$changed" | grep -qE '^scripts/BlocksScreen-updater\.service$|^scripts/BlocksScreen-bootstrap\.service$|^scripts/BlocksScreen-clock\.service$|^scripts/BlocksScreen-clock\.timer$|^scripts/com\.blockscreen\.Updater\.conf$|^scripts/com\.blockscreen\.Updater\.service$|^scripts/install-updater\.sh$|^scripts/bs-apt-helper\.sh$|^scripts/requirements-pip\.txt$'; then
+if echo "$changed" | grep -qE '^scripts/BlocksScreen-updater\.service$|^scripts/BlocksScreen-bootstrap\.service$|^scripts/BlocksScreen-clock\.service$|^scripts/BlocksScreen-clock\.timer$|^scripts/com\.blockscreen\.Updater\.conf$|^scripts/com\.blockscreen\.Updater\.service$|^scripts/install-updater\.sh$|^scripts/bs-apt-helper\.sh$|^scripts/requirements-pip\.txt$|^scripts/bs-tree-guard\.sh$|^scripts/BlocksScreen-tree-guard\.service$'; then
     echo "[post-merge] Updater install files changed - reinstalling updater ..."
     _record_or install sudo bash "$SCRIPT_PATH/install-updater.sh"
 elif echo "$changed" | grep -qE '^scripts/bs-splash-holder\.py$'; then

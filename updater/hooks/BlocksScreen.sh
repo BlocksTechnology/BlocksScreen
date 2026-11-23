@@ -5,6 +5,8 @@ set -euo pipefail
 if [ -z "${COMPONENT_PATH:-}" ] || [ -z "${PREV_HASH:-}" ] || [ -z "${NEW_HASH:-}" ]; then
     exit 0
 fi
+# Before any flag or restart: git writes the tree without fsync, and an older daemon never syncs it.
+sync -f "$COMPONENT_PATH" || true
 
 _set_deploy_flag() {
     # Mid-batch: record to the sentinel; setting the flag now would fire deploy mid-batch.
@@ -79,7 +81,8 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         scripts/BlocksScreen-updater.service scripts/BlocksScreen-bootstrap.service \
         scripts/BlocksScreen-clock.service scripts/BlocksScreen-clock.timer \
         scripts/com.blockscreen.Updater.conf scripts/com.blockscreen.Updater.service \
-        scripts/requirements-pip.txt \
+        scripts/requirements-pip.txt scripts/bs-tree-guard.sh \
+        scripts/BlocksScreen-tree-guard.service \
         2>/dev/null; then
     echo "[hook:BlocksScreen] install files changed - setting deploy flag"
     _set_deploy_flag
@@ -102,5 +105,6 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     _base=$(head -n1 "$_followup" 2>/dev/null || true)
     mkdir -p "$(dirname "$_followup")"
     printf '%s\n' "${_base:-$PREV_HASH}" >"$_followup.tmp" && mv -f "$_followup.tmp" "$_followup"
+    sync -f "$_followup" || true
     echo "[hook:BlocksScreen] components.yaml changed - follow-up queued"
 fi
