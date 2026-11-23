@@ -294,6 +294,12 @@ class UpdateService:
         self._offline_provision_tries = 0
         self._offline_followup_tries = 0
         self._restarted_services: set[str] = set()
+        self._committed = False
+
+    @property
+    def update_committed(self) -> bool:
+        """True from an update's commit until it ends, while only restarts remain."""
+        return self._committed
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -1179,7 +1185,7 @@ class UpdateService:
                 )
                 self._cb("on_component_done", c.name, True)
             # Durable now; the self-restart's CancelledError must never revert.
-            committed = True
+            committed = self._committed = True
             await self._finalize_git_batch(alive, batch, pending_revert, ui_components)
             return not failed
         except asyncio.CancelledError:
@@ -1202,6 +1208,8 @@ class UpdateService:
                 alive, prev, touched, restarted, "unexpected_error", pending_revert
             )
             return False
+        finally:
+            self._committed = False
 
     async def _safe_revert(self, component: ComponentConfig, prev_hash: str) -> bool:
         """Reset one repo, containing a raise so it cannot skip the rest of the recovery."""
@@ -2586,7 +2594,7 @@ class UpdateService:
                 return False
             self._history("update_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
-            committed = True
+            committed = self._committed = True
             await asyncio.to_thread(self._clear_inflight)
             await self._fire_and_forget_restart(component)
             await self._apply_deferred_restart()
@@ -2627,6 +2635,8 @@ class UpdateService:
                     exc_info=True,
                 )
             return False
+        finally:
+            self._committed = False
 
     def _apt_failed(self, err: str) -> None:
         """Open the apt breaker, classifying the failure as permanent or transient."""

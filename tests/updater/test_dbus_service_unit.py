@@ -884,6 +884,16 @@ class TestProvisioningFlag:
         await svc.cancel()
         assert svc._busy is True
 
+    @pytest.mark.asyncio
+    async def test_cancel_ignored_after_commit(self, svc):
+        task = asyncio.ensure_future(asyncio.sleep(10))
+        task.set_name("update_all")
+        svc._background_tasks.add(task)
+        svc._svc.update_committed = svc._busy = True
+        await svc.cancel()
+        assert not task.cancelled() and svc._busy is True
+        task.cancel()
+
 
 class TestMethodReturnValues:
     @pytest.mark.asyncio

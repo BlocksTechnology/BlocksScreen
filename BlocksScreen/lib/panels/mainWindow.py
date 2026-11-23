@@ -141,6 +141,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._reconnect_timer.timeout.connect(self._on_reconnect_timer)
         self._klippy_ready: bool = False
         self._klippy_state: str | None = None
+        self._klippy_settled_state: str | None = None
         self._klipper_auto_restart_pending: bool = False
         self._klipper_restart_timeout = QtCore.QTimer(self)
         self._klipper_restart_timeout.setSingleShot(True)
@@ -506,6 +507,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_klippy_state(self, state: str) -> None:
         self._klippy_ready = state == "ready"
         self._klippy_state = state
+        was_ready = self._klippy_settled_state == "ready"
+        if state in ("ready", "shutdown", "error"):
+            self._klippy_settled_state = state
         if state != "ready":
             # print_stats is re-reported once Klipper is ready again.
             self._print_state_known = False
@@ -514,8 +518,9 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self._klipper_disconnect_grace.stop()
         if state == "shutdown":
-            if self._update_in_progress:
-                _logger.warning("Klipper E-stop detected — cancelling active update")
+            # Reconnects re-report an old shutdown; only ready -> shutdown is an E-stop.
+            if self._update_in_progress and was_ready:
+                _logger.warning("Klipper E-stop detected, cancelling active update")
                 self.updater_worker.trigger_cancel()
         elif state == "ready" and self._klipper_auto_restart_pending:
             _logger.info("Klipper back online after auto-restart")

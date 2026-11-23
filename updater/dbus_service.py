@@ -575,6 +575,9 @@ class UpdaterInterface(
         if self._provisioning:
             _log.info("cancel() ignored: component install in progress")
             return
+        if self._svc.update_committed:
+            _log.info("cancel() ignored: update committed, finishing restarts")
+            return
         cancelled_tasks: list[asyncio.Task] = []
         for task in list(self._background_tasks):
             name = task.get_name()
