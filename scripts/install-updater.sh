@@ -403,6 +403,8 @@ if [[ -d "$_DD_REPO/.git" ]]; then
 fi
 
 # Stamp last: bs-bootstrap and post-merge re-run this script until it is written.
+# Persist the guard and units first: a stamp that outlives them skips the reinstall.
+sync -f "$BS_PATH" || true
 _stamp=$(bs_updater_install_hash "$SCRIPT_PATH")
 if echo "$_stamp" | sudo tee "$BSENV/.blockscreen-updater-hash.new" >/dev/null \
     && sudo chown "$_BSENV_USER" "$BSENV/.blockscreen-updater-hash.new" \

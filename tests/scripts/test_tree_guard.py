@@ -147,6 +147,69 @@ def test_emptied_branch_ref_resets_to_local_remote_ref_offline(repo, tmp_path, e
     assert _flag(tmp_path / "home").exists()
 
 
+_V2 = "#!/bin/bash\necho v2\n"
+
+
+def _commit_v2(repo: Path, env: dict[str, str]) -> tuple[str, str]:
+    """Commit a second version of start.sh; returns (v1, v2) hashes."""
+    v1 = _git(repo, "rev-parse", "HEAD").strip()
+    (repo / "scripts/start.sh").write_text(_V2)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-qam", "v2"], check=True, env=env
+    )
+    return v1, _git(repo, "rev-parse", "HEAD").strip()
+
+
+def _last_good(home: Path, commit: str) -> None:
+    cache = home / ".cache" / "blockscreen"
+    cache.mkdir(parents=True)
+    (cache / "last_good_commit").write_text(f"{commit}\n")
+
+
+def test_emptied_loose_ref_does_not_fall_back_to_packed_ref(repo, tmp_path, env):
+    # Packed at v1, as after gc --auto.
+    subprocess.run(["git", "-C", str(repo), "pack-refs", "--all"], check=True, env=env)
+    _, v2 = _commit_v2(repo, env)
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").strip()
+    (repo / ".git/refs/heads" / branch).write_bytes(b"")
+    (repo / "scripts/start.sh").write_text("")
+    _last_good(tmp_path / "home", v2)
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert _git(repo, "rev-parse", "HEAD").strip() == v2
+    assert (repo / "scripts/start.sh").read_text() == _V2
+
+
+def test_emptied_ref_and_index_still_reset(repo, tmp_path, env):
+    head = _git(repo, "rev-parse", "HEAD").strip()
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").strip()
+    (repo / ".git/refs/heads" / branch).write_bytes(b"")
+    (repo / ".git/index").write_bytes(b"")
+    (repo / "scripts/start.sh").write_text("")
+    _last_good(tmp_path / "home", head)
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert _git(repo, "rev-parse", "HEAD").strip() == head
+    assert (repo / "scripts/start.sh").read_text() == _FILES["scripts/start.sh"]
+    assert _git(repo, "status", "--porcelain") == ""
+
+
+def test_emptied_blob_falls_back_to_last_good(repo, tmp_path, env):
+    v1, _ = _commit_v2(repo, env)
+    blob = _git(repo, "rev-parse", "HEAD:scripts/start.sh").strip()
+    obj = repo / ".git/objects" / blob[:2] / blob[2:]
+    obj.chmod(0o644)
+    obj.write_bytes(b"")  # loose objects are not fsynced by default
+    (repo / "scripts/start.sh").write_text("")
+    _last_good(tmp_path / "home", v1)
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert "restore failed, resetting" in res.stdout
+    assert _git(repo, "rev-parse", "HEAD").strip() == v1
+    assert (repo / "scripts/start.sh").read_text() == _FILES["scripts/start.sh"]
+    assert _flag(tmp_path / "home").exists()
+
+
 def test_emptied_orig_head_is_removed_so_the_next_pull_works(repo, tmp_path, env):
     (repo / ".git/ORIG_HEAD").write_bytes(b"")  # cut right after a pull
     res = _run(repo, tmp_path / "home", env)
