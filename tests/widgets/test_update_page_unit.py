@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from updater.models import CLOCK_UNSYNCED, PRINTER_BUSY, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, DISK_FULL, PRINTER_BUSY, ComponentStatus
 
 _UP_MOD = "BlocksScreen.lib.panels.widgets.MainWindow.updatePage"
 
@@ -568,6 +568,31 @@ class TestConfirmPopupCleanup:
         second.deleteLater.assert_not_called()
 
 
+class TestCommittedCancel:
+    def test_committed_hides_cancel_and_false_restores_it(self, page):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page._cancel_btn.reset_mock()
+        page.handle_committed_changed(True)
+        page._cancel_btn.hide.assert_called_once()
+        page.handle_committed_changed(False)
+        page._cancel_btn.show.assert_called_once()
+
+    def test_busy_while_committed_keeps_cancel_hidden(self, page):
+        page.show_loading = MagicMock()
+        page.handle_committed_changed(True)
+        page.handle_busy_changed(True)
+        page._cancel_btn.setVisible.assert_called_with(False)
+
+    def test_committed_false_keeps_cancel_hidden_while_provisioning(self, page):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page.handle_provisioning_changed(True)
+        page._cancel_btn.reset_mock()
+        page.handle_committed_changed(False)
+        page._cancel_btn.show.assert_not_called()
+
+
 class TestBootProvisioning:
     def test_declared_provisioning_shows_installing_message(self, page, qtbot):
         page.show_loading = MagicMock()
@@ -817,3 +842,19 @@ class TestDeployUnitsLive:
         # Same fallback as the daemon's deploy_running(); the 900 s cap still bounds it.
         with patch(f"{_UP_MOD}.subprocess.run", side_effect=OSError):
             assert UpdatePage._deploy_units_live() is True
+
+
+class TestDiskFullPopup:
+    def test_disk_full_opens_one_persistent_popup(self, page):
+        page._show_toast = MagicMock()
+        reason = f"{DISK_FULL}: 50 MB free, 200 MB needed"
+        with patch(f"{_UP_MOD}.BasePopup") as popup_cls:
+            popup = popup_cls.return_value
+            popup.isVisible.return_value = True
+            page.handle_error_occurred("system", reason)
+            page.handle_error_occurred("BlocksScreen", reason)
+        popup_cls.assert_called_once()
+        msg = popup.set_message.call_args[0][0].lower()
+        assert "full" in msg and "delete" in msg
+        popup.open.assert_called_once()
+        page._show_toast.assert_not_called()

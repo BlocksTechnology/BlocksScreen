@@ -21,6 +21,7 @@ from updater.models import (
     DEPLOY_LIVE_STATES,
     DEPLOY_PATH_UNIT,
     CLOCK_UNSYNCED,
+    DISK_FULL,
     DEPLOY_UNITS,
     PRINTER_BUSY,
     ComponentStatus,
@@ -101,6 +102,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._overlay_shown: bool = False
         self._restart_pending: bool = False
         self._provisioning: bool = False
+        self._committed: bool = False
         self._elapsed_time_seconds: int = 0
         self._elapsed_timer: QtCore.QTimer = QtCore.QTimer(self)
         self._elapsed_timer.setSingleShot(False)
@@ -130,6 +132,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._deploy_cap_timer.setInterval(int(DEPLOY_HOLD_CAP_S * 1000))
         self._deploy_cap_timer.timeout.connect(self._on_deploy_cap)
         self._update_confirm_popup: BasePopup | None = None
+        self._disk_full_popup: BasePopup | None = None
         self.show_loading(True)
 
     def _request_status_debounced(self) -> None:
@@ -416,10 +419,12 @@ class UpdatePage(QtWidgets.QWidget):
             self._elapsed_time_label.show()
             self._progress_label.setText("")
             self._progress_label.show()
-            # The daemon ignores cancel() while installing a component.
-            self._cancel_btn.setVisible(not self._provisioning)
+            # The daemon ignores cancel() while installing a component or once committed.
+            self._cancel_btn.setVisible(not (self._provisioning or self._committed))
         else:
             self._provisioning = False
+            # Also clears a commit whose False signal a daemon restart never sent.
+            self._committed = False
             self._elapsed_timer.stop()
             self._busy_timeout_timer.stop()
             self._elapsed_time_label.hide()
@@ -446,6 +451,14 @@ class UpdatePage(QtWidgets.QWidget):
         elif self._busy:
             # Still busy after the clone: the daemon holds it for install-updater.
             self._show_finishing_overlay()
+
+    def handle_committed_changed(self, committed: bool) -> None:
+        """Daemon-declared: past the commit point cancel is ignored, so hide the button."""
+        self._committed = committed
+        if committed:
+            self._cancel_btn.hide()
+        elif self._busy and not self._provisioning:
+            self._cancel_btn.show()
 
     def _show_provisioning_overlay(self) -> None:
         self._overlay_shown = True
@@ -646,7 +659,28 @@ class UpdatePage(QtWidgets.QWidget):
         if reason == PRINTER_BUSY:
             self._show_toast("Printer is busy or not responding. Try again later.")
             return
+        if reason.startswith(DISK_FULL):
+            self._show_disk_full(reason)
+            return
         self._show_toast(f"{name} update failed: {reason}. Tap refresh to retry.")
+
+    def _show_disk_full(self, reason: str) -> None:
+        """Open one popup that stays until tapped; the daemon sends it once per component."""
+        if self._disk_full_popup is not None and self._disk_full_popup.isVisible():
+            return
+        if self._disk_full_popup is not None:
+            self._disk_full_popup.deleteLater()
+        detail = reason.partition(":")[2].strip()
+        popup = BasePopup(self, floating=True)
+        popup.set_message(
+            "Update canceled: storage is full"
+            + (f" ({detail})" if detail else "")
+            + ".\nDelete some print files, then tap Update again."
+        )
+        popup.confirm_button_text("OK")
+        popup.cancel_button.hide()
+        self._disk_full_popup = popup
+        popup.open()
 
     def handle_update_rejected(self) -> None:
         """Daemon refused the request (already busy): drop the optimistic overlay and toast."""

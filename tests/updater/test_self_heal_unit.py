@@ -923,3 +923,48 @@ class TestCorruptionHardening:
             assert "BlocksScreen" not in svc._read_state()  # entry sanitized away
 
         asyncio.run(run_test())
+
+
+class TestDiskFullRecovery:
+    """Rung 0: purge bytecode, reclaim, and never reset the tree on a full disk."""
+
+    def _svc(self, tmp_path: Path) -> UpdateService:
+        from updater.models import ComponentConfig
+
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._components = [
+            ComponentConfig(name="BlocksScreen", kind="git", path=tmp_path, order=99)
+        ]
+        return svc
+
+    def test_full_disk_skips_git_rungs(self, tmp_path, disk):
+        disk.free.return_value = 50.0
+
+        async def run_test():
+            svc = self._svc(tmp_path)
+            svc._write_state({"BlocksScreen": {"prev_hash": "old", "fast_attempt": 0}})
+            with patch.object(svc, "run_recovery_rung") as m_rung:
+                await svc._handle_crash_loop(12)
+            m_rung.assert_not_called()
+            disk.reclaim.assert_awaited_once_with(tmp_path)
+            assert disk.purge.call_count == 2
+
+        asyncio.run(run_test())
+
+    def test_space_ok_purges_then_runs_rung(self, tmp_path, disk, monkeypatch):
+        monkeypatch.setattr(updater_service, "_RECOVERY_SETTLE_S", 0)
+
+        async def run_test():
+            svc = self._svc(tmp_path)
+            svc._write_state({"BlocksScreen": {"prev_hash": "old", "fast_attempt": 0}})
+            with (
+                patch("updater.service.get_service_nrestarts", return_value=12),
+                patch.object(svc, "run_recovery_rung", return_value=True) as m_rung,
+            ):
+                await svc._handle_crash_loop(12)
+            m_rung.assert_called_once_with("BlocksScreen", 1)
+            disk.purge.assert_any_call(tmp_path / "BlocksScreen")
+            disk.reclaim.assert_not_awaited()
+
+        asyncio.run(run_test())

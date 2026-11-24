@@ -113,7 +113,7 @@ _record_or() {
     fi
 }
 
-if echo "$changed" | grep -qE '^scripts/BlocksScreen-updater\.service$|^scripts/BlocksScreen-bootstrap\.service$|^scripts/BlocksScreen-clock\.service$|^scripts/BlocksScreen-clock\.timer$|^scripts/com\.blockscreen\.Updater\.conf$|^scripts/com\.blockscreen\.Updater\.service$|^scripts/install-updater\.sh$|^scripts/bs-apt-helper\.sh$|^scripts/requirements-pip\.txt$' \
+if echo "$changed" | grep -qE "$(bs_updater_install_trigger_regex)" \
     || [ "$(cat "$_UPDATER_STAMP" 2>/dev/null)" != "$(bs_updater_install_hash "$SCRIPT_PATH")" ]; then
     echo "[post-merge] Updater install files changed - reinstalling updater ..."
     _record_or install sudo bash "$SCRIPT_PATH/install-updater.sh"

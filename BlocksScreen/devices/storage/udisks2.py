@@ -9,7 +9,7 @@ from collections.abc import Coroutine
 
 import sdbus
 from helper_methods import USB_FALLBACK_NAME, USB_LABEL_PREFIX, USB_LINK_PREFIXES
-from PyQt6 import QtCore
+from PyQt6 import QtCore, sip
 
 from .device import Device
 from .udisks2_dbus_async import (
@@ -25,6 +25,9 @@ from .udisks2_dbus_async import (
 UDisks2_service: str = "org.freedesktop.UDisks2"
 UDisks2_obj_path: str = "org/freedesktop/UDisks2"
 AlreadyMountedException = "org.freedesktop.UDisks2.Error.AlreadyMounted"
+_STOP_WAIT_MS = 15000
+# Detached monitors stay referenced until they finish, so sip never collects a live one.
+_DETACHED: list[QtCore.QThread] = []
 
 _T = typing.TypeVar(name="_T")
 
@@ -193,7 +196,18 @@ class UDisksDBusAsync(QtCore.QThread):
                 logging.warning("UDisks2 monitor unexpected RuntimeError: %s", err)
         finally:
             self._drain_loop()
+            self._release_devices()
             self._active = False
+
+    def _release_devices(self) -> None:
+        """Drop every tracked device; restore_tracked rebuilds them on the next start."""
+        try:
+            while self.controlled_devs:
+                _, dev = self.controlled_devs.popitem()
+                dev.delete()
+        except Exception as e:
+            # An exception escaping QThread.run() is a qFatal in PyQt6.
+            logging.debug("UDisks2 device release encountered: %s", e)
 
     def _cancel_tasks(self) -> None:
         """Cancel every tracked task. Scheduled onto the loop thread."""
@@ -223,27 +237,37 @@ class UDisksDBusAsync(QtCore.QThread):
 
         Requests cancellation of the tracked tasks from inside the loop thread
         and lets :meth:`run` unwind on its own, instead of stopping the loop
-        mid-future (which raised ``RuntimeError``). ``terminate`` is kept only
-        as a last-resort fallback if the thread fails to stop in time.
+        mid-future (which raised ``RuntimeError``). Never ``terminate``: it can
+        kill the thread while it holds the GIL and hang the app.
         """
         try:
             loop = self.loop
             if loop is not None and loop.is_running():
                 self.stop_event.set()
                 loop.call_soon_threadsafe(self._cancel_tasks)
-            if self.isRunning() and not self.wait(5000):
-                logging.warning("UDisks2 monitor did not stop in time; terminating")
-                self.terminate()
-                _ = self.wait()
-            self._active = False
-            for path in list(self.controlled_devs.keys()):
-                dev: Device = self.controlled_devs.pop(path)
-                dev.delete()
+            if QtCore.QThread.currentThread() is self:
+                # In-thread call from monitor_dbus: run() finishes the teardown.
+                return
+            if self.isRunning() and not self.wait(_STOP_WAIT_MS):
+                self._detach()
+                return
             self.deleteLater()
         except Exception as e:
             logging.error(
                 "Caught exception while trying to close Udisks2 monitor: %s", e
             )
+
+    def _detach(self) -> None:
+        """Orphan a monitor that will not stop, since deleting a running QThread aborts."""
+        logging.warning(
+            "UDisks2 monitor did not stop in %d s; detached, USB monitoring stays"
+            " down until BlocksScreen restarts",
+            _STOP_WAIT_MS // 1000,
+        )
+        _DETACHED[:] = [t for t in _DETACHED if not t.isFinished()]
+        self.setParent(None)
+        sip.transferto(self, None)
+        _DETACHED.append(self)
 
     async def monitor_dbus(self) -> None:
         """Schedule coroutines for UDisks2 signals `interfaces_added`, `interfaces_removed`
