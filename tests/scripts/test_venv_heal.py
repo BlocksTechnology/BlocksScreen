@@ -143,6 +143,8 @@ def test_offline_heal_keeps_pending_then_online_heal_clears_it(
     calls = _fake_pip(monkeypatch, heal, rc=0)
     assert heal.heal() == 1
     assert "--force-reinstall" in calls[-1] and calls[-1][-1] == "foo==1.0"
+    assert calls[-1][calls[-1].index("--no-binary") + 1] == "sdbus,sdbus-networkmanager"
+    assert calls[-1][calls[-1].index("--only-binary") + 1] == ":all:"
     assert not heal._pending_file().exists()
 
     calls = _fake_pip(monkeypatch, heal, rc=0)
@@ -244,3 +246,12 @@ def test_pins_installed(
     assert heal.pins_installed(reqs) == 1
     del have["requests"]
     assert heal.pins_installed(reqs) == 1
+
+
+def test_crash_exits_3_not_healed(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Callers treat exit 1 as healed, so a crash must report a distinct code."""
+    monkeypatch.setattr(heal, "heal", lambda: 1 // 0)
+    monkeypatch.setattr(heal.sys, "argv", ["bs-venv-heal.py"])
+    assert heal.main() == 3

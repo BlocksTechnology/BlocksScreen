@@ -245,6 +245,11 @@ def heal() -> int:
                 "--no-deps",
                 "--force-reinstall",
                 "--no-cache-dir",
+                # Same binary policy as bs-bootstrap and install-updater (sdbus from source).
+                "--only-binary",
+                ":all:",
+                "--no-binary",
+                "sdbus,sdbus-networkmanager",
                 *pending,
             ],
             timeout=1800,
@@ -263,6 +268,7 @@ def pins_installed(reqs: Path) -> int:
     """0 when every `name==version` pin in REQS is the installed version (pip's exit code is not proof)."""
     wrong = []
     for line in reqs.read_text(encoding="utf-8").splitlines():
+        # Plain `name==version` only: extras and env markers are not in requirements.txt.
         m = _PIN.match(line.strip())
         if not m:
             continue
@@ -287,7 +293,13 @@ def main() -> int:
         "--pins", type=Path, help="verify these pins instead of healing"
     )
     args = parser.parse_args()
-    return pins_installed(args.pins) if args.pins else heal()
+    if args.pins:
+        return pins_installed(args.pins)
+    try:
+        return heal()
+    except Exception:  # noqa: BLE001 - a crash must not read as exit 1 (healed)
+        _LOG.exception("heal crashed")
+        return 3
 
 
 if __name__ == "__main__":
