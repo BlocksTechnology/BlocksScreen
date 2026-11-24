@@ -24,6 +24,13 @@ BS_PATH=$(dirname "$SCRIPT_PATH")
 _BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
+# shellcheck source=/dev/null
+. "$SCRIPT_PATH/bs-common.sh"
+_MOONRAKER_CONF="$_BSENV_HOME/printer_data/config/moonraker.conf"
+# Builds and service restarts starve the MCU mid-print (Timer too close): wait prints out, never an update.
+# BS_SKIP_PRINT_WAIT=1 for callers that block the UI (bs-deploy-check fallback): no Pause without a touchscreen.
+_wait_print_idle() { [ -n "${BS_SKIP_PRINT_WAIT:-}" ] || bs_wait_moonraker_idle "$_MOONRAKER_CONF" 0 || true; }
+_wait_print_idle
 
 # Venv-mutating commands run as blocks: root-owned dists break later pip-as-blocks runs.
 _as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
@@ -266,6 +273,8 @@ git -C "$BS_PATH" update-index --chmod=+x scripts/post-merge 2>/dev/null || true
 git -C "$BS_PATH" config core.hooksPath scripts
 echo_ok "post-merge hook installed"
 
+# A print can start while the steps above run; wait before taking the venv lock.
+_wait_print_idle
 echo_info "Installing Python requirements ..."
 # Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
 export PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -368,6 +377,8 @@ if [[ -d "$_DD_REPO/.git" ]]; then
         [[ "$(systemctl show --property=LoadState --value "$_DD_UNIT")" == "loaded" ]]; then
         echo_ok "DeviceDiscovery already set up"
     else
+        # A print can start while the venv steps above run.
+        _wait_print_idle
         echo_info "Setting up DeviceDiscovery (first build can take several minutes) ..."
         if _setup_device_discovery; then
             echo_ok "DeviceDiscovery installed and started"
@@ -376,6 +387,16 @@ if [[ -d "$_DD_REPO/.git" ]]; then
             echo_error "DeviceDiscovery setup failed, retried on the next update"
         fi
     fi
+fi
+
+# Stamp last: bs-bootstrap and post-merge re-run this script until it is written.
+_stamp=$(bs_updater_install_hash "$SCRIPT_PATH")
+if echo "$_stamp" | sudo tee "$BSENV/.blockscreen-updater-hash.new" >/dev/null \
+    && sudo chown "$_BSENV_USER" "$BSENV/.blockscreen-updater-hash.new" \
+    && sudo mv -Tf "$BSENV/.blockscreen-updater-hash.new" "$BSENV/.blockscreen-updater-hash"; then
+    echo_ok "Updater install stamp written"
+else
+    echo_warn "Updater install stamp not written; the next boot re-runs this script"
 fi
 
 # Restart the daemon last, --no-block, so it starts after everything above is in

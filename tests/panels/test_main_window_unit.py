@@ -14,6 +14,8 @@ def _make_fake_window(
 ) -> SimpleNamespace:
     win = SimpleNamespace(
         _klippy_ready=False,
+        _klippy_state=None,
+        _klippy_settled_state=None,
         _update_in_progress=False,
         _klipper_auto_restart_pending=False,
         _post_update_reconnect=False,
@@ -26,9 +28,30 @@ def _make_fake_window(
         ws=MagicMock(connected=ws_connected),
         _try_device_config_restart=MagicMock(),
         _prompt_device_confirmation=MagicMock(),
+        _device_restart_pending=False,
+        _config_reload_on_ready=False,
     )
     win._begin_klipper_restart = MethodType(MainWindow._begin_klipper_restart, win)
     return win
+
+
+class TestEstopCancelsUpdate:
+    @pytest.mark.parametrize(
+        ("states", "cancels"),
+        [
+            (["ready", "shutdown"], True),
+            (["ready", "disconnected", "startup", "shutdown"], True),
+            (["shutdown", "disconnected", "shutdown"], False),
+            (["shutdown", "startup", "shutdown"], False),
+            (["shutdown"], False),
+        ],
+    )
+    def test_only_ready_to_shutdown_cancels(self, states, cancels) -> None:
+        win = _make_fake_window()
+        win._update_in_progress = True
+        for state in states:
+            MainWindow._on_klippy_state(win, state)
+        assert win.updater_worker.trigger_cancel.called is cancels
 
 
 class TestKlippyDisconnectedAutoRestartGuard:
@@ -140,6 +163,7 @@ def _make_device_window(**state) -> SimpleNamespace:
     """Fake window running the real device-config prompt/restart methods."""
     win = SimpleNamespace(
         _klippy_state="ready",
+        _klippy_settled_state="ready",
         _print_state="standby",
         _print_state_known=True,
         print_status="idle",
@@ -147,6 +171,13 @@ def _make_device_window(**state) -> SimpleNamespace:
         _update_in_progress=False,
         _klipper_auto_restart_pending=False,
         _device_restart_pending=False,
+        _finish_screen_hold=False,
+        _reprint_hold=MagicMock(**{"isActive.return_value": False}),
+        _config_reload_on_ready=False,
+        _klippy_ready=True,
+        _post_update_reconnect=False,
+        _klipper_disconnect_grace=MagicMock(),
+        updater_worker=MagicMock(),
         _pending_device_confirm=[],
         _device_confirm_names=[],
         _klipper_restart_timeout=MagicMock(),
@@ -156,6 +187,9 @@ def _make_device_window(**state) -> SimpleNamespace:
         device_config_accepted=MagicMock(),
         device_config_declined=MagicMock(),
         _show_device_confirmation=MagicMock(),
+        cancelpage=MagicMock(),
+        width=lambda: 800,
+        height=lambda: 480,
     )
     win.__dict__.update(state)
     for name in (
@@ -170,6 +204,12 @@ def _make_device_window(**state) -> SimpleNamespace:
         "_prompt_device_confirmation",
         "_on_device_config_accept",
         "_on_device_config_decline",
+        "_track_print_state",
+        "_on_klippy_state",
+        "_on_reprint_requested",
+        "_release_finish_screen_hold",
+        "_show_cancel_page_if_operational",
+        "handle_cancel_print",
     ):
         setattr(win, name, MethodType(getattr(MainWindow, name), win))
     return win
@@ -220,12 +260,138 @@ class TestDeviceConfigRestart:
         assert win.ws.api.restart_service.call_count == 2
 
     def test_deferred_restart_runs_when_print_ends(self) -> None:
-        win = _make_device_window(_print_state="printing")
+        win = _make_device_window(_print_state="complete")
         win.request_klipper_restart()
-        win.ws.api.restart_service.assert_not_called()
-        win._print_state = "complete"
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+
+
+class TestDeviceRestartAfterJob:
+    """A job's end must keep its finished screen; the restart waits until it closes."""
+
+    @pytest.fixture(autouse=True)
+    def _sync_single_shot(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "BlocksScreen.lib.panels.mainWindow.QtCore.QTimer.singleShot",
+            lambda _ms, fn: fn(),
+        )
+
+    def _finished(self, end_state: str = "complete") -> SimpleNamespace:
+        win = _make_device_window(_print_state="printing")
         win.ws.api.restart_service.return_value = True
+        win.request_klipper_restart()
+        if end_state != "cancelled":
+            # jobStatusPage asks for the screen before MainWindow sees the state.
+            win.handle_cancel_print(True)
+        win._track_print_state("state", end_state)
+        return win
+
+    @pytest.mark.parametrize("end_state", ["complete", "error"])
+    def test_held_while_finished_screen_open(self, end_state) -> None:
+        win = self._finished(end_state)
+        win.cancelpage.show.assert_called_once()
+        win._try_device_config_restart()  # e.g. the PrintComplete event retry
+        win._track_print_state("state", "standby")  # another client's reset
+        win.ws.api.restart_service.assert_not_called()
+
+    def test_cancelled_opens_no_screen_restarts_at_once(self) -> None:
+        win = self._finished("cancelled")
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+
+    def test_screen_skipped_while_klippy_not_ready_releases_hold(self) -> None:
+        win = _make_device_window(_print_state="printing", _klippy_ready=False)
+        win.ws.api.restart_service.return_value = True
+        win.request_klipper_restart()
+        win.handle_cancel_print(True)
+        win._track_print_state("state", "error")
+        win.cancelpage.show.assert_not_called()
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+        assert win._finish_screen_hold is False
+
+    def test_runs_once_screen_closes(self) -> None:
+        win = self._finished()
+        win._release_finish_screen_hold()  # cancelpage.hidden
+        win._release_finish_screen_hold()
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+        assert win._device_restart_pending is False
+
+    def test_hide_request_closes_the_page(self) -> None:
+        win = self._finished()
+        win.handle_cancel_print(False)
+        win.cancelpage.hide.assert_called_once()
+
+    def test_reprint_does_not_restart_under_new_job(self) -> None:
+        win = self._finished()
+        win._reprint_hold.isActive.return_value = True
+        win._on_reprint_requested("cube.gcode")
+        win._reprint_hold.start.assert_called_once()
+        win._release_finish_screen_hold()
+        win._track_print_state("state", "standby")
+        win._track_print_state("state", "printing")
+        win._reprint_hold.stop.assert_called_once()
+        win.ws.api.restart_service.assert_not_called()
+
+    def test_refused_reprint_restarts_after_hold(self) -> None:
+        win = self._finished()
+        win._reprint_hold.isActive.return_value = True
+        win._on_reprint_requested("cube.gcode")
+        win._release_finish_screen_hold()
+        win.ws.api.restart_service.assert_not_called()
+        win._reprint_hold.isActive.return_value = False
+        win._try_device_config_restart()  # hold timeout
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+
+    def test_job_not_seen_running_restarts_at_once(self) -> None:
+        # UI started on a finished job: jobStatusPage opens no screen.
+        win = _make_device_window(_print_state="standby")
+        win.ws.api.restart_service.return_value = True
+        win._track_print_state("state", "complete")
+        win.request_klipper_restart()
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+
+    @pytest.mark.parametrize("held, says", [(True, True), (False, False)])
+    def test_prompt_says_restart_waits_for_screen(self, held, says) -> None:
+        win = _make_device_window(_finish_screen_hold=held, _device_config_popup=None)
+        win._pending_device_confirm = ["amu"]
+        popup = MagicMock(**{"isVisible.return_value": False})
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "BlocksScreen.lib.panels.mainWindow.BasePopup", lambda *a, **k: popup
+            )
+            MainWindow._show_device_confirmation(win)
+        msg = popup.set_message.call_args.args[0]
+        assert ("print-finished screen is closed" in msg) is says
+
+
+class TestDeviceRestartAfterShutdown:
+    """A service restart cannot clear an MCU shutdown; the operator's Firmware Restart reloads the config."""
+
+    @pytest.mark.parametrize("change_first", [True, False])
+    def test_firmware_restart_loads_config_no_second_restart(
+        self, change_first
+    ) -> None:
+        win = _make_device_window()
+        win.ws.api.restart_service.return_value = True
+        if change_first:
+            win._print_state = "printing"
+            win.request_klipper_restart()
+            win._on_klippy_state("shutdown")
+        else:
+            win._on_klippy_state("shutdown")
+            win.request_klipper_restart()
+        win._print_state = "error"
         win._try_device_config_restart()
+        for state in ("disconnected", "startup", "ready"):
+            win._on_klippy_state(state)
+        win.ws.api.restart_service.assert_not_called()
+        assert win._device_restart_pending is False
+
+    def test_change_during_startup_still_restarts(self) -> None:
+        # Klipper may have read printer.cfg before the write: restart once ready.
+        win = _make_device_window()
+        win.ws.api.restart_service.return_value = True
+        win._on_klippy_state("shutdown")
+        win._on_klippy_state("startup")
+        win.request_klipper_restart()
         win.ws.api.restart_service.assert_called_once_with("klipper")
 
 
@@ -283,6 +449,7 @@ def test_real_confirmation_popup_opens_and_accepts(qtbot, monkeypatch) -> None:
     host = _Host()
     qtbot.addWidget(host)
     host._device_config_popup = None
+    host._finish_screen_hold = False
     host._device_confirm_names = []
     host._pending_device_confirm = ["amu"]
     host._on_device_config_accept = MagicMock()

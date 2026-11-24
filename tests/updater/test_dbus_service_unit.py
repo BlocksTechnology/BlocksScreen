@@ -33,6 +33,11 @@ class TestDbusProgressCallback:
         cb.on_component_done("klipper", True)
         iface.component_done.emit.assert_called_once_with(("klipper", True))
 
+    def test_on_committed_emits_signal(self):
+        cb, iface = self._make_cb()
+        cb.on_committed(True)
+        iface.committed_changed.emit.assert_called_once_with((True,))
+
     def test_on_error_emits_signal(self):
         cb, iface = self._make_cb()
         cb.on_error("klipper", "network")
@@ -452,6 +457,21 @@ class TestDeployHold:
         svc._set_busy(False)
         await asyncio.sleep(0.02)
         assert (svc._busy, svc._deploy_hold) == (False, None)
+
+    @pytest.mark.asyncio
+    async def test_print_releases_hold_once(self, svc, monkeypatch, printing):
+        """install-updater waits the print out: the overlay must not hide Pause meanwhile."""
+        from updater import dbus_service
+
+        monkeypatch.setattr(dbus_service, "_DEPLOY_POLL_S", 0.01)
+        svc._busy = True
+        svc._svc.deploy_pending.return_value = True
+        printing.return_value = True
+        svc._set_busy(False)
+        await asyncio.sleep(0.05)
+        assert (svc._busy, svc._deploy_hold) == (False, None)
+        svc._set_busy(False)
+        assert svc._deploy_hold is None, "the same flag must not re-cover the print"
 
     @pytest.mark.asyncio
     async def test_hold_spawned_once(self, svc, monkeypatch):
@@ -883,6 +903,21 @@ class TestProvisioningFlag:
         svc._provisioning = svc._busy = True
         await svc.cancel()
         assert svc._busy is True
+
+    @pytest.mark.asyncio
+    async def test_cancel_ignored_after_commit(self, svc):
+        task = asyncio.ensure_future(asyncio.sleep(10))
+        task.set_name("update_all")
+        svc._background_tasks.add(task)
+        svc._svc.update_committed = svc._busy = True
+        await svc.cancel()
+        assert not task.cancelled() and svc._busy is True
+        task.cancel()
+
+    @pytest.mark.asyncio
+    async def test_get_committed_reports_service_flag(self, svc):
+        svc._svc.update_committed = True
+        assert await svc.get_committed() is True
 
 
 class TestMethodReturnValues:

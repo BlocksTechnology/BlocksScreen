@@ -5,7 +5,9 @@ withouth a real D-Bus session bus.
 """
 
 import asyncio
+import importlib
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -34,6 +36,34 @@ def mock_sdbus():
         yield mock
 
 
+def _rebase(value, real: Path, home: Path):
+    """Map a path (or tuple of paths) under the real home onto the test home."""
+    if isinstance(value, tuple):
+        return tuple(_rebase(v, real, home) for v in value)
+    if isinstance(value, Path) and value.is_relative_to(real):
+        return home / value.relative_to(real)
+    return value
+
+
+@pytest.fixture(autouse=True)
+def hermetic_home(tmp_path, monkeypatch):
+    """Import-time home paths and the lock dir point at tmp, never the real ~/.cache."""
+    # mock_sdbus re-imports the package, so the cached submodule is not its attribute.
+    locking = importlib.import_module("updater.locking")
+    real, home = Path.home(), tmp_path / "home"
+    run = home / ".cache" / "blockscreen"
+    run.mkdir(parents=True)
+    monkeypatch.setattr(locking, "_runtime_dir", lambda: run)
+    for name, mod in list(sys.modules.items()):
+        if name != "updater" and not name.startswith("updater."):
+            continue
+        for attr, value in list(vars(mod).items()):
+            rebased = _rebase(value, real, home)
+            if rebased is not value:
+                monkeypatch.setattr(mod, attr, rebased)
+    return home
+
+
 @pytest.fixture(autouse=True)
 def printing():
     """Klipper idle unless a test sets return_value; never dials a real klippy.sock."""
@@ -54,6 +84,13 @@ def apt_lists_partial(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def no_real_sudo(monkeypatch):
+    """Unmocked repair paths must not run real sudo: no tty trips Howdy, then pam_faillock."""
+    executor = importlib.import_module("updater.executor")
+    monkeypatch.setattr(executor, "SUDO", "/usr/bin/false")
+
+
+@pytest.fixture(autouse=True)
 def moonraker():
     """Moonraker unreachable; never dials the host's real :7125."""
     with (
@@ -61,6 +98,20 @@ def moonraker():
         patch("updater.service.moonraker_refresh_repo", AsyncMock(return_value=None)),
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def disk():
+    """Plenty of free space; never wipes the host's caches or bytecode."""
+    free = MagicMock(return_value=10_000.0)
+    # Real reclaim returns free space after.
+    reclaim = AsyncMock(side_effect=lambda path=None: free(path))
+    with (
+        patch("updater.service.free_disk_mb", free),
+        patch("updater.service.reclaim_disk", reclaim),
+        patch("updater.service.purge_pycache", MagicMock(return_value=0)) as purge,
+    ):
+        yield MagicMock(free=free, reclaim=reclaim, purge=purge)
 
 
 @pytest.fixture
@@ -83,6 +134,7 @@ def svc():
     mock_svc.run_followup = AsyncMock(return_value=(False, False))
     mock_svc.background_apt_upgrade = AsyncMock()
     mock_svc.daemon_restart_pending = False
+    mock_svc.update_committed = False
     mock_svc.reconcile = AsyncMock(return_value=True)
     mock_svc.reconcile_if_pending = AsyncMock()
     mock_svc.sync_moonraker = AsyncMock(return_value=True)

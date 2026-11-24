@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import signal
 import sys
 import tempfile
@@ -36,6 +37,8 @@ DPKG = "/usr/bin/dpkg"
 # Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
 APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
 KLIPPY_SOCK = Path("~/printer_data/comms/klippy.sock").expanduser()
+# print_stats states that count as a running print; updatePage._PRINT_ACTIVE must match.
+PRINT_ACTIVE_STATES = frozenset({"printing", "paused"})
 MOONRAKER_HOST, MOONRAKER_PORT = "127.0.0.1", 7125
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
@@ -93,6 +96,11 @@ async def _reap(proc, sig: int, grace: float) -> bool:
     return True
 
 
+# Bytes/s and seconds, as Moonraker's GIT_ENV_VARS (git_deploy.py), whose TIME key has a stray space.
+_GIT_LOW_SPEED_LIMIT = "1000"
+_GIT_LOW_SPEED_TIME = "30"
+
+
 def _make_clean_env() -> dict[str, str]:
     """Build a minimal env without session bus/XDG vars or unsafe SUDO_ vars."""
     env: dict[str, str] = {}
@@ -106,6 +114,9 @@ def _make_clean_env() -> dict[str, str]:
         if val is not None:
             env[key] = val
     env["GIT_TERMINAL_PROMPT"] = "0"
+    # A link that drops mid-transfer otherwise stalls git until the subprocess cap.
+    env["GIT_HTTP_LOW_SPEED_LIMIT"] = _GIT_LOW_SPEED_LIMIT
+    env["GIT_HTTP_LOW_SPEED_TIME"] = _GIT_LOW_SPEED_TIME
     # git/apt error parsing matches English text.
     env["LC_ALL"] = "C"
     safe_sudo = {"SUDO_USER", "SUDO_UID", "SUDO_GID"}
@@ -126,7 +137,7 @@ async def _run(
     cwd: Path | None = None,
     env: dict[str, str] | None = None,
 ) -> tuple[bool, str]:
-    """Run a subprocess -> (success, stdout_or_stderr); timeout SIGTERM/5s/SIGKILL/5s, cancel SIGKILL/2s then re-raise."""
+    """Run a subprocess -> (success, stdout_or_stderr); timeout SIGTERM/5s/SIGKILL/5s, cancel SIGTERM/2s/SIGKILL/2s then re-raise."""
     proc = await asyncio.create_subprocess_exec(
         *[str(c) for c in cmd],
         cwd=cwd,
@@ -145,7 +156,14 @@ async def _run(
             await _reap(proc, signal.SIGKILL, 5.0)
         return False, f"timed out after {timeout}s"
     except asyncio.CancelledError:
-        await _reap(proc, signal.SIGKILL, 2.0)
+        # SIGKILL skips git's lockfile cleanup and strands .git/index.lock.
+        try:
+            if not await _reap(proc, signal.SIGTERM, 2.0):
+                await _reap(proc, signal.SIGKILL, 2.0)
+        finally:
+            # A second cancel during the grace wait must not leave the group alive.
+            if proc.returncode is None:
+                _kill_proc_group(proc, signal.SIGKILL)
         raise
 
 
@@ -620,6 +638,7 @@ _GIT_NETWORK_SIGNATURES = (
     "temporary failure in name resolution",
     "could not read from remote repository",
     "timed out after",
+    "operation too slow",
 )
 
 
@@ -994,6 +1013,37 @@ def _apt_cmd(verb: str, pkgs: Sequence[str] = ()) -> list[str]:
     return [SUDO, str(APT_HELPER), verb, *pkgs]
 
 
+# Re-downloadable caches only; pip/uv sit under the daemon user's home.
+_RECLAIM_DIRS = (Path.home() / ".cache" / "pip", Path.home() / ".cache" / "uv")
+
+
+def free_disk_mb(path: Path | None = None) -> float:
+    """Free MiB on the filesystem holding path (default: home)."""
+    return shutil.disk_usage(path or Path.home()).free / 1_048_576
+
+
+async def reclaim_disk(path: Path | None = None) -> float:
+    """Drop pip/uv caches and apt's package archive; returns MiB free on path after."""
+    before = await asyncio.to_thread(free_disk_mb, path)
+    for d in _RECLAIM_DIRS:
+        await asyncio.to_thread(shutil.rmtree, d, True)
+    ok, out = await _run(_apt_cmd("clean"), timeout=60.0, env=_apt_env())
+    if not ok:
+        logger.warning("reclaim: apt clean failed: %s", out.strip()[:200])
+    after = await asyncio.to_thread(free_disk_mb, path)
+    # uv hard-links its cache into venvs, so freed space can be well below cache size.
+    logger.info("reclaim: freed %.0f MB, %.0f MB free", after - before, after)
+    return after
+
+
+def purge_pycache(root: Path) -> int:
+    """Delete every __pycache__ under root; a full disk leaves truncated .pyc CPython never rewrites."""
+    dirs = [d for d in root.rglob("__pycache__") if d.is_dir()]
+    for d in dirs:
+        shutil.rmtree(d, ignore_errors=True)
+    return len(dirs)
+
+
 async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
     """Snapshot package state via dpkg --get-selections to a temp file (no sudo)."""
     snapshot_path = (
@@ -1290,7 +1340,7 @@ async def klipper_printing(
     ) as exc:
         logger.debug("klipper print state unavailable: %r", exc)
         return False
-    return state in ("printing", "paused")
+    return state in PRINT_ACTIVE_STATES
 
 
 async def wait_for_http_ready(

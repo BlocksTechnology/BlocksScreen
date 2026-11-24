@@ -132,6 +132,11 @@ class TestHandlePrintState:
             widget._handle_print_state(state)
         assert sig.args == [True]
 
+    def test_cancelled_does_not_open_cancel_page(self, widget, qtbot):
+        widget._internal_print_status = "printing"
+        with qtbot.assertNotEmitted(widget.call_cancel_panel):
+            widget._handle_print_state("cancelled")
+
     @pytest.mark.parametrize("state", ["error", "complete"])
     def test_stale_end_when_idle_does_not_open_cancel_page(self, widget, qtbot, state):
         widget._internal_print_status = ""
