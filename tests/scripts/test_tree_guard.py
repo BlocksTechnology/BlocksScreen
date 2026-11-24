@@ -150,3 +150,32 @@ def test_emptied_branch_ref_resets_to_local_remote_ref_offline(repo, tmp_path, e
 def test_unit_ordered_before_moonraker():
     unit = _SCRIPT.with_name("BlocksScreen-tree-guard.service").read_text()
     assert "Before=moonraker.service" in unit
+
+
+def test_post_merge_syncs_the_tree_on_a_moonraker_pull(tmp_path: Path) -> None:
+    """Moonraker pulls exit post-merge early; the new tree must still be synced first."""
+    scripts = tmp_path / "repo" / "scripts"
+    scripts.mkdir(parents=True)
+    hook = scripts / "post-merge"
+    shutil.copy(_SCRIPT.parent / "post-merge", hook)
+    (scripts / "bs-common.sh").write_text("bs_in_moonraker_cgroup() { return 0; }\n")
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    log = tmp_path / "sync.log"
+    stub = bindir / "sync"
+    stub.write_text(f'#!/bin/sh\necho "$*" >> {log}\n')
+    stub.chmod(0o755)
+    getent = bindir / "getent"
+    getent.write_text(f"#!/bin/sh\necho blocks:x:1000:1000::{tmp_path}:/bin/bash\n")
+    getent.chmod(0o755)
+    res = subprocess.run(
+        ["bash", str(hook)],
+        capture_output=True,
+        check=False,
+        env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}"},
+        text=True,
+        timeout=20,
+    )
+    assert res.returncode == 0, res.stderr
+    assert "under moonraker" in res.stdout
+    assert log.read_text().split() == ["-f", str(tmp_path / "repo")]

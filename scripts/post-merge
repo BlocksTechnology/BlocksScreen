@@ -17,14 +17,14 @@ _own() { [ "$(id -u)" = "0" ] && chown "$_BSENV_USER" "$1" 2>/dev/null || true; 
 # shellcheck source=/dev/null
 if [ -f "$SCRIPT_PATH/bs-common.sh" ]; then . "$SCRIPT_PATH/bs-common.sh"; fi
 
+# Runs inside every pull, Moonraker's too: sync the new tree before anything acts on it.
+sync -f "$BS_PATH" || true
+
 # Under Moonraker its update owns deps and the restart; bs-bootstrap does the rest (BUG-10).
 if bs_in_moonraker_cgroup; then
     echo "[post-merge] under moonraker - bs-bootstrap finishes this update after the restart"
     exit 0
 fi
-
-# Runs inside the pull: sync the new tree before anything acts on it.
-sync -f "$BS_PATH" || true
 
 changed=$(git -C "$BS_PATH" diff ORIG_HEAD HEAD --name-only 2>/dev/null || true)
 
