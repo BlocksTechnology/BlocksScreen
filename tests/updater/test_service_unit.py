@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import json
 import os
 import subprocess
@@ -3298,6 +3299,100 @@ class TestReconcile:
         assert order == ["hook:{'moonraker.service'}", "moonraker.service"]
 
 
+class TestHealMmuServerLink:
+    """Boot relinks mmu_server when an earlier HH clone ran without its hook (BUG-9)."""
+
+    @staticmethod
+    def _layout(tmp_path: Path, moonraker: bool = True) -> ComponentConfig:
+        hh = tmp_path / "Happy-Hare"
+        (hh / "components").mkdir(parents=True)
+        (hh / "components" / "mmu_server.py").write_text("# mmu_server\n")
+        if moonraker:
+            (tmp_path / "moonraker" / "moonraker" / "components").mkdir(parents=True)
+        return ComponentConfig(name="Happy-Hare", kind="git", path=hh)
+
+    @staticmethod
+    def _dst(tmp_path: Path) -> Path:
+        return tmp_path / "moonraker" / "moonraker" / "components" / "mmu_server.py"
+
+    async def _heal(self, comp: ComponentConfig) -> AsyncMock:
+        svc = UpdateService()
+        svc._components = [comp]
+        with patch.object(UpdateService, "_boot_reclone_hook", AsyncMock()) as hook:
+            await svc._heal_mmu_server_link({"klipper.service"})
+        return hook
+
+    @pytest.mark.asyncio
+    async def test_missing_link_reruns_hook(self, tmp_path):
+        comp = self._layout(tmp_path)
+        hook = await self._heal(comp)
+        hook.assert_awaited_once_with(comp, {"klipper.service"})
+
+    @pytest.mark.asyncio
+    async def test_stale_link_reruns_hook(self, tmp_path):
+        comp = self._layout(tmp_path)
+        self._dst(tmp_path).symlink_to(tmp_path / "old" / "mmu_server.py")
+        hook = await self._heal(comp)
+        hook.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_correct_link_is_left_alone(self, tmp_path):
+        comp = self._layout(tmp_path)
+        assert comp.path is not None
+        self._dst(tmp_path).symlink_to(comp.path / "components" / "mmu_server.py")
+        hook = await self._heal(comp)
+        hook.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_moonraker_or_no_hh_is_skipped(self, tmp_path):
+        hook = await self._heal(self._layout(tmp_path, moonraker=False))
+        hook.assert_not_awaited()
+        missing = ComponentConfig(
+            name="Happy-Hare", kind="git", path=tmp_path / "absent"
+        )
+        hook = await self._heal(missing)
+        hook.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_boot_reconcile_heals_link(self, tmp_path):
+        comp = self._layout(tmp_path)
+        svc = UpdateService()
+        svc._components = [comp]
+        with (
+            patch.object(
+                UpdateService, "_revert_inflight", AsyncMock(return_value=set())
+            ),
+            patch.object(
+                UpdateService, "_boot_repair_component", AsyncMock(return_value=False)
+            ),
+            patch.object(UpdateService, "_reconcile_self_heal_state", AsyncMock()),
+            patch.object(UpdateService, "_restart_reverted", AsyncMock()),
+            patch.object(UpdateService, "_boot_reclone_hook", AsyncMock()) as hook,
+        ):
+            await svc._reconcile_locked()
+        hook.assert_awaited_once_with(comp, set())
+
+    @pytest.mark.asyncio
+    async def test_real_hook_relinks(self, tmp_path, monkeypatch):
+        """The shipped hook links on the empty-tree prev and defers the restart."""
+        comp = self._layout(tmp_path)
+        assert comp.path is not None
+        svc = UpdateService()
+        svc._components = [comp]
+        # hermetic_home rebases repo paths under $HOME, the hooks dir included.
+        hooks = Path(__file__).resolve().parents[2] / "updater" / "hooks"
+        executor = importlib.import_module("updater.executor")
+        monkeypatch.setattr(executor, "_HOOKS_DIR", hooks)
+        with (
+            patch("updater.service.git_get_hash", AsyncMock(return_value="a" * 40)),
+            patch("updater.service.klipper_printing", AsyncMock(return_value=False)),
+        ):
+            await svc._heal_mmu_server_link({"moonraker.service"})
+        dst = self._dst(tmp_path)
+        assert dst.is_symlink()
+        assert dst.readlink() == comp.path / "components" / "mmu_server.py"
+
+
 class TestWriteStateDurability:
     """_write_state fsyncs file + parent dir (Major 4)."""
 
@@ -3331,6 +3426,21 @@ class TestRollbackVerifiesRestart:
             svc = UpdateService(callback=cb)
             await svc._rollback(comp, "abc123", "deps")
         cb.on_rollback.assert_called_once_with("klipper", False)
+
+
+class _PeakFetch:
+    """git_fetch stand-in recording how many fetches overlap."""
+
+    def __init__(self) -> None:
+        self.active = 0
+        self.peak = 0
+
+    async def __call__(self, _path: Path) -> tuple[bool, str]:
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        await asyncio.sleep(0.01)
+        self.active -= 1
+        return True, ""
 
 
 class TestPreflightFetch:
@@ -3387,6 +3497,42 @@ class TestPreflightFetch:
         assert offline == {}
         mock_fetch.assert_not_called()
 
+    _DNS_ERROR = "fatal: unable to access: Could not resolve host: github.com"
+
+    @pytest.mark.asyncio
+    async def test_recent_network_failure_is_reused_as_offline(self, tmp_path):
+        """The press's status check just failed: report offline without a refetch."""
+        comp = self._git(tmp_path, "klipper")
+        with patch("updater.service.git_fetch") as mock_fetch:
+            svc = UpdateService()
+            svc._components = [comp]
+            svc._record_fetch_result("klipper", time.monotonic(), self._DNS_ERROR)
+            offline = await svc._preflight_fetch([comp])
+        assert offline == {"klipper": self._DNS_ERROR}
+        mock_fetch.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_stale_network_failure_is_refetched(self, tmp_path):
+        comp = self._git(tmp_path, "klipper")
+        with patch("updater.service.git_fetch", return_value=(True, "")) as mock_fetch:
+            svc = UpdateService()
+            svc._components = [comp]
+            svc._fetch_failures["klipper"] = (time.monotonic() - 60, self._DNS_ERROR)
+            offline = await svc._preflight_fetch([comp])
+        assert offline == {}
+        mock_fetch.assert_called_once()
+        assert "klipper" not in svc._fetch_failures
+
+    @pytest.mark.asyncio
+    async def test_repos_are_fetched_concurrently(self, tmp_path):
+        comps = [self._git(tmp_path, n) for n in ("klipper", "moonraker", "crowsnest")]
+        probe = _PeakFetch()
+        with patch("updater.service.git_fetch", new=probe):
+            svc = UpdateService()
+            svc._components = comps
+            assert await svc._preflight_fetch(comps) == {}
+        assert probe.peak == len(comps)
+
     @pytest.mark.asyncio
     async def test_update_all_drops_only_offline_components(self, tmp_path):
         offline_comp = self._git(tmp_path, "klipper")
@@ -3425,6 +3571,59 @@ class TestPreflightFetch:
             svc._components = [comp]
             assert await svc.update_all({"klipper"}) is False
         cb.on_error.assert_called_once_with("klipper", CLOCK_UNSYNCED)
+
+    @staticmethod
+    def _status(name: str, *_args: object, **_kwargs: object) -> ComponentStatus:
+        return ComponentStatus(name=name, commits_behind=int(name == "klipper"))
+
+    @pytest.mark.asyncio
+    async def test_press_skips_repos_current_after_the_fetch(self, tmp_path):
+        """A failed status fetch marks all dirty; only repos still behind are applied."""
+        comps = [self._git(tmp_path, "klipper"), self._git(tmp_path, "moonraker")]
+        cb = MagicMock()
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.check_git_status", side_effect=self._status),
+            patch.object(
+                UpdateService, "_run_git_batch", return_value=True
+            ) as mock_batch,
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = comps
+            assert await svc.update_all({"klipper", "moonraker"}) is True
+        assert [c.name for c in mock_batch.call_args.args[0]] == ["klipper"]
+        cb.on_component_done.assert_called_once_with("moonraker", True)
+
+    @pytest.mark.asyncio
+    async def test_repo_with_a_failed_fetch_stays_in_the_batch(self, tmp_path):
+        comp = self._git(tmp_path, "moonraker")
+        with (
+            patch("updater.service.git_fetch", return_value=(False, "bad pack")),
+            patch("updater.service.git_has_corruption", return_value=True),
+            patch("updater.service.check_git_status", side_effect=self._status),
+            patch.object(
+                UpdateService, "_run_git_batch", return_value=True
+            ) as mock_batch,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            await svc.update_all({"moonraker"})
+        assert [c.name for c in mock_batch.call_args.args[0]] == ["moonraker"]
+
+    @pytest.mark.asyncio
+    async def test_unnamed_update_all_keeps_every_repo(self, tmp_path):
+        comp = self._git(tmp_path, "moonraker")
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.check_git_status", side_effect=self._status),
+            patch.object(
+                UpdateService, "_run_git_batch", return_value=True
+            ) as mock_batch,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            await svc.update_all()
+        assert [c.name for c in mock_batch.call_args.args[0]] == ["moonraker"]
 
 
 class TestDeferredRestart:
