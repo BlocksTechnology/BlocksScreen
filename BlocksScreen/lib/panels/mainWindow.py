@@ -299,6 +299,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updater_worker.provisioning_changed.connect(
             self.update_page.handle_provisioning_changed
         )
+        self.updater_worker.committed_changed.connect(
+            self.update_page.handle_committed_changed
+        )
         self.updater_worker.daemon_unavailable.connect(self.on_updater_unavailable)
         self.updater_worker.daemon_unavailable.connect(
             self.update_page.handle_daemon_unavailable

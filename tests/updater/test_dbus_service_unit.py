@@ -33,6 +33,11 @@ class TestDbusProgressCallback:
         cb.on_component_done("klipper", True)
         iface.component_done.emit.assert_called_once_with(("klipper", True))
 
+    def test_on_committed_emits_signal(self):
+        cb, iface = self._make_cb()
+        cb.on_committed(True)
+        iface.committed_changed.emit.assert_called_once_with((True,))
+
     def test_on_error_emits_signal(self):
         cb, iface = self._make_cb()
         cb.on_error("klipper", "network")
@@ -893,6 +898,11 @@ class TestProvisioningFlag:
         await svc.cancel()
         assert not task.cancelled() and svc._busy is True
         task.cancel()
+
+    @pytest.mark.asyncio
+    async def test_get_committed_reports_service_flag(self, svc):
+        svc._svc.update_committed = True
+        assert await svc.get_committed() is True
 
 
 class TestMethodReturnValues:

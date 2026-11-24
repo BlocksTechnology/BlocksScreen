@@ -1568,6 +1568,7 @@ class TestAtomicBatch:
             assert await svc._run_git_batch(comps) is True
         assert seen == [True]
         assert svc.update_committed is False
+        assert [c.args for c in cb.on_committed.call_args_list] == [(True,), (False,)]
 
     @pytest.mark.asyncio
     async def test_stage_failure_drops_only_failed_component(self, tmp_path):
