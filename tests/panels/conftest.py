@@ -50,7 +50,6 @@ _STUB_MODULES = (
     "lib.panels.widgets.Common.loadWidget",
     "lib.panels.widgets.MainWindow.notificationPage",
     "lib.panels.widgets.MainWindow.updatePage",
-    "lib.panels.widgets.PrintTab.jobStatusPage",
     "lib.printer",
     "lib.ui",
     "lib.ui.resources",
@@ -107,10 +106,6 @@ sys.modules[
     "lib.panels.widgets.MainWindow.notificationPage"
 ].NotificationPage = MagicMock
 sys.modules["lib.panels.widgets.MainWindow.updatePage"].UpdatePage = MagicMock
-# Mirrors the real constant, pinned in tests/widgets/test_job_status_page_unit.py.
-sys.modules["lib.panels.widgets.PrintTab.jobStatusPage"].JobStatusWidget = type(
-    "JobStatusWidget", (), {"FINISH_SCREEN_STATES": frozenset({"complete", "error"})}
-)
 sys.modules["lib.printer"].Printer = MagicMock
 sys.modules["lib.updater_worker"].UpdaterWorker = MagicMock
 sys.modules["screensaver"].ScreenSaver = MagicMock

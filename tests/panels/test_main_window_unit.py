@@ -165,6 +165,9 @@ def _make_device_window(**state) -> SimpleNamespace:
         device_config_accepted=MagicMock(),
         device_config_declined=MagicMock(),
         _show_device_confirmation=MagicMock(),
+        cancelpage=MagicMock(),
+        width=lambda: 800,
+        height=lambda: 480,
     )
     win.__dict__.update(state)
     for name in (
@@ -184,6 +187,7 @@ def _make_device_window(**state) -> SimpleNamespace:
         "_on_reprint_requested",
         "_release_finish_screen_hold",
         "_show_cancel_page_if_operational",
+        "handle_cancel_print",
     ):
         setattr(win, name, MethodType(getattr(MainWindow, name), win))
     return win
@@ -240,20 +244,31 @@ class TestDeviceConfigRestart:
 
 
 class TestDeviceRestartAfterJob:
-    """A job's end must keep its finished screen; the restart waits for the operator."""
+    """A job's end must keep its finished screen; the restart waits until it closes."""
+
+    @pytest.fixture(autouse=True)
+    def _sync_single_shot(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "BlocksScreen.lib.panels.mainWindow.QtCore.QTimer.singleShot",
+            lambda _ms, fn: fn(),
+        )
 
     def _finished(self, end_state: str = "complete") -> SimpleNamespace:
         win = _make_device_window(_print_state="printing")
         win.ws.api.restart_service.return_value = True
         win.request_klipper_restart()
+        if end_state != "cancelled":
+            # jobStatusPage asks for the screen before MainWindow sees the state.
+            win.handle_cancel_print(True)
         win._track_print_state("state", end_state)
         return win
 
     @pytest.mark.parametrize("end_state", ["complete", "error"])
     def test_held_while_finished_screen_open(self, end_state) -> None:
         win = self._finished(end_state)
-        win.ws.api.restart_service.assert_not_called()
+        win.cancelpage.show.assert_called_once()
         win._try_device_config_restart()  # e.g. the PrintComplete event retry
+        win._track_print_state("state", "standby")  # another client's reset
         win.ws.api.restart_service.assert_not_called()
 
     def test_cancelled_opens_no_screen_restarts_at_once(self) -> None:
@@ -261,23 +276,33 @@ class TestDeviceRestartAfterJob:
         win.ws.api.restart_service.assert_called_once_with("klipper")
 
     def test_screen_skipped_while_klippy_not_ready_releases_hold(self) -> None:
-        win = self._finished("error")
-        win._klippy_ready = False
-        win._show_cancel_page_if_operational()
+        win = _make_device_window(_print_state="printing", _klippy_ready=False)
+        win.ws.api.restart_service.return_value = True
+        win.request_klipper_restart()
+        win.handle_cancel_print(True)
+        win._track_print_state("state", "error")
+        win.cancelpage.show.assert_not_called()
         win.ws.api.restart_service.assert_called_once_with("klipper")
         assert win._finish_screen_hold is False
 
-    def test_runs_once_operator_dismisses(self) -> None:
+    def test_runs_once_screen_closes(self) -> None:
         win = self._finished()
-        win._track_print_state("state", "standby")  # SDCARD_RESET_FILE
+        win._release_finish_screen_hold()  # cancelpage.hidden
+        win._release_finish_screen_hold()
         win.ws.api.restart_service.assert_called_once_with("klipper")
         assert win._device_restart_pending is False
 
-    def test_reprint_standby_does_not_restart_under_new_job(self) -> None:
+    def test_hide_request_closes_the_page(self) -> None:
+        win = self._finished()
+        win.handle_cancel_print(False)
+        win.cancelpage.hide.assert_called_once()
+
+    def test_reprint_does_not_restart_under_new_job(self) -> None:
         win = self._finished()
         win._reprint_hold.isActive.return_value = True
         win._on_reprint_requested("cube.gcode")
         win._reprint_hold.start.assert_called_once()
+        win._release_finish_screen_hold()
         win._track_print_state("state", "standby")
         win._track_print_state("state", "printing")
         win._reprint_hold.stop.assert_called_once()
@@ -287,19 +312,32 @@ class TestDeviceRestartAfterJob:
         win = self._finished()
         win._reprint_hold.isActive.return_value = True
         win._on_reprint_requested("cube.gcode")
-        win._track_print_state("state", "standby")
+        win._release_finish_screen_hold()
         win.ws.api.restart_service.assert_not_called()
         win._reprint_hold.isActive.return_value = False
         win._try_device_config_restart()  # hold timeout
         win.ws.api.restart_service.assert_called_once_with("klipper")
 
     def test_job_not_seen_running_restarts_at_once(self) -> None:
-        # UI started on a finished job: no screen to protect.
+        # UI started on a finished job: jobStatusPage opens no screen.
         win = _make_device_window(_print_state="standby")
         win.ws.api.restart_service.return_value = True
         win._track_print_state("state", "complete")
         win.request_klipper_restart()
         win.ws.api.restart_service.assert_called_once_with("klipper")
+
+    @pytest.mark.parametrize("held, says", [(True, True), (False, False)])
+    def test_prompt_says_restart_waits_for_screen(self, held, says) -> None:
+        win = _make_device_window(_finish_screen_hold=held, _device_config_popup=None)
+        win._pending_device_confirm = ["amu"]
+        popup = MagicMock(**{"isVisible.return_value": False})
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "BlocksScreen.lib.panels.mainWindow.BasePopup", lambda *a, **k: popup
+            )
+            MainWindow._show_device_confirmation(win)
+        msg = popup.set_message.call_args.args[0]
+        assert ("print-finished screen is closed" in msg) is says
 
 
 class TestDeviceRestartAfterShutdown:
@@ -389,6 +427,7 @@ def test_real_confirmation_popup_opens_and_accepts(qtbot, monkeypatch) -> None:
     host = _Host()
     qtbot.addWidget(host)
     host._device_config_popup = None
+    host._finish_screen_hold = False
     host._device_confirm_names = []
     host._pending_device_confirm = ["amu"]
     host._on_device_config_accept = MagicMock()

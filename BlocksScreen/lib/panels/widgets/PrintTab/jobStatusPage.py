@@ -68,10 +68,6 @@ class JobStatusWidget(QtWidgets.QWidget):
     _INVALID_STATES: typing.ClassVar[frozenset[str]] = frozenset(
         {"cancelled", "complete", "error", "standby"}
     )
-    # Ends that reuse the cancel page as the reprint prompt; MainWindow holds restarts on these.
-    FINISH_SCREEN_STATES: typing.ClassVar[frozenset[str]] = frozenset(
-        {"complete", "error"}
-    )
 
     def _post_event(self, event: QtCore.QEvent) -> None:
         """Post a QEvent to the top-level window via QApplication."""
@@ -341,7 +337,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 if self.total_layer_reported:
                     self.layer_display_button.setText(str(self.total_layers))
             # Completed/errored print reuses the cancel page as the reprint prompt.
-            if lstate in self.FINISH_SCREEN_STATES and _was_active:
+            if lstate in ("complete", "error") and _was_active:
                 self.call_cancel_panel.emit(True)
             self.hide_request.emit()
         # Capture state before clearing so the event carries the real data.

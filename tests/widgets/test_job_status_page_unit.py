@@ -132,10 +132,6 @@ class TestHandlePrintState:
             widget._handle_print_state(state)
         assert sig.args == [True]
 
-    def test_finish_screen_states_match_panels_stub(self):
-        # tests/panels/conftest.py stubs this constant; keep both in step.
-        assert JobStatusWidget.FINISH_SCREEN_STATES == {"complete", "error"}
-
     def test_cancelled_does_not_open_cancel_page(self, widget, qtbot):
         widget._internal_print_status = "printing"
         with qtbot.assertNotEmitted(widget.call_cancel_panel):

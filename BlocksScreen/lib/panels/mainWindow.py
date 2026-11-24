@@ -24,7 +24,6 @@ from lib.panels.filamentTab import FilamentTab
 from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
-from lib.panels.widgets.PrintTab.jobStatusPage import JobStatusWidget
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.MainWindow.cancelPage import CancelPage
@@ -380,8 +379,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._device_config_popup: BasePopup | None = None
         # printer.cfg changed for a device; Klipper must restart to load it.
         self._device_restart_pending = False
-        # A job just ended: the restart waits until the operator leaves its finished screen.
+        # Restart waits until the print-finished screen closes.
         self._finish_screen_hold = False
+        self.cancelpage.hidden.connect(self._release_finish_screen_hold)
         # Reprint sends SDCARD_RESET_FILE first; its standby must not restart Klipper under the new job.
         self._reprint_hold = QtCore.QTimer(self)
         self._reprint_hold.setSingleShot(True)
@@ -438,6 +438,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if not show:
             self.cancelpage.hide()
             return
+        # Set before the deferred show: _track_print_state runs next.
+        self._finish_screen_hold = True
         # Defer so a concurrent E-stop (klippy shutdown) is seen before we decide.
         QtCore.QTimer.singleShot(0, self._show_cancel_page_if_operational)
 
@@ -804,10 +806,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self._device_config_popup.accepted.connect(self._on_device_config_accept)
             self._device_config_popup.rejected.connect(self._on_device_config_decline)
         devices = ", ".join(n.upper() for n in self._device_confirm_names)
+        restart = (
+            "and restart Klipper when the\nprint-finished screen is closed?"
+            if self._finish_screen_hold
+            else "and restart Klipper?"
+        )
         self._device_config_popup.set_message(
             f"New device detected: {devices}\n"
-            "Update the printer configuration for it\n"
-            "and restart Klipper?"
+            f"Update the printer configuration for it\n{restart}"
         )
         self._device_config_popup.confirm_button_text("Configure")
         self._device_config_popup.cancel_button_text("Not now")
@@ -881,7 +887,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._begin_klipper_restart()
 
     def _release_finish_screen_hold(self) -> None:
-        """The finished screen did not open: let a held Klipper restart run."""
+        """The finished screen closed or never opened: let a held Klipper restart run."""
         if self._finish_screen_hold:
             self._finish_screen_hold = False
             self._try_device_config_restart()
@@ -918,14 +924,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def _track_print_state(self, field: str, value: str) -> None:
         """Track ``print_stats.state`` as the source of truth for job activity."""
         if field == "state":
-            was_active = self._is_job_active()
             self._print_state = value
             self._print_state_known = True
-            if value in JobStatusWidget.FINISH_SCREEN_STATES:
-                self._finish_screen_hold = self._finish_screen_hold or was_active
-            else:
-                # Standby = finished screen dismissed (SDCARD_RESET_FILE) or Klipper restarted.
-                self._finish_screen_hold = False
             if value == "printing":
                 self._reprint_hold.stop()
             if not self._is_job_active():
