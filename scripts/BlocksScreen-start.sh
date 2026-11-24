@@ -36,15 +36,12 @@ BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 # shellcheck source=/dev/null
 [ -f "$SCRIPT_PATH/bs-common.sh" ] && . "$SCRIPT_PATH/bs-common.sh"
 
-# Smooth splash with no VT flash: on a service RESTART X.Org already holds tty7
-# with the splash (ExecStop/feh), so stay on tty7. Only on a cold boot use tty8,
-# writing the splash image to fb0 (never bare text).
-_BS_XORG_UP=0
-if systemctl is-active --quiet BlocksScreen-xorg.service 2>/dev/null \
-   && [ -S /tmp/.X11-unix/X0 ]; then
-    _BS_XORG_UP=1
+# When installed, the X.Org unit owns tty7 and X; leaving tty7 during X startup fails its DRM probe.
+_BS_XORG_UNIT=0
+if [ "$(systemctl show -p LoadState --value BlocksScreen-xorg.service 2>/dev/null)" = loaded ]; then
+    _BS_XORG_UNIT=1
 fi
-if [ "$_BS_XORG_UP" -eq 0 ]; then
+if [ "$_BS_XORG_UNIT" -eq 0 ]; then
     sudo chvt 8 2>/dev/null || true
     _SPLASH_RAW="$_BSENV_HOME/.cache/blockscreen/splash.raw"
     if [ -e /dev/fb0 ] && [ -r "$_SPLASH_RAW" ]; then
@@ -90,7 +87,6 @@ if [ -n "$_FB_W" ] && [ -n "$_FB_H" ] && [ "$_FB_W" -gt 0 ] 2>/dev/null; then
 fi
 git -C "$BS_PATH" config core.hooksPath scripts 2>/dev/null || true
 
-bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" BlocksScreen-start
 bs_ensure_install_state "$BS_PATH" "$BSENV" BlocksScreen-start
 bs_ensure_usb_max_current /boot/firmware/config.txt BlocksScreen-start || true
 
@@ -137,6 +133,13 @@ fi
 # migration boundary and leave a half-swapped service topology.
 _BOOT_DIR="$_BSENV_HOME/.cache/blockscreen"
 _MAX_BOOT_ATTEMPTS=3
+# Full disk: skip resets and bytecode writes, accepting a UI loop if the commit is also bad.
+_disk_low=0
+if command -v bs_disk_low >/dev/null && bs_disk_low "$BS_PATH" "$_BSENV_HOME"; then
+    _disk_low=1
+    export PYTHONDONTWRITEBYTECODE=1
+    echo "BlocksScreen: disk full after reclaim - skipping rollback and source check"
+fi
 mkdir -p "$_BOOT_DIR" 2>/dev/null || true
 _attempts=$(cat "$_BOOT_DIR/boot_attempts" 2>/dev/null || echo 0)
 case "$_attempts" in ''|*[!0-9]*) _attempts=0 ;; esac
@@ -144,9 +147,14 @@ _attempts=$((_attempts + 1))
 printf '%s\n' "$_attempts" > "$_BOOT_DIR/.boot_attempts.tmp" 2>/dev/null \
     && mv -f "$_BOOT_DIR/.boot_attempts.tmp" "$_BOOT_DIR/boot_attempts" 2>/dev/null || true
 echo "[BlocksScreen-start] boot attempt $_attempts"
+if [ "$_attempts" -ge 2 ] && command -v bs_purge_pycache >/dev/null; then
+    bs_purge_pycache "$BS_PATH/BlocksScreen" "$BS_PATH/updater"
+fi
 _last_good=$(tr -d '[:space:]' < "$_BOOT_DIR/last_good_commit" 2>/dev/null || echo "")
 _cur_head=$(git -C "$BS_PATH" rev-parse HEAD 2>/dev/null || echo "")
-if [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] \
+if [ "$_disk_low" -eq 1 ]; then
+    :
+elif [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] \
    && bs_selfheal_engaged "$_BOOT_DIR/updater_state.json" "$BSENV/bin/python3.11"; then
     # One rollback authority at a time: reverting here would undo the daemon's rung (it resets HEAD on purpose).
     echo "BlocksScreen: crash loop ($_attempts boots) - updater self-heal owns recovery, not rolling back"
@@ -163,7 +171,7 @@ fi
 
 # If any source file fails to compile the working tree is corrupt (partial file write).
 # Hard-reset to HEAD to restore all tracked files to the last known-good commit.
-if ! "$BSENV/bin/python3.11" -m compileall -q \
+if [ "$_disk_low" -eq 0 ] && ! "$BSENV/bin/python3.11" -m compileall -q \
       "$BS_PATH/BlocksScreen" "$BS_PATH/updater" 2>/dev/null; then
     echo "BlocksScreen: source check failed - running git reset --hard HEAD to recover"
     git -C "$BS_PATH" reset --hard HEAD 2>/dev/null || true
@@ -207,18 +215,14 @@ else
         [ -S /tmp/.X11-unix/X0 ] && break
         sleep 0.5
     done
-    # Fallback: xorg service not yet installed (e.g. power cut mid-update before hook ran).
-    # Start X inline so the machine stays functional; next successful update installs the
-    # permanent service and eliminates this path.
-    if [ ! -S /tmp/.X11-unix/X0 ] && \
-       ! systemctl is-active --quiet BlocksScreen-xorg.service 2>/dev/null; then
-        echo "X.Org service not active - starting X inline (transitional)" >&2
+    # Fallback for boxes without the X.Org unit (e.g. power cut mid-update).
+    if [ ! -S /tmp/.X11-unix/X0 ] && [ "$_BS_XORG_UNIT" -eq 0 ]; then
+        echo "X.Org service not installed - starting X inline (transitional)" >&2
         /bin/bash "$SCRIPT_PATH/bs-ensure-xauth.sh" /home/blocks/.Xauthority
         exec /usr/bin/xinit $_XCLIENT -- :0 vt7 -keeptty -novtswitch -nocursor \
             -auth /home/blocks/.Xauthority
     fi
-    # Only switch back to tty7 if we left it for the cold-boot tty8 splash; on a
-    # restart we never left tty7, so skip the switch to avoid a visible flash.
-    [ "$_BS_XORG_UP" -eq 0 ] && sudo chvt 7 2>/dev/null || true
+    # Only switch back to tty7 if we left it for the tty8 splash above.
+    [ "$_BS_XORG_UNIT" -eq 0 ] && sudo chvt 7 2>/dev/null || true
     exec $_XCLIENT
 fi

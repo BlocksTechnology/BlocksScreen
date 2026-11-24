@@ -1,8 +1,11 @@
 import enum
+import logging
 from collections import deque
 
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+logger = logging.getLogger(__name__)
 
 
 class Popup(QtWidgets.QDialog):
@@ -21,10 +24,17 @@ class Popup(QtWidgets.QDialog):
         WARNING = QtGui.QColor("#E7E147")
         ERROR = QtGui.QColor("#CA4949")
 
+    # Lets the tap that closed one banner finish before the next one can appear.
+    NEXT_MESSAGE_DELAY_MS = 300
+
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.timeout_timer = QtCore.QTimer(self)
         self.timeout_timer.setSingleShot(True)
+        self.next_message_timer = QtCore.QTimer(self)
+        self.next_message_timer.setSingleShot(True)
+        self.next_message_timer.setInterval(Popup.NEXT_MESSAGE_DELAY_MS)
+        self.next_message_timer.timeout.connect(self._on_next_message_due)
         self.messages: deque = deque()
         self.isShown = False
         self.persistent_notifications: deque = deque()
@@ -49,12 +59,7 @@ class Popup(QtWidgets.QDialog):
         self.slide_out_animation.setDuration(200)
         self.slide_out_animation.setEasingCurve(QtCore.QEasingCurve.Type.InCubic)
 
-        self.SingleTime = QtCore.QTimer(self)
-        self.SingleTime.setInterval(5000)
-        self.SingleTime.setSingleShot(True)
-        self.SingleTime.timeout.connect(self._add_popup)
-
-        self.slide_out_animation.finished.connect(self.on_slide_out_finished)
+        self.slide_out_animation.finished.connect(self.hide)
         self.slide_in_animation.finished.connect(self.on_slide_in_finished)
         self.timeout_timer.timeout.connect(lambda: self.slide_out_animation.start())
         self.actionbtn.clicked.connect(self.slide_out_animation.start)
@@ -65,11 +70,25 @@ class Popup(QtWidgets.QDialog):
             return
         self.timeout_timer.start()
 
-    def on_slide_out_finished(self):
-        """Handle slide out animation finished"""
-        self.hide()
+    def hideEvent(self, a0: QtGui.QHideEvent | None) -> None:
+        """Reset on every hide: Qt closes a Popup window by itself on any outside tap."""
+        super().hideEvent(a0)
+        if not self.isShown:
+            return
         self.isShown = False
         self.timeout_timer.stop()
+        self.slide_in_animation.stop()
+        self.slide_out_animation.stop()
+        # Forget the text so the same error raised again later still pops up.
+        self.text_label.clear()
+        # Never from inside the hide event (re-enters Qt); delayed so the closing
+        # tap can't dismiss the next banner, which Qt would do for a Popup window.
+        if self.messages:
+            self.next_message_timer.start()
+
+    def _on_next_message_due(self) -> None:
+        """Show the message queued behind the one that was just hidden."""
+        logger.debug("popup: showing queued message, %d queued", len(self.messages))
         self._add_popup()
 
     def _calculate_target_geometry(self) -> QtCore.QRect:
@@ -133,6 +152,19 @@ class Popup(QtWidgets.QDialog):
         """
         if len(self.messages) == 4:
             return
+        # Klipper repeats some errors back to back (M112 sends its `!!` twice).
+        # Not while sliding out: the copy would be lost when the popup hides.
+        if (
+            self.isShown
+            and message == self.text_label.text()
+            and self.slide_out_animation.state()
+            != QtCore.QPropertyAnimation.State.Running
+        ):
+            if self.timeout_timer.isActive():
+                self.timeout_timer.start()  # keep a repeated warning up its full time
+            return
+        if any(m.get("message") == message for m in self.messages):
+            return
 
         self.messages.append(
             {
@@ -146,10 +178,8 @@ class Popup(QtWidgets.QDialog):
 
     def _add_popup(self) -> None:
         """Add popup to queue"""
-        if self.isShown:
-            if self.SingleTime.isActive():
-                return
-            self.SingleTime.start()
+        # hideEvent calls back here, so a queued message waits for the current one.
+        if self.isShown or self.next_message_timer.isActive():
             return
 
         if (
@@ -164,11 +194,6 @@ class Popup(QtWidgets.QDialog):
             message = message_entry.get("message")
             timeout = message_entry.get("timeout")
             self.timeout_timer.setInterval(timeout)
-            if message == self.text_label.text():
-                self.messages = deque(
-                    m for m in self.messages if m.get("message") != message
-                )
-                return
             self.userInput = message_entry.get("userInput")
             self.text_label.setFixedHeight(60)
             self.text_label.setFixedWidth(500)

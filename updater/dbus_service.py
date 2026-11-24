@@ -6,6 +6,7 @@ import asyncio
 import dataclasses
 import json
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from functools import partial
 from pathlib import Path
@@ -23,8 +24,21 @@ _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
 _FETCH_RETRY_INTERVAL_S = 300.0
 _RECONCILE_RETRY_S = 5.0
 _BOOT_DELAY_S = 3.0
+# Past this uptime a start is a deploy or crash restart: nothing left to settle.
+_BOOT_WINDOW_S = 120.0
 _SHUTDOWN_DRAIN_S = 60.0  # < systemd's 90s stop timeout
 _DEPLOY_POLL_S = 1.0
+# Moonraker answers 503 while printing, updating or before its first refresh.
+_MOONRAKER_SYNC_RETRY_S = 60.0
+# A print can refuse it for hours; the next periodic check is up to a day away.
+_MOONRAKER_SYNC_RETRY_MAX_S = 600.0
+
+
+def _boot_delay_s() -> float:
+    """Startup settle delay, only while the system itself is still booting."""
+    if time.clock_gettime(time.CLOCK_BOOTTIME) < _BOOT_WINDOW_S:
+        return _BOOT_DELAY_S
+    return 0.0
 
 
 class DbusProgressCallback:
@@ -60,6 +74,10 @@ class DbusProgressCallback:
     def on_recover(self, name: str, success: bool) -> None:
         """Emit the recover_done signal."""
         self._iface.recover_done.emit((name, success))
+
+    def on_committed(self, committed: bool) -> None:
+        """Emit the committed_changed signal."""
+        self._iface.committed_changed.emit((committed,))
 
 
 class UpdaterInterface(
@@ -108,6 +126,11 @@ class UpdaterInterface(
         """Emitted on True↔False transition while a missing component is being installed."""
         raise NotImplementedError
 
+    @sdbus.dbus_signal_async("b")
+    def committed_changed(self) -> tuple[bool]:
+        """Emitted when an update commits (True) and when it ends (False): cancel is then ignored."""
+        raise NotImplementedError
+
     def __init__(self) -> None:
         """Start idle: busy rises only once a reachable install actually begins."""
         super().__init__()
@@ -116,6 +139,8 @@ class UpdaterInterface(
         self._provisioning: bool = False
         self._provisioned: bool = False
         self._followed_up: bool = False
+        # Keeps busy up from boot or deploy end until _followup_pass has run or deferred.
+        self._followup_hold: bool = False
         # request_status waits for the boot pass, so a client never sees pre-install status.
         self._boot_pass_done: bool = False
         self._deploy_hold: asyncio.Task | None = None
@@ -125,7 +150,11 @@ class UpdaterInterface(
         self._closing: bool = False
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
+        self._followup_running: bool = False
         self._invalid_requests: int = 0
+        self._moonraker_sync: asyncio.Task | None = None
+        # Held by a Moonraker refresh (it runs git fetch) and by our own git work.
+        self._git_guard = asyncio.Lock()
         self._reconcile_task = self._spawn(
             self._boot_reconcile(), name="boot_reconcile"
         )
@@ -138,6 +167,11 @@ class UpdaterInterface(
         if self._svc.deploy_pending():
             self._busy = True
             self._deploy_hold = self._spawn(self._hold_for_deploy(), name="deploy_hold")
+        # Same for the follow-up the update left: the status fetch runs before its pass.
+        if self._svc.followup_pending():
+            self._busy = True
+            self._followup_hold = True
+            self._spawn(self._release_hold_if_printing(), name="followup_hold_print")
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
@@ -208,7 +242,22 @@ class UpdaterInterface(
                     self._hold_for_deploy(), name="deploy_hold"
                 )
             busy = True
-        self._emit_busy(busy)
+        self._emit_busy(busy or self._followup_hold)
+
+    def _end_followup_hold(self) -> None:
+        """Drop the follow-up hold; busy falls unless a deploy hold still owns it."""
+        if self._followup_hold:
+            self._followup_hold = False
+            self._set_busy(False)
+
+    async def _release_hold_if_printing(self) -> None:
+        """A marker that outlived a mid-print daemon restart must not cover the print."""
+        # A silent Klippy counts as printing: an overlay over a live print hides Pause.
+        if await klipper_printing(unanswered=True) and not self._followup_running:
+            _log.info(
+                "followup hold: printer busy - releasing until the follow-up runs"
+            )
+            self._end_followup_hold()
 
     def _emit_busy(self, busy: bool) -> None:
         """Emit busy_changed only on state transitions to avoid redundant signals."""
@@ -216,6 +265,33 @@ class UpdaterInterface(
             self._busy = busy
             _log.info("busy_changed -> %s", busy)
             self.busy_changed.emit((busy,))
+            if not busy:
+                self._schedule_moonraker_sync()
+
+    def _schedule_moonraker_sync(self) -> None:
+        """Start a Moonraker resync unless one is already pending."""
+        if self._closing or (self._moonraker_sync and not self._moonraker_sync.done()):
+            return
+        self._moonraker_sync = self._spawn(
+            self._moonraker_sync_loop(), name="moonraker_sync"
+        )
+
+    async def _moonraker_sync_loop(self) -> None:
+        """Resync Moonraker's repo state, retrying while it refuses or is down."""
+        delay = _MOONRAKER_SYNC_RETRY_S
+        while True:
+            # Sleep first: the restarted BlocksScreen-start.sh waits only 20 s for the lock.
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, _MOONRAKER_SYNC_RETRY_MAX_S)
+            if self._busy:
+                continue
+            async with self._git_guard:
+                # An update may have started while this waited for the guard.
+                if self._busy:
+                    continue
+                with process_lock() as acquired:
+                    if acquired and await self._svc.sync_moonraker():
+                        return
 
     def _hold_wanted(self) -> bool:
         """A deploy flag is set and has not already used up the hold cap."""
@@ -225,7 +301,7 @@ class UpdaterInterface(
         )
 
     async def _hold_for_deploy(self) -> None:
-        """Hold busy while install-updater runs; release on exit, dead units or the cap."""
+        """Hold busy while install-updater runs; release on exit, dead units, a print or the cap."""
         _log.info("deploy flag set - holding busy until install-updater finishes")
         loop = asyncio.get_running_loop()
         deadline = loop.time() + _DEPLOY_HOLD_CAP_S
@@ -238,12 +314,23 @@ class UpdaterInterface(
                     )
                     self._capped_flag = self._svc.deploy_flag_stamp()
                     break
+                # install-updater waits the print out; an overlay over it would hide Pause.
+                if await klipper_printing():
+                    _log.info("deploy waits for the print - releasing busy")
+                    self._capped_flag = self._svc.deploy_flag_stamp()
+                    break
                 await asyncio.sleep(_DEPLOY_POLL_S)
         finally:
             self._deploy_hold = None
         # A provisioning pass that started under the hold still owns busy.
         if not self._provisioning:
-            self._emit_busy(busy=False)
+            # Hand busy straight to the follow-up the update left, no gap between them.
+            if self._provisioned and not self._followed_up:
+                self._followup_hold = (
+                    self._followup_hold or self._svc.followup_pending()
+                )
+            if not self._followup_hold:
+                self._emit_busy(busy=False)
             # The follow-up skipped while the hold owned busy: run it now, not at the next poll.
             if self._provisioned and not self._followed_up:
                 self._spawn(self._followup_pass(), name="followup_after_deploy")
@@ -271,7 +358,9 @@ class UpdaterInterface(
             return
         self._status_check_in_progress = True
         try:
-            status = await self._svc.check_status(force=force)
+            # Its git fetch would race a Moonraker refresh fetch on the ref locks.
+            async with self._git_guard:
+                status = await self._svc.check_status(force=force)
         except Exception as exc:  # noqa: BLE001
             _log.error("check_status failed: %s", exc)
             status = {
@@ -303,7 +392,7 @@ class UpdaterInterface(
 
     async def _periodic_status_check(self) -> None:
         """Provision once; emit status per poll, sooner on fetch failure or deferral."""
-        await asyncio.sleep(_BOOT_DELAY_S)
+        await asyncio.sleep(_boot_delay_s())
         while True:
             try:
                 if not self._provisioned:
@@ -320,6 +409,8 @@ class UpdaterInterface(
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
             await self._followup_pass()
+            # Also catches repos moved while we were down or by a CLI run.
+            self._schedule_moonraker_sync()
             interval = self._svc.poll_interval
             if self._svc.has_fetch_failures():
                 interval = min(_FETCH_RETRY_INTERVAL_S, interval)
@@ -333,8 +424,17 @@ class UpdaterInterface(
 
     async def _followup_pass(self) -> None:
         """After provisioning, apply manifest changes the previous daemon could not see."""
-        if not self._provisioned or self._followed_up or self._busy:
+        # A second pass (periodic vs followup_after_deploy) must not end the running one's hold.
+        if self._followup_running:
             return
+        if (
+            not self._provisioned
+            or self._followed_up
+            or (self._busy and not self._followup_hold)
+        ):
+            self._end_followup_hold()
+            return
+        self._followup_running = True
         try:
             retry, ran = await self._svc.run_followup(self._set_busy)
             if ran:
@@ -342,6 +442,9 @@ class UpdaterInterface(
         except Exception as exc:  # noqa: BLE001
             _log.error("followup pass failed: %s", exc, exc_info=True)
             retry, ran = False, False
+        finally:
+            self._followup_running = False
+            self._end_followup_hold()
         self._followed_up = not retry
         # A failed try that will retry sweeps apt once the follow-up settles.
         if not ran or retry:
@@ -402,20 +505,24 @@ class UpdaterInterface(
         """Run work() under the cross-process lock, then clear busy; True if the lock was held."""
         ran = False
         try:
-            with process_lock() as acquired:
-                if not acquired:
-                    _log.warning("%s: a CLI run holds the lock; skipping", label)
-                    self.error.emit((target, "another update is running"))
-                    return False
-                # The UI checks too, but a print can start while its confirm popup is open.
-                # Fail closed: a Klippy too loaded to answer may be mid-print.
-                if await klipper_printing(unanswered=True):
-                    _log.warning("%s: printer busy or not answering; skipping", label)
-                    self.error.emit((target, PRINTER_BUSY))
-                    return False
-                ran = True
-                await self._svc.reconcile_if_pending()
-                await work()
+            # A Moonraker refresh in flight fetches these repos: let it finish.
+            async with self._git_guard:
+                with process_lock() as acquired:
+                    if not acquired:
+                        _log.warning("%s: a CLI run holds the lock; skipping", label)
+                        self.error.emit((target, "another update is running"))
+                        return False
+                    # The UI checks too, but a print can start while its popup is open.
+                    # Fail closed: a Klippy too loaded to answer may be mid-print.
+                    if await klipper_printing(unanswered=True):
+                        _log.warning(
+                            "%s: printer busy or not answering; skipping", label
+                        )
+                        self.error.emit((target, PRINTER_BUSY))
+                        return False
+                    ran = True
+                    await self._svc.reconcile_if_pending()
+                    await work()
         except Exception as exc:  # noqa: BLE001
             _log.error("_run_%s failed: %s", label, exc, exc_info=True)
         finally:
@@ -476,11 +583,19 @@ class UpdaterInterface(
         """D-Bus method: True while a missing component is being installed."""
         return self._provisioning
 
+    @sdbus.dbus_method_async(result_signature="b")
+    async def get_committed(self) -> bool:
+        """D-Bus method: True once the running update is committed and can no longer be cancelled."""
+        return self._svc.update_committed
+
     @sdbus.dbus_method_async()
     async def cancel(self) -> None:
         """D-Bus method: cancel the task, then wait (not re-cancel) for its rollback."""
         if self._provisioning:
             _log.info("cancel() ignored: component install in progress")
+            return
+        if self._svc.update_committed:
+            _log.info("cancel() ignored: update committed, finishing restarts")
             return
         cancelled_tasks: list[asyncio.Task] = []
         for task in list(self._background_tasks):

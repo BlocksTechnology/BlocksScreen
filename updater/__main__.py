@@ -1,13 +1,15 @@
 import argparse
 import asyncio
 import contextlib
+import hashlib
 import logging
 import os
 import signal
 import socket
 from collections.abc import Iterator
+from pathlib import Path
 
-from updater.locking import process_lock
+from updater.locking import code_hash_path, process_lock
 from updater.models import ComponentStatus
 from updater.service import LoggingCallback, UpdateService
 
@@ -49,12 +51,34 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def code_hash(pkg: Path = Path(__file__).parent) -> str:
+    """Hash the daemon's code like bs_updater_code_hash in bs-common.sh."""
+    names = sorted([p.name for p in pkg.glob("*.py")] + ["components.yaml"])
+    digest = hashlib.sha256()
+    for name in names:
+        with contextlib.suppress(OSError):
+            digest.update((pkg / name).read_bytes())
+    return digest.hexdigest()
+
+
+def _record_code_hash() -> None:
+    """Record the loaded code so bs-bootstrap can restart a daemon a Moonraker pull left stale."""
+    path = code_hash_path()
+    tmp = path.with_name(path.name + ".new")
+    try:
+        tmp.write_text(code_hash() + "\n")
+        tmp.replace(path)
+    except OSError as exc:
+        logging.getLogger("updater").warning("could not record code hash: %s", exc)
+
+
 async def _run_daemon() -> None:
     """Start the D-Bus service; sdbus is imported here so the CLI runs without it."""
     import sdbus
 
     from updater.dbus_service import UpdaterDbusService
 
+    _record_code_hash()
     _log = logging.getLogger("updater")
     bus = sdbus.sd_bus_open_system()
     service = UpdaterDbusService()

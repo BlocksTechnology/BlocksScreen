@@ -31,6 +31,7 @@ class NotificationPage(QtWidgets.QWidget):
         self.notification_list_view.setItemDelegate(self.entry_delegate)
         self.entry_delegate.item_selected.connect(self.on_item_clicked)
         self.model.rowsInserted.connect(self._on_rows_inserted)
+        self.model.rowsRemoved.connect(self._on_rows_removed)
 
         self.back_btn.clicked.connect(self.hide)
         self.delete_btn.clicked.connect(self.delete_selected_item)
@@ -58,14 +59,26 @@ class NotificationPage(QtWidgets.QWidget):
 
     def delete_selected_item(self) -> None:
         """Deletes currently selected item from the list view"""
-        if self.selected_item is None:
-            return
-        self.model.remove_item(self.selected_item)
-        self.selected_item = None
-        if self.model.entries:
-            self._select_row(0)
-        else:
+        if self.selected_item is not None:
+            self._remove_entry(self.selected_item)
+
+    @QtCore.pyqtSlot(str, name="retract-notification")
+    def retract_notification(self, message: str) -> None:
+        """Remove the entry for a condition that has cleared."""
+        entry = next((e for e in self.model.entries if e.text == message), None)
+        if entry is not None:
+            self._remove_entry(entry)
+
+    def _remove_entry(self, entry: ListItem) -> None:
+        """Remove *entry*, reselect the newest if it was selected, clear the dot if empty."""
+        self.model.remove_item(entry)
+        if self.selected_item is entry:
+            self.selected_item = None
+        if not self.model.entries:
             self._clear_info_box()
+            self.has_new_notification.emit(False)
+        elif self.selected_item is None and self.isVisible():
+            self._select_row(0)
 
     def reset_view_model(self) -> None:
         """Clears items from ListView
@@ -89,6 +102,16 @@ class NotificationPage(QtWidgets.QWidget):
         """Keep the delegate's prev_index valid when a notification is prepended above it."""
         if first <= self.entry_delegate.prev_index:
             self.entry_delegate.prev_index += 1
+
+    def _on_rows_removed(
+        self, _parent: QtCore.QModelIndex, first: int, last: int
+    ) -> None:
+        """Keep the delegate's prev_index on the same entry when rows above it go."""
+        prev = self.entry_delegate.prev_index
+        if last < prev:
+            self.entry_delegate.prev_index = prev - (last - first + 1)
+        elif first <= prev:
+            self.entry_delegate.prev_index = 0
 
     def _select_row(self, row: int) -> None:
         """Selects *row*, clearing the previous selection and refreshing the info box."""
@@ -183,7 +206,11 @@ class NotificationPage(QtWidgets.QWidget):
                 case _:
                     msg_type = Popup.MessageType.UNKNOWN
 
-            self.popup.new_message(message_type=msg_type, message=message, timeout=3000)
+            # Errors stay 10 s like KlipperScreen: a print refused while the user is away.
+            timeout = 10000 if priority == 3 else 3000
+            self.popup.new_message(
+                message_type=msg_type, message=message, timeout=timeout
+            )
 
         self.has_new_notification.emit(not self.isVisible())
 

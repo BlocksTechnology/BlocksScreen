@@ -1,10 +1,13 @@
 import json
+import subprocess
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from updater.models import PRINTER_BUSY, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, DISK_FULL, PRINTER_BUSY, ComponentStatus
+
+_UP_MOD = "BlocksScreen.lib.panels.widgets.MainWindow.updatePage"
 
 
 @pytest.fixture
@@ -147,6 +150,16 @@ class TestVersionString:
     def test_system_returns_updates_available(self, page):
         s = _make_status(kind="system", packages_upgradable=12)
         assert page._version_string(s) == "updates available"
+
+    @pytest.mark.parametrize(
+        ("error", "label"),
+        [
+            (f"{CLOCK_UNSYNCED}: fatal", "clock not synchronized"),
+            ("fatal", "status error"),
+        ],
+    )
+    def test_error_label(self, page, error, label):
+        assert page._version_string(_make_status(error=error)) == label
 
 
 class TestBuildCards:
@@ -555,6 +568,31 @@ class TestConfirmPopupCleanup:
         second.deleteLater.assert_not_called()
 
 
+class TestCommittedCancel:
+    def test_committed_hides_cancel_and_false_restores_it(self, page):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page._cancel_btn.reset_mock()
+        page.handle_committed_changed(True)
+        page._cancel_btn.hide.assert_called_once()
+        page.handle_committed_changed(False)
+        page._cancel_btn.show.assert_called_once()
+
+    def test_busy_while_committed_keeps_cancel_hidden(self, page):
+        page.show_loading = MagicMock()
+        page.handle_committed_changed(True)
+        page.handle_busy_changed(True)
+        page._cancel_btn.setVisible.assert_called_with(False)
+
+    def test_committed_false_keeps_cancel_hidden_while_provisioning(self, page):
+        page.show_loading = MagicMock()
+        page.handle_busy_changed(True)
+        page.handle_provisioning_changed(True)
+        page._cancel_btn.reset_mock()
+        page.handle_committed_changed(False)
+        page._cancel_btn.show.assert_not_called()
+
+
 class TestBootProvisioning:
     def test_declared_provisioning_shows_installing_message(self, page, qtbot):
         page.show_loading = MagicMock()
@@ -680,3 +718,143 @@ class TestCancelHiddenWhileProvisioning:
         page._cancel_btn.reset_mock()
         page.handle_provisioning_changed(True)
         page._cancel_btn.hide.assert_called_once()
+
+
+@pytest.fixture
+def deploy_flag(tmp_path):
+    """Point the page at a tmp deploy flag with an installed path unit; yields the flag."""
+    flag = tmp_path / ".run-install-updater"
+    unit = tmp_path / "BlocksScreen-deploy.path"
+    unit.touch()
+    mod = "BlocksScreen.lib.panels.widgets.MainWindow.updatePage"
+    with (
+        patch(f"{mod}.DEPLOY_FLAG", flag),
+        patch(f"{mod}.DEPLOY_PATH_UNIT", unit),
+        patch(f"{mod}.UpdatePage._deploy_units_live", return_value=True),
+    ):
+        yield flag
+
+
+class TestDeployHold:
+    def test_print_states_match_the_daemon(self):
+        from updater.executor import PRINT_ACTIVE_STATES
+
+        from BlocksScreen.lib.panels.widgets.MainWindow.updatePage import UpdatePage
+
+        assert UpdatePage._PRINT_ACTIVE == PRINT_ACTIVE_STATES
+
+    def test_old_daemon_idle_during_deploy_keeps_screen_locked(
+        self, page, deploy_flag, qtbot
+    ):
+        # Release-2.0 daemons drop busy before install-updater ends.
+        page.show_loading = MagicMock()
+        deploy_flag.touch()
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_busy_changed(False)
+        assert blocker.args == [True, "Finishing installation ...", False]
+        emitted: list[bool] = []
+        page.call_load_panel.connect(lambda show, *_: emitted.append(show))
+        page.handle_status_ready(_make_payload())
+        assert False not in emitted
+        assert page._deploy_poll_timer.isActive()
+
+    def test_flag_cleared_rides_the_daemon_restart(self, page, deploy_flag, qtbot):
+        page.show_loading = MagicMock()
+        page._show_toast = MagicMock()
+        deploy_flag.touch()
+        assert page.hold_for_deploy() is True
+        deploy_flag.unlink()
+        page._poll_deploy_flag()
+        assert not page._deploy_poll_timer.isActive()
+        assert page._restart_pending and page._restart_grace_timer.isActive()
+        # MainWindow drops the overlay when the daemon leaves the bus; the page re-locks.
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page.handle_daemon_unavailable()
+        assert blocker.args[0] is True
+
+    def test_no_path_unit_means_no_hold(self, page, deploy_flag):
+        # Nothing ever clears the flag without the unit: holding would lock forever.
+        deploy_flag.touch()
+        (deploy_flag.parent / "BlocksScreen-deploy.path").unlink()
+        assert page.hold_for_deploy() is False
+
+    def test_cap_releases_and_never_rearms_for_that_flag(self, page, deploy_flag):
+        deploy_flag.touch()
+        assert page.hold_for_deploy() is True
+        page._on_deploy_cap()
+        assert page._deploy_hold is False
+        assert page.hold_for_deploy() is False
+
+    def test_print_never_starts_a_hold(self, page, deploy_flag):
+        page._show_toast = MagicMock()
+        deploy_flag.touch()
+        page.set_printing_state("state", "printing")
+        assert page.hold_for_deploy() is False
+        page._show_toast.assert_called_once_with(
+            "Finishing update after the print", success=True
+        )
+        page.set_printing_state("state", "complete")
+        # Released once per flag, like the daemon.
+        assert page.hold_for_deploy() is False
+
+    def test_print_starting_mid_hold_drops_the_overlay(self, page, deploy_flag, qtbot):
+        page.show_loading = MagicMock()
+        page._show_toast = MagicMock()
+        deploy_flag.touch()
+        assert page.hold_for_deploy() is True
+        page.set_printing_state("state", "paused")
+        with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
+            page._poll_deploy_flag()
+        assert blocker.args[0] is False
+        assert page._deploy_hold is False
+        assert not page._deploy_poll_timer.isActive()
+        assert not page._deploy_cap_timer.isActive()
+
+    def test_dead_units_never_hold_for_a_stale_flag(self, page, deploy_flag):
+        # A failed/stopped path unit never clears the flag: holding would lock 900 s per boot.
+        deploy_flag.touch()
+        with patch.object(page, "_deploy_units_live", return_value=False):
+            assert page.hold_for_deploy() is False
+        assert page.hold_for_deploy() is False
+        assert not page._deploy_cap_timer.isActive()
+
+
+class TestDeployUnitsLive:
+    @pytest.mark.parametrize(
+        ("stdout", "live"),
+        [
+            ("active\ninactive\n", True),
+            ("inactive\nactivating\n", True),
+            ("failed\ninactive\n", False),
+            ("inactive\ninactive\n", False),
+        ],
+    )
+    def test_reads_systemctl_active_state(self, stdout, live):
+        from BlocksScreen.lib.panels.widgets.MainWindow.updatePage import UpdatePage
+
+        done = subprocess.CompletedProcess([], 0, stdout=stdout)
+        with patch(f"{_UP_MOD}.subprocess.run", return_value=done):
+            assert UpdatePage._deploy_units_live() is live
+
+    def test_systemctl_failure_trusts_the_flag(self):
+        from BlocksScreen.lib.panels.widgets.MainWindow.updatePage import UpdatePage
+
+        # Same fallback as the daemon's deploy_running(); the 900 s cap still bounds it.
+        with patch(f"{_UP_MOD}.subprocess.run", side_effect=OSError):
+            assert UpdatePage._deploy_units_live() is True
+
+
+class TestDiskFullPopup:
+    def test_disk_full_opens_one_persistent_popup(self, page):
+        page._show_toast = MagicMock()
+        reason = f"{DISK_FULL}: 50 MB free, 200 MB needed"
+        with patch(f"{_UP_MOD}.BasePopup") as popup_cls:
+            popup = popup_cls.return_value
+            popup.isVisible.return_value = True
+            page.handle_error_occurred("system", reason)
+            page.handle_error_occurred("BlocksScreen", reason)
+        popup_cls.assert_called_once()
+        msg = popup.set_message.call_args[0][0].lower()
+        assert "full" in msg and "delete" in msg
+        popup.open.assert_called_once()
+        page._show_toast.assert_not_called()

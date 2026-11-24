@@ -443,3 +443,273 @@ class TestBlocksScreenHook:
         )
         assert not sentinel.exists()
         assert followup.exists()
+
+
+RF50_HOOK = HOOK.parent / "RF50-Klipper.sh"
+
+
+@pytest.fixture
+def rf50_home(tmp_path: Path) -> Path:
+    home = tmp_path / "home"
+    cam = tmp_path / "dev" / "cam0"
+    cam.parent.mkdir()
+    cam.write_text("")
+    repo = home / "RF50-Klipper"
+    repo.mkdir(parents=True)
+    (repo / "crowsnest.conf").write_text(f"[cam 1]\ndevice: {cam}  # by-id\n")
+    conf = home / "printer_data" / "config" / "crowsnest.conf"
+    conf.parent.mkdir(parents=True)
+    conf.write_text("[cam 1]\ndevice: /dev/video0\n")
+    return home
+
+
+def _run_rf50_hook(
+    tmp_path: Path, home: Path, **extra: str
+) -> subprocess.CompletedProcess:
+    return _run_hh_hook(
+        tmp_path,
+        home,
+        hook=RF50_HOOK,
+        COMPONENT_PATH=str(home / "RF50-Klipper"),
+        **extra,
+    )
+
+
+def _rf50_conf(home: Path) -> Path:
+    return home / "printer_data" / "config" / "crowsnest.conf"
+
+
+def _rf50_backups(home: Path) -> list[Path]:
+    return sorted((home / ".rf50_backups").glob("crowsnest.conf.*"))
+
+
+def _change_template(home: Path, line: str) -> None:
+    template = home / "RF50-Klipper" / "crowsnest.conf"
+    template.write_text(template.read_text() + line)
+
+
+class TestRF50KlipperHook:
+    def test_installs_backs_up_and_restarts(self, tmp_path, rf50_home):
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        conf = _rf50_conf(rf50_home)
+        assert not conf.is_symlink()
+        assert (
+            conf.read_text()
+            == (rf50_home / "RF50-Klipper" / "crowsnest.conf").read_text()
+        )
+        backups = _rf50_backups(rf50_home)
+        assert [b.read_text() for b in backups] == ["[cam 1]\ndevice: /dev/video0\n"]
+        assert _sudo_calls(tmp_path) == ["-n systemctl restart crowsnest.service"]
+
+    def test_back_to_back_runs_keep_every_backup(self, tmp_path, rf50_home):
+        conf = _rf50_conf(rf50_home)
+        _run_rf50_hook(tmp_path, rf50_home)
+        conf.write_text("second\n")
+        _change_template(rf50_home, "max_fps: 15\n")
+        _run_rf50_hook(tmp_path, rf50_home)
+        assert sorted(b.read_text() for b in _rf50_backups(rf50_home)) == [
+            "[cam 1]\ndevice: /dev/video0\n",
+            "second\n",
+        ]
+
+    def test_local_edits_kept_until_template_changes(self, tmp_path, rf50_home):
+        conf = _rf50_conf(rf50_home)
+        _run_rf50_hook(tmp_path, rf50_home)
+        conf.write_text(conf.read_text() + "resolution: 640x480\n")
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert "resolution: 640x480" in conf.read_text()
+        assert len(_sudo_calls(tmp_path)) == 1
+        _change_template(rf50_home, "max_fps: 15\n")
+        _run_rf50_hook(tmp_path, rf50_home)
+        assert "resolution: 640x480" not in conf.read_text()
+        assert "max_fps: 15" in conf.read_text()
+        assert len(_rf50_backups(rf50_home)) == 2
+
+    def test_restart_argv_matches_sudoers_rule(self, tmp_path, rf50_home):
+        _run_rf50_hook(tmp_path, rf50_home)
+        manifest = (HOOK.parents[2] / "updater" / "components.yaml").read_text()
+        assert re.search(r"^\s*service: crowsnest\.service$", manifest, re.M)
+        assert _sudo_calls(tmp_path) == ["-n systemctl restart crowsnest.service"]
+
+    def test_up_to_date_is_noop(self, tmp_path, rf50_home):
+        _run_rf50_hook(tmp_path, rf50_home)
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert len(_sudo_calls(tmp_path)) == 1
+        assert len(_rf50_backups(rf50_home)) == 1
+
+    def test_missing_camera_keeps_local_conf(self, tmp_path, rf50_home):
+        (tmp_path / "dev" / "cam0").unlink()
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert _rf50_conf(rf50_home).read_text() == "[cam 1]\ndevice: /dev/video0\n"
+        assert _sudo_calls(tmp_path) == []
+
+    def test_current_by_path_template_is_skipped(self, tmp_path, rf50_home):
+        (rf50_home / "RF50-Klipper" / "crowsnest.conf").write_text(
+            "[cam 1]\n"
+            "#device: /dev/video0                     # See Log for available ...\n"
+            "device: /dev/v4l/by-path/platform-xhci-hcd.4.auto-usb-0:1.4:1.0"
+            "-video-index0\n"
+        )
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert "by-path/platform-xhci-hcd.4" in result.stdout
+        assert _rf50_conf(rf50_home).read_text() == "[cam 1]\ndevice: /dev/video0\n"
+        assert _sudo_calls(tmp_path) == []
+
+    def test_symlinked_conf_is_replaced_by_copy(self, tmp_path, rf50_home):
+        conf = _rf50_conf(rf50_home)
+        conf.unlink()
+        conf.symlink_to(rf50_home / "RF50-Klipper" / "crowsnest.conf")
+        result = _run_rf50_hook(tmp_path, rf50_home)
+        assert result.returncode == 0, result.stderr
+        assert conf.is_file() and not conf.is_symlink()
+        assert len(_sudo_calls(tmp_path)) == 1
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            {"BS_UPDATER_PRINTING": "1"},
+            {"BS_UPDATER_PENDING_RESTARTS": "crowsnest.service klipper.service"},
+        ],
+    )
+    def test_installs_without_restart(self, tmp_path, rf50_home, extra):
+        result = _run_rf50_hook(tmp_path, rf50_home, **extra)
+        assert result.returncode == 0, result.stderr
+        assert "by-id" in _rf50_conf(rf50_home).read_text()
+        assert _sudo_calls(tmp_path) == []
+
+    def test_failed_restart_warns(self, tmp_path, rf50_home):
+        result = _run_rf50_hook(tmp_path, rf50_home, SUDO_RC="1")
+        assert result.returncode == 0, result.stderr
+        assert "WARN: could not restart" in result.stdout
+
+
+SPOOLMAN_HOOK = HOOK.with_name("Spoolman.sh")
+_RELEASE_INFO = '{\n  "project_name": "Spoolman",\n  "version": "v0.26.0"\n}\n'
+
+
+@pytest.fixture
+def spoolman_home(tmp_path: Path) -> Path:
+    """A Spoolman clone carrying both factory leftovers."""
+    home = tmp_path / "home"
+    repo = home / "Spoolman"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "scripts" / "start.sh").write_text("")
+    _git(repo, "init", "-q")
+    _git(repo, "add", ".")
+    (repo / "Spoolman" / ".venv").mkdir(parents=True)
+    (repo / "Spoolman" / "release_info.json").write_text(_RELEASE_INFO)
+    (repo / "Spoolman" / ".env").write_text(
+        "#SPOOLMAN_DIR_DATA=/home/pi/spoolman_data\n"
+    )
+    (repo / "uv").mkdir()
+    for name in ("uv", "uvx"):
+        (repo / "uv" / name).write_text("")
+    return home
+
+
+def _run_spoolman_hook(
+    tmp_path: Path, home: Path, health: str = "healthy", unit_dir: str = ""
+) -> subprocess.CompletedProcess:
+    """Run Spoolman.sh with stub uv/curl/systemctl/sudo/sleep; no moonraker.conf."""
+    stub_bin = tmp_path / "stub-bin"
+    stub_bin.mkdir(exist_ok=True)
+    stubs = {
+        "curl": f'echo \'{{"status": "{health}"}}\'',
+        "systemctl": f'[ "$1" = show ] && echo "{unit_dir}"; exit 0',
+        "sudo": "exit 0",
+        "sleep": "exit 0",
+        "uv": "exit 0",
+    }
+    for name, body in stubs.items():
+        (stub_bin / name).write_text(f"#!/bin/bash\n{body}\n")
+        (stub_bin / name).chmod(0o755)
+    env = {
+        "PATH": f"{stub_bin}:{os.environ['PATH']}",
+        "HOME": str(home),
+        "COMPONENT_PATH": str(home / "Spoolman"),
+        "BLOCKSSCREEN_VENV": str(tmp_path / "no-venv"),
+    }
+    return subprocess.run(
+        ["bash", str(SPOOLMAN_HOOK)],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+class TestSpoolmanHook:
+    def test_removes_factory_leftovers(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert not (repo / "Spoolman").exists()
+        assert not (repo / "uv").exists()
+        assert (repo / "scripts" / "start.sh").exists()
+
+    def test_keeps_dirs_without_installer_fingerprint(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        (repo / "Spoolman" / "release_info.json").unlink()
+        (repo / "uv" / "notes.txt").write_text("mine")
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "Spoolman").is_dir()
+        assert (repo / "uv" / "notes.txt").exists()
+
+    def test_keeps_tracked_and_unit_dirs(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        _git(repo, "add", "uv")
+        result = _run_spoolman_hook(
+            tmp_path, spoolman_home, unit_dir=str(repo / "Spoolman")
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "Spoolman" / "release_info.json").exists()
+        assert (repo / "uv" / "uv").exists()
+
+    def test_git_failure_keeps_leftovers(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        (repo / ".git" / "index").write_bytes(b"corrupt")
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "Spoolman").is_dir()
+        assert (repo / "uv").is_dir()
+
+    @pytest.mark.parametrize(
+        ("rel", "text"),
+        [
+            ("data/spoolman.db", ""),
+            ("backups/spoolman.db.1", ""),
+            (".env", "SPOOLMAN_DIR_DATA=/home/blocks/Spoolman/Spoolman/data\n"),
+            (".env", "export SPOOLMAN_DIR_BACKUPS=/srv/bk\n"),
+        ],
+    )
+    def test_keeps_release_dir_with_data(self, tmp_path, spoolman_home, rel, text):
+        release = spoolman_home / "Spoolman" / "Spoolman"
+        (release / rel).parent.mkdir(parents=True, exist_ok=True)
+        (release / rel).write_text(text)
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (release / rel).exists()
+        assert "kept Spoolman/" in result.stdout
+
+    def test_keeps_symlinked_dir(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        target = tmp_path / "shared-uv"
+        (repo / "uv").rename(target)
+        (repo / "uv").symlink_to(target)
+        result = _run_spoolman_hook(tmp_path, spoolman_home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (repo / "uv").is_symlink()
+        assert (target / "uv").exists()
+
+    def test_unhealthy_install_keeps_leftovers(self, tmp_path, spoolman_home):
+        repo = spoolman_home / "Spoolman"
+        result = _run_spoolman_hook(tmp_path, spoolman_home, health="down")
+        assert result.returncode == 1
+        assert (repo / "Spoolman").is_dir()
+        assert (repo / "uv").is_dir()

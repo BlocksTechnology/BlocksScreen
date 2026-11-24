@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import typing
 from collections import deque
 
@@ -10,8 +9,10 @@ from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
 from lib.klipper_message_filter import (
+    CONSOLE_ECHO_PREFIX,
     MessageSource,
     Severity,
+    macro_error_text,
     match_message,
 )
 from lib.klippy_status import KlippyStatus
@@ -44,10 +45,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
-
-_MACRO_ERROR_RE = re.compile(
-    r"Error evaluating 'gcode_macro ([^:]+):gcode'.*CommandError", re.IGNORECASE
-)
 
 
 def api_handler(func):
@@ -135,6 +132,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._popup_toggle: bool = False
         self._update_in_progress: bool = False
         self._post_update_reconnect: bool = False
+        # Latest loadscreen request made before this window was first shown.
+        self._early_loadscreen: tuple[bool, str] | None = None
         self._reconnect_retries: int = 0
         self._reconnect_timer = QtCore.QTimer(self)
         self._reconnect_timer.setSingleShot(False)
@@ -142,6 +141,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._reconnect_timer.timeout.connect(self._on_reconnect_timer)
         self._klippy_ready: bool = False
         self._klippy_state: str | None = None
+        self._klippy_settled_state: str | None = None
         self._klipper_auto_restart_pending: bool = False
         self._klipper_restart_timeout = QtCore.QTimer(self)
         self._klipper_restart_timeout.setSingleShot(True)
@@ -195,6 +195,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.usb_manager.usb_unmounted.connect(
             self.printPanel.filesPage_widget.on_usb_removed
         )
+        self.usb_manager.usb_unmounted.connect(self.printPanel.on_usb_removed)
         if not os.environ.get("BLOCKSCREEN_DEV"):
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
@@ -217,6 +218,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_notifications.connect(self.notiPage.new_notication)
 
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
+        self.printPanel.request_forget_pages.connect(self.forget_pages)
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
@@ -272,6 +274,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.object_updated.connect(self.amu_manager.on_object_updated)
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.ws.klippy_state_signal.connect(self.amu_manager.on_klippy_state)
+        self.ws.server_components_signal.connect(self.amu_manager.on_server_components)
+        self.amu_manager.show_notification.connect(self.show_notifications)
+        self.amu_manager.retract_notification.connect(
+            self.notiPage.retract_notification
+        )
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
@@ -295,7 +302,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updater_worker.provisioning_changed.connect(
             self.update_page.handle_provisioning_changed
         )
-        self.updater_worker.replay_busy()
+        self.updater_worker.status_ready.connect(self.amu_manager.on_updater_status)
+        self.updater_worker.daemon_unavailable.connect(
+            self.amu_manager.on_updater_unavailable
+        )
+        self.updater_worker.busy_changed.connect(self.amu_manager.on_updater_busy)
+        self.updater_worker.provisioning_changed.connect(
+            self.amu_manager.on_updater_provisioning
+        )
+        self.updater_worker.committed_changed.connect(
+            self.update_page.handle_committed_changed
+        )
         self.updater_worker.daemon_unavailable.connect(self.on_updater_unavailable)
         self.updater_worker.daemon_unavailable.connect(
             self.update_page.handle_daemon_unavailable
@@ -377,12 +394,51 @@ class MainWindow(QtWidgets.QMainWindow):
         self._device_config_popup: BasePopup | None = None
         # printer.cfg changed for a device; Klipper must restart to load it.
         self._device_restart_pending = False
+        # Restart waits until the print-finished screen closes.
+        self._finish_screen_hold = False
+        # hideEvent also fires when an ancestor hides; nothing hides MainWindow at runtime.
+        self.cancelpage.hidden.connect(self._release_finish_screen_hold)
+        # Reprint sends SDCARD_RESET_FILE first; its standby must not restart Klipper under the new job.
+        self._reprint_hold = QtCore.QTimer(self)
+        self._reprint_hold.setSingleShot(True)
+        # Upper bound for the reprint to reach "printing"; a refused start must not hold forever.
+        self._reprint_hold.setInterval(30_000)
+        self._reprint_hold.timeout.connect(self._try_device_config_restart)
+        self.cancelpage.reprint_start.connect(self._on_reprint_requested)
+        # Shut down since the change: the operator's Firmware Restart re-reads printer.cfg.
+        self._config_reload_on_ready = False
         self.chamber_temp_display.hide()
 
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
         self.conn_window.show()
+        # Last: the daemon may report busy before any slot or the loadscreen exists.
+        self.updater_worker.replay_busy()
+        self.update_page.hold_for_deploy()
+
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
+        """Apply a loadscreen request that arrived before the window was shown."""
+        super().showEvent(a0)
+        if self._early_loadscreen is not None:
+            # The show event precedes the native map, so wait for the next loop pass.
+            QtCore.QTimer.singleShot(0, self._flush_early_loadscreen)
+
+    def _flush_early_loadscreen(self) -> None:
+        """Show or hide the loadscreen as the last pre-show request asked."""
+        if self._early_loadscreen is None:
+            return
+        show, msg = self._early_loadscreen
+        self._early_loadscreen = None
+        self._apply_loadscreen(show, msg)
+
+    def _apply_loadscreen(self, show: bool, msg: str) -> None:
+        """Set the loadscreen message and visibility."""
+        self.loadwidget.set_status_message(msg)
+        if show:
+            self.loadscreen.show()
+        else:
+            self.loadscreen.hide()
 
     @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
@@ -398,12 +454,15 @@ class MainWindow(QtWidgets.QMainWindow):
         if not show:
             self.cancelpage.hide()
             return
+        # Set before the deferred show: _track_print_state runs next.
+        self._finish_screen_hold = True
         # Defer so a concurrent E-stop (klippy shutdown) is seen before we decide.
         QtCore.QTimer.singleShot(0, self._show_cancel_page_if_operational)
 
     def _show_cancel_page_if_operational(self) -> None:
         # E-stop/shutdown aborts the print with an error too; the connection page handles that, not the cancel page.
         if not self._klippy_ready:
+            self._release_finish_screen_hold()
             return
         self.cancelpage.setGeometry(0, 0, self.width(), self.height())
         self.cancelpage.raise_()
@@ -420,6 +479,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
+                if not show:
+                    # A boot-sync restart deferred by the update has no other retry.
+                    QtCore.QTimer.singleShot(0, self._try_device_config_restart)
             if (
                 not show
                 and self._post_update_reconnect
@@ -443,11 +505,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 if not self.utilitiesPanel.isVisible():
                     return
 
-        self.loadwidget.set_status_message(msg)
-        if show:
-            self.loadscreen.show()
-        else:
-            self.loadscreen.hide()
+        if not self.isVisible():
+            # No window manager on the device: a popup mapped first stays under us.
+            self._early_loadscreen = (show, msg)
+            return
+        self._early_loadscreen = None
+        self._apply_loadscreen(show, msg)
 
     @QtCore.pyqtSlot(bool, name="show-update-page")
     def show_update_page(self, fullscreen: bool):
@@ -474,6 +537,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_klippy_state(self, state: str) -> None:
         self._klippy_ready = state == "ready"
         self._klippy_state = state
+        was_ready = self._klippy_settled_state == "ready"
+        if state in ("ready", "shutdown", "error"):
+            self._klippy_settled_state = state
         if state != "ready":
             # print_stats is re-reported once Klipper is ready again.
             self._print_state_known = False
@@ -482,8 +548,17 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self._klipper_disconnect_grace.stop()
         if state == "shutdown":
-            if self._update_in_progress:
-                _logger.warning("Klipper E-stop detected — cancelling active update")
+            self._config_reload_on_ready = self._device_restart_pending
+        elif state in ("ready", "error") and self._config_reload_on_ready:
+            self._config_reload_on_ready = False
+            # Every route back to ready (FIRMWARE_RESTART, RESTART, service restart) re-reads printer.cfg.
+            if state == "ready" and self._device_restart_pending:
+                _logger.info("Firmware Restart loaded the new device config")
+                self._device_restart_pending = False
+        if state == "shutdown":
+            # Reconnects re-report an old shutdown; only ready -> shutdown is an E-stop.
+            if self._update_in_progress and was_ready:
+                _logger.warning("Klipper E-stop detected, cancelling active update")
                 self.updater_worker.trigger_cancel()
         elif state == "ready" and self._klipper_auto_restart_pending:
             _logger.info("Klipper back online after auto-restart")
@@ -661,7 +736,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_content_widget.setTabEnabled(
             self.main_content_widget.indexOf(self.utilitiesTab), True
         )
-        self.header_main_layout.setEnabled(True)
         return all(
             [
                 not self.main_content_widget.isTabEnabled(
@@ -670,7 +744,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 not self.main_content_widget.isTabEnabled(
                     self.main_content_widget.indexOf(self.utilitiesTab)
                 ),
-                not self.header_main_layout.isEnabled(),
             ]
         )
 
@@ -691,7 +764,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_content_widget.setTabEnabled(
             self.main_content_widget.indexOf(self.utilitiesTab), False
         )
-        self.header_main_layout.setEnabled(False)
         return all(
             [
                 not self.main_content_widget.isTabEnabled(
@@ -700,7 +772,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 not self.main_content_widget.isTabEnabled(
                     self.main_content_widget.indexOf(self.utilitiesTab)
                 ),
-                not self.header_main_layout.isEnabled(),
             ]
         )
 
@@ -755,10 +826,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self._device_config_popup.accepted.connect(self._on_device_config_accept)
             self._device_config_popup.rejected.connect(self._on_device_config_decline)
         devices = ", ".join(n.upper() for n in self._device_confirm_names)
+        restart = (
+            "and restart Klipper when the\nprint-finished screen is closed?"
+            if self._finish_screen_hold
+            else "and restart Klipper?"
+        )
         self._device_config_popup.set_message(
             f"New device detected: {devices}\n"
-            "Update the printer configuration for it\n"
-            "and restart Klipper?"
+            f"Update the printer configuration for it\n{restart}"
         )
         self._device_config_popup.confirm_button_text("Configure")
         self._device_config_popup.cancel_button_text("Not now")
@@ -787,6 +862,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def request_klipper_restart(self) -> None:
         """Restart Klipper as soon as it is safe (never during a job)."""
         self._device_restart_pending = True
+        self._config_reload_on_ready = self._klippy_state == "shutdown"
         self._try_device_config_restart()
 
     def _device_restart_blocked(self) -> str:
@@ -797,6 +873,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return "print state not known yet"
         if self._is_job_active() or self.print_status == "printing":
             return "a job is running"
+        if self._config_reload_on_ready:
+            # A service restart cannot clear an MCU shutdown, and E-stops never auto-recover.
+            return "Klipper is shut down, waiting for the operator's Firmware Restart"
+        if self._finish_screen_hold:
+            return "the print-finished screen is open"
+        if self._reprint_hold.isActive():
+            return "a reprint is starting"
         if self._update_in_progress:
             return "an update is running"
         if self._klipper_auto_restart_pending:
@@ -823,6 +906,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self._device_restart_pending = False
         self._begin_klipper_restart()
 
+    def _release_finish_screen_hold(self) -> None:
+        """The finished screen closed or never opened: let a held Klipper restart run."""
+        if self._finish_screen_hold:
+            self._finish_screen_hold = False
+            self._try_device_config_restart()
+
+    @QtCore.pyqtSlot(str, name="on-reprint-requested")
+    def _on_reprint_requested(self, _filename: str) -> None:
+        """Hold a pending Klipper restart until the reprint reports printing."""
+        self._reprint_hold.start()
+
     @QtCore.pyqtSlot(bool, name="toggle-popups")
     def popup_toggle(self, toggle: bool) -> None:
         """Toggles app popups"""
@@ -834,8 +928,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def set_ui_lock(self, locked: bool) -> None:
         """Lock or unlock navigation during calibration.
 
-        Disables all tabs except controlTab (where calibration lives) and
-        the header, so the user cannot navigate away mid-calibration.
+        Disables all tabs except controlTab (where calibration lives), so the
+        user cannot navigate away mid-calibration.
         """
         for tab in (
             self.printTab,
@@ -845,7 +939,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.main_content_widget.setTabEnabled(
                 self.main_content_widget.indexOf(tab), not locked
             )
-        self.header_main_layout.setEnabled(not locked)
 
     @QtCore.pyqtSlot(str, str, name="track_print_state")
     def _track_print_state(self, field: str, value: str) -> None:
@@ -853,6 +946,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if field == "state":
             self._print_state = value
             self._print_state_known = True
+            if value == "printing":
+                self._reprint_hold.stop()
             if not self._is_job_active():
                 self._try_device_config_restart()
                 self._prompt_device_confirmation()
@@ -1004,6 +1099,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
 
+    @QtCore.pyqtSlot(int, list, name="forget-pages")
+    def forget_pages(self, tab_index: int, panels: list[int]) -> None:
+        """Drop back-history entries of pages whose content is gone."""
+        kept: list[list[int]] = []
+        for entry in self.index_stack:
+            gone = entry[0] == tab_index and entry[1] in panels
+            if not gone and (not kept or kept[-1] != entry):  # no Back to the same page
+                kept.append(entry)
+        self.index_stack.clear()
+        self.index_stack.extend(kept)
+
     @QtCore.pyqtSlot(name="bo-start-websocket-connection")
     def bo_start_websocket_connection(self) -> None:
         """Starts the Websocket connection with moonraker"""
@@ -1051,7 +1157,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if "ok" in data:
             return
         if "update" in method:
-            if ("status" or "refresh") in method:
+            # Same behaviour as the old ("status" or "refresh"), which never matched refresh
+            if "status" in method:
                 self.on_update_message.emit(dict(data))
 
     @api_handler
@@ -1109,21 +1216,19 @@ class MainWindow(QtWidgets.QMainWindow):
     def _handle_notify_service_state_changed_message(
         self, method, data, metadata
     ) -> None:
-        """Handle websocket service messages"""
+        """Notify only when a service fails; routine start/stop transitions are noise."""
         entry = data.get("params")
-        if entry:
-            if self._popup_toggle:
-                return
-            service_entry: dict = entry[0]
-            service_name, service_info = service_entry.popitem()
-            self.show_notifications.emit(
-                "mainwindow",
-                str(
-                    f"{service_name} service changed state to \n{service_info.get('sub_state')}"
-                ),
-                1,
-                False,
-            )
+        if not entry or self._popup_toggle:
+            return
+        # Mainsail stores these silently and KlipperScreen ignores them: every boot and restart emits several.
+        for service_name, service_info in entry[0].items():
+            if service_info.get("active_state") == "failed":
+                self.show_notifications.emit(
+                    "mainwindow",
+                    f"{service_name} service failed",
+                    Severity.WARNING.value,
+                    False,
+                )
 
     def _emit_filtered_notification(
         self,
@@ -1140,8 +1245,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if rule.severity == Severity.IGNORE:
                 return True
             if rule.severity == Severity.ERROR:
-                self.show_loadscreen(False, "", True)
-                self.in_case_error.emit()
+                self._clear_overlay_for_error()
 
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
@@ -1152,10 +1256,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_notifications.emit(
                 source_id, text, Severity.ERROR.value, show_popup
             )
-            self.show_loadscreen(False, "", True)
-            self.in_case_error.emit()
+            self._clear_overlay_for_error()
             return True
         return False
+
+    def _clear_overlay_for_error(self) -> None:
+        """Drop the loading overlay for an error unless an update holds it."""
+        if not (self._update_in_progress or self._post_update_reconnect):
+            self.show_loadscreen(False, "", True)
+        self.in_case_error.emit()
 
     @QtCore.pyqtSlot(str, str, int, bool)
     def _on_probe_notification(
@@ -1199,10 +1308,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
             elif _gcode_msg_type == "!!":
+                if _message.startswith(CONSOLE_ECHO_PREFIX):
+                    return  # PrintTab showed it already; the echo is for other clients
                 source = MessageSource.GCODE_ERROR
-                m = _MACRO_ERROR_RE.search(_message)
-                if m:
-                    _message = f"macro failed: {m.group(1)}"
+                _message = macro_error_text(_message)
 
             else:
                 return
@@ -1237,11 +1346,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if "does not exist" in lower_text:
             self.printPanel.filesPage_widget.on_directory_error()
 
+        # A refused API print start carries the full "Error evaluating ..." text.
+        shown = macro_error_text(text)
         if not self._emit_filtered_notification(
-            MessageSource.MOONRAKER_ERROR, text, fallback=False, show_popup=True
+            MessageSource.MOONRAKER_ERROR, shown, fallback=False, show_popup=True
         ):
             self._emit_filtered_notification(
-                MessageSource.GCODE_ERROR, text, fallback=True, show_popup=True
+                MessageSource.GCODE_ERROR, shown, fallback=True, show_popup=True
             )
         _logger.error(text)
 

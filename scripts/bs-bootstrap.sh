@@ -15,6 +15,8 @@ _BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 _as_blocks() { runuser -u "$_BSENV_USER" -- "$@"; }
+# shellcheck source=/dev/null
+. "$SCRIPT_PATH/bs-common.sh"
 # Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -48,6 +50,8 @@ _deps_broken() {
 }
 # Every venv writer (also install-updater.sh, post-merge) flocks the venv dir: a probe mid-replace forces a reinstall.
 { exec 201<"$BSENV" && flock -w 900 201; } || echo "[bs-bootstrap] venv lock not acquired (busy 900s or no venv) - continuing unlocked"
+# Older installers ran pip as root; return those files to blocks before any pip-as-blocks run.
+[ -d "$BSENV" ] && find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
 # Repair the daemon's own dependency up front so an update can still run if the full set below fails.
 if ! _probe yaml; then
     _deps_broken PyYAML
@@ -116,10 +120,19 @@ fi
 exec 201<&-
 
 # 4. Updater stack (local files only - works offline).
+_installed=0
 # Verify each critical artifact: an old-installer box can have the service but no apt helper.
 if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ] \
     || [ ! -x /usr/local/sbin/bs-apt-helper ]; then
-    bash "$SCRIPT_PATH/install-updater.sh" || true
+    bash "$SCRIPT_PATH/install-updater.sh" && _installed=1
+elif [ "$(cat "$BSENV/.blockscreen-updater-hash" 2>/dev/null)" != "$(bs_updater_install_hash "$SCRIPT_PATH")" ]; then
+    # Stale stamp: an update skipped or interrupted the install (BUG-10).
+    if bs_updater_install_busy; then
+        echo "[bs-bootstrap] updater install owed, but an update or install is running - next boot"
+    else
+        echo "[bs-bootstrap] updater install owed (stale stamp) - running install-updater.sh"
+        bash "$SCRIPT_PATH/install-updater.sh" && _installed=1
+    fi
 fi
 
 # 5. Splash holder unit (local).
@@ -137,5 +150,30 @@ systemctl is-active --quiet BlocksScreen-splash-holder.service \
 
 # 6. Precompute splash cache (needs Pillow; skips gracefully until installed).
 _as_blocks "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
+
+# 7. Hostname helper, install-only: the rename waits for the next boot.
+bash "$SCRIPT_PATH/hostname-helper.sh" --install-only || true
+
+# 8. Restart a daemon left on old code; Moonraker pulls never restart it.
+if [ "$_installed" = 0 ] && bs_updater_code_stale "$BS_PATH"; then
+    if bs_updater_install_busy; then
+        echo "[bs-bootstrap] updater daemon runs old code, but an update is running - next start"
+    else
+        echo "[bs-bootstrap] updater daemon runs old code - restarting it"
+        systemctl restart BlocksScreen-updater.service || true
+    fi
+fi
+
+# 9. moonraker.conf migration, last: its restart waits for updates and prints.
+_MR_CONF="$_BSENV_HOME/printer_data/config/moonraker.conf"
+_MR_OWED=/run/blockscreen-moonraker-restart-owed
+_mr_pid=$(systemctl show -p MainPID --value moonraker.service 2>/dev/null)
+# As blocks: sed -i as root would leave moonraker.conf root-owned.
+# shellcheck disable=SC2016
+_owed=$(_as_blocks /bin/bash -c '. "$1"; bs_migrate_moonraker_conf "$2" bs-bootstrap defer >&2; echo "${BS_MOONRAKER_RESTART_OWED:-false}"' \
+    _ "$SCRIPT_PATH/bs-common.sh" "$_MR_CONF")
+# The flag stores the pre-patch PID for a later run.
+if [ "$_owed" = true ] && [ ! -e "$_MR_OWED" ]; then echo "$_mr_pid" >"$_MR_OWED"; fi
+bs_settle_moonraker_restart "$_MR_CONF" "$_MR_OWED" 1800 "$(cat "$_MR_OWED" 2>/dev/null)"
 
 echo "[bs-bootstrap] done"

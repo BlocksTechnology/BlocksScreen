@@ -6,13 +6,22 @@ import asyncio
 import json
 import os
 import shutil
+import signal
+import subprocess
+import sys
 import time
+from functools import partial
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
+from updater.models import CLOCK_UNSYNCED
 from updater.executor import (
+    GIT,
+    _moonraker_call,
+    moonraker_refresh_repo,
+    moonraker_repo_hashes,
     _clear_stale_git_index_lock,
     _is_head_readable,
     _make_clean_env,
@@ -34,6 +43,7 @@ from updater.executor import (
     git_get_hash,
     git_has_corruption,
     git_is_dirty,
+    git_is_network_error,
     git_pull,
     git_remote_reachable,
     git_remote_url,
@@ -43,6 +53,11 @@ from updater.executor import (
     git_prune_extra_remotes,
     git_untracked_paths,
     enable_service,
+    _clock_heal,
+    clock_verified,
+    explain_fetch_error,
+    heal_clock,
+    ntp_synchronized,
     klipper_printing,
     restart_service,
     restart_service_noblock,
@@ -75,11 +90,24 @@ class TestMakeCleanEnv:
         assert "LD_PRELOAD" not in result
         assert "PYTHONPATH" not in result
 
+    def test_sets_git_low_speed_abort(self):
+        result = _make_clean_env()
+        assert int(result["GIT_HTTP_LOW_SPEED_LIMIT"]) > 0
+        assert int(result["GIT_HTTP_LOW_SPEED_TIME"]) > 0
+
     def test_forces_untranslated_output(self):
         result = _make_clean_env()
         assert result["LC_ALL"] == "C"
         assert "LANG" not in result
         assert "LANGUAGE" not in result
+
+
+def _read_or_empty(path: Path) -> str:
+    """File text, or "" while git has it unlinked mid-checkout."""
+    try:
+        return path.read_text()
+    except OSError:
+        return ""
 
 
 class TestRun:
@@ -149,15 +177,29 @@ class TestRun:
         assert killpg_mock.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_cancel_kills_process_and_reraises(self, tmp_path):
+    @pytest.mark.parametrize(
+        ("drains", "signals"),
+        [
+            ([(b"", b"")], [signal.SIGTERM]),
+            ([asyncio.TimeoutError, (b"", b"")], [signal.SIGTERM, signal.SIGKILL]),
+        ],
+    )
+    async def test_cancel_terminates_first_then_reraises(
+        self, tmp_path, drains, signals
+    ):
         proc = _make_proc(0)
         proc.returncode = None  # still running
         proc.pid = 1234
+        replies = iter([asyncio.CancelledError, *drains])
 
-        async def hang(*_a, **_kw):
-            raise asyncio.CancelledError
+        async def communicate():
+            reply = next(replies)
+            if isinstance(reply, tuple):
+                proc.returncode = 0  # a completed drain means the child exited
+                return reply
+            raise reply
 
-        proc.communicate = hang
+        proc.communicate = communicate
         with (
             patch(
                 "asyncio.create_subprocess_exec",
@@ -169,8 +211,68 @@ class TestRun:
         ):
             with pytest.raises(asyncio.CancelledError):
                 await _run(["/bin/sleep", "999"], timeout=5.0, cwd=tmp_path)
-        # Should call killpg once with SIGKILL on cancel
-        assert killpg_mock.call_count == 1
+        assert [c.args[1] for c in killpg_mock.call_args_list] == signals
+
+    @pytest.mark.asyncio
+    async def test_second_cancel_during_grace_still_sigkills(self, tmp_path):
+        proc = _make_proc(0)
+        proc.returncode = None  # still running
+        proc.pid = 1234
+        proc.communicate = AsyncMock(
+            side_effect=[asyncio.CancelledError, asyncio.CancelledError]
+        )
+        with (
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=proc,
+            ),
+            patch("os.killpg") as killpg_mock,
+            patch("os.getpgid", return_value=1234),
+        ):
+            with pytest.raises(asyncio.CancelledError):
+                await _run(["/bin/sleep", "999"], timeout=5.0, cwd=tmp_path)
+        sigs = [c.args[1] for c in killpg_mock.call_args_list]
+        assert sigs == [signal.SIGTERM, signal.SIGKILL]
+
+    @pytest.mark.asyncio
+    async def test_cancel_mid_git_write_leaves_no_index_lock(self, tmp_path):
+        """Regression: SIGKILL on cancel stranded .git/index.lock and blocked the revert."""
+        repo = tmp_path / "r"
+        (repo / "d").mkdir(parents=True)
+        git = partial(subprocess.run, cwd=repo, check=True, capture_output=True)
+        git([GIT, "init", "-q"])
+        trees = []
+        for tag in ("a", "b"):
+            for i in range(5000):
+                (repo / "d" / f"f{i}").write_text(f"{tag}{i}\n")
+            git([GIT, "add", "-A"])
+            trees.append(git([GIT, "write-tree"], text=True).stdout.strip())
+        git([GIT, "read-tree", "--reset", "-u", trees[0]])
+        lock = repo / ".git" / "index.lock"
+
+        task = asyncio.create_task(
+            _run([GIT, "read-tree", "--reset", "-u", trees[1]], timeout=60.0, cwd=repo)
+        )
+        first = repo / "d" / "f0"
+        deadline = time.monotonic() + 30.0
+        # git opens index.lock before arming its signal cleanup; cancel once it writes the worktree.
+        while not (lock.exists() and _read_or_empty(first) == "b0\n"):
+            assert not task.done(), "read-tree finished before the cancel"
+            assert time.monotonic() < deadline, "read-tree never started writing"
+            await asyncio.sleep(0.0005)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert not lock.exists()
+        # The index is only committed at the end, so trees[0] proves it was interrupted.
+        index_tree = git([GIT, "write-tree"], text=True).stdout.strip()
+        assert index_tree == trees[0]
+        ok, err = await _run(
+            [GIT, "read-tree", "--reset", "-u", trees[0]], timeout=60.0, cwd=repo
+        )
+        assert ok, err
 
     @pytest.mark.asyncio
     async def test_timeout_returns_with_flooding_child(self, tmp_path):
@@ -511,6 +613,257 @@ class TestGitPruneExtraRemotes:
         assert exec_mock.call_count == 1
 
 
+_TLS_ERR = "fatal: server certificate verification failed. CAfile: none CRLfile: none"
+
+
+def _mark_verified(marker: Path, jump: int = 0) -> None:
+    """Write the marker as bs-clock-sync does; jump = wall-clock jump since then."""
+    boot = int(time.clock_gettime(time.CLOCK_BOOTTIME))
+    marker.write_text(f"{int(time.time()) - jump} {boot}\n")
+
+
+class _GatedFetch:
+    """Fetch stub: /slow fails only once the gate opens, like a fetch outlasting a heal."""
+
+    def __init__(self) -> None:
+        self.gate = asyncio.Event()
+        self.calls: dict[str, int] = {}
+
+    async def __call__(self, path: Path, **_: object) -> tuple[bool, str]:
+        n = self.calls[str(path)] = self.calls.get(str(path), 0) + 1
+        if n > 1:
+            return (True, "")
+        if str(path) == "/slow":
+            await self.gate.wait()
+        return (False, _TLS_ERR)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("output", "synced", "verified", "clock"),
+    [
+        (_TLS_ERR, False, False, True),
+        (_TLS_ERR, True, False, False),
+        (_TLS_ERR, False, True, False),  # bs-clock-sync confirmed the clock
+        ("fatal: timed out", False, False, False),
+    ],
+)
+async def test_explain_fetch_error(tmp_path, output, synced, verified, clock):
+    marker = tmp_path / "verified"
+    if verified:
+        _mark_verified(marker)
+    with (
+        patch("updater.executor.CLOCK_VERIFIED_MARKER", marker),
+        patch("updater.executor.ntp_synchronized", AsyncMock(return_value=synced)),
+    ):
+        result = await explain_fetch_error(output)
+    assert result.startswith(CLOCK_UNSYNCED) is clock
+    assert result.endswith(output)
+
+
+@pytest.mark.parametrize(
+    ("content", "valid"),
+    [
+        ("now", True),
+        ("drift", True),  # under the jump threshold
+        ("back", False),
+        ("ahead", False),
+        ("1700000000\n", False),  # single field from an older script
+        ("garbage\n", False),
+        (None, False),
+    ],
+)
+def test_clock_verified(tmp_path, content, valid):
+    """The marker holds only while wall time has kept pace with boot time."""
+    marker = tmp_path / "verified"
+    jumps = {"now": 0, "drift": 60, "back": 30 * 86400, "ahead": -3600}
+    if content in jumps:
+        _mark_verified(marker, jumps[content])
+    elif content is not None:
+        marker.write_text(content)
+    with patch("updater.executor.CLOCK_VERIFIED_MARKER", marker):
+        assert clock_verified() is valid
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("run", "synced"),
+    [
+        ((True, "no\n"), False),
+        ((True, "yes\n"), True),
+        ((False, "Failed to connect to bus"), True),  # unknown never blames the clock
+        (FileNotFoundError("timedatectl"), True),
+    ],
+)
+async def test_ntp_synchronized(run, synced):
+    mock = (
+        AsyncMock(side_effect=run)
+        if isinstance(run, Exception)
+        else AsyncMock(return_value=run)
+    )
+    with patch("updater.executor._run", mock):
+        assert await ntp_synchronized() is synced
+
+
+class TestClockHeal:
+    @pytest.fixture(autouse=True)
+    def _fresh(self, tmp_path):
+        marker = tmp_path / "verified"
+        with (
+            patch("updater.executor.CLOCK_VERIFIED_MARKER", marker),
+            patch("updater.executor.CLOCK_HEAL_DISABLED", tmp_path / "disabled"),
+            patch.dict("updater.executor._clock_heal", {"last": float("-inf")}),
+        ):
+            yield marker
+
+    @pytest.mark.asyncio
+    async def test_kill_switch_never_starts_the_unit(self, tmp_path):
+        """With the kill switch the clock error is reported but nothing runs as root."""
+        (tmp_path / "disabled").touch()
+        fetch = AsyncMock(return_value=(False, _TLS_ERR))
+        run = AsyncMock()
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await git_fetch(Path("/x")) == (False, _TLS_ERR)
+        run.assert_not_called()
+        assert fetch.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_fetch_retries_after_heal(self, _fresh):
+        fetch = AsyncMock(side_effect=[(False, _TLS_ERR), (True, "")])
+        run = AsyncMock(
+            side_effect=lambda *a, **k: _mark_verified(_fresh) or (True, "")
+        )
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await git_fetch(Path("/x")) == (True, "")
+        assert run.call_args.args[0][-2:] == ["start", "BlocksScreen-clock.service"]
+        assert fetch.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_clock_jump_after_verification_heals_again(self, _fresh):
+        """A clock that went wrong again after a heal is relabelled and healed again."""
+        _mark_verified(_fresh, jump=30 * 86400)
+        fetch = AsyncMock(side_effect=[(False, _TLS_ERR), (True, "")])
+        run = AsyncMock(
+            side_effect=lambda *a, **k: _mark_verified(_fresh) or (True, "")
+        )
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert (await explain_fetch_error(_TLS_ERR)).startswith(CLOCK_UNSYNCED)
+            assert await git_fetch(Path("/x")) == (True, "")
+        assert run.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_unhealed_clock_keeps_error_and_rate_limits(self, _fresh):
+        fetch = AsyncMock(return_value=(False, _TLS_ERR))
+        run = AsyncMock(return_value=(True, ""))
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await git_fetch(Path("/x")) == (False, _TLS_ERR)
+            assert await git_fetch(Path("/x")) == (False, _TLS_ERR)
+        assert run.await_count == 1  # second failure inside the retry window
+        assert fetch.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_window_starts_when_the_run_ends(self, _fresh):
+        """A run longer than the window must not let the next repo start another."""
+        seen: list[float] = []
+        run = AsyncMock(
+            side_effect=lambda *a, **k: seen.append(time.monotonic()) or (True, "")
+        )
+        with (
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await heal_clock() is False
+        assert _clock_heal["last"] >= seen[0]
+
+    @pytest.mark.asyncio
+    async def test_failure_outlasting_a_concurrent_heal_retries(self, _fresh):
+        """A fetch that fails after another fetch healed the clock still retries."""
+        fetch = _GatedFetch()
+        run = AsyncMock(
+            side_effect=lambda *a, **k: (
+                _mark_verified(_fresh) or fetch.gate.set() or (True, "")
+            )
+        )
+        with (
+            patch("updater.executor._git_fetch_once", fetch),
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            slow = asyncio.create_task(git_fetch(Path("/slow")))
+            await asyncio.sleep(0)
+            assert await git_fetch(Path("/fast")) == (True, "")
+            assert await slow == (True, "")
+        assert run.await_count == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "err",
+        [
+            "E: Release file for http://deb.debian.org/debian/dists/bookworm-updates/"
+            "InRelease is expired (invalid since 3d 2h). Updates for this repository "
+            "will not be applied.",
+            "E: Release file for http://archive.raspberrypi.com/debian/dists/bookworm/"
+            "InRelease is not valid yet (invalid for another 40d 1h). Updates for this "
+            "repository will not be applied.",
+        ],
+    )
+    async def test_apt_release_date_heals_and_retries(self, _fresh, err):
+        runs = [(False, err), (True, ""), (True, "Hit:1")]
+        run = AsyncMock(
+            side_effect=lambda cmd, **k: (
+                ("start" in cmd and _mark_verified(_fresh)) or runs.pop(0)
+            )
+        )
+        with (
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert await apt_update() == (True, "Hit:1")
+        assert run.call_args_list[1].args[0][-2:] == [
+            "start",
+            "BlocksScreen-clock.service",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_apt_network_failure_never_heals(self, _fresh):
+        run = AsyncMock(return_value=(False, "E: Failed to fetch: Temporary failure"))
+        with (
+            patch("updater.executor.ntp_synchronized", AsyncMock(return_value=False)),
+            patch("updater.executor._run", run),
+        ):
+            assert (await apt_update())[0] is False
+        assert run.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_non_clock_failure_never_heals(self):
+        run = AsyncMock()
+        with (
+            patch(
+                "updater.executor._git_fetch_once",
+                AsyncMock(return_value=(False, "timeout")),
+            ),
+            patch("updater.executor._run", run),
+        ):
+            assert await git_fetch(Path("/x")) == (False, "timeout")
+        run.assert_not_called()
+
+
 class TestGitFetch:
     @pytest.mark.asyncio
     async def test_success(self, tmp_path):
@@ -521,6 +874,92 @@ class TestGitFetch:
         with patch("asyncio.create_subprocess_exec", exec_mock):
             ok, _ = await git_fetch(tmp_path)
         assert ok is True
+
+    @pytest.mark.asyncio
+    async def test_status_fetch_ignores_extra_remote(self, tmp_path):
+        """An extra remote must not fail the non-pruning status fetch (--all + --atomic)."""
+        repo, origin = tmp_path / "repo", tmp_path / "origin.git"
+        assert (await _run(["git", "init", "-q", "--bare", str(origin)], timeout=10.0))[
+            0
+        ]
+        assert (await _run(["git", "init", "-q", str(repo)], timeout=10.0))[0]
+        for name, url in (("origin", origin), ("extra", tmp_path / "missing.git")):
+            ok, _ = await _run(
+                ["git", "remote", "add", name, str(url)], cwd=repo, timeout=10.0
+            )
+            assert ok
+        ok, out = await git_fetch(repo, prune_remotes=False)
+        assert ok, out
+        assert (await _run(["git", "remote"], cwd=repo, timeout=10.0))[1].split() == [
+            "extra",
+            "origin",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_unreachable_origin_reads_as_network_error(self, tmp_path):
+        """Real git output from a fetch whose host never resolves (.invalid, RFC 6761)."""
+        repo = tmp_path / "repo"
+        assert (await _run(["git", "init", "-q", str(repo)], timeout=10.0))[0]
+        url = "https://bs-offline.invalid/repo.git"
+        assert (
+            await _run(["git", "remote", "add", "origin", url], cwd=repo, timeout=10.0)
+        )[0]
+        ok, out = await git_fetch(repo, prune_remotes=False)
+        assert not ok
+        assert git_is_network_error(out), out
+
+    @pytest.mark.asyncio
+    async def test_stalled_transfer_aborts_as_network_error(
+        self, tmp_path, monkeypatch
+    ):
+        """A server that accepts and never answers, like a WAN drop after connect."""
+        # Held so a collected StreamWriter cannot close the socket (Python 3.12+).
+        writers: list[asyncio.StreamWriter] = []
+        server = await asyncio.start_server(
+            lambda _r, w: writers.append(w), "127.0.0.1", 0, reuse_address=True
+        )
+        port = server.sockets[0].getsockname()[1]
+        repo = tmp_path / "repo"
+        assert (await _run(["git", "init", "-q", str(repo)], timeout=10.0))[0]
+        url = f"http://127.0.0.1:{port}/repo.git"
+        assert (
+            await _run(["git", "remote", "add", "origin", url], cwd=repo, timeout=10.0)
+        )[0]
+        monkeypatch.setattr(
+            sys.modules[git_fetch.__module__], "_GIT_LOW_SPEED_TIME", "2"
+        )
+        start = time.monotonic()
+        async with server:
+            ok, out = await git_fetch(repo, prune_remotes=False)
+            for w in writers:
+                w.close()
+        assert not ok
+        assert time.monotonic() - start < 15
+        assert "too slow" in out.lower() and git_is_network_error(out), out
+
+    @pytest.mark.parametrize(
+        ("output", "expected"),
+        [
+            (
+                "fatal: unable to access 'u': The requested URL returned error: 403",
+                True,
+            ),
+            (
+                "fatal: unable to access 'u': SSL certificate problem: not yet valid",
+                True,
+            ),
+            ("timed out after 120.0s", True),
+            (
+                "error: RPC failed; curl 28 Operation too slow. Less than 1000 "
+                "bytes/sec transferred the last 30 seconds\nfatal: early EOF",
+                True,
+            ),
+            ("fatal: --atomic can only be used when fetching from one remote", False),
+            ("error: object file .git/objects/ab/cd is empty", False),
+        ],
+    )
+    def test_network_error_classifier(self, output, expected):
+        assert git_is_network_error(output) is expected
 
     @pytest.mark.asyncio
     async def test_none_path_returns_false(self):
@@ -988,7 +1427,8 @@ class TestGitShowFile:
 
 class TestCheckAptStatus:
     @pytest.mark.asyncio
-    async def test_success(self):
+    async def test_success(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))  # writes the apt cache under ~/.cache
         proc = _make_proc(0, b"", b"")
         with patch(
             "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
@@ -1365,6 +1805,16 @@ class TestStaleIndexLockHandling:
         assert not lock_path.exists()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(("skew", "cleared"), [(3600, True), (5, False)])
+    async def test_future_lock_after_clock_step_back(self, tmp_path, skew, cleared):
+        lock_path = tmp_path / ".git" / "index.lock"
+        lock_path.parent.mkdir(parents=True)
+        lock_path.touch()
+        os.utime(lock_path, (time.time(), time.time() + skew))
+        assert _clear_stale_git_index_lock(tmp_path) is cleared
+        assert lock_path.exists() is not cleared
+
+    @pytest.mark.asyncio
     async def test_clear_stale_git_index_lock_preserves_fresh_lock(self, tmp_path):
         lock_path = tmp_path / ".git" / "index.lock"
         lock_path.parent.mkdir(parents=True)
@@ -1611,3 +2061,89 @@ class TestKlipperPrinting:
     @pytest.mark.asyncio
     async def test_missing_socket_stays_idle_when_failing_closed(self, tmp_path):
         assert not await klipper_printing(tmp_path / "absent.sock", unanswered=True)
+
+
+class TestMoonrakerRepoHashes:
+    @pytest.mark.asyncio
+    async def test_keeps_git_repos_including_unknown_hash(self):
+        sha = "a" * 40
+        info = {
+            "BlocksScreen": {"current_hash": sha},
+            "klipper": {"current_hash": "?"},
+            "mainsail": {"version": "v2.14.0"},
+            "system": {"package_count": 0},
+        }
+        with patch(
+            "updater.executor._moonraker_call", return_value={"version_info": info}
+        ):
+            assert await moonraker_repo_hashes() == {
+                "BlocksScreen": sha,
+                "klipper": "?",
+            }
+
+    @pytest.mark.asyncio
+    async def test_unreachable_is_none(self):
+        with patch("updater.executor._moonraker_call", return_value=None):
+            assert await moonraker_repo_hashes() is None
+
+    @pytest.mark.asyncio
+    async def test_refresh_posts_by_name(self):
+        result = {"version_info": {"RF50 Klipper": {"current_hash": "b" * 40}}}
+        with patch("updater.executor._moonraker_call", return_value=result) as call:
+            assert await moonraker_refresh_repo("RF50 Klipper") == "b" * 40
+        call.assert_called_once_with(
+            "POST", "/machine/update/refresh?name=RF50+Klipper", 120.0
+        )
+
+    @pytest.mark.asyncio
+    async def test_refresh_returns_unknown_hash_from_failed_fetch(self):
+        # Moonraker answers 200 with "?" when its git fetch fails (offline).
+        result = {"version_info": {"RF50 Klipper": {"current_hash": "?"}}}
+        with patch("updater.executor._moonraker_call", return_value=result):
+            assert await moonraker_refresh_repo("RF50 Klipper") == "?"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("result", [None, {}, {"version_info": {}}])
+    async def test_refused_refresh_is_none(self, result):
+        with patch("updater.executor._moonraker_call", return_value=result):
+            assert await moonraker_refresh_repo("RF50 Klipper") is None
+
+    @pytest.mark.parametrize(("status", "expected"), [(200, {"a": 1}), (503, None)])
+    def test_call_returns_result_only_on_2xx(self, status, expected):
+        resp = MagicMock(status=status)
+        resp.read.return_value = json.dumps({"result": {"a": 1}}).encode()
+        with patch("updater.executor.http.client.HTTPConnection") as conn:
+            conn.return_value.getresponse.return_value = resp
+            assert _moonraker_call("GET", "/x", 1.0) == expected
+
+
+class TestDiskReclaim:
+    def test_purge_pycache_removes_truncated_bytecode(self, tmp_path):
+        from updater.executor import purge_pycache
+
+        cache = tmp_path / "pkg" / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "mod.cpython-311.pyc").write_bytes(b"\xa7\x0d\x0d\x0a" + b"\0" * 12)
+        (tmp_path / "pkg" / "mod.py").write_text("x = 1\n")
+        assert purge_pycache(tmp_path) == 1
+        assert not cache.exists()
+        assert (tmp_path / "pkg" / "mod.py").exists()
+
+    @pytest.mark.asyncio
+    async def test_reclaim_drops_caches_and_runs_apt_clean(self, tmp_path):
+        from updater.executor import reclaim_disk
+
+        pip, uv = tmp_path / "pip", tmp_path / "uv"
+        for d in (pip, uv):
+            (d / "wheels").mkdir(parents=True)
+        with (
+            patch("updater.executor._RECLAIM_DIRS", (pip, uv)),
+            patch(
+                "updater.executor._run", new_callable=AsyncMock, return_value=(True, "")
+            ) as mock_run,
+            patch("updater.executor.free_disk_mb", side_effect=[50.0, 300.0]) as free,
+        ):
+            assert await reclaim_disk(tmp_path) == 300.0
+        assert not pip.exists() and not uv.exists()
+        assert mock_run.call_args[0][0][-1] == "clean"
+        assert free.call_args_list == [call(tmp_path), call(tmp_path)]

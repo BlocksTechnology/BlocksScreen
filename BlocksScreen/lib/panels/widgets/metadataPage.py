@@ -125,6 +125,11 @@ class FileMetadataWidget(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.back_btn.clicked.connect(self.request_back.emit)
 
+    @property
+    def shown_path(self) -> str:
+        """Gcodes-relative path of the file on display, or ""."""
+        return self._shown_path
+
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
         """Re-render on fresh metadata for the shown file."""

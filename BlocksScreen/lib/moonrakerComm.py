@@ -96,18 +96,21 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         return self._moonRest
 
     @QtCore.pyqtSlot(name="retry_wb_conn")
-    def retry_wb_conn(self):
+    def retry_wb_conn(self) -> None:
         """Retry websocket connection"""
-        return self.try_connection()
+        self.try_connection()
 
     @QtCore.pyqtSlot(name="try_connection")
-    def try_connection(self):
-        """Arm the reconnect watchdog and attempt a connection now"""
+    def try_connection(self) -> None:
+        """Arm the reconnect watchdog and attempt a connection now, off the GUI thread"""
         if self._retry_timer is None:
             self._retry_timer = RepeatedTimer(self.timeout, self.reconnect)
         else:
             self._retry_timer.startTimer()
-        return self.reconnect()
+        # connect() does a blocking oneshot-token GET (3 s timeout); callers are Qt slots
+        threading.Thread(
+            target=self.reconnect, name="moonraker.connect", daemon=True
+        ).start()
 
     def reconnect(self) -> bool:
         """Watchdog tick, retries forever per Moonraker's client startup sequence"""
@@ -147,6 +150,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             )
             return False
 
+        # The token GET can outlast wb_disconnect; a socket opened now outlives its owner
+        if self._closing:
+            return False
         _url = f"ws://{self._host}:{self._port}/websocket?token={_oneshot_token}"
         self.ws = websocket.WebSocketApp(
             _url,
@@ -179,6 +185,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self.query_klippy_status_timer.stopTimer()
         if self._retry_timer is not None:
             self._retry_timer.stopTimer()
+        # Let an in-flight connect thread finish so the _wst read below sees its socket
+        if self._connect_lock.acquire(timeout=self.timeout + 1):
+            self._connect_lock.release()
         if self._wst is not None and self.ws is not None:
             self.ws.keep_running = False
             # ws.close() frees the fd under the dispatcher's epoll (it sleeps ping_timeout); SHUT_RD wakes it
