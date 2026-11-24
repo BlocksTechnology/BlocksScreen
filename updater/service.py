@@ -298,6 +298,8 @@ class UpdateService:
         self._fetch_backoff: dict[str, _Backoff] = {}
         # Last fetch error per repo, re-reported while its breaker skips the fetch.
         self._fetch_errors: dict[str, str] = {}
+        # Last network fetch failure per repo: (monotonic time it ended, error).
+        self._fetch_failures: dict[str, tuple[float, str]] = {}
         # Per repo, the HEAD Moonraker last failed to record (no upstream, offline).
         self._moonraker_unreadable: dict[str, str] = {}
         self._state_path = _STATE_PATH
@@ -377,8 +379,12 @@ class UpdateService:
             self._fetch_times[name] = now
             self._fetch_backoff.pop(name, None)
             self._fetch_errors.pop(name, None)
+            self._fetch_failures.pop(name, None)
             return
-        if git_is_network_error(error) and not error.startswith(CLOCK_UNSYNCED):
+        network = git_is_network_error(error)
+        if network:
+            self._fetch_failures[name] = (time.monotonic(), error)
+        if network and not error.startswith(CLOCK_UNSYNCED):
             # Offline is not an update: never re-report it while the breaker skips.
             self._fetch_errors.pop(name, None)
         else:
@@ -890,28 +896,39 @@ class UpdateService:
             for c in sorted_components
             if c.kind == "git" and c.path is not None and is_git_repo(c.path)
         ]
-        offline: dict[str, str] = {}
-        for c in targets:
-            now = time.monotonic()
-            async with self._git_lock:
-                recent = (
-                    now - self._fetch_times.get(c.name, float("-inf"))
-                    < self._PREFLIGHT_FRESH_S
-                )
-            if recent:
-                continue
-            ok, err = await git_fetch(c.path)
-            if ok:
-                async with self._git_lock:
-                    self._record_fetch_result(c.name, now, None)
-            elif not await git_has_corruption(c.path, hint=err):
-                offline[c.name] = await explain_fetch_error(err)
+        errors = await asyncio.gather(*(self._preflight_fetch_one(c) for c in targets))
+        offline = {
+            c.name: err
+            for c, err in zip(targets, errors, strict=True)
+            if err is not None
+        }
         if offline:
             self._log.error(
                 "update_all: pre-flight fetch failed for %s - continuing without them",
                 sorted(offline),
             )
         return offline
+
+    async def _preflight_fetch_one(self, c: ComponentConfig) -> str | None:
+        """Fetch one repo unless just fetched; return its offline error, else None."""
+        now = time.monotonic()
+        async with self._git_lock:
+            last_ok = self._fetch_times.get(c.name, float("-inf"))
+            failed_at, failed_err = self._fetch_failures.get(
+                c.name, (float("-inf"), "")
+            )
+        if now - last_ok < self._PREFLIGHT_FRESH_S:
+            return None
+        if now - failed_at < self._PREFLIGHT_FRESH_S:
+            return failed_err
+        ok, err = await git_fetch(c.path)
+        if ok:
+            async with self._git_lock:
+                self._record_fetch_result(c.name, now, None)
+            return None
+        if await git_has_corruption(c.path, hint=err):
+            return None
+        return await explain_fetch_error(err)
 
     async def _prepare_git_batch_hashes(
         self, batch: list[ComponentConfig]
