@@ -44,3 +44,15 @@ def test_filename_update_does_not_touch_reason(page):
     page.on_print_stats_update("filename", "part.gcode")
     assert page.filename == "part.gcode"
     assert page.cf_info_tf.text() == "Print Cancelled"
+
+
+@pytest.mark.parametrize("button", ["confirm_button", "refuse_button"])
+def test_close_resets_the_file_before_signalling_hidden(page, button):
+    # MainWindow restarts Klipper on hidden; SDCARD_RESET_FILE must go out first.
+    page.parentWidget().show()
+    page.show()
+    events = []
+    page.run_gcode.connect(lambda g: events.append(g))
+    page.hidden.connect(lambda: events.append("hidden"))
+    getattr(page, button).click()
+    assert events == ["SDCARD_RESET_FILE", "hidden"]
