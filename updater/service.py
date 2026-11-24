@@ -2097,11 +2097,26 @@ class UpdateService:
         } | fields
         try:
             self._history_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            self._heal_history_tail()
             with self._history_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(entry) + "\n")
             self._trim_history()
         except OSError as exc:
             self._log.warning("update history write failed: %s", exc)
+
+    def _heal_history_tail(self) -> None:
+        """Drop a partial or NUL-filled last line left by a power cut (BUG-7)."""
+        with (
+            contextlib.suppress(FileNotFoundError),
+            self._history_path.open("rb+") as f,
+        ):
+            if f.seek(0, os.SEEK_END) == 0:
+                return
+            f.seek(-1, os.SEEK_END)
+            if f.read(1) == b"\n":
+                return
+            f.seek(0)
+            f.truncate(f.read().rfind(b"\n") + 1)
 
     def _trim_history(self) -> None:
         """Cap the on-SD history so a years-running device cannot fill the card."""
