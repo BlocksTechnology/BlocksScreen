@@ -411,11 +411,11 @@ def test_clock_units_are_wired() -> None:
         "enable --now --no-reload BlocksScreen-clock.timer"
         in (scripts / "install-updater.sh").read_text()
     )
-    post_merge = (scripts / "post-merge").read_text()
+    triggers = (scripts / "bs-common.sh").read_text()
     hook = (_ROOT / "updater" / "hooks" / "BlocksScreen.sh").read_text()
     for unit in ("BlocksScreen-clock.service", "BlocksScreen-clock.timer"):
         assert f"scripts/{unit}" in hook
-        assert "scripts/" + unit.replace(".", "\\.") in post_merge
+        assert unit in triggers.split("BS_UPDATER_INSTALL_TRIGGERS=(", 1)[1]
 
 
 def test_timeouts_nest() -> None:

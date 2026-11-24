@@ -24,6 +24,8 @@ BS_PATH=$(dirname "$SCRIPT_PATH")
 _BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
+# shellcheck source=/dev/null
+. "$SCRIPT_PATH/bs-common.sh"
 
 # Venv-mutating commands run as blocks: root-owned dists break later pip-as-blocks runs.
 _as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
@@ -390,6 +392,16 @@ if [[ -d "$_DD_REPO/.git" ]]; then
             echo_error "DeviceDiscovery setup failed, retried on the next update"
         fi
     fi
+fi
+
+# Stamp last: bs-bootstrap and post-merge re-run this script until it is written.
+_stamp=$(bs_updater_install_hash "$SCRIPT_PATH")
+if echo "$_stamp" | sudo tee "$BSENV/.blockscreen-updater-hash.new" >/dev/null \
+    && sudo chown "$_BSENV_USER" "$BSENV/.blockscreen-updater-hash.new" \
+    && sudo mv -Tf "$BSENV/.blockscreen-updater-hash.new" "$BSENV/.blockscreen-updater-hash"; then
+    echo_ok "Updater install stamp written"
+else
+    echo_warn "Updater install stamp not written; the next boot re-runs this script"
 fi
 
 # Restart the daemon last, --no-block, so it starts after everything above is in
