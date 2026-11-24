@@ -75,6 +75,9 @@ class UpdatePage(QtWidgets.QWidget):
         {1: "updating packages", 2: "upgrading packages"}
     )
 
+    # Same states the daemon's klipper_printing() and bs_wait_moonraker_idle wait on.
+    _PRINT_ACTIVE: typing.ClassVar[frozenset[str]] = frozenset({"printing", "paused"})
+
     def __init__(self) -> None:
         super().__init__()
         self._chevron_right: QtGui.QPixmap = QtGui.QPixmap()
@@ -505,6 +508,9 @@ class UpdatePage(QtWidgets.QWidget):
         stamp = self._deploy_stamp()
         if self._busy or stamp is None or stamp == self._capped_deploy:
             return False
+        if self._printing_state in self._PRINT_ACTIVE:
+            self._release_deploy_for_print(stamp)
+            return False
         if not self._deploy_units_live():
             _log.warning("deploy flag set but its units are dead - not holding")
             self._capped_deploy = stamp
@@ -520,9 +526,26 @@ class UpdatePage(QtWidgets.QWidget):
         return True
 
     def _poll_deploy_flag(self) -> None:
-        if self._deploy_stamp() is None:
+        stamp = self._deploy_stamp()
+        if stamp is None:
             _log.info("deploy flag cleared - waiting for the restarted updater")
             self._end_deploy_hold()
+        elif self._printing_state in self._PRINT_ACTIVE:
+            self._release_deploy_for_print(stamp)
+
+    def _release_deploy_for_print(self, stamp: int) -> None:
+        """install-updater waits the print out; an overlay over it would hide Pause."""
+        _log.info("deploy waits for the print - releasing the overlay")
+        self._capped_deploy = stamp
+        self._show_toast("Finishing update after the print", success=True)
+        if not self._deploy_hold:
+            return
+        self._deploy_hold = False
+        self._deploy_poll_timer.stop()
+        self._deploy_cap_timer.stop()
+        if not self._busy:
+            self._overlay_shown = False
+            self.call_load_panel.emit(False, "", False)
 
     def _on_deploy_cap(self) -> None:
         _log.warning(

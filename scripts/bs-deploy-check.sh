@@ -15,4 +15,4 @@ fi
 echo "[bs-deploy-check] Missing updater infrastructure - bootstrapping in background"
 # Detached transient unit: never blocks BlocksScreen.service startup (ExecStartPre).
 systemd-run --unit=bs-bootstrap --collect /bin/bash "$SCRIPT_DIR/bs-bootstrap.sh" 2>/dev/null \
-    || exec /bin/bash "$SCRIPT_DIR/install-updater.sh"
+    || BS_SKIP_PRINT_WAIT=1 exec /bin/bash "$SCRIPT_DIR/install-updater.sh"

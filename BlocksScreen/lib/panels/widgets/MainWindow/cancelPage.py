@@ -22,6 +22,7 @@ class CancelPage(QtWidgets.QWidget):
     run_gcode: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
+    hidden: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="hidden")
 
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
@@ -39,8 +40,9 @@ class CancelPage(QtWidgets.QWidget):
         self.close()
 
     def _handle_refuse(self):
-        self.close()
+        # Reset before closing: hiding releases a held Klipper restart.
         self.run_gcode.emit("SDCARD_RESET_FILE")
+        self.close()
 
     _REASON_HEADERS: typing.ClassVar[dict[str, str]] = {
         "complete": "Print Finished",
@@ -63,6 +65,11 @@ class CancelPage(QtWidgets.QWidget):
                 elif value == "printing":
                     # New job: drop the previous job's reason so it cannot leak.
                     self.cf_info_tf.clear()
+
+    def hideEvent(self, a0: QtGui.QHideEvent | None) -> None:
+        """Tell MainWindow the screen closed, whichever way it was dismissed."""
+        super().hideEvent(a0)
+        self.hidden.emit()
 
     def show(self):
         self.request_file_info.emit(self.filename)
