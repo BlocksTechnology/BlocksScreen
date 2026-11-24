@@ -6,6 +6,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 _FN = Path(__file__).resolve().parents[2] / "scripts" / "bs-common.sh"
 
 # Already migrated: a healthy run patches nothing, so any restart comes from the heal.
@@ -147,3 +149,61 @@ def test_marker_patch_writes_durably(tmp_path: Path) -> None:
     synced = log.read_text().splitlines()
     assert synced[-1] == str(conf.parent)  # dir fsync after the rename
     assert ".moonraker.conf." in synced[0]  # temp fsync before the rename
+
+
+def test_bak_restore_logs_the_lines_it_drops(tmp_path: Path) -> None:
+    conf = _conf(tmp_path)
+    edited = _GOOD.replace(_MARK, "\n[power printer]\ntype: gpio\n")
+    conf.write_bytes(edited.encode() + b"\0" * 64)
+    Path(f"{conf}.bak").write_text(_GOOD)
+    out, _ = _migrate(conf)
+    assert conf.read_text() == _GOOD
+    assert "not in .bak, dropped: [power printer]" in out
+    assert "not in .bak, dropped: type: gpio" in out
+
+
+def test_failed_replace_stops_without_leaking_the_temp(tmp_path: Path) -> None:
+    conf = _conf(tmp_path)
+    conf.write_bytes(_torn_tail())
+    Path(f"{conf}.bak").write_text(_GOOD)
+    shim = conf.parent / "bin"
+    shim.mkdir()
+    (shim / "mv").write_text("#!/bin/sh\nexit 1\n")
+    (shim / "mv").chmod(0o755)
+    out, sudo = _migrate(conf)
+    assert "restore from" in out and "failed" in out
+    assert "stripped" not in out
+    assert conf.read_bytes() == _torn_tail()
+    assert not list(conf.parent.glob(".moonraker.conf.??????"))
+    assert sudo == []
+
+
+def _sane(conf: Path) -> bool:
+    res = subprocess.run(
+        ["bash", "-c", f'. "{_FN}"; bs_moonraker_conf_sane "{conf}"'],
+        check=False,
+        timeout=20,
+    )
+    return res.returncode == 0
+
+
+def test_server_in_an_include_is_sane(tmp_path: Path) -> None:
+    conf = _conf(tmp_path)
+    (conf.parent / "moonraker.d").mkdir()
+    (conf.parent / "moonraker.d" / "server.conf").write_text("[server]\nport: 7125\n")
+    conf.write_text("[include moonraker.d/*.conf]\n\n[authorization]\n")
+    assert _sane(conf)
+    abs_inc = conf.parent / "moonraker.d" / "server.conf"
+    conf.write_text(f"[include {abs_inc}]\n")
+    assert _sane(conf)
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["[include missing/*.conf]\n[server]\n", "[include moonraker.conf]\n[server]\n"],
+    ids=["no-match", "recursive"],
+)
+def test_include_that_moonraker_rejects_is_not_sane(tmp_path: Path, body: str) -> None:
+    conf = _conf(tmp_path)
+    conf.write_text(body)
+    assert not _sane(conf)

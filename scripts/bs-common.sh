@@ -14,8 +14,10 @@ bs_migrate_moonraker_conf() {
     # Back up only a conf that parses: never overwrite a good .bak with a corrupt one.
     if bs_moonraker_conf_sane "$conf" && ! cmp -s "$conf" "${conf}.bak"; then
         local bak_tmp
-        bak_tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" \
-            && { cp "$conf" "$bak_tmp" && _bs_replace_file "$bak_tmp" "${conf}.bak" || rm -f "$bak_tmp"; }
+        bak_tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" || bak_tmp=""
+        if [ -n "$bak_tmp" ] && ! { cp "$conf" "$bak_tmp" && _bs_replace_file "$bak_tmp" "${conf}.bak"; }; then
+            rm -f "$bak_tmp"
+        fi
     fi
     # Gate on the section existing: else the sed no-ops but patched=true restarts moonraker every boot.
     if ! grep -q "enable_system_updates" "$conf" && grep -q '^\[update_manager\]$' "$conf"; then
@@ -79,26 +81,52 @@ bs_moonraker_conf_torn() {
     [ "$(tr -d '\000' <"$1" | wc -c)" != "$(wc -c <"$1")" ]
 }
 
-# True when $1 can serve as moonraker.conf: not torn, parses like Moonraker (configparser, no interpolation), has [server].
+# True when $1 can serve as moonraker.conf: not torn, parses like Moonraker (configparser, no interpolation, includes followed), has [server].
 bs_moonraker_conf_sane() {
     [ -s "$1" ] && ! bs_moonraker_conf_torn "$1" || return 1
     python3 - "$1" 2>/dev/null <<'PY'
 import configparser
+import pathlib
 import sys
 
-parser = configparser.ConfigParser(interpolation=None)
-try:
-    with open(sys.argv[1], encoding="utf-8") as f:
+
+def sections(path: pathlib.Path, seen: set[pathlib.Path]) -> set[str]:
+    # Include rules follow Moonraker's confighelper._parse_file.
+    if path.resolve() in seen:
+        raise configparser.Error(f"recursive include {path}")
+    seen.add(path.resolve())
+    parser = configparser.ConfigParser(interpolation=None)
+    with open(path, encoding="utf-8") as f:
         parser.read_file(f)
-except (OSError, UnicodeDecodeError, configparser.Error):
-    sys.exit(1)
-sys.exit(0 if parser.has_section("server") else 1)
+    found = set()
+    for sec in parser.sections():
+        if not sec.startswith("include "):
+            found.add(sec)
+            continue
+        inc = sec[8:].strip()
+        if inc.startswith("/"):
+            target = pathlib.Path(inc).resolve()
+            paths = sorted(target.parent.glob(target.name))
+        else:
+            paths = sorted(path.parent.glob(inc))
+        if not paths:
+            raise configparser.Error(f"no files match [{sec}]")
+        for inc_path in paths:
+            found |= sections(inc_path, seen)
+    return found
+
+
+try:
+    ok = "server" in sections(pathlib.Path(sys.argv[1]), set())
+except (OSError, UnicodeDecodeError, ValueError, configparser.Error):
+    ok = False
+sys.exit(0 if ok else 1)
 PY
 }
 
 # Restore a torn moonraker.conf from the newest sane source: .bak, NULs stripped, Moonraker's .bkp. $1 conf, $2 tag.
 bs_heal_moonraker_conf() {
-    local conf="$1" tag="${2:-bs-common}" src tmp
+    local conf="$1" tag="${2:-bs-common}" src tmp dropped
     [ -f "$conf" ] && bs_moonraker_conf_torn "$conf" || return 1
     cp -f "$conf" "$(dirname "$conf")/.$(basename "$conf").torn" 2>/dev/null || true
     tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" || return 1
@@ -108,10 +136,18 @@ bs_heal_moonraker_conf() {
         else
             cp -f "$src" "$tmp" 2>/dev/null || continue
         fi
-        if bs_moonraker_conf_sane "$tmp" && _bs_replace_file "$tmp" "$conf"; then
-            echo "[$tag] moonraker.conf: torn by a power cut, restored from $src"
-            return 0
+        bs_moonraker_conf_sane "$tmp" || continue
+        dropped=""
+        [ "$src" = "${conf}.bak" ] && dropped=$(tr -d '\000' <"$conf" | diff "$tmp" - |
+            awk -v p="[$tag] moonraker.conf: not in .bak, dropped: " '/^> / { print p substr($0, 3); if (++n == 20) exit }')
+        # Stop on a failed rename: every source would fail the same way.
+        if ! _bs_replace_file "$tmp" "$conf"; then
+            echo "[$tag] moonraker.conf: torn by a power cut, restore from $src failed"
+            return 1
         fi
+        echo "[$tag] moonraker.conf: torn by a power cut, restored from $src"
+        [ -z "$dropped" ] || printf '%s\n' "$dropped"
+        return 0
     done
     rm -f "$tmp"
     echo "[$tag] moonraker.conf: torn by a power cut, no sane copy to restore"
