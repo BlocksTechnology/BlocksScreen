@@ -97,6 +97,11 @@ async def _reap(proc, sig: int, grace: float) -> bool:
     return True
 
 
+# Bytes/s and seconds, as Moonraker's GIT_ENV_VARS (git_deploy.py), whose TIME key has a stray space.
+_GIT_LOW_SPEED_LIMIT = "1000"
+_GIT_LOW_SPEED_TIME = "30"
+
+
 def _make_clean_env() -> dict[str, str]:
     """Build a minimal env without session bus/XDG vars or unsafe SUDO_ vars."""
     env: dict[str, str] = {}
@@ -110,6 +115,9 @@ def _make_clean_env() -> dict[str, str]:
         if val is not None:
             env[key] = val
     env["GIT_TERMINAL_PROMPT"] = "0"
+    # A link that drops mid-transfer otherwise stalls git until the subprocess cap.
+    env["GIT_HTTP_LOW_SPEED_LIMIT"] = _GIT_LOW_SPEED_LIMIT
+    env["GIT_HTTP_LOW_SPEED_TIME"] = _GIT_LOW_SPEED_TIME
     # git/apt error parsing matches English text.
     env["LC_ALL"] = "C"
     safe_sudo = {"SUDO_USER", "SUDO_UID", "SUDO_GID"}
@@ -660,6 +668,7 @@ _GIT_NETWORK_SIGNATURES = (
     "temporary failure in name resolution",
     "could not read from remote repository",
     "timed out after",
+    "operation too slow",
 )
 
 

@@ -201,6 +201,7 @@ _FIRE_AND_FORGET_SERVICES = frozenset({_UI_SERVICE})
 _KLIPPER_SERVICE = "klipper.service"
 
 _UI_COMPONENT = "BlocksScreen"
+_HH_COMPONENT = "Happy-Hare"
 # A requested daemon restart that has not happened by now is assumed lost.
 _RESTART_PENDING_TTL_S = 600.0
 # Absent at the target ref = abort: a Type=notify host without it crash-loops.
@@ -278,6 +279,7 @@ class UpdateService:
     """Async service that orchestrates component status checks and updates."""
 
     _FETCH_TTL: float = 300.0
+    _PREFLIGHT_FRESH_S: float = 30.0
 
     def __init__(self, callback: ProgressCallback | None = None) -> None:
         """Load components and initialize locks, caches, and self-heal tracking."""
@@ -297,6 +299,8 @@ class UpdateService:
         self._fetch_backoff: dict[str, _Backoff] = {}
         # Last fetch error per repo, re-reported while its breaker skips the fetch.
         self._fetch_errors: dict[str, str] = {}
+        # Last network fetch failure per repo: (monotonic time it ended, error).
+        self._fetch_failures: dict[str, tuple[float, str]] = {}
         # Per repo, the HEAD Moonraker last failed to record (no upstream, offline).
         self._moonraker_unreadable: dict[str, str] = {}
         self._state_path = _STATE_PATH
@@ -376,8 +380,12 @@ class UpdateService:
             self._fetch_times[name] = now
             self._fetch_backoff.pop(name, None)
             self._fetch_errors.pop(name, None)
+            self._fetch_failures.pop(name, None)
             return
-        if git_is_network_error(error) and not error.startswith(CLOCK_UNSYNCED):
+        network = git_is_network_error(error)
+        if network:
+            self._fetch_failures[name] = (time.monotonic(), error)
+        if network and not error.startswith(CLOCK_UNSYNCED):
             # Offline is not an update: never re-report it while the breaker skips.
             self._fetch_errors.pop(name, None)
         else:
@@ -516,12 +524,15 @@ class UpdateService:
         if not await self._ensure_disk_space(components):
             return False
         sorted_components = sorted(components, key=lambda c: c.order)
+        started = time.monotonic()
         offline = await self._preflight_fetch(sorted_components)
 
         apt, batch = self._build_apt_and_batch_lists(sorted_components)
         ok = await self._filter_offline_batch(batch, offline)
         ok = await self._filter_nonrepo_batch(batch) and ok
         ok = await self._filter_dead_branch_batch(batch) and ok
+        if names is not None:
+            await self._drop_current_batch(batch, started)
         provision = self._build_provision_list(sorted_components)
         return await self._run_update_phases(apt, batch, provision) and ok
 
@@ -615,6 +626,30 @@ class UpdateService:
                 reason = CLOCK_UNSYNCED
             ok = self._cb_error_done(c.name, reason)
         return ok
+
+    async def _drop_current_batch(
+        self, batch: list[ComponentConfig], since: float
+    ) -> None:
+        """Drop freshly fetched repos with nothing to apply, reporting them done."""
+        async with self._git_lock:
+            fresh = [
+                c
+                for c in batch
+                if since - self._fetch_times.get(c.name, float("-inf"))
+                < self._PREFLIGHT_FRESH_S
+            ]
+        statuses = await asyncio.gather(
+            *(
+                check_git_status(c.name, c.path, c.branch, c.version, skip_fetch=True)
+                for c in fresh
+            )
+        )
+        for c, status in zip(fresh, statuses, strict=True):
+            if status.needs_update:
+                continue
+            batch.remove(c)
+            self._log.info("%s: up to date after the pre-flight fetch", c.name)
+            self._cb("on_component_done", c.name, True)
 
     async def _filter_nonrepo_batch(self, batch: list[ComponentConfig]) -> bool:
         """Drop non-git-repo dirs, quarantining installable ones for a fresh clone."""
@@ -868,25 +903,39 @@ class UpdateService:
             for c in sorted_components
             if c.kind == "git" and c.path is not None and is_git_repo(c.path)
         ]
-        offline: dict[str, str] = {}
-        for c in targets:
-            now = time.monotonic()
-            async with self._git_lock:
-                recent = now - self._fetch_times.get(c.name, float("-inf")) < 30
-            if recent:
-                continue
-            ok, err = await git_fetch(c.path)
-            if ok:
-                async with self._git_lock:
-                    self._record_fetch_result(c.name, now, None)
-            elif not await git_has_corruption(c.path, hint=err):
-                offline[c.name] = await explain_fetch_error(err)
+        errors = await asyncio.gather(*(self._preflight_fetch_one(c) for c in targets))
+        offline = {
+            c.name: err
+            for c, err in zip(targets, errors, strict=True)
+            if err is not None
+        }
         if offline:
             self._log.error(
                 "update_all: pre-flight fetch failed for %s - continuing without them",
                 sorted(offline),
             )
         return offline
+
+    async def _preflight_fetch_one(self, c: ComponentConfig) -> str | None:
+        """Fetch one repo unless just fetched; return its offline error, else None."""
+        now = time.monotonic()
+        async with self._git_lock:
+            last_ok = self._fetch_times.get(c.name, float("-inf"))
+            failed_at, failed_err = self._fetch_failures.get(
+                c.name, (float("-inf"), "")
+            )
+        if now - last_ok < self._PREFLIGHT_FRESH_S:
+            return None
+        if now - failed_at < self._PREFLIGHT_FRESH_S:
+            return failed_err
+        ok, err = await git_fetch(c.path)
+        if ok:
+            async with self._git_lock:
+                self._record_fetch_result(c.name, now, None)
+            return None
+        if await git_has_corruption(c.path, hint=err):
+            return None
+        return await explain_fetch_error(err)
 
     async def _prepare_git_batch_hashes(
         self, batch: list[ComponentConfig]
@@ -1929,6 +1978,22 @@ class UpdateService:
         except Exception:  # noqa: BLE001
             self._log.warning("%s: post-reclone hook raised", c.name, exc_info=True)
 
+    async def _heal_mmu_server_link(self, pending: set[str]) -> None:
+        """Rerun the Happy-Hare hook when Moonraker's mmu_server link is missing or stale."""
+        hh = next((c for c in self._components if c.name == _HH_COMPONENT), None)
+        if hh is None or hh.path is None:
+            return
+        src = hh.path / "components" / "mmu_server.py"
+        components = hh.path.parent / "moonraker" / "moonraker" / "components"
+        if not src.is_file() or not components.is_dir():
+            return
+        dst = components / "mmu_server.py"
+        if dst.is_symlink() and dst.readlink() == src:
+            return
+        # The hook only runs on an HH change, so a run made without it never relinks.
+        self._log.warning("reconcile: %s not linked to %s, rerunning hook", dst, src)
+        await self._boot_reclone_hook(hh, pending)
+
     async def _reconcile_locked(self) -> None:
         """Boot heal under the lock: revert, repair, reclone hooks, sanitize, then restart."""
         reverted = await self._revert_inflight()
@@ -1941,6 +2006,7 @@ class UpdateService:
                 recloned.append(c)
         for c in recloned:
             await self._boot_reclone_hook(c, reverted)
+        await self._heal_mmu_server_link(reverted)
         await self._reconcile_self_heal_state()
         # Last, so one restart covers the revert and any reclone hook that defers to it.
         await self._restart_reverted(reverted)

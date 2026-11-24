@@ -89,6 +89,49 @@ def test_reset_view_model_clears_dot(page, qtbot):
     assert blocker.args == [False]
 
 
+def test_retract_removes_entry_and_clears_dot(page, qtbot):
+    page.new_notication("amu", "gone", 2, False)
+    with qtbot.waitSignal(page.has_new_notification, timeout=200) as blocker:
+        page.retract_notification("gone")
+    assert blocker.args == [False]
+    assert page.model.entries == []
+
+
+def test_retract_keeps_other_entries_and_selection(page):
+    page.show()
+    page.new_notication("x", "stay", 1, False)
+    page.new_notication("amu", "gone", 2, False)
+    page.new_notication("x", "newest", 1, False)
+    page._select_row(2)
+    selected = page.selected_item
+    page.retract_notification("gone")
+    page.retract_notification("missing")
+    assert [e.text for e in page.model.entries] == ["newest", "stay"]
+    assert page.selected_item is selected
+    assert page.entry_delegate.prev_index == 1
+
+
+def test_retract_selected_entry_selects_newest(page):
+    page.show()
+    page.new_notication("amu", "gone", 2, False)
+    page.new_notication("x", "stay", 1, False)
+    page._select_row(1)
+    page.retract_notification("gone")
+    assert page.selected_item is page.model.entries[0]
+
+
+def test_delete_selected_selects_newest(page):
+    page.show()
+    page.new_notication("x", "old", 1, False)
+    page.new_notication("x", "mid", 1, False)
+    page.new_notication("x", "new", 1, False)
+    page._select_row(1)
+    page.delete_selected_item()
+    assert [e.text for e in page.model.entries] == ["new", "old"]
+    assert page.selected_item is page.model.entries[0]
+    assert page.entry_delegate.prev_index == 0
+
+
 def test_error_popup_stays_longer_than_info(page):
     page.new_notication(message="boom", priority=3, popup=True)
     page.new_notication(message="hello", priority=1, popup=True)

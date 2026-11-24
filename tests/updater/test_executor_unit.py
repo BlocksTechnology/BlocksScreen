@@ -8,6 +8,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from functools import partial
 from pathlib import Path
@@ -89,6 +90,11 @@ class TestMakeCleanEnv:
         result = _make_clean_env()
         assert "LD_PRELOAD" not in result
         assert "PYTHONPATH" not in result
+
+    def test_sets_git_low_speed_abort(self):
+        result = _make_clean_env()
+        assert int(result["GIT_HTTP_LOW_SPEED_LIMIT"]) > 0
+        assert int(result["GIT_HTTP_LOW_SPEED_TIME"]) > 0
 
     def test_forces_untranslated_output(self):
         result = _make_clean_env()
@@ -903,6 +909,35 @@ class TestGitFetch:
         assert not ok
         assert git_is_network_error(out), out
 
+    @pytest.mark.asyncio
+    async def test_stalled_transfer_aborts_as_network_error(
+        self, tmp_path, monkeypatch
+    ):
+        """A server that accepts and never answers, like a WAN drop after connect."""
+        # Held so a collected StreamWriter cannot close the socket (Python 3.12+).
+        writers: list[asyncio.StreamWriter] = []
+        server = await asyncio.start_server(
+            lambda _r, w: writers.append(w), "127.0.0.1", 0, reuse_address=True
+        )
+        port = server.sockets[0].getsockname()[1]
+        repo = tmp_path / "repo"
+        assert (await _run(["git", "init", "-q", str(repo)], timeout=10.0))[0]
+        url = f"http://127.0.0.1:{port}/repo.git"
+        assert (
+            await _run(["git", "remote", "add", "origin", url], cwd=repo, timeout=10.0)
+        )[0]
+        monkeypatch.setattr(
+            sys.modules[git_fetch.__module__], "_GIT_LOW_SPEED_TIME", "2"
+        )
+        start = time.monotonic()
+        async with server:
+            ok, out = await git_fetch(repo, prune_remotes=False)
+            for w in writers:
+                w.close()
+        assert not ok
+        assert time.monotonic() - start < 15
+        assert "too slow" in out.lower() and git_is_network_error(out), out
+
     @pytest.mark.parametrize(
         ("output", "expected"),
         [
@@ -915,6 +950,11 @@ class TestGitFetch:
                 True,
             ),
             ("timed out after 120.0s", True),
+            (
+                "error: RPC failed; curl 28 Operation too slow. Less than 1000 "
+                "bytes/sec transferred the last 30 seconds\nfatal: early EOF",
+                True,
+            ),
             ("fatal: --atomic can only be used when fetching from one remote", False),
             ("error: object file .git/objects/ab/cd is empty", False),
         ],

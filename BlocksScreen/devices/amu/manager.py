@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import shlex
@@ -30,8 +31,9 @@ CONFIG_PATH: Path = Path("~/printer_data/config/printer.cfg").expanduser()
 # HH job detection never ends these (only complete/error); MMU_PRINT_END parks only on complete.
 _STALE_JOB_STATES: tuple[str, ...] = ("cancelled", "standby")
 _STALE_JOB_GRACE_MS: int = 5000
-# Outlasts an update, where Klipper restarts before the updater links mmu_server.
+# Outlasts the gap between Klipper's restart and the updater linking mmu_server.
 _MMU_SERVER_GRACE_MS: int = 300_000
+_HH_COMPONENT: str = "Happy-Hare"
 _MMU_SERVER_MISSING_MSG: str = (
     "Spoolman sync unavailable: Moonraker did not load the Happy Hare component.\n"
     "Spool usage is not being recorded. Contact support."
@@ -71,6 +73,10 @@ class AMUManager(QtCore.QObject):
         str, str, int, bool, name="show-notification"
     )
 
+    retract_notification: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="retract-notification"
+    )
+
     def __init__(self, ws: MoonWebSocket, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._config_toggler = ConfigToggler(CONFIG_PATH)
@@ -84,6 +90,9 @@ class AMUManager(QtCore.QObject):
         self._stale_job_timer.timeout.connect(self._end_stale_mmu_job)
         self._moonraker_components: frozenset[str] | None = None
         self._mmu_server_warned = False
+        self._updater_busy = False
+        self._updater_provisioning = False
+        self._hh_install_pending = False
         self._mmu_server_timer = QtCore.QTimer(self)
         self._mmu_server_timer.setSingleShot(True)
         self._mmu_server_timer.setInterval(_MMU_SERVER_GRACE_MS)
@@ -404,19 +413,61 @@ class AMUManager(QtCore.QObject):
             and "mmu_server" not in self._moonraker_components
         )
 
+    @QtCore.pyqtSlot(bool, name="on-updater-busy")
+    def on_updater_busy(self, busy: bool) -> None:
+        """Hold the mmu_server warning while the updater runs a batch."""
+        self._updater_busy = busy
+        self._check_mmu_server()
+
+    @QtCore.pyqtSlot(bool, name="on-updater-provisioning")
+    def on_updater_provisioning(self, provisioning: bool) -> None:
+        """Hold the mmu_server warning while the updater installs missing components."""
+        self._updater_provisioning = provisioning
+        self._check_mmu_server()
+
+    @QtCore.pyqtSlot(name="on-updater-unavailable")
+    def on_updater_unavailable(self) -> None:
+        """Drop every updater hold when the daemon is gone; reconnect re-sends its state."""
+        self._updater_busy = False
+        self._updater_provisioning = False
+        self._hh_install_pending = False
+        self._check_mmu_server()
+
+    @QtCore.pyqtSlot(str, name="on-updater-status")
+    def on_updater_status(self, json_str: str) -> None:
+        """Hold the mmu_server warning while the updater still has Happy Hare to install."""
+        try:
+            hh = json.loads(json_str).get(_HH_COMPONENT) or {}
+            self._hh_install_pending = bool(hh.get("needs_install"))
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            logger.debug("Ignoring malformed updater status for the mmu_server check")
+            return
+        self._check_mmu_server()
+
+    def _updater_owns_hh(self) -> bool:
+        """Return True while the updater may still be linking mmu_server."""
+        return (
+            self._updater_busy or self._updater_provisioning or self._hh_install_pending
+        )
+
     def _check_mmu_server(self) -> None:
-        """Arm the missing-mmu_server warning; re-allow it once mmu_server loads."""
+        """Arm the mmu_server warning, holding it during updates; retract it on load."""
         if self._is_mmu_server_missing():
-            if not (self._mmu_server_warned or self._mmu_server_timer.isActive()):
+            if self._updater_owns_hh():
+                # Re-armed with a full grace once the updater is done.
+                self._mmu_server_timer.stop()
+            elif not (self._mmu_server_warned or self._mmu_server_timer.isActive()):
                 self._mmu_server_timer.start()
             return
         self._mmu_server_timer.stop()
         if self._moonraker_components and "mmu_server" in self._moonraker_components:
+            if self._mmu_server_warned:
+                self.retract_notification.emit(_MMU_SERVER_MISSING_MSG)
             self._mmu_server_warned = False
 
     def _warn_mmu_server_missing(self) -> None:
         """Warn once that Happy Hare's Spoolman calls fail without mmu_server."""
-        if not self._is_mmu_server_missing():
+        if not self._is_mmu_server_missing() or self._updater_owns_hh():
             return
         self._mmu_server_warned = True
         logger.warning(
