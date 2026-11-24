@@ -276,6 +276,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.klippy_state_signal.connect(self.amu_manager.on_klippy_state)
         self.ws.server_components_signal.connect(self.amu_manager.on_server_components)
         self.amu_manager.show_notification.connect(self.show_notifications)
+        self.amu_manager.retract_notification.connect(
+            self.notiPage.retract_notification
+        )
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
@@ -298,6 +301,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updater_worker.busy_changed.connect(self.update_page.handle_busy_changed)
         self.updater_worker.provisioning_changed.connect(
             self.update_page.handle_provisioning_changed
+        )
+        self.updater_worker.status_ready.connect(self.amu_manager.on_updater_status)
+        self.updater_worker.daemon_unavailable.connect(
+            self.amu_manager.on_updater_unavailable
+        )
+        self.updater_worker.busy_changed.connect(self.amu_manager.on_updater_busy)
+        self.updater_worker.provisioning_changed.connect(
+            self.amu_manager.on_updater_provisioning
         )
         self.updater_worker.committed_changed.connect(
             self.update_page.handle_committed_changed
