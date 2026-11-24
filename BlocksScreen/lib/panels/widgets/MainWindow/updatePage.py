@@ -98,6 +98,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._overlay_shown: bool = False
         self._restart_pending: bool = False
         self._provisioning: bool = False
+        self._committed: bool = False
         self._elapsed_time_seconds: int = 0
         self._elapsed_timer: QtCore.QTimer = QtCore.QTimer(self)
         self._elapsed_timer.setSingleShot(False)
@@ -413,10 +414,12 @@ class UpdatePage(QtWidgets.QWidget):
             self._elapsed_time_label.show()
             self._progress_label.setText("")
             self._progress_label.show()
-            # The daemon ignores cancel() while installing a component.
-            self._cancel_btn.setVisible(not self._provisioning)
+            # The daemon ignores cancel() while installing a component or once committed.
+            self._cancel_btn.setVisible(not (self._provisioning or self._committed))
         else:
             self._provisioning = False
+            # Also clears a commit whose False signal a daemon restart never sent.
+            self._committed = False
             self._elapsed_timer.stop()
             self._busy_timeout_timer.stop()
             self._elapsed_time_label.hide()
@@ -443,6 +446,14 @@ class UpdatePage(QtWidgets.QWidget):
         elif self._busy:
             # Still busy after the clone: the daemon holds it for install-updater.
             self._show_finishing_overlay()
+
+    def handle_committed_changed(self, committed: bool) -> None:
+        """Daemon-declared: past the commit point cancel is ignored, so hide the button."""
+        self._committed = committed
+        if committed:
+            self._cancel_btn.hide()
+        elif self._busy and not self._provisioning:
+            self._cancel_btn.show()
 
     def _show_provisioning_overlay(self) -> None:
         self._overlay_shown = True

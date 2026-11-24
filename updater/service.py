@@ -227,6 +227,10 @@ class ProgressCallback(Protocol):
         """Report a recover attempt's outcome."""
         ...
 
+    def on_committed(self, committed: bool) -> None:
+        """Report an update crossing its commit point, and its end."""
+        ...
+
 
 class LoggingCallback:
     def __init__(self) -> None:
@@ -255,6 +259,10 @@ class LoggingCallback:
     def on_recover(self, name: str, success: bool) -> None:
         """Log a recover outcome."""
         self._log.info("%s recover (ok=%s)", name, success)
+
+    def on_committed(self, committed: bool) -> None:
+        """Log the commit point."""
+        self._log.info("update committed=%s", committed)
 
 
 class UpdateService:
@@ -294,6 +302,17 @@ class UpdateService:
         self._offline_provision_tries = 0
         self._offline_followup_tries = 0
         self._restarted_services: set[str] = set()
+        self._committed = False
+
+    @property
+    def update_committed(self) -> bool:
+        """True from an update's commit until it ends; nobody can stop it, the restart timeouts bound it."""
+        return self._committed
+
+    def _set_committed(self, committed: bool) -> None:
+        if committed != self._committed:
+            self._committed = committed
+            self._cb("on_committed", committed)
 
     @property
     def daemon_restart_pending(self) -> bool:
@@ -1163,7 +1182,6 @@ class UpdateService:
         restarted: list[str] = []
         # Failed reverts stay in the inflight marker for the boot reconcile.
         pending_revert: dict[str, str] = {}
-        committed = False
         try:
             # Phases prune alive in place, so an abort never re-reports a dropped repo.
             new_hashes, ui_components, failed = await self._run_batch_phases(
@@ -1179,11 +1197,11 @@ class UpdateService:
                 )
                 self._cb("on_component_done", c.name, True)
             # Durable now; the self-restart's CancelledError must never revert.
-            committed = True
+            self._set_committed(True)
             await self._finalize_git_batch(alive, batch, pending_revert, ui_components)
             return not failed
         except asyncio.CancelledError:
-            if committed:
+            if self._committed:
                 raise
             self._log.warning("git batch cancelled - aborting")
             await self._shielded(
@@ -1194,7 +1212,7 @@ class UpdateService:
             )
             raise
         except Exception:  # noqa: BLE001
-            if committed:
+            if self._committed:
                 self._log.error("post-commit error (update stands)", exc_info=True)
                 return True
             self._log.error("git batch unexpected error", exc_info=True)
@@ -1202,6 +1220,8 @@ class UpdateService:
                 alive, prev, touched, restarted, "unexpected_error", pending_revert
             )
             return False
+        finally:
+            self._set_committed(False)
 
     async def _safe_revert(self, component: ComponentConfig, prev_hash: str) -> bool:
         """Reset one repo, containing a raise so it cannot skip the rest of the recovery."""
@@ -2579,20 +2599,19 @@ class UpdateService:
         if not ok:
             return False
 
-        committed = False
         try:
             phases_ok, new_hash = await self._run_git_phases(component, prev_hash)
             if not phases_ok:
                 return False
             self._history("update_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
-            committed = True
+            self._set_committed(True)
             await asyncio.to_thread(self._clear_inflight)
             await self._fire_and_forget_restart(component)
             await self._apply_deferred_restart()
             return True
         except asyncio.CancelledError:
-            if committed:
+            if self._committed:
                 raise
             self._log.warning(
                 "%s: update cancelled mid-flight, rolling back to %s",
@@ -2605,7 +2624,7 @@ class UpdateService:
             )
             raise
         except Exception as exc:  # noqa: BLE001
-            if committed:
+            if self._committed:
                 self._log.error(
                     "%s: post-commit error (update stands)",
                     component.name,
@@ -2627,6 +2646,8 @@ class UpdateService:
                     exc_info=True,
                 )
             return False
+        finally:
+            self._set_committed(False)
 
     def _apt_failed(self, err: str) -> None:
         """Open the apt breaker, classifying the failure as permanent or transient."""
