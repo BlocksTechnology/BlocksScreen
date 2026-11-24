@@ -67,7 +67,8 @@ def moonraker():
 def disk():
     """Plenty of free space; never wipes the host's caches or bytecode."""
     free = MagicMock(return_value=10_000.0)
-    reclaim = AsyncMock()
+    # Real reclaim returns free space after.
+    reclaim = AsyncMock(side_effect=lambda path=None: free(path))
     with (
         patch("updater.service.free_disk_mb", free),
         patch("updater.service.reclaim_disk", reclaim),

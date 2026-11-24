@@ -575,10 +575,8 @@ class UpdateService:
         if free_mb >= MIN_FREE_MB:
             return True
         self._log.warning("update: %.0f MB free, reclaiming caches", free_mb)
-        await reclaim_disk()
-        free_mb = await asyncio.to_thread(free_disk_mb)
+        free_mb = await reclaim_disk()
         if free_mb >= MIN_FREE_MB:
-            self._log.info("update: reclaim freed enough space (%.0f MB free)", free_mb)
             return True
         msg = f"{DISK_FULL}: {free_mb:.0f} MB free, {MIN_FREE_MB} MB needed"
         self._log.error("update refused: %s", msg)
@@ -1661,18 +1659,19 @@ class UpdateService:
     async def _disk_blocks_recovery(self) -> bool:
         """Rung 0: drop UI bytecode and reclaim caches; True while the disk is too full to reset."""
         component = next((c for c in self._components if c.name == _UI_COMPONENT), None)
-        if component is not None and component.path:
+        # Same filesystem BlocksScreen-start.sh measures.
+        tree = component.path if component is not None else None
+        if tree:
             for sub in ("BlocksScreen", "updater"):
-                n = await asyncio.to_thread(purge_pycache, component.path / sub)
+                n = await asyncio.to_thread(purge_pycache, tree / sub)
                 if n:
                     self._log.info("self-heal: purged %d __pycache__ under %s", n, sub)
-        if await asyncio.to_thread(free_disk_mb) >= MIN_FREE_MB:
+        if await asyncio.to_thread(free_disk_mb, tree) >= MIN_FREE_MB:
             return False
-        await reclaim_disk()
-        free_mb = await asyncio.to_thread(free_disk_mb)
+        free_mb = await reclaim_disk(tree)
         if free_mb >= MIN_FREE_MB:
             return False
-        # A full disk is not a bad commit: a reset now would truncate the tree.
+        # A reset would truncate the tree; a bad commit loops until space is freed.
         self._log.error(
             "self-heal: %.0f MB free - skipping git recovery until space is freed",
             free_mb,

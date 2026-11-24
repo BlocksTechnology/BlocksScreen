@@ -134,7 +134,7 @@ fi
 # migration boundary and leave a half-swapped service topology.
 _BOOT_DIR="$_BSENV_HOME/.cache/blockscreen"
 _MAX_BOOT_ATTEMPTS=3
-# A full disk is not a bad commit: never reset the tree or write bytecode while it lasts.
+# Full disk: skip resets and bytecode writes, accepting a UI loop if the commit is also bad.
 _disk_low=0
 if command -v bs_disk_low >/dev/null && bs_disk_low "$BS_PATH" "$_BSENV_HOME"; then
     _disk_low=1

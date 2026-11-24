@@ -947,7 +947,7 @@ class TestDiskFullRecovery:
             with patch.object(svc, "run_recovery_rung") as m_rung:
                 await svc._handle_crash_loop(12)
             m_rung.assert_not_called()
-            disk.reclaim.assert_awaited_once()
+            disk.reclaim.assert_awaited_once_with(tmp_path)
             assert disk.purge.call_count == 2
 
         asyncio.run(run_test())

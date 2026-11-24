@@ -1004,13 +1004,18 @@ def free_disk_mb(path: Path | None = None) -> float:
     return shutil.disk_usage(path or Path.home()).free / 1_048_576
 
 
-async def reclaim_disk() -> None:
-    """Drop pip/uv caches and apt's package archive; user data is never touched."""
+async def reclaim_disk(path: Path | None = None) -> float:
+    """Drop pip/uv caches and apt's package archive; returns MiB free on path after."""
+    before = await asyncio.to_thread(free_disk_mb, path)
     for d in _RECLAIM_DIRS:
         await asyncio.to_thread(shutil.rmtree, d, True)
     ok, out = await _run(_apt_cmd("clean"), timeout=60.0, env=_apt_env())
     if not ok:
         logger.warning("reclaim: apt clean failed: %s", out.strip()[:200])
+    after = await asyncio.to_thread(free_disk_mb, path)
+    # uv hard-links its cache into venvs, so freed space can be well below cache size.
+    logger.info("reclaim: freed %.0f MB, %.0f MB free", after - before, after)
+    return after
 
 
 def purge_pycache(root: Path) -> int:

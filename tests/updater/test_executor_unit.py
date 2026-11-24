@@ -8,7 +8,7 @@ import os
 import shutil
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -2014,7 +2014,9 @@ class TestDiskReclaim:
             patch(
                 "updater.executor._run", new_callable=AsyncMock, return_value=(True, "")
             ) as mock_run,
+            patch("updater.executor.free_disk_mb", side_effect=[50.0, 300.0]) as free,
         ):
-            await reclaim_disk()
+            assert await reclaim_disk(tmp_path) == 300.0
         assert not pip.exists() and not uv.exists()
         assert mock_run.call_args[0][0][-1] == "clean"
+        assert free.call_args_list == [call(tmp_path), call(tmp_path)]

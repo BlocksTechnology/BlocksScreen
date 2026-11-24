@@ -184,13 +184,15 @@ bs_reclaim_disk() {
 
 # Reclaim when short; true (0) while the disk is still below BS_MIN_FREE_MB. $1 = path, $2 = home.
 bs_disk_low() {
-    local free
-    free=$(bs_free_mb "$1")
-    [ -n "$free" ] || return 1
-    [ "$free" -ge "$BS_MIN_FREE_MB" ] && return 1
+    local before free
+    before=$(bs_free_mb "$1")
+    [ -n "$before" ] || return 1
+    [ "$before" -ge "$BS_MIN_FREE_MB" ] && return 1
     bs_reclaim_disk "$2"
     free=$(bs_free_mb "$1")
-    [ -n "$free" ] && [ "$free" -lt "$BS_MIN_FREE_MB" ]
+    [ -n "$free" ] || return 1
+    echo "BlocksScreen: reclaim freed $((free - before)) MB, $free MB free"
+    [ "$free" -lt "$BS_MIN_FREE_MB" ]
 }
 
 # Delete __pycache__ under each arg: CPython keeps a truncated .pyc from a full disk forever.
