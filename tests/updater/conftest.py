@@ -84,6 +84,13 @@ def apt_lists_partial(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def no_real_sudo(monkeypatch):
+    """Unmocked repair paths must not run real sudo: no tty trips Howdy, then pam_faillock."""
+    executor = importlib.import_module("updater.executor")
+    monkeypatch.setattr(executor, "SUDO", "/usr/bin/false")
+
+
+@pytest.fixture(autouse=True)
 def moonraker():
     """Moonraker unreachable; never dials the host's real :7125."""
     with (
