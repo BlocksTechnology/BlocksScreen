@@ -3426,6 +3426,59 @@ class TestPreflightFetch:
             assert await svc.update_all({"klipper"}) is False
         cb.on_error.assert_called_once_with("klipper", CLOCK_UNSYNCED)
 
+    @staticmethod
+    def _status(name: str, *_args: object, **_kwargs: object) -> ComponentStatus:
+        return ComponentStatus(name=name, commits_behind=int(name == "klipper"))
+
+    @pytest.mark.asyncio
+    async def test_press_skips_repos_current_after_the_fetch(self, tmp_path):
+        """A failed status fetch marks all dirty; only repos still behind are applied."""
+        comps = [self._git(tmp_path, "klipper"), self._git(tmp_path, "moonraker")]
+        cb = MagicMock()
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.check_git_status", side_effect=self._status),
+            patch.object(
+                UpdateService, "_run_git_batch", return_value=True
+            ) as mock_batch,
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = comps
+            assert await svc.update_all({"klipper", "moonraker"}) is True
+        assert [c.name for c in mock_batch.call_args.args[0]] == ["klipper"]
+        cb.on_component_done.assert_called_once_with("moonraker", True)
+
+    @pytest.mark.asyncio
+    async def test_repo_with_a_failed_fetch_stays_in_the_batch(self, tmp_path):
+        comp = self._git(tmp_path, "moonraker")
+        with (
+            patch("updater.service.git_fetch", return_value=(False, "bad pack")),
+            patch("updater.service.git_has_corruption", return_value=True),
+            patch("updater.service.check_git_status", side_effect=self._status),
+            patch.object(
+                UpdateService, "_run_git_batch", return_value=True
+            ) as mock_batch,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            await svc.update_all({"moonraker"})
+        assert [c.name for c in mock_batch.call_args.args[0]] == ["moonraker"]
+
+    @pytest.mark.asyncio
+    async def test_unnamed_update_all_keeps_every_repo(self, tmp_path):
+        comp = self._git(tmp_path, "moonraker")
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.check_git_status", side_effect=self._status),
+            patch.object(
+                UpdateService, "_run_git_batch", return_value=True
+            ) as mock_batch,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            await svc.update_all()
+        assert [c.name for c in mock_batch.call_args.args[0]] == ["moonraker"]
+
 
 class TestDeferredRestart:
     """_apply_deferred_restart: hooks record to the sentinel, daemon acts once."""

@@ -278,6 +278,7 @@ class UpdateService:
     """Async service that orchestrates component status checks and updates."""
 
     _FETCH_TTL: float = 300.0
+    _PREFLIGHT_FRESH_S: float = 30.0
 
     def __init__(self, callback: ProgressCallback | None = None) -> None:
         """Load components and initialize locks, caches, and self-heal tracking."""
@@ -516,12 +517,15 @@ class UpdateService:
         if not await self._ensure_disk_space(components):
             return False
         sorted_components = sorted(components, key=lambda c: c.order)
+        started = time.monotonic()
         offline = await self._preflight_fetch(sorted_components)
 
         apt, batch = self._build_apt_and_batch_lists(sorted_components)
         ok = await self._filter_offline_batch(batch, offline)
         ok = await self._filter_nonrepo_batch(batch) and ok
         ok = await self._filter_dead_branch_batch(batch) and ok
+        if names is not None:
+            await self._drop_current_batch(batch, started)
         provision = self._build_provision_list(sorted_components)
         return await self._run_update_phases(apt, batch, provision) and ok
 
@@ -615,6 +619,30 @@ class UpdateService:
                 reason = CLOCK_UNSYNCED
             ok = self._cb_error_done(c.name, reason)
         return ok
+
+    async def _drop_current_batch(
+        self, batch: list[ComponentConfig], since: float
+    ) -> None:
+        """Drop freshly fetched repos with nothing to apply, reporting them done."""
+        async with self._git_lock:
+            fresh = [
+                c
+                for c in batch
+                if since - self._fetch_times.get(c.name, float("-inf"))
+                < self._PREFLIGHT_FRESH_S
+            ]
+        statuses = await asyncio.gather(
+            *(
+                check_git_status(c.name, c.path, c.branch, c.version, skip_fetch=True)
+                for c in fresh
+            )
+        )
+        for c, status in zip(fresh, statuses, strict=True):
+            if status.needs_update:
+                continue
+            batch.remove(c)
+            self._log.info("%s: up to date after the pre-flight fetch", c.name)
+            self._cb("on_component_done", c.name, True)
 
     async def _filter_nonrepo_batch(self, batch: list[ComponentConfig]) -> bool:
         """Drop non-git-repo dirs, quarantining installable ones for a fresh clone."""
@@ -866,7 +894,10 @@ class UpdateService:
         for c in targets:
             now = time.monotonic()
             async with self._git_lock:
-                recent = now - self._fetch_times.get(c.name, float("-inf")) < 30
+                recent = (
+                    now - self._fetch_times.get(c.name, float("-inf"))
+                    < self._PREFLIGHT_FRESH_S
+                )
             if recent:
                 continue
             ok, err = await git_fetch(c.path)
