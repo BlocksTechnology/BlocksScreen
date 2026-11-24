@@ -63,6 +63,20 @@ def moonraker():
         yield
 
 
+@pytest.fixture(autouse=True)
+def disk():
+    """Plenty of free space; never wipes the host's caches or bytecode."""
+    free = MagicMock(return_value=10_000.0)
+    # Real reclaim returns free space after.
+    reclaim = AsyncMock(side_effect=lambda path=None: free(path))
+    with (
+        patch("updater.service.free_disk_mb", free),
+        patch("updater.service.reclaim_disk", reclaim),
+        patch("updater.service.purge_pycache", MagicMock(return_value=0)) as purge,
+    ):
+        yield MagicMock(free=free, reclaim=reclaim, purge=purge)
+
+
 @pytest.fixture
 def svc():
     """UpdaterDbusService with mocked UpdateService and signals."""
@@ -83,6 +97,7 @@ def svc():
     mock_svc.run_followup = AsyncMock(return_value=(False, False))
     mock_svc.background_apt_upgrade = AsyncMock()
     mock_svc.daemon_restart_pending = False
+    mock_svc.update_committed = False
     mock_svc.reconcile = AsyncMock(return_value=True)
     mock_svc.reconcile_if_pending = AsyncMock()
     mock_svc.sync_moonraker = AsyncMock(return_value=True)

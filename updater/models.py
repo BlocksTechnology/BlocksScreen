@@ -16,6 +16,10 @@ DEPLOY_LIVE_STATES = frozenset({"active", "activating", "deactivating", "reloadi
 PRINTER_BUSY = "printer is busy"
 # Error prefix for a TLS failure while the clock is unverified.
 CLOCK_UNSYNCED = "system clock not synchronized"
+# Error prefix for an update refused because reclaiming caches left too little space.
+DISK_FULL = "disk full"
+# Below this an update or a recovery reset could truncate files mid-write.
+MIN_FREE_MB = 200
 
 
 @dataclass
