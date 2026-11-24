@@ -27,6 +27,7 @@ async def test_update_moves_to_origin_tip_and_restarts(harness):
     assert not harness.inflight.exists()
     assert [s[1] for s in rec.of("on_step")] == [1, 2, 3, 4]
     assert rec.of("on_component_done") == [("klipper", True)]
+    assert rec.of("on_committed") == [(True,), (False,)]
     calls = harness.calls()
     assert "systemctl restart klipper.service" in calls
     assert "systemctl is-active klipper.service" in calls
@@ -59,6 +60,7 @@ async def test_hook_failure_reverts(harness):
     assert (rb["reason"], rb["reverted_to"], rb["ok"]) == ("hook", old[:12], True)
     assert rec.of("on_error") == [("klipper", "hook")]
     assert rec.of("on_rollback") == [("klipper", True)]
+    assert rec.of("on_committed") == []
     assert "systemctl restart klipper.service" not in harness.calls()
     assert not harness.inflight.exists()
 

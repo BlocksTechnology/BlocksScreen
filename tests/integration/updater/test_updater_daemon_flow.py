@@ -40,6 +40,7 @@ async def test_update_all_round_trip(harness, daemon, wait_for):
     steps = [a for a in d.signals("step_complete") if a[0] == "klipper"]
     assert steps == [("klipper", n, 4) for n in (1, 2, 3, 4)]
     assert d.signals("component_done") == [("klipper", True)]
+    assert d.signals("committed_changed") == [(True,), (False,)]
     await wait_for(lambda: harness.apt_upgrade.await_count == 1, what="apt upgrade")
 
     seen = len(d.statuses())
@@ -154,6 +155,7 @@ async def test_restarted_daemon_resumes_hold_silently(harness, daemon, wait_for)
 
     d = daemon()
     # Not exported yet at __init__: clients read it via get_busy, no signal.
+    await asyncio.sleep(0.3)  # several deploy polls, so a stray emit would show
     assert d.busy_trace() == []
     assert await d.iface.get_busy() is True
 
@@ -219,5 +221,6 @@ async def test_cancel_mid_hook_reverts_and_releases(harness, daemon, wait_for):
 
     assert harness.head("klipper") == old
     assert d.signals("rollback") == [("klipper", True)]
+    assert d.signals("committed_changed") == []  # cancelled before the commit point
     assert d.busy_trace() == [True, False]
     assert not harness.inflight.exists()

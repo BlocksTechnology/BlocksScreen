@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 from collections.abc import Mapping
@@ -140,6 +141,10 @@ class Recorder:
         """Record a recover."""
         self.events.append(("on_recover", name, success))
 
+    def on_committed(self, committed: bool) -> None:
+        """Record a commit-point change."""
+        self.events.append(("on_committed", committed))
+
     def of(self, method: str) -> list[tuple]:
         """Arguments of every call to one callback method."""
         return [e[1:] for e in self.events if e[0] == method]
@@ -209,7 +214,14 @@ class Harness:
 
     def git(self, *args: str, cwd: Path | None = None) -> str:
         """Run git as the test author; return stripped stdout."""
-        out = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+        out = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
         if out.returncode:
             pytest.fail(f"git {' '.join(args)} exited {out.returncode}: {out.stderr}")
         return out.stdout.strip()
@@ -356,6 +368,22 @@ def _write_fakes(h: Harness) -> None:
     _script(h.bin / "dbus-send", "exit 1\n")
 
 
+def _rebase(value: object, real: Path, home: Path) -> object:
+    """Map a path (or tuple of paths) under the real home onto the test home."""
+    if isinstance(value, tuple):
+        return tuple(_rebase(v, real, home) for v in value)
+    if isinstance(value, Path) and value.is_relative_to(real):
+        return home / value.relative_to(real)
+    return value
+
+
+def _closed_port() -> int:
+    """A local port nothing listens on, so Moonraker calls fail fast as on an offline box."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def _patch(mp: pytest.MonkeyPatch, g: dict, **values: object) -> None:
     """Patch module globals, failing loudly if a name was renamed upstream."""
     for key, value in values.items():
@@ -369,6 +397,7 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
     import updater.dbus_service as dbus_mod
 
     root = tmp_path.resolve()
+    real_home = Path.home()
     home = root / "home"
     home.mkdir()
     h = Harness(root, home, monkeypatch)
@@ -394,6 +423,13 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
     lock_g = exec_g["restart_sentinel_path"].__globals__
     comp_g = svc_g["load_components"].__globals__
     real_load = comp_g["load_components"]
+    h.dbus_g = dbus_mod.UpdaterDbusService.__init__.__globals__
+    # Import-time home paths (pip cache reclaim, ...); runs first so the patches below win.
+    for g in {id(g): g for g in (svc_g, exec_g, lock_g, comp_g, h.dbus_g)}.values():
+        for key, value in list(g.items()):
+            rebased = _rebase(value, real_home, home)
+            if rebased is not value:
+                monkeypatch.setitem(g, key, rebased)
     _patch(monkeypatch, comp_g, OVERRIDE_PATH=root / "blockscreen_updater.yaml")
 
     def _load_components(bundled_text: str | None = None):
@@ -453,8 +489,9 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
         "__defaults__",
         (root / "no-klippy.sock", *printing_fn.__defaults__[1:]),
     )
+    # A dev Moonraker on :7125 would otherwise answer the post-update sync.
+    _patch(monkeypatch, exec_g, MOONRAKER_PORT=_closed_port())
     _patch(monkeypatch, lock_g, _runtime_dir=lambda: h.run_dir)
-    h.dbus_g = dbus_mod.UpdaterDbusService.__init__.__globals__
     _patch(
         monkeypatch,
         h.dbus_g,
@@ -462,6 +499,7 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
         klipper_printing=h.printing,
         _BOOT_DELAY_S=0.0,
         _DEPLOY_POLL_S=0.05,
+        _SHUTDOWN_DRAIN_S=5.0,
     )
     # Self-heal supervisors poll systemd on minute timers: out of scope here.
     for method in ("supervise_ui", "forward_heal_ui", "background_prime_nrestarts"):
@@ -486,6 +524,7 @@ class Daemon:
             "status_ready",
             "busy_changed",
             "provisioning_changed",
+            "committed_changed",
         ):
             setattr(iface, name, Signal(name, self.log))
 
