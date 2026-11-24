@@ -182,6 +182,8 @@ def _make_device_window(**state) -> SimpleNamespace:
         "_track_print_state",
         "_on_klippy_state",
         "_on_reprint_requested",
+        "_release_finish_screen_hold",
+        "_show_cancel_page_if_operational",
     ):
         setattr(win, name, MethodType(getattr(MainWindow, name), win))
     return win
@@ -247,12 +249,23 @@ class TestDeviceRestartAfterJob:
         win._track_print_state("state", end_state)
         return win
 
-    @pytest.mark.parametrize("end_state", ["complete", "cancelled", "error"])
+    @pytest.mark.parametrize("end_state", ["complete", "error"])
     def test_held_while_finished_screen_open(self, end_state) -> None:
         win = self._finished(end_state)
         win.ws.api.restart_service.assert_not_called()
         win._try_device_config_restart()  # e.g. the PrintComplete event retry
         win.ws.api.restart_service.assert_not_called()
+
+    def test_cancelled_opens_no_screen_restarts_at_once(self) -> None:
+        win = self._finished("cancelled")
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+
+    def test_screen_skipped_while_klippy_not_ready_releases_hold(self) -> None:
+        win = self._finished("error")
+        win._klippy_ready = False
+        win._show_cancel_page_if_operational()
+        win.ws.api.restart_service.assert_called_once_with("klipper")
+        assert win._finish_screen_hold is False
 
     def test_runs_once_operator_dismisses(self) -> None:
         win = self._finished()

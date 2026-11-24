@@ -384,6 +384,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Reprint sends SDCARD_RESET_FILE first; its standby must not restart Klipper under the new job.
         self._reprint_hold = QtCore.QTimer(self)
         self._reprint_hold.setSingleShot(True)
+        # Upper bound for the reprint to reach "printing"; a refused start must not hold forever.
         self._reprint_hold.setInterval(30_000)
         self._reprint_hold.timeout.connect(self._try_device_config_restart)
         self.cancelpage.reprint_start.connect(self._on_reprint_requested)
@@ -442,6 +443,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _show_cancel_page_if_operational(self) -> None:
         # E-stop/shutdown aborts the print with an error too; the connection page handles that, not the cancel page.
         if not self._klippy_ready:
+            self._release_finish_screen_hold()
             return
         self.cancelpage.setGeometry(0, 0, self.width(), self.height())
         self.cancelpage.raise_()
@@ -527,6 +529,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._config_reload_on_ready = self._device_restart_pending
         elif state in ("ready", "error") and self._config_reload_on_ready:
             self._config_reload_on_ready = False
+            # Every route back to ready (FIRMWARE_RESTART, RESTART, service restart) re-reads printer.cfg.
             if state == "ready" and self._device_restart_pending:
                 _logger.info("Firmware Restart loaded the new device config")
                 self._device_restart_pending = False
@@ -876,6 +879,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._device_restart_pending = False
         self._begin_klipper_restart()
 
+    def _release_finish_screen_hold(self) -> None:
+        """The finished screen did not open: let a held Klipper restart run."""
+        if self._finish_screen_hold:
+            self._finish_screen_hold = False
+            self._try_device_config_restart()
+
     @QtCore.pyqtSlot(str, name="on-reprint-requested")
     def _on_reprint_requested(self, _filename: str) -> None:
         """Hold a pending Klipper restart until the reprint reports printing."""
@@ -911,7 +920,8 @@ class MainWindow(QtWidgets.QMainWindow):
             was_active = self._is_job_active()
             self._print_state = value
             self._print_state_known = True
-            if value in ("complete", "cancelled", "error"):
+            # Same states as jobStatusPage: a cancelled job opens no finished screen.
+            if value in ("complete", "error"):
                 self._finish_screen_hold = self._finish_screen_hold or was_active
             else:
                 # Standby = finished screen dismissed (SDCARD_RESET_FILE) or Klipper restarted.
