@@ -1,11 +1,15 @@
 """UDisksDBusAsync.close() must never hang or abort the app."""
 
+import asyncio
 import os
 import pathlib
 import subprocess  # nosec B404
 import sys
 
 import pytest
+
+# Reuse its path loader: tests/panels and tests/lib stub these modules.
+from tests.storage.test_udisks_symlinks_unit import UDisksDBusAsync
 
 _SRC = pathlib.Path(__file__).resolve().parents[2] / "BlocksScreen"
 
@@ -78,3 +82,37 @@ def test_close_never_wedges_the_process(mode: str) -> None:
     assert res.stdout == "alive\n", res.stderr
     assert res.returncode == 0, res.stderr
     assert "Destroyed while thread" not in res.stderr
+
+
+class _Dev:
+    def __init__(self) -> None:
+        self.deleted = 0
+
+    def delete(self) -> None:
+        self.deleted += 1
+
+
+class _Run:
+    """UDisksDBusAsync.run on a fake: no QThread, no D-Bus."""
+
+    def __init__(self, exit_with: BaseException | None) -> None:
+        self._run = UDisksDBusAsync.run.__get__(self)
+        self._drain_loop = UDisksDBusAsync._drain_loop.__get__(self)
+        self._release_devices = UDisksDBusAsync._release_devices.__get__(self)
+        self.stop_event = asyncio.Event()
+        self.loop, self._active, self.exit_with = None, False, exit_with
+        self.devs = [_Dev(), _Dev()]
+        self.controlled_devs = {"/a": self.devs[0], "/b": self.devs[1]}
+
+    async def monitor_dbus(self) -> None:
+        if self.exit_with is not None:
+            raise self.exit_with
+
+
+@pytest.mark.parametrize("exit_with", [None, RuntimeError("bus gone")])
+def test_run_releases_tracked_devices_on_every_exit(exit_with) -> None:
+    mon = _Run(exit_with)
+    mon._run()
+    assert mon.controlled_devs == {}
+    assert [d.deleted for d in mon.devs] == [1, 1]
+    assert mon._active is False
