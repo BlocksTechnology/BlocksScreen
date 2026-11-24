@@ -373,14 +373,15 @@ class TestShutdown:
         assert ws.connected is False
         connect.assert_not_called()
 
-    def test_real_socket_thread_exits_within_join(self, ws, qtbot, monkeypatch):
+    def test_real_socket_thread_exits_within_join(
+        self, ws, qtbot, monkeypatch, ws_server
+    ):
         # Unfixed, ~40% of closes left run_forever in epoll for ping_timeout (10 s).
         monkeypatch.delitem(sys.modules, "websocket", raising=False)  # conftest stub
         monkeypatch.setattr(
             moonrakerComm, "websocket", importlib.import_module("websocket")
         )
-        port = _serve_ws()
-        ws._host, ws._port = "127.0.0.1", port
+        ws._host, ws._port = "127.0.0.1", ws_server
         ws.moonRest.get_oneshot_token.return_value = "t"
         for _ in range(8):
             ws._closing = False
@@ -393,40 +394,66 @@ class TestShutdown:
             ws.connected = False
 
 
-def _serve_ws() -> int:
-    """Minimal RFC 6455 server: handshake, then answer a close frame like Moonraker."""
+def _ws_client(conn: socket.socket) -> None:
+    """Handshake, then answer a close frame like Moonraker."""
+    with conn:
+        req = b""
+        while b"\r\n\r\n" not in req:
+            req += conn.recv(4096)
+        key = next(
+            line.split(b":", 1)[1].strip()
+            for line in req.split(b"\r\n")
+            if line.lower().startswith(b"sec-websocket-key")
+        )
+        accept = base64.b64encode(hashlib.sha1(key + _WS_GUID).digest())  # nosec B324
+        conn.sendall(
+            b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+            b"Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + b"\r\n\r\n"
+        )
+        while (hdr := conn.recv(2)) and len(hdr) == 2:
+            length = hdr[1] & 0x7F
+            conn.recv(4 + length)
+            if hdr[0] & 0x0F == 8:
+                conn.sendall(b"\x88\x02\x03\xe8")
+                return
+
+
+def _ws_accept(
+    srv: socket.socket, stop: threading.Event, clients: list[threading.Thread]
+) -> None:
+    """Accept until stopped; the timeout lets the loop see stop without a racy close."""
+    while not stop.is_set():
+        try:
+            conn, _ = srv.accept()
+        except TimeoutError:
+            continue
+        except OSError:
+            return
+        conn.settimeout(5)
+        t = threading.Thread(target=_ws_client, args=(conn,), daemon=True)
+        clients.append(t)
+        t.start()
+
+
+@pytest.fixture
+def ws_server():
+    """Minimal RFC 6455 server on a free port; stopped and joined at teardown."""
     srv = socket.create_server(("127.0.0.1", 0))
-
-    def _client(conn: socket.socket) -> None:
-        with conn:
-            req = b""
-            while b"\r\n\r\n" not in req:
-                req += conn.recv(4096)
-            key = next(
-                line.split(b":", 1)[1].strip()
-                for line in req.split(b"\r\n")
-                if line.lower().startswith(b"sec-websocket-key")
-            )
-            accept = base64.b64encode(hashlib.sha1(key + _WS_GUID).digest())  # nosec B324
-            conn.sendall(
-                b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
-                b"Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + b"\r\n\r\n"
-            )
-            while (hdr := conn.recv(2)) and len(hdr) == 2:
-                length = hdr[1] & 0x7F
-                conn.recv(4 + length)
-                if hdr[0] & 0x0F == 8:
-                    conn.sendall(b"\x88\x02\x03\xe8")
-                    return
-
-    def _accept() -> None:
-        while True:
-            threading.Thread(
-                target=_client, args=(srv.accept()[0],), daemon=True
-            ).start()
-
-    threading.Thread(target=_accept, daemon=True).start()
-    return srv.getsockname()[1]
+    srv.settimeout(0.1)
+    stop = threading.Event()
+    clients: list[threading.Thread] = []
+    acceptor = threading.Thread(
+        target=_ws_accept, args=(srv, stop, clients), daemon=True
+    )
+    acceptor.start()
+    yield srv.getsockname()[1]
+    stop.set()
+    acceptor.join(timeout=2)
+    srv.close()
+    for t in clients:
+        t.join(timeout=2)
+    assert not acceptor.is_alive()
+    assert not any(t.is_alive() for t in clients)
 
 
 _WS_GUID = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
