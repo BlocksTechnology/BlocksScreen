@@ -4,6 +4,7 @@
 import argparse
 import csv
 import importlib.metadata
+import importlib.util
 import logging
 import os
 import re
@@ -105,7 +106,12 @@ def _uninstall(dist_info: Path) -> None:
         path = Path(os.path.normpath(site / row[0])) if row else None
         if path is None or not str(path).startswith(prefix) or path.is_dir():
             continue
-        path.unlink(missing_ok=True)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            # A root-owned leftover must not crash the heal; pip replaces it or reports it.
+            _LOG.warning("cannot remove %s: %s", path, exc)
+            continue
         dirs.update(d for d in path.parents if site in d.parents)
     shutil.rmtree(dist_info, ignore_errors=True)
     # Deepest first; a left-over file from the newer version would shadow the reinstalled one.
@@ -119,6 +125,12 @@ def _uninstall(dist_info: Path) -> None:
 
 def _repair_pip(site: Path) -> bool:
     """Reinstall pip offline from the interpreter's bundled wheel, as `python -m venv` does."""
+    # Debian ships ensurepip in python3.11-venv; without it, deleting pip only makes things worse.
+    if importlib.util.find_spec("ensurepip") is None:
+        _LOG.error(
+            "ensurepip unavailable (python3.11-venv missing?) - leaving pip as is"
+        )
+        return False
     for dist_info in site.glob("pip-*.dist-info"):
         _uninstall(dist_info)
     # A cut can empty RECORD too; a newer pip's unlisted package dir then shadows the older wheel's module.
@@ -168,7 +180,7 @@ def _repair_venv_cfg() -> bool:
 
 
 def _pending_file() -> Path:
-    """Survives a failed (offline) reinstall: the broken dist-info is already gone by then."""
+    """Survives a failed (offline) reinstall: a pip-damaged dist may already be gone by then."""
     return Path(sys.prefix, ".blockscreen-venv-reinstall")
 
 
@@ -217,17 +229,21 @@ def heal() -> int:
     site = _site_packages()
     broken = broken_dists(site)
     pending = _read_pending()
+    deferred = []
     for req, dist_info in broken:
         _LOG.warning("truncated distribution %s (%s)", req, dist_info.name)
         if _PIN.match(req) and req not in pending:
             pending.append(req)
-    if broken:
-        _write_pending(pending)
-        # A working pip skips a dist-info with no valid METADATA and cannot uninstall one without RECORD.
-        for _, dist_info in broken:
+            rc = 1
+        # Kept until its wheel is local: offline, damaged dist-info often sits beside intact code.
+        if req in pending and not dist_info.name.startswith("pip-"):
+            deferred.append(dist_info)
+        else:
+            # pip's own dist is repaired offline by ensurepip below.
             _uninstall(dist_info)
-    if broken:
-        rc = 1
+            rc = 1
+    if rc:
+        _write_pending(pending)
     if not _pip_works():
         _LOG.warning("pip unusable - reinstalling it from the bundled wheel")
         if not _repair_pip(site):
@@ -235,6 +251,51 @@ def heal() -> int:
             return 2
         rc = 1
     if pending:
+        if not _reinstall(pending, deferred):
+            _LOG.warning("reinstall of %s deferred (offline?)", " ".join(pending))
+            return rc or 2
+        _pending_file().unlink(missing_ok=True)
+        _LOG.info("reinstalled %s", " ".join(pending))
+        rc = 1
+    return rc
+
+
+def _wheel_dir() -> Path:
+    """Fixed name, so a run cut short leaves nothing the next run does not clear."""
+    return Path(sys.prefix, ".blockscreen-heal-wheels")
+
+
+def _reinstall(pending: list[str], deferred: list[Path]) -> bool:
+    """Fetch every wheel first, then remove the damaged dists and install offline."""
+    wheels = _wheel_dir()
+    shutil.rmtree(wheels, ignore_errors=True)
+    try:
+        res = subprocess.run(  # nosec B603 - pending lines all match _PIN
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "wheel",
+                "--quiet",
+                "--no-deps",
+                "--no-cache-dir",
+                # Same binary policy as bs-bootstrap and install-updater (sdbus from source).
+                "--only-binary",
+                ":all:",
+                "--no-binary",
+                "sdbus,sdbus-networkmanager",
+                "--wheel-dir",
+                str(wheels),
+                *pending,
+            ],
+            timeout=1800,
+            check=False,
+        )
+        if res.returncode != 0:
+            return False
+        # A working pip skips a dist-info with no valid METADATA and cannot uninstall one without RECORD.
+        for dist_info in deferred:
+            _uninstall(dist_info)
         res = subprocess.run(  # nosec B603 - pending lines all match _PIN
             [
                 sys.executable,
@@ -244,24 +305,17 @@ def heal() -> int:
                 "--quiet",
                 "--no-deps",
                 "--force-reinstall",
-                "--no-cache-dir",
-                # Same binary policy as bs-bootstrap and install-updater (sdbus from source).
-                "--only-binary",
-                ":all:",
-                "--no-binary",
-                "sdbus,sdbus-networkmanager",
+                "--no-index",
+                "--find-links",
+                str(wheels),
                 *pending,
             ],
-            timeout=1800,
+            timeout=600,
             check=False,
         )
-        if res.returncode != 0:
-            _LOG.warning("reinstall of %s deferred (offline?)", " ".join(pending))
-            return rc or 2
-        _pending_file().unlink(missing_ok=True)
-        _LOG.info("reinstalled %s", " ".join(pending))
-        rc = 1
-    return rc
+        return res.returncode == 0
+    finally:
+        shutil.rmtree(wheels, ignore_errors=True)
 
 
 def pins_installed(reqs: Path) -> int:

@@ -132,9 +132,9 @@ def test_offline_heal_keeps_pending_then_online_heal_clears_it(
 
     calls = _fake_pip(monkeypatch, heal, rc=1)
     assert heal.heal() == 1  # damage found this run: caller reinstalls its set
-    assert not dist_info.exists()
+    assert dist_info.exists()  # nothing removed before the wheels are local
     assert heal._read_pending() == ["foo==1.0"]
-    assert calls[-1][-1] == "foo==1.0"
+    assert calls[-1][3] == "wheel" and calls[-1][-1] == "foo==1.0"
 
     _fake_pip(monkeypatch, heal, rc=1)
     assert heal.heal() == 2  # still offline, nothing new: reinstall stays pending
@@ -142,14 +142,65 @@ def test_offline_heal_keeps_pending_then_online_heal_clears_it(
 
     calls = _fake_pip(monkeypatch, heal, rc=0)
     assert heal.heal() == 1
-    assert "--force-reinstall" in calls[-1] and calls[-1][-1] == "foo==1.0"
-    assert calls[-1][calls[-1].index("--no-binary") + 1] == "sdbus,sdbus-networkmanager"
-    assert calls[-1][calls[-1].index("--only-binary") + 1] == ":all:"
+    wheel, install = calls[-2:]
+    assert wheel[wheel.index("--no-binary") + 1] == "sdbus,sdbus-networkmanager"
+    assert wheel[wheel.index("--only-binary") + 1] == ":all:"
+    assert "--force-reinstall" in install and "--no-index" in install
+    assert install[-1] == "foo==1.0"
+    assert not dist_info.exists()
     assert not heal._pending_file().exists()
 
     calls = _fake_pip(monkeypatch, heal, rc=0)
     assert heal.heal() == 0
     assert calls == []
+
+
+def test_offline_heal_keeps_a_dist_whose_code_is_intact(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """pip writes dist-info last, so a cut most often leaves only METADATA damaged."""
+    site = heal._site_packages()
+    dist_info = _dist(site, "foo", "1.0", {"foo/__init__.py": b"x = 1\n"})
+    (dist_info / "METADATA").write_bytes(b"")
+    _fake_pip(monkeypatch, heal, rc=1)
+    assert heal.heal() == 1
+    assert (site / "foo/__init__.py").read_bytes() == b"x = 1\n"
+    assert heal._read_pending() == ["foo==1.0"]
+
+
+def test_damaged_dist_is_removed_only_after_its_wheel_is_fetched(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = heal._site_packages()
+    dist_info = _dist(site, "foo", "1.0", {"foo/__init__.py": b"x = 1\n"})
+    (dist_info / "RECORD").write_bytes(b"")
+    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        heal,
+        "subprocess",
+        types.SimpleNamespace(
+            run=lambda argv, **_kw: (
+                seen.append((argv[3], dist_info.exists()))
+                or types.SimpleNamespace(returncode=0)
+            )
+        ),
+    )
+    monkeypatch.setattr(heal, "_pip_works", lambda: True)
+    assert heal.heal() == 1
+    assert seen == [("wheel", True), ("install", False)]
+    assert not heal._wheel_dir().exists()
+
+
+def test_pip_repair_needs_ensurepip_before_deleting_pip(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = heal._site_packages()
+    dist_info = _dist(site, "pip", "23.0.1", {"pip/__init__.py": b"v = 23\n"})
+    monkeypatch.setattr(heal.importlib.util, "find_spec", lambda _name: None)
+    calls = _fake_pip(monkeypatch, heal, rc=0)
+    assert not heal._repair_pip(site)
+    assert calls == []
+    assert dist_info.exists() and (site / "pip/__init__.py").exists()
 
 
 def test_broken_pip_is_repaired_before_reinstall(
