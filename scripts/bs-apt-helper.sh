@@ -9,7 +9,7 @@ CONF=(-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
 export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 
 usage() {
-    echo "usage: bs-apt-helper {update|upgrade <pkg...>|autoremove|fix-broken|dselect-upgrade|set-selections}" >&2
+    echo "usage: bs-apt-helper {update|upgrade <pkg...>|autoremove|clean|fix-broken|dselect-upgrade|set-selections}" >&2
     exit 2
 }
 
@@ -34,6 +34,10 @@ case "$verb" in
     autoremove)
         [ $# -eq 0 ] || usage
         exec "$APT_GET" "${LOCK[@]}" autoremove -y
+        ;;
+    clean)
+        [ $# -eq 0 ] || usage
+        exec "$APT_GET" "${LOCK[@]}" clean
         ;;
     fix-broken)
         [ $# -eq 0 ] || usage

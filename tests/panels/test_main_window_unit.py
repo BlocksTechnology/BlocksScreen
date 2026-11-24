@@ -14,6 +14,8 @@ def _make_fake_window(
 ) -> SimpleNamespace:
     win = SimpleNamespace(
         _klippy_ready=False,
+        _klippy_state=None,
+        _klippy_settled_state=None,
         _update_in_progress=False,
         _klipper_auto_restart_pending=False,
         _post_update_reconnect=False,
@@ -31,6 +33,25 @@ def _make_fake_window(
     )
     win._begin_klipper_restart = MethodType(MainWindow._begin_klipper_restart, win)
     return win
+
+
+class TestEstopCancelsUpdate:
+    @pytest.mark.parametrize(
+        ("states", "cancels"),
+        [
+            (["ready", "shutdown"], True),
+            (["ready", "disconnected", "startup", "shutdown"], True),
+            (["shutdown", "disconnected", "shutdown"], False),
+            (["shutdown", "startup", "shutdown"], False),
+            (["shutdown"], False),
+        ],
+    )
+    def test_only_ready_to_shutdown_cancels(self, states, cancels) -> None:
+        win = _make_fake_window()
+        win._update_in_progress = True
+        for state in states:
+            MainWindow._on_klippy_state(win, state)
+        assert win.updater_worker.trigger_cancel.called is cancels
 
 
 class TestKlippyDisconnectedAutoRestartGuard:
@@ -142,6 +163,7 @@ def _make_device_window(**state) -> SimpleNamespace:
     """Fake window running the real device-config prompt/restart methods."""
     win = SimpleNamespace(
         _klippy_state="ready",
+        _klippy_settled_state="ready",
         _print_state="standby",
         _print_state_known=True,
         print_status="idle",
