@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import signal
 import sys
 import tempfile
@@ -999,6 +1000,37 @@ def _apt_env() -> dict[str, str]:
 def _apt_cmd(verb: str, pkgs: Sequence[str] = ()) -> list[str]:
     """Build the sudo apt argv via the root-owned wrapper."""
     return [SUDO, str(APT_HELPER), verb, *pkgs]
+
+
+# Re-downloadable caches only; pip/uv sit under the daemon user's home.
+_RECLAIM_DIRS = (Path.home() / ".cache" / "pip", Path.home() / ".cache" / "uv")
+
+
+def free_disk_mb(path: Path | None = None) -> float:
+    """Free MiB on the filesystem holding path (default: home)."""
+    return shutil.disk_usage(path or Path.home()).free / 1_048_576
+
+
+async def reclaim_disk(path: Path | None = None) -> float:
+    """Drop pip/uv caches and apt's package archive; returns MiB free on path after."""
+    before = await asyncio.to_thread(free_disk_mb, path)
+    for d in _RECLAIM_DIRS:
+        await asyncio.to_thread(shutil.rmtree, d, True)
+    ok, out = await _run(_apt_cmd("clean"), timeout=60.0, env=_apt_env())
+    if not ok:
+        logger.warning("reclaim: apt clean failed: %s", out.strip()[:200])
+    after = await asyncio.to_thread(free_disk_mb, path)
+    # uv hard-links its cache into venvs, so freed space can be well below cache size.
+    logger.info("reclaim: freed %.0f MB, %.0f MB free", after - before, after)
+    return after
+
+
+def purge_pycache(root: Path) -> int:
+    """Delete every __pycache__ under root; a full disk leaves truncated .pyc CPython never rewrites."""
+    dirs = [d for d in root.rglob("__pycache__") if d.is_dir()]
+    for d in dirs:
+        shutil.rmtree(d, ignore_errors=True)
+    return len(dirs)
 
 
 async def _apt_snapshot_packages() -> tuple[bool, Path | None]:

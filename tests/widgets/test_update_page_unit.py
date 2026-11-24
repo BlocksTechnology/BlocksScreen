@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from updater.models import CLOCK_UNSYNCED, PRINTER_BUSY, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, DISK_FULL, PRINTER_BUSY, ComponentStatus
 
 _UP_MOD = "BlocksScreen.lib.panels.widgets.MainWindow.updatePage"
 
@@ -810,3 +810,19 @@ class TestDeployUnitsLive:
         # Same fallback as the daemon's deploy_running(); the 900 s cap still bounds it.
         with patch(f"{_UP_MOD}.subprocess.run", side_effect=OSError):
             assert UpdatePage._deploy_units_live() is True
+
+
+class TestDiskFullPopup:
+    def test_disk_full_opens_one_persistent_popup(self, page):
+        page._show_toast = MagicMock()
+        reason = f"{DISK_FULL}: 50 MB free, 200 MB needed"
+        with patch(f"{_UP_MOD}.BasePopup") as popup_cls:
+            popup = popup_cls.return_value
+            popup.isVisible.return_value = True
+            page.handle_error_occurred("system", reason)
+            page.handle_error_occurred("BlocksScreen", reason)
+        popup_cls.assert_called_once()
+        msg = popup.set_message.call_args[0][0].lower()
+        assert "full" in msg and "delete" in msg
+        popup.open.assert_called_once()
+        page._show_toast.assert_not_called()

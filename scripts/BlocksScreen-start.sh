@@ -134,6 +134,13 @@ fi
 # migration boundary and leave a half-swapped service topology.
 _BOOT_DIR="$_BSENV_HOME/.cache/blockscreen"
 _MAX_BOOT_ATTEMPTS=3
+# Full disk: skip resets and bytecode writes, accepting a UI loop if the commit is also bad.
+_disk_low=0
+if command -v bs_disk_low >/dev/null && bs_disk_low "$BS_PATH" "$_BSENV_HOME"; then
+    _disk_low=1
+    export PYTHONDONTWRITEBYTECODE=1
+    echo "BlocksScreen: disk full after reclaim - skipping rollback and source check"
+fi
 mkdir -p "$_BOOT_DIR" 2>/dev/null || true
 _attempts=$(cat "$_BOOT_DIR/boot_attempts" 2>/dev/null || echo 0)
 case "$_attempts" in ''|*[!0-9]*) _attempts=0 ;; esac
@@ -141,9 +148,14 @@ _attempts=$((_attempts + 1))
 printf '%s\n' "$_attempts" > "$_BOOT_DIR/.boot_attempts.tmp" 2>/dev/null \
     && mv -f "$_BOOT_DIR/.boot_attempts.tmp" "$_BOOT_DIR/boot_attempts" 2>/dev/null || true
 echo "[BlocksScreen-start] boot attempt $_attempts"
+if [ "$_attempts" -ge 2 ] && command -v bs_purge_pycache >/dev/null; then
+    bs_purge_pycache "$BS_PATH/BlocksScreen" "$BS_PATH/updater"
+fi
 _last_good=$(tr -d '[:space:]' < "$_BOOT_DIR/last_good_commit" 2>/dev/null || echo "")
 _cur_head=$(git -C "$BS_PATH" rev-parse HEAD 2>/dev/null || echo "")
-if [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] \
+if [ "$_disk_low" -eq 1 ]; then
+    :
+elif [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] \
    && bs_selfheal_engaged "$_BOOT_DIR/updater_state.json" "$BSENV/bin/python3.11"; then
     # One rollback authority at a time: reverting here would undo the daemon's rung (it resets HEAD on purpose).
     echo "BlocksScreen: crash loop ($_attempts boots) - updater self-heal owns recovery, not rolling back"
@@ -160,7 +172,7 @@ fi
 
 # If any source file fails to compile the working tree is corrupt (partial file write).
 # Hard-reset to HEAD to restore all tracked files to the last known-good commit.
-if ! "$BSENV/bin/python3.11" -m compileall -q \
+if [ "$_disk_low" -eq 0 ] && ! "$BSENV/bin/python3.11" -m compileall -q \
       "$BS_PATH/BlocksScreen" "$BS_PATH/updater" 2>/dev/null; then
     echo "BlocksScreen: source check failed - running git reset --hard HEAD to recover"
     git -C "$BS_PATH" reset --hard HEAD 2>/dev/null || true
