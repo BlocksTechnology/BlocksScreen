@@ -132,6 +132,21 @@ def test_unreadable_head_resets_to_last_good(repo, tmp_path, env):
     assert _flag(tmp_path / "home").exists()
 
 
+def test_emptied_branch_ref_resets_to_local_remote_ref_offline(repo, tmp_path, env):
+    head = _git(repo, "rev-parse", "HEAD").strip()
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").strip()
+    _git(repo, "update-ref", f"refs/remotes/origin/{branch}", head)
+    (repo / ".git/refs/heads" / branch).write_bytes(b"")  # cut mid ref update
+    (repo / "scripts/start.sh").write_text("")
+    res = _run(repo, tmp_path / "home", env)  # no last_good, no reachable remote
+    assert res.returncode == 0, res.stderr
+    assert f"reset to local origin/{branch}" in res.stdout
+    assert "No such file" not in res.stderr
+    assert _git(repo, "rev-parse", "HEAD").strip() == head
+    assert (repo / "scripts/start.sh").read_text() == _FILES["scripts/start.sh"]
+    assert _flag(tmp_path / "home").exists()
+
+
 def test_unit_ordered_before_moonraker():
     unit = _SCRIPT.with_name("BlocksScreen-tree-guard.service").read_text()
     assert "Before=moonraker.service" in unit

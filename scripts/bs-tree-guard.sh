@@ -43,10 +43,14 @@ full=1
 if ! _git cat-file -e 'HEAD^{tree}' 2>/dev/null; then
     echo "$_tag HEAD unreadable, pruning empty objects"
     find "$BS_PATH/.git/objects" -type f -empty -delete 2>/dev/null
-    _good=$(tr -d '[:space:]' <"$HOME_DIR/.cache/blockscreen/last_good_commit" 2>/dev/null)
+    _good=$(tr -d '[:space:]' 2>/dev/null <"$HOME_DIR/.cache/blockscreen/last_good_commit")
     _branch=$(_git symbolic-ref --short HEAD 2>/dev/null)
+    _remote="refs/remotes/origin/$_branch"
     if [[ -n "$_good" ]] && _git cat-file -e "$_good^{tree}" 2>/dev/null; then
         _git reset -q --hard "$_good" && healed=1 && echo "$_tag reset to last good ${_good:0:8}"
+    # Moonraker's soft recovery resets to the local remote ref without fetching; the network is rarely up yet.
+    elif [[ -n "$_branch" ]] && _git cat-file -e "$_remote^{tree}" 2>/dev/null; then
+        _git reset -q --hard "$_remote" && healed=1 && echo "$_tag reset to local origin/$_branch"
     elif [[ -n "$_branch" ]] && _as_owner timeout 60 git -C "$BS_PATH" fetch -q origin "$_branch" 2>/dev/null; then
         _git reset -q --hard "origin/$_branch" && healed=1 && echo "$_tag reset to origin/$_branch"
     else
