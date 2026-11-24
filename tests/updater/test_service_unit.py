@@ -1553,6 +1553,33 @@ class TestAtomicBatch:
         assert all(c.args[1] is True for c in cb.on_component_done.call_args_list)
 
     @pytest.mark.asyncio
+    async def test_committed_flag_spans_finalize_only(self, tmp_path):
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=1)
+        seen: list[bool] = []
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch(
+                "updater.service.UpdateService._apply_deferred_restart",
+                new=AsyncMock(side_effect=lambda: seen.append(svc.update_committed)),
+            ),
+        ):
+            assert await svc._run_git_batch(comps) is True
+        assert seen == [True]
+        assert svc.update_committed is False
+        assert [c.args for c in cb.on_committed.call_args_list] == [(True,), (False,)]
+
+    @pytest.mark.asyncio
     async def test_stage_failure_drops_only_failed_component(self, tmp_path):
         # c1 fails staging: it is reverted and dropped; c0 continues and commits.
         cb = MagicMock()

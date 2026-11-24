@@ -55,6 +55,7 @@ class UpdaterWorker(QtCore.QObject):
     recover_done = QtCore.pyqtSignal(str, bool)
     busy_changed = QtCore.pyqtSignal(bool)
     provisioning_changed = QtCore.pyqtSignal(bool)
+    committed_changed = QtCore.pyqtSignal(bool)
     daemon_unavailable = QtCore.pyqtSignal()
     daemon_restarting = QtCore.pyqtSignal()
     update_rejected = QtCore.pyqtSignal()
@@ -81,6 +82,8 @@ class UpdaterWorker(QtCore.QObject):
         self._last_busy: bool = False
         self._last_provisioning: bool = False
         self._provisioning_signals: int = 0
+        self._last_committed: bool = False
+        self._committed_signals: int = 0
         self._owner_task: asyncio.Task | None = None
         self._escalated: bool = False
         self._init_lock = asyncio.Lock()
@@ -188,6 +191,7 @@ class UpdaterWorker(QtCore.QObject):
             self._listen_recover_done,
             self._listen_busy_changed,
             self._listen_provisioning_changed,
+            self._listen_committed_changed,
         ]
         for fn in listeners:
             task = asyncio.create_task(fn(), name=fn.__name__)
@@ -219,7 +223,9 @@ class UpdaterWorker(QtCore.QObject):
         _log.info("connected to owner %s, busy=%s", self._daemon_owner, busy)
         self._last_busy = busy
         await self._poll_provisioning(busy)
+        await self._poll_committed(busy)
         self.provisioning_changed.emit(self._last_provisioning)
+        self.committed_changed.emit(self._last_committed)
         self.busy_changed.emit(self._last_busy)
         if not busy:
             self.request_reconnect.emit()
@@ -243,10 +249,27 @@ class UpdaterWorker(QtCore.QObject):
         except (sdbus.SdBusBaseError, TimeoutError):
             return False
 
+    async def _poll_committed(self, busy: bool) -> None:
+        """Seed _last_committed unless a live signal landed during the poll."""
+        seen = self._committed_signals
+        polled = busy and await self._get_committed()
+        if self._committed_signals == seen:
+            self._last_committed = polled
+
+    async def _get_committed(self) -> bool:
+        """Daemons predating get_committed answer with an error: treat as not committed."""
+        try:
+            async with asyncio.timeout(5):
+                return await self._proxy.get_committed()
+        except (sdbus.SdBusBaseError, TimeoutError):
+            return False
+
     def replay_busy(self) -> None:
         """Re-emit busy state once slots are wired; the connect-time emit can fire before they are."""
         if self._last_provisioning:
             self.provisioning_changed.emit(True)
+        if self._last_committed:
+            self.committed_changed.emit(True)
         if self._last_busy:
             self.busy_changed.emit(True)
 
@@ -618,6 +641,14 @@ class UpdaterWorker(QtCore.QObject):
             self._last_provisioning = provisioning
             self._provisioning_signals += 1
             self.provisioning_changed.emit(provisioning)
+
+    async def _listen_committed_changed(self) -> None:
+        """Forward committed_changed signals; an old daemon never emits them."""
+        async for committed in self._proxy.committed_changed:
+            self._touch_activity()
+            self._last_committed = committed
+            self._committed_signals += 1
+            self.committed_changed.emit(committed)
 
     async def _probe_busy(self) -> bool | None:
         """Ask the daemon whether it is busy; None when it does not answer."""

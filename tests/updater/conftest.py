@@ -97,6 +97,7 @@ def svc():
     mock_svc.run_followup = AsyncMock(return_value=(False, False))
     mock_svc.background_apt_upgrade = AsyncMock()
     mock_svc.daemon_restart_pending = False
+    mock_svc.update_committed = False
     mock_svc.reconcile = AsyncMock(return_value=True)
     mock_svc.reconcile_if_pending = AsyncMock()
     mock_svc.sync_moonraker = AsyncMock(return_value=True)

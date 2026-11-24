@@ -75,6 +75,10 @@ class DbusProgressCallback:
         """Emit the recover_done signal."""
         self._iface.recover_done.emit((name, success))
 
+    def on_committed(self, committed: bool) -> None:
+        """Emit the committed_changed signal."""
+        self._iface.committed_changed.emit((committed,))
+
 
 class UpdaterInterface(
     sdbus.DbusInterfaceCommonAsync,
@@ -120,6 +124,11 @@ class UpdaterInterface(
     @sdbus.dbus_signal_async("b")
     def provisioning_changed(self) -> tuple[bool]:
         """Emitted on True↔False transition while a missing component is being installed."""
+        raise NotImplementedError
+
+    @sdbus.dbus_signal_async("b")
+    def committed_changed(self) -> tuple[bool]:
+        """Emitted when an update commits (True) and when it ends (False): cancel is then ignored."""
         raise NotImplementedError
 
     def __init__(self) -> None:
@@ -569,11 +578,19 @@ class UpdaterInterface(
         """D-Bus method: True while a missing component is being installed."""
         return self._provisioning
 
+    @sdbus.dbus_method_async(result_signature="b")
+    async def get_committed(self) -> bool:
+        """D-Bus method: True once the running update is committed and can no longer be cancelled."""
+        return self._svc.update_committed
+
     @sdbus.dbus_method_async()
     async def cancel(self) -> None:
         """D-Bus method: cancel the task, then wait (not re-cancel) for its rollback."""
         if self._provisioning:
             _log.info("cancel() ignored: component install in progress")
+            return
+        if self._svc.update_committed:
+            _log.info("cancel() ignored: update committed, finishing restarts")
             return
         cancelled_tasks: list[asyncio.Task] = []
         for task in list(self._background_tasks):
