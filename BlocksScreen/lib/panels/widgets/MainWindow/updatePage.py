@@ -418,6 +418,7 @@ class UpdatePage(QtWidgets.QWidget):
             self._cancel_btn.setVisible(not (self._provisioning or self._committed))
         else:
             self._provisioning = False
+            # Also clears a commit whose False signal a daemon restart never sent.
             self._committed = False
             self._elapsed_timer.stop()
             self._busy_timeout_timer.stop()
