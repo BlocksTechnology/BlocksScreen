@@ -5,14 +5,19 @@ from __future__ import annotations
 import updater.locking as locking
 from updater.locking import lock_path, process_lock, restart_sentinel_path
 
+# Captured at collection, before conftest's hermetic_home replaces it per test.
+_REAL_RUNTIME_DIR = locking._runtime_dir
+
 
 def test_lock_path_is_under_home_or_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(locking, "_runtime_dir", _REAL_RUNTIME_DIR)
     monkeypatch.setenv("HOME", str(tmp_path))
     p = lock_path()
     assert p.name == "updater.lock"
 
 
 def test_restart_sentinel_path_name(monkeypatch, tmp_path):
+    monkeypatch.setattr(locking, "_runtime_dir", _REAL_RUNTIME_DIR)
     monkeypatch.setenv("HOME", str(tmp_path))
     p = restart_sentinel_path()
     assert p.name == "updater-restart-needed"
@@ -42,3 +47,11 @@ def test_process_lock_yields_false_when_open_fails(monkeypatch, tmp_path):
     monkeypatch.setattr("builtins.open", _boom)
     with process_lock() as acquired:
         assert acquired is False
+
+
+def test_suite_never_touches_real_home(tmp_path):
+    """hermetic_home keeps the lock, state and history off the developer's ~/.cache."""
+    import updater.service as service
+
+    for path in (lock_path(), service._STATE_PATH, service._HISTORY_PATH):
+        assert path.is_relative_to(tmp_path)

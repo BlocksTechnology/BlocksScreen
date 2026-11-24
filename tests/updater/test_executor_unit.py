@@ -1377,7 +1377,8 @@ class TestGitShowFile:
 
 class TestCheckAptStatus:
     @pytest.mark.asyncio
-    async def test_success(self):
+    async def test_success(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))  # writes the apt cache under ~/.cache
         proc = _make_proc(0, b"", b"")
         with patch(
             "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
