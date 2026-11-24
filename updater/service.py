@@ -201,6 +201,7 @@ _FIRE_AND_FORGET_SERVICES = frozenset({_UI_SERVICE})
 _KLIPPER_SERVICE = "klipper.service"
 
 _UI_COMPONENT = "BlocksScreen"
+_HH_COMPONENT = "Happy-Hare"
 # A requested daemon restart that has not happened by now is assumed lost.
 _RESTART_PENDING_TTL_S = 600.0
 # Absent at the target ref = abort: a Type=notify host without it crash-loops.
@@ -1923,6 +1924,22 @@ class UpdateService:
         except Exception:  # noqa: BLE001
             self._log.warning("%s: post-reclone hook raised", c.name, exc_info=True)
 
+    async def _heal_mmu_server_link(self, pending: set[str]) -> None:
+        """Rerun the Happy-Hare hook when Moonraker's mmu_server link is missing or stale."""
+        hh = next((c for c in self._components if c.name == _HH_COMPONENT), None)
+        if hh is None or hh.path is None:
+            return
+        src = hh.path / "components" / "mmu_server.py"
+        components = hh.path.parent / "moonraker" / "moonraker" / "components"
+        if not src.is_file() or not components.is_dir():
+            return
+        dst = components / "mmu_server.py"
+        if dst.is_symlink() and dst.readlink() == src:
+            return
+        # The hook only runs on an HH change, so a run made without it never relinks.
+        self._log.warning("reconcile: %s not linked to %s, rerunning hook", dst, src)
+        await self._boot_reclone_hook(hh, pending)
+
     async def _reconcile_locked(self) -> None:
         """Boot heal under the lock: revert, repair, reclone hooks, sanitize, then restart."""
         reverted = await self._revert_inflight()
@@ -1935,6 +1952,7 @@ class UpdateService:
                 recloned.append(c)
         for c in recloned:
             await self._boot_reclone_hook(c, reverted)
+        await self._heal_mmu_server_link(reverted)
         await self._reconcile_self_heal_state()
         # Last, so one restart covers the revert and any reclone hook that defers to it.
         await self._restart_reverted(reverted)
