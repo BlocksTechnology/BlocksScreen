@@ -16,6 +16,8 @@ _LOG = logging.getLogger("bs-venv-heal")
 _PIN = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s;#]+)")
 _CFG_HOME = re.compile(r"^home\s*=\s*\S", re.M)
 _CFG_ISOLATED = re.compile(r"^include-system-site-packages\s*=\s*false\s*$", re.M)
+# pip's AdjacentTempDirectory rollback names for `pip/` and `pip-X.dist-info` (`~ip`, `~-p-X.dist-info`).
+_PIP_STASH = re.compile(r"^~[-~.=%0-9]*(?:pip|ip|p)(?:-[^-]+\.dist-info)?$")
 
 
 def _site_packages() -> Path:
@@ -119,13 +121,23 @@ def _repair_pip(site: Path) -> bool:
     """Reinstall pip offline from the interpreter's bundled wheel, as `python -m venv` does."""
     for dist_info in site.glob("pip-*.dist-info"):
         _uninstall(dist_info)
-    subprocess.run(  # nosec B603
+    # A cut can empty RECORD too; a newer pip's unlisted package dir then shadows the older wheel's module.
+    shutil.rmtree(site / "pip", ignore_errors=True)
+    # With a stale stash present, the next `pip install pip` of itself keeps the old dist-info and files.
+    for stash in site.glob("~*"):
+        if stash.is_dir() and _PIP_STASH.match(stash.name):
+            shutil.rmtree(stash, ignore_errors=True)
+    res = subprocess.run(  # nosec B603
         [sys.executable, "-m", "ensurepip", "--upgrade", "--default-pip"],
         capture_output=True,
+        text=True,
         timeout=600,
         check=False,
     )
-    return _pip_works()
+    if _pip_works():
+        return True
+    _LOG.error("ensurepip rc=%s: %s", res.returncode, (res.stderr or "").strip()[-400:])
+    return False
 
 
 def _venv_cfg_ok() -> bool:

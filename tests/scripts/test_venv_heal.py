@@ -162,6 +162,32 @@ def test_broken_pip_is_repaired_before_reinstall(
     assert heal.heal() == 1
 
 
+def test_pip_repair_drops_files_an_emptied_record_no_longer_lists(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = heal._site_packages()
+    dist_info = _dist(site, "pip", "26.2.1", {"pip/__init__.py": b"v = 26\n"})
+    (dist_info / "RECORD").write_bytes(b"")
+    # pip 26 made build_env a package; left behind, it shadows the bundled 23.0.1 build_env.py.
+    (site / "pip/_internal/build_env").mkdir(parents=True)
+    (site / "pip/_internal/build_env/__init__.py").write_bytes(b"")
+    stashes = [
+        site / n for n in ("~ip", "~ip-23.0.1.dist-info", "~-p-23.0.1.dist-info")
+    ]
+    for stash in stashes:
+        stash.mkdir()
+    other = site / "~oo-0.9.dist-info"
+    other.mkdir()
+    calls = _fake_pip(monkeypatch, heal, rc=0)
+    assert heal._repair_pip(site)
+    assert calls[-1][1:3] == ["-m", "ensurepip"]
+    assert not (site / "pip").exists()
+    assert not dist_info.exists()
+    # A stale pip stash makes pip's later self-upgrade keep the old dist-info beside the new one.
+    assert not any(stash.exists() for stash in stashes)
+    assert other.exists()
+
+
 @pytest.mark.parametrize(
     "damaged",
     [b"", b"\0" * 120, b"home = /usr/bin\n"],
