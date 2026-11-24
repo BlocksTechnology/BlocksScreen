@@ -147,6 +147,16 @@ def test_emptied_branch_ref_resets_to_local_remote_ref_offline(repo, tmp_path, e
     assert _flag(tmp_path / "home").exists()
 
 
+def test_emptied_orig_head_is_removed_so_the_next_pull_works(repo, tmp_path, env):
+    (repo / ".git/ORIG_HEAD").write_bytes(b"")  # cut right after a pull
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert not (repo / ".git/ORIG_HEAD").exists()
+    # Every pull and reset writes ORIG_HEAD first; an empty one fails this as "broken".
+    _git(repo, "update-ref", "ORIG_HEAD", "HEAD")
+    assert not _flag(tmp_path / "home").exists()
+
+
 def test_unit_ordered_before_moonraker():
     unit = _SCRIPT.with_name("BlocksScreen-tree-guard.service").read_text()
     assert "Before=moonraker.service" in unit

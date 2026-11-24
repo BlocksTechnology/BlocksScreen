@@ -19,6 +19,8 @@ _git() { _as_owner git -C "$BS_PATH" "$@"; }
 # Nothing else has started yet, so any lock is stale; an empty ref aborts every fetch.
 rm -f "$BS_PATH/.git/index.lock"
 find "$BS_PATH/.git/refs" -type f -empty -delete 2>/dev/null
+# Same for pseudo-refs: an empty ORIG_HEAD fails every later pull as "reference broken".
+find "$BS_PATH/.git" -maxdepth 1 -type f -name '*_HEAD' -empty -delete 2>/dev/null
 
 # Regular files that are empty on disk but not in HEAD, one per line.
 _broken_paths() {
