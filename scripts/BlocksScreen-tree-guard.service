@@ -3,6 +3,7 @@ Description=BlocksScreen worktree integrity check
 After=local-fs.target
 Before=BlocksScreen-xorg.service BlocksScreen.service BlocksScreen-updater.service
 Before=BlocksScreen-deploy.service BlocksScreen-bootstrap.service BlocksScreen-clock.service
+Before=moonraker.service
 
 [Service]
 Type=oneshot

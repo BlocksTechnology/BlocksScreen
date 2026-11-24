@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ctypes
 import functools
 import http.client
 import json
@@ -149,13 +150,31 @@ async def _run(
         raise
 
 
+def _sync_fs(path: Path) -> None:
+    """Flush only the filesystem holding path; os.sync would also stall on print uploads."""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            if ctypes.CDLL(None, use_errno=True).syncfs(fd) == 0:
+                return
+        finally:
+            os.close(fd)
+    except (OSError, AttributeError):
+        pass
+    os.sync()
+
+
 async def _run_durable(
-    cmd: Sequence[str | Path], *, timeout: float, cwd: Path | None = None
+    cmd: Sequence[str | Path],
+    *,
+    timeout: float,
+    cwd: Path | None = None,
+    sync_path: Path | None = None,
 ) -> tuple[bool, str]:
     """_run, then flush to disk on success: git writes the worktree without fsync."""
     ok, out = await _run(cmd, cwd=cwd, timeout=timeout)
     if ok:
-        await asyncio.to_thread(os.sync)
+        await asyncio.to_thread(_sync_fs, sync_path or cwd or Path("/"))
     return ok, out
 
 
@@ -479,7 +498,7 @@ async def git_clone(
     if branch:
         cmd += ["--branch", branch]
     cmd += [url, str(path)]
-    return await _run_durable(cmd, timeout=300.0)
+    return await _run_durable(cmd, timeout=300.0, sync_path=path)
 
 
 async def git_remote_reachable(url: str, timeout: float = 15.0) -> bool:

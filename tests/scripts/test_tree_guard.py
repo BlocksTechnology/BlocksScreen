@@ -121,3 +121,8 @@ def test_unreadable_head_resets_to_last_good(repo, tmp_path, env):
     assert _git(repo, "rev-parse", "HEAD").strip() == good
     assert (repo / "scripts/start.sh").read_text() == _FILES["scripts/start.sh"]
     assert _flag(tmp_path / "home").exists()
+
+
+def test_unit_ordered_before_moonraker():
+    unit = _SCRIPT.with_name("BlocksScreen-tree-guard.service").read_text()
+    assert "Before=moonraker.service" in unit
