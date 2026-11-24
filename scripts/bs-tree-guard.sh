@@ -39,6 +39,7 @@ _restore() {
 }
 
 healed=0
+full=1
 if ! _git cat-file -e 'HEAD^{tree}' 2>/dev/null; then
     echo "$_tag HEAD unreadable, pruning empty objects"
     find "$BS_PATH/.git/objects" -type f -empty -delete 2>/dev/null
@@ -53,6 +54,8 @@ if ! _git cat-file -e 'HEAD^{tree}' 2>/dev/null; then
     fi
 else
     _broken=$(_broken_paths)
+    # Units, the installer and its sources live in scripts/; other files need no redeploy.
+    grep -q '^scripts/' <<<"$_broken" || full=0
     if [[ -n "$_broken" ]]; then
         echo "$_tag $(wc -l <<<"$_broken") empty tracked files, restoring from HEAD"
         if _restore "$_broken"; then
@@ -65,6 +68,10 @@ fi
 [[ "$healed" == 1 ]] || exit 0
 
 sync -f "$BS_PATH"
+if [[ "$full" == 0 ]]; then
+    echo "$_tag healed"
+    exit 0
+fi
 # Units symlinked into the tree were loaded empty at boot and skipped.
 systemctl daemon-reload
 for _unit in BlocksScreen.service BlocksScreen-clock.timer; do

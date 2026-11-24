@@ -94,6 +94,15 @@ def test_restores_emptied_files_and_rearms_deploy(repo, tmp_path, env):
     assert "daemon-reload" in (tmp_path / "systemctl.log").read_text()
 
 
+def test_heal_outside_scripts_skips_redeploy(repo, tmp_path, env):
+    (repo / "a[1].txt").write_text("")
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert (repo / "a[1].txt").read_text() == _FILES["a[1].txt"]
+    assert not _flag(tmp_path / "home").exists()
+    assert not (tmp_path / "systemctl.log").exists()
+
+
 def test_rebuilds_a_truncated_index(repo, tmp_path, env):
     (repo / "scripts/start.sh").write_text("")
     (repo / ".git/index").write_bytes(b"")
