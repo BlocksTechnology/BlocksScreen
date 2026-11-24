@@ -913,8 +913,10 @@ class TestGitFetch:
         self, tmp_path, monkeypatch
     ):
         """A server that accepts and never answers, like a WAN drop after connect."""
+        # Held so a collected StreamWriter cannot close the socket (Python 3.12+).
+        writers: list[asyncio.StreamWriter] = []
         server = await asyncio.start_server(
-            lambda _r, _w: None, "127.0.0.1", 0, reuse_address=True
+            lambda _r, w: writers.append(w), "127.0.0.1", 0, reuse_address=True
         )
         port = server.sockets[0].getsockname()[1]
         repo = tmp_path / "repo"
@@ -929,6 +931,8 @@ class TestGitFetch:
         start = time.monotonic()
         async with server:
             ok, out = await git_fetch(repo, prune_remotes=False)
+            for w in writers:
+                w.close()
         assert not ok
         assert time.monotonic() - start < 15
         assert "too slow" in out.lower() and git_is_network_error(out), out
