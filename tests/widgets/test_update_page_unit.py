@@ -711,6 +711,13 @@ def deploy_flag(tmp_path):
 
 
 class TestDeployHold:
+    def test_print_states_match_the_daemon(self):
+        from updater.executor import PRINT_ACTIVE_STATES
+
+        from BlocksScreen.lib.panels.widgets.MainWindow.updatePage import UpdatePage
+
+        assert UpdatePage._PRINT_ACTIVE == PRINT_ACTIVE_STATES
+
     def test_old_daemon_idle_during_deploy_keeps_screen_locked(
         self, page, deploy_flag, qtbot
     ):
