@@ -1,12 +1,13 @@
 """Unit tests for BlocksScreen.devices.amu.manager."""
 
+import json
 import shlex
 from unittest.mock import MagicMock, patch
 
 import pytest
 from PyQt6 import QtCore
 
-from BlocksScreen.devices.amu.manager import AMUManager
+from BlocksScreen.devices.amu.manager import _MMU_SERVER_MISSING_MSG, AMUManager
 from BlocksScreen.devices.amu.models import MMUState
 from tests.amu.conftest import (
     COMMENTED_CFG as _COMMENTED_CFG,
@@ -49,6 +50,10 @@ _FULL_STATUS_WITH_SPOOLMAN: dict = {
     "has_bypass": False,
     "spoolman_support": "push",
 }
+
+
+_HH_PENDING: str = json.dumps({"Happy-Hare": {"needs_install": True}})
+_HH_CLONED: str = json.dumps({"Happy-Hare": {"needs_install": False}})
 
 
 def _status(**overrides: object) -> dict:
@@ -917,6 +922,14 @@ class TestMMUServerMissing:
                 manager.on_server_components(value)
             elif kind == "mmu":
                 manager.update_mmu_state(value)
+            elif kind == "busy":
+                manager.on_updater_busy(value)
+            elif kind == "provisioning":
+                manager.on_updater_provisioning(value)
+            elif kind == "status":
+                manager.on_updater_status(value)
+            elif kind == "unavailable":
+                manager.on_updater_unavailable()
             else:
                 manager.on_klippy_state(value)
         qtbot.wait(50)
@@ -963,3 +976,58 @@ class TestMMUServerMissing:
         manager.on_server_components([])
         qtbot.wait(50)
         assert len(warnings) == 2
+
+    @pytest.mark.parametrize(
+        ("hold", "release"),
+        [
+            (("busy", True), ("busy", False)),
+            (("provisioning", True), ("provisioning", False)),
+            (("status", _HH_PENDING), ("status", _HH_CLONED)),
+            (("busy", True), ("unavailable", None)),
+        ],
+        ids=["busy", "provisioning", "hh-not-installed", "daemon-lost"],
+    )
+    def test_updater_holds_warning_until_done(
+        self, manager, qtbot, hold, release
+    ) -> None:
+        steps = [hold, ("components", ["spoolman"]), ("mmu", _status())]
+        assert self._run(manager, qtbot, *steps) == []
+        assert not manager._mmu_server_timer.isActive()
+        warnings = self._run(manager, qtbot, release)
+        assert warnings == [_MMU_SERVER_MISSING_MSG]
+
+    # T4c: the grace started at UI launch must not run out mid-update.
+    def test_hold_rearms_full_grace(self, manager, qtbot) -> None:
+        manager.on_server_components(["spoolman"])
+        manager.update_mmu_state(_status())
+        assert manager._mmu_server_timer.isActive()
+        manager.on_updater_busy(True)
+        assert not manager._mmu_server_timer.isActive()
+        manager.on_updater_busy(False)
+        assert manager._mmu_server_timer.remainingTime() > 290_000
+
+    @pytest.mark.parametrize("payload", ["not json", "[]", '{"Happy-Hare": 1}'])
+    def test_malformed_updater_status_keeps_hold(self, manager, payload) -> None:
+        manager.on_updater_status(_HH_PENDING)
+        manager.on_updater_status(payload)
+        assert manager._updater_owns_hh()
+
+    def test_warning_retracted_when_mmu_server_loads(self, manager, qtbot) -> None:
+        retracted: list[str] = []
+        manager.retract_notification.connect(retracted.append)
+        steps = [("components", ["spoolman"]), ("mmu", _status())]
+        assert len(self._run(manager, qtbot, *steps)) == 1
+        manager.on_server_components(["spoolman", "mmu_server"])
+        manager.on_server_components(["spoolman", "mmu_server"])
+        assert retracted == [_MMU_SERVER_MISSING_MSG]
+
+    def test_no_retract_without_warning(self, manager, qtbot) -> None:
+        retracted: list[str] = []
+        manager.retract_notification.connect(retracted.append)
+        steps = [
+            ("components", ["spoolman"]),
+            ("mmu", _status()),
+            ("components", ["spoolman", "mmu_server"]),
+        ]
+        self._run(manager, qtbot, *steps)
+        assert retracted == []
