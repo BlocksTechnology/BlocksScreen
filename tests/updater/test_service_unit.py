@@ -132,6 +132,21 @@ class TestHistoryLog:
         svc._history_path = blocker / "sub" / "history.jsonl"
         svc._history("update_start", "klipper")  # must not raise
 
+    @pytest.mark.parametrize(
+        "tail",
+        [b"\0" * 4096, b'{"event": "upd', b'{"event": "upd' + b"\0" * 512],
+        ids=["nul-run", "partial-line", "partial-then-nul"],
+    )
+    def test_history_heals_cut_tail(self, tmp_path: Path, tail: bytes):
+        """BUG-7: a power-cut tail is dropped so the next append is a clean line."""
+        hist = tmp_path / "history.jsonl"
+        hist.write_bytes(b'{"event": "update_start"}\n' + tail)
+        svc = UpdateService()
+        svc._history_path = hist
+        svc._history("update_success", "klipper")
+        events = [json.loads(line)["event"] for line in hist.read_text().splitlines()]
+        assert events == ["update_start", "update_success"]
+
     def test_history_is_bounded(self, tmp_path: Path):
         """Oversized history is trimmed to the last KEEP lines (SD-fill guard)."""
         from updater.service import _HISTORY_KEEP_LINES, _HISTORY_MAX_BYTES
