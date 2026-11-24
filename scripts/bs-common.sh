@@ -393,7 +393,7 @@ bs_updater_code_stale() {
 
 # Wait out a Moonraker update (capped, rc 1) or a print (uncapped); unreachable = idle. $1 conf, $2 cap s.
 bs_wait_moonraker_idle() {
-    local url status waited=0
+    local url status waited=0 said=""
     url="http://127.0.0.1:$(sed -n '/^\[server\]/,/^\[/ s/^port:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$1" 2>/dev/null | head -n1)"
     [ "$url" = "http://127.0.0.1:" ] && url="${url}7125"
     while :; do
@@ -401,6 +401,8 @@ bs_wait_moonraker_idle() {
         # Captured, not piped to grep -q: under pipefail curl's SIGPIPE reads as idle.
         status=$(curl -fsm 5 "$url/printer/objects/query?print_stats=state" 2>/dev/null) || status=""
         case "$status" in *'"state": "printing"'* | *'"state":"printing"'* | *'"state": "paused"'* | *'"state":"paused"'*)
+            [ -n "$said" ] || echo "[bs-common] print in progress - deferred until it ends"
+            said=1
             sleep 30
             continue
             ;;

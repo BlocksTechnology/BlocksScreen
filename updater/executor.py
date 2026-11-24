@@ -38,6 +38,8 @@ DPKG = "/usr/bin/dpkg"
 # Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
 APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
 KLIPPY_SOCK = Path("~/printer_data/comms/klippy.sock").expanduser()
+# print_stats states that count as a running print; updatePage._PRINT_ACTIVE must match.
+PRINT_ACTIVE_STATES = frozenset({"printing", "paused"})
 MOONRAKER_HOST, MOONRAKER_PORT = "127.0.0.1", 7125
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
@@ -1359,7 +1361,7 @@ async def klipper_printing(
     ) as exc:
         logger.debug("klipper print state unavailable: %r", exc)
         return False
-    return state in ("printing", "paused")
+    return state in PRINT_ACTIVE_STATES
 
 
 async def wait_for_http_ready(

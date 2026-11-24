@@ -383,6 +383,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self._device_config_popup: BasePopup | None = None
         # printer.cfg changed for a device; Klipper must restart to load it.
         self._device_restart_pending = False
+        # Restart waits until the print-finished screen closes.
+        self._finish_screen_hold = False
+        # hideEvent also fires when an ancestor hides; nothing hides MainWindow at runtime.
+        self.cancelpage.hidden.connect(self._release_finish_screen_hold)
+        # Reprint sends SDCARD_RESET_FILE first; its standby must not restart Klipper under the new job.
+        self._reprint_hold = QtCore.QTimer(self)
+        self._reprint_hold.setSingleShot(True)
+        # Upper bound for the reprint to reach "printing"; a refused start must not hold forever.
+        self._reprint_hold.setInterval(30_000)
+        self._reprint_hold.timeout.connect(self._try_device_config_restart)
+        self.cancelpage.reprint_start.connect(self._on_reprint_requested)
+        # Shut down since the change: the operator's Firmware Restart re-reads printer.cfg.
+        self._config_reload_on_ready = False
         self.chamber_temp_display.hide()
 
         if self.config.has_section("server"):
@@ -430,12 +443,15 @@ class MainWindow(QtWidgets.QMainWindow):
         if not show:
             self.cancelpage.hide()
             return
+        # Set before the deferred show: _track_print_state runs next.
+        self._finish_screen_hold = True
         # Defer so a concurrent E-stop (klippy shutdown) is seen before we decide.
         QtCore.QTimer.singleShot(0, self._show_cancel_page_if_operational)
 
     def _show_cancel_page_if_operational(self) -> None:
         # E-stop/shutdown aborts the print with an error too; the connection page handles that, not the cancel page.
         if not self._klippy_ready:
+            self._release_finish_screen_hold()
             return
         self.cancelpage.setGeometry(0, 0, self.width(), self.height())
         self.cancelpage.raise_()
@@ -520,6 +536,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self._klipper_disconnect_grace.start()
         else:
             self._klipper_disconnect_grace.stop()
+        if state == "shutdown":
+            self._config_reload_on_ready = self._device_restart_pending
+        elif state in ("ready", "error") and self._config_reload_on_ready:
+            self._config_reload_on_ready = False
+            # Every route back to ready (FIRMWARE_RESTART, RESTART, service restart) re-reads printer.cfg.
+            if state == "ready" and self._device_restart_pending:
+                _logger.info("Firmware Restart loaded the new device config")
+                self._device_restart_pending = False
         if state == "shutdown":
             # Reconnects re-report an old shutdown; only ready -> shutdown is an E-stop.
             if self._update_in_progress and was_ready:
@@ -791,10 +815,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self._device_config_popup.accepted.connect(self._on_device_config_accept)
             self._device_config_popup.rejected.connect(self._on_device_config_decline)
         devices = ", ".join(n.upper() for n in self._device_confirm_names)
+        restart = (
+            "and restart Klipper when the\nprint-finished screen is closed?"
+            if self._finish_screen_hold
+            else "and restart Klipper?"
+        )
         self._device_config_popup.set_message(
             f"New device detected: {devices}\n"
-            "Update the printer configuration for it\n"
-            "and restart Klipper?"
+            f"Update the printer configuration for it\n{restart}"
         )
         self._device_config_popup.confirm_button_text("Configure")
         self._device_config_popup.cancel_button_text("Not now")
@@ -823,6 +851,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def request_klipper_restart(self) -> None:
         """Restart Klipper as soon as it is safe (never during a job)."""
         self._device_restart_pending = True
+        self._config_reload_on_ready = self._klippy_state == "shutdown"
         self._try_device_config_restart()
 
     def _device_restart_blocked(self) -> str:
@@ -833,6 +862,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return "print state not known yet"
         if self._is_job_active() or self.print_status == "printing":
             return "a job is running"
+        if self._config_reload_on_ready:
+            # A service restart cannot clear an MCU shutdown, and E-stops never auto-recover.
+            return "Klipper is shut down, waiting for the operator's Firmware Restart"
+        if self._finish_screen_hold:
+            return "the print-finished screen is open"
+        if self._reprint_hold.isActive():
+            return "a reprint is starting"
         if self._update_in_progress:
             return "an update is running"
         if self._klipper_auto_restart_pending:
@@ -858,6 +894,17 @@ class MainWindow(QtWidgets.QMainWindow):
         _logger.info("Restarting Klipper to load the new device config")
         self._device_restart_pending = False
         self._begin_klipper_restart()
+
+    def _release_finish_screen_hold(self) -> None:
+        """The finished screen closed or never opened: let a held Klipper restart run."""
+        if self._finish_screen_hold:
+            self._finish_screen_hold = False
+            self._try_device_config_restart()
+
+    @QtCore.pyqtSlot(str, name="on-reprint-requested")
+    def _on_reprint_requested(self, _filename: str) -> None:
+        """Hold a pending Klipper restart until the reprint reports printing."""
+        self._reprint_hold.start()
 
     @QtCore.pyqtSlot(bool, name="toggle-popups")
     def popup_toggle(self, toggle: bool) -> None:
@@ -888,6 +935,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if field == "state":
             self._print_state = value
             self._print_state_known = True
+            if value == "printing":
+                self._reprint_hold.stop()
             if not self._is_job_active():
                 self._try_device_config_restart()
                 self._prompt_device_confirmation()
