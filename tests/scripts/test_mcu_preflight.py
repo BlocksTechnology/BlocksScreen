@@ -286,7 +286,7 @@ def test_dfu_without_readback_leaves_but_reports_unverified(tmp_path: Path) -> N
 
 def test_dfu_still_listed_after_leave_is_a_failure(tmp_path: Path) -> None:
     rc, calls = _run_flash_dfu(tmp_path, STUCK="1")
-    assert rc == 1
+    assert rc == 4
     assert sum(c.endswith("--list") for c in calls) == 2
 
 
@@ -304,7 +304,7 @@ def test_dfu_unlistable_without_readback_is_unverified(tmp_path: Path) -> None:
 
 def test_dfu_list_error_after_a_failed_write_still_retries(tmp_path: Path) -> None:
     rc, calls = _run_flash_dfu(tmp_path, LIST="fail", WRITE="fail")
-    assert rc == 1
+    assert rc == 4
     assert sum(" -D " in c for c in calls) == 2
 
 
@@ -319,28 +319,43 @@ def test_dfu_board_gone_from_usb_is_a_failure(tmp_path: Path, env: dict) -> None
 @pytest.mark.parametrize("env", [{"READBACK": "bad"}, {"WRITE": "fail"}])
 def test_dfu_never_leaves_after_a_bad_write(tmp_path: Path, env: dict) -> None:
     rc, calls = _run_flash_dfu(tmp_path, **env)
-    assert rc == 1
+    assert rc == 4
     assert sum(" -D " in c for c in calls) == 2  # one rewrite while still in DFU
     assert not any(":leave" in c for c in calls)
 
 
-# cmd_flash with every hardware step stubbed; sudo calls and flashes go to $LOG.
+# cmd_flash with every hardware step stubbed; sudo calls, flashes and results go to $LOG.
+# RUNNING="th=v1 mcu=v1" is what Klipper reports per section after the flash.
 _FLASH_STUBS = r"""
 sudo() { echo "sudo $*" >>"$LOG"; }
 build_firmware() { return 0; }
 use_build() { :; }
 preflight_firmware() { [[ " ${BAD:-} " != *" $1 "* ]]; }
-flash_can() { echo "flash_can $1" >>"$LOG"; return 1; }
-flash_dfu() { echo "flash_dfu $1" >>"$LOG"; return 0; }
-bootloader_uuids() { echo "${IN_KATAPULT:-}"; }
-_summary_box() { printf 'failed: %s\n' "${failed[@]}" >>"$LOG"; }
+flash_can() { echo "flash_can $1" >>"$LOG"; [ -n "${CAN_OK:-}" ]; }
+flash_dfu() { echo "flash_dfu $1" >>"$LOG"; return "${DFU_RC:-0}"; }
+probe_can_mcu() { [[ " ${IN_KATAPULT:-} " == *" $1 "* ]] && echo "stm32g0b1|" || echo "|"; }
+_summary_box() {
+    printf 'failed: %s\n' "${failed[@]}" >>"$LOG"
+    printf 'flashed: %s\n' "${flashed[@]}" >>"$LOG"
+}
 save_uuid_cache() { :; }
 record_flash() { echo "record_flash $3" >>"$LOG"; }
-check_host_power() { :; }
+check_host_power() { [ -z "${UNDERVOLT:-}" ]; }
+hold_klipper() { :; }
 release_klipper() { :; }
 ensure_can_up() { :; }
 sleep() { :; }
-CONTEXT=local FORCE=true FLASH_ORDER_LOCKED=false FLASH_NAMES=()
+python3() { :; }
+config_meta() { [[ "$1" == *th.cfg ]] && echo th || echo mcu; }
+versions_match() { [ -n "$1" ] && [ "$1" = "$2" ]; }
+query_moonraker_versions() {
+    local kv
+    for kv in ${RUNNING:-}; do MOONRAKER_VERSIONS["${kv%=*}"]="${kv#*=}"; done
+}
+verify_klipper_ready() { [ -n "${READY:-}" ]; }
+write_versions_file() { :; }
+CONTEXT=${CTX:-local} FORCE=true FLASH_ORDER_LOCKED=false FLASH_NAMES=() SRC_VERSION=v1
+ALLOW_UNDERVOLTAGE=${ALLOW_UV:-false}
 DISCOVERED=("toolhead|can|aaa|$TH_CFG||true" "octopus|dfu|SER|$BRIDGE_CFG||true")
 """
 
@@ -348,6 +363,9 @@ DISCOVERED=("toolhead|can|aaa|$TH_CFG||true" "octopus|dfu|SER|$BRIDGE_CFG||true"
 def _run_cmd_flash(tmp_path: Path, **env: str) -> tuple[int, str, list[str]]:
     (tmp_path / "th.cfg").write_text("CONFIG_CANBUS=y\n")
     (tmp_path / "bridge.cfg").write_text("CONFIG_USBCANBUS=y\n")
+    for name in ("toolhead", "octopus"):
+        (tmp_path / name).mkdir(exist_ok=True)
+        (tmp_path / name / ".config").write_text("CONFIG_X=y\n")
     log = tmp_path / "flash.log"
     script = f'. "{_SCRIPTS / "flash_mcus.sh"}"; {_FLASH_STUBS}\ncmd_flash'
     res = subprocess.run(
@@ -376,9 +394,71 @@ def test_failed_preflight_never_stops_klipper(tmp_path: Path) -> None:
     assert calls.count("record_flash failed") == 2
 
 
+def test_one_failed_preflight_flashes_nothing(tmp_path: Path) -> None:
+    rc, _, calls = _run_cmd_flash(tmp_path, BAD="toolhead")
+    assert rc == 1
+    assert not any("systemctl stop" in c or c.startswith("flash_") for c in calls)
+    assert (
+        "failed: octopus (dfu) - not flashed, another board failed its checks" in calls
+    )
+    assert calls.count("record_flash failed") == 1
+
+
+@pytest.mark.parametrize("allow", ["false", "true"])
+def test_undervoltage_needs_its_own_flag(tmp_path: Path, allow: str) -> None:
+    rc, _, calls = _run_cmd_flash(tmp_path, UNDERVOLT="1", ALLOW_UV=allow, CAN_OK="1")
+    flashed = any(c.startswith("flash_") for c in calls)
+    assert flashed == (allow == "true")
+    assert rc == (0 if allow == "true" else 1)
+
+
+def test_flash_counts_once_klipper_runs_the_new_version(tmp_path: Path) -> None:
+    rc, _, calls = _run_cmd_flash(
+        tmp_path, CTX="pi", CAN_OK="1", READY="1", RUNNING="th=v1 mcu=v1"
+    )
+    assert rc == 0
+    assert calls.count("record_flash ok") == 2
+    assert (tmp_path / "toolhead.flashed.config").exists()
+
+
+def test_old_version_after_the_flash_is_a_failure(tmp_path: Path) -> None:
+    rc, _, calls = _run_cmd_flash(
+        tmp_path, CTX="pi", CAN_OK="1", READY="1", RUNNING="th=v0 mcu=v1"
+    )
+    assert rc == 1
+    assert "failed: toolhead (can) - still runs the old version" in calls
+    assert not (tmp_path / "toolhead.flashed.config").exists()
+
+
+def test_verified_write_with_silent_klipper_still_counts(tmp_path: Path) -> None:
+    rc, _, calls = _run_cmd_flash(tmp_path, CTX="pi", CAN_OK="1", RUNNING="th=v1")
+    assert rc == 0
+    assert "flashed: octopus (dfu) - running version unconfirmed" in calls
+
+
+def test_unverified_write_with_silent_klipper_needs_a_person(tmp_path: Path) -> None:
+    rc, out, calls = _run_cmd_flash(
+        tmp_path, CTX="pi", CAN_OK="1", DFU_RC="3", RUNNING="th=v1"
+    )
+    assert rc == 4
+    assert "failed: octopus (dfu) - unconfirmed" in calls
+    assert "Needs someone at the printer: [octopus]" in out
+
+
+def test_board_left_in_dfu_needs_the_24v_cut(tmp_path: Path) -> None:
+    rc, out, _ = _run_cmd_flash(tmp_path, CAN_OK="1", DFU_RC="4")
+    assert rc == 4
+    assert "switch the printer's 24 V supply off" in out
+
+
+def test_failed_write_with_klipper_ready_needs_no_person(tmp_path: Path) -> None:
+    rc, _, _ = _run_cmd_flash(tmp_path, CTX="pi", READY="1", RUNNING="th=v0 mcu=v0")
+    assert rc == 1
+
+
 def test_failed_can_node_retries_in_katapult_and_skips_bridge(tmp_path: Path) -> None:
     rc, _, calls = _run_cmd_flash(tmp_path, IN_KATAPULT="aaa")
-    assert rc == 1
+    assert rc == 4
     assert calls.count("flash_can toolhead") == 2
     assert "flash_dfu octopus" not in calls
     assert "failed: octopus (dfu) - skipped, CAN node failed" in calls

@@ -349,6 +349,47 @@ record_flash() {
         --version "$SRC_VERSION" --interface "$iface" --result "$result" || true
 }
 
+# Record a confirmed board; its build config becomes the next run's crystal baseline.
+_confirm_ok() {
+    local name="$1" iface="$2" cfg="$3" note="$4"
+    flashed+=("$name ($iface)$note")
+    record_flash "$cfg" "$iface" ok
+    is_linux_config "$cfg" ||
+        cp -f "$FW_BUILD_ROOT/$name/.config" "$FW_BUILD_ROOT/$name.flashed.config"
+}
+
+# Settles FLASH_PENDING rows (name|iface|cfg|verified): flashed once Klipper reports the host's version.
+confirm_flashed() {
+    local entry name iface cfg verified section running
+    [ "$CONTEXT" = "pi" ] && { query_moonraker_versions || true; }
+    for entry in "${FLASH_PENDING[@]}"; do
+        IFS='|' read -r name iface cfg verified <<<"$entry"
+        section=$(config_meta "$cfg" klipper_section)
+        running=""
+        [ -n "$section" ] && running="${MOONRAKER_VERSIONS[$section]:-}"
+        if [ -n "$running" ] && versions_match "$running" "$SRC_VERSION"; then
+            ok "[$name] runs $running"
+            _confirm_ok "$name" "$iface" "$cfg" ""
+        elif [ -n "$running" ]; then
+            err "[$name] still runs $running after the flash, not $SRC_VERSION"
+            failed+=("$name ($iface) - still runs the old version")
+            record_flash "$cfg" "$iface" failed
+        elif [ "$verified" = 1 ]; then
+            # Klipper stops identifying MCUs at the first one that fails, so silence is not proof.
+            warn "[$name] write verified, but Klipper does not report its version"
+            _confirm_ok "$name" "$iface" "$cfg" " - running version unconfirmed"
+        elif [ "$CONTEXT" != "pi" ]; then
+            warn "[$name] write unverified, and no Klipper on this host to confirm it"
+            _confirm_ok "$name" "$iface" "$cfg" " - unconfirmed"
+        else
+            err "[$name] write unverified and Klipper does not report its version"
+            failed+=("$name ($iface) - unconfirmed")
+            FLASH_NEEDS_PERSON+=("$name")
+            record_flash "$cfg" "$iface" failed
+        fi
+    done
+}
+
 # Git hash of a version string, display only.
 extract_git_hash() { [[ "$1" =~ -(g[0-9a-f]{7,40}) ]] && echo "${BASH_REMATCH[1]}" || echo ""; }
 
@@ -628,7 +669,7 @@ _dfu_left() {
 # Write <image> at <addr>, read it back, and leave DFU only once it matches.
 # A :leave on the write would jump into an unverified image, so it is a separate
 # command after the readback; a mismatch is rewritten while the ROM still runs.
-# Returns 0 verified, 3 booted but unverified (no readback), 1 failed.
+# Returns 0 verified, 3 booted but unverified (no readback), 1 failed, 4 left in DFU mode.
 flash_dfu() {
     local name="$1" vidpid="$2" serial="$3" alt="${4:-0}" addr="${5:-0x08000000}"
     local image="${6:-$FW_BIN}" opts="${7:-}"
@@ -696,11 +737,11 @@ flash_dfu() {
         if [ "$left" -eq 1 ]; then
             err "[$name] still in DFU mode after the leave request"
             if [ "$verify" -eq 0 ]; then
-                warn "  The image is verified - power-cycle the board to boot it."
+                warn "  The image is verified; it boots at the next power-on."
             else
-                warn "  Power-cycle the board; it boots the unverified image in flash."
+                warn "  It boots the unverified image in flash at the next power-on."
             fi
-            return 1
+            return 4
         fi
         if [ "$verify" -eq 0 ]; then
             ok "[$name] flashed via DFU, readback verified"
@@ -710,8 +751,8 @@ flash_dfu() {
         return 3
     done
     err "[$name] DFU flash failed - the board is still in DFU mode, nothing was booted"
-    warn "  Re-run to retry. A power cycle boots whatever is in flash, possibly a partial image."
-    return 1
+    warn "  The next power-on boots whatever is in flash, possibly a partial image."
+    return 4
 }
 
 # Set DFU_VIDPID/DFU_MEM/DFU_ADDR/DFU_ALT/DFU_MCU_TYPE from a config's metadata.
@@ -837,10 +878,10 @@ preflight_firmware() {
             warn "[$name] no $katapult_cfg - app address against Katapult unchecked"
         fi
     fi
-    local flashed="$FW_BUILD_ROOT/$name.flashed.config"
-    if [ -f "$flashed" ]; then
+    local baseline="$FW_BUILD_ROOT/$name.flashed.config"
+    if [ -f "$baseline" ]; then
         python3 "$PREFLIGHT_PY" flashed --new "$FW_BUILD_ROOT/$name/.config" \
-            --flashed "$flashed" || check_rc=$?
+            --flashed "$baseline" || check_rc=$?
         case "$check_rc" in
         0) ;;
         4) err "[$name] crystal check could not run - not flashing"; return 1 ;;
@@ -893,17 +934,17 @@ build_katapult_firmware() {
     ok "Katapult built"
 }
 
-# Wait up to $timeout seconds for a Katapult node UUID to appear on CAN.
+# Wait up to $timeout s for one Katapult node; a bus-wide query makes every node answer at once.
 wait_for_katapult_node() {
-    local uuid="$1" timeout="${2:-20}"
+    local uuid="$1" timeout="${2:-20}" deadline
     info "Waiting for [$uuid] as Katapult node (up to ${timeout}s)..."
-    local i
-    for ((i = 1; i <= timeout; i++)); do
-        sleep 1
-        bootloader_uuids | grep -qF "$uuid" && {
+    deadline=$((SECONDS + timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        [ "$(probe_can_mcu "$uuid")" != "|" ] && {
             ok "[$uuid] online as Katapult"
             return 0
         }
+        sleep 1
     done
     err "[$uuid] did not appear as Katapult node within ${timeout}s"
     return 1
@@ -1038,8 +1079,9 @@ flash_usb() {
     info "Flashing [$name] via klipper make flash ($serial)..."
     make -C "$KLIPPER_DIR" "${FW_MAKE_ARGS[@]}" flash FLASH_DEVICE="$serial" 2>&1 | _indent
     if [ "${PIPESTATUS[0]}" -eq 0 ]; then
-        ok "[$name] flashed via klipper make flash"
-        return 0
+        # Klipper's flash_usb.py may pick dfu-util or rp2040_flash, which read nothing back.
+        ok "[$name] flashed via klipper make flash, write unverified"
+        return 3
     fi
     err "[$name] all flash methods failed"
     return 1
@@ -1443,12 +1485,16 @@ is_canbus_bridge() { grep -q "^CONFIG_USBCANBUS=y" "$1"; }
 # flashing them first would drop the CAN bus mid-session.
 declare -a FLASH_NAMES=()
 FORCE=false
-ALLOW_COMMS_CHANGE=false # flash even if the build changes CAN/USB/clock settings
-FLASH_ORDER_LOCKED=false # true when TUI user explicitly set the order
+ALLOW_COMMS_CHANGE=false  # flash even if the build changes CAN/USB/clock settings
+ALLOW_UNDERVOLTAGE=false  # flash on a host reporting under-voltage now
+FLASH_ORDER_LOCKED=false  # true when TUI user explicitly set the order
+declare -a FLASH_PENDING=()      # written boards awaiting confirm_flashed
+declare -a FLASH_NEEDS_PERSON=() # failed after a write; may need someone at the printer
 
 cmd_flash() {
     local -a to_flash=()
     flashed=() failed=() skipped_utd=() skipped_missing=()
+    FLASH_PENDING=() FLASH_NEEDS_PERSON=()
 
     # When FLASH_NAMES is set, iterate in FLASH_NAMES order (preserves user ordering).
     # Use a consume-from-remaining approach so that multiple entries with the same
@@ -1531,6 +1577,7 @@ cmd_flash() {
     header "Building firmware..."
     local -a _ready=()
     local -A _built=()
+    local _refused=false
     for entry in "${to_flash[@]}"; do
         IFS='|' read -r name iface id cfg fw_ver detected <<<"$entry"
         if [ -z "${_built[$name]:-}" ]; then
@@ -1540,23 +1587,29 @@ cmd_flash() {
         if [ "${_built[$name]}" = 1 ] && preflight_firmware "$name" "$iface" "$cfg"; then
             _ready+=("$entry")
         else
-            failed+=("$name ($iface) - not flashed")
+            failed+=("$name ($iface) - failed its checks, not flashed")
             record_flash "$cfg" "$iface" failed
+            _refused=true
         fi
     done
-    to_flash=("${_ready[@]}")
-    if [ ${#to_flash[@]} -eq 0 ]; then
+    # All or nothing: a partial set would leave MCUs on mixed Klipper versions.
+    if $_refused; then
+        for entry in "${_ready[@]}"; do
+            IFS='|' read -r name iface _ _ _ _ <<<"$entry"
+            failed+=("$name ($iface) - not flashed, another board failed its checks")
+        done
+        err "Nothing was flashed: every selected board must pass its checks first"
         save_uuid_cache
         _summary_box "Flash Summary"
         return 1
     fi
     if ! check_host_power; then
-        if ! $FORCE; then
-            err "Not flashing on an under-volted host - fix the PSU, or re-run with --force"
+        if ! $ALLOW_UNDERVOLTAGE; then
+            err "Not flashing on an under-volted host - fix the PSU, or re-run with --allow-undervoltage"
             save_uuid_cache
             return 1
         fi
-        warn "Flashing on an under-volted host (--force)"
+        warn "Flashing on an under-volted host (--allow-undervoltage)"
     fi
 
     # Interrupts (incl. SSH hangup) finish the current step, then Klipper is restarted.
@@ -1575,6 +1628,7 @@ cmd_flash() {
 
     local _flash_idx=0 _flash_total=${#to_flash[@]}
     local _bridge_flashed=false _can_failed=false
+    local -a _dfu_stuck=()
     for entry in "${to_flash[@]}"; do
         IFS='|' read -r name iface id cfg fw_ver detected <<<"$entry"
         if $_flash_aborted; then
@@ -1591,7 +1645,7 @@ cmd_flash() {
         fi
         ((_flash_idx++))
         header "[$name] ($iface) - ${_flash_idx}/${_flash_total}"
-        local ok_flag=0 _note=""
+        local ok_flag=0 _verified=1 _rc
         use_build "$name" "$cfg"
         case "$iface" in
         can)
@@ -1619,7 +1673,7 @@ cmd_flash() {
                 fi
             fi
             # Broken comms leave the node in Katapult; one more write usually lands.
-            if [ "$ok_flag" -eq 0 ] && bootloader_uuids | grep -qF "$id"; then
+            if [ "$ok_flag" -eq 0 ] && [ "$(probe_can_mcu "$id")" != "|" ]; then
                 warn "[$name] still in Katapult - retrying the flash once"
                 flash_can "$name" "$id" && ok_flag=1
             fi
@@ -1631,9 +1685,15 @@ cmd_flash() {
                 warn "  button to enter Katapult, then re-run this script."
             fi
             ;;
-        usb) flash_usb "$name" "$id" && ok_flag=1 ;;
-        bootsel) flash_bootsel "$name" "$id" && ok_flag=1 ;;
-        linux) flash_linux "$name" "$id" && ok_flag=1 ;;
+        usb)
+            _rc=0
+            flash_usb "$name" "$id" || _rc=$?
+            [ "$_rc" -eq 0 ] && ok_flag=1
+            [ "$_rc" -eq 3 ] && ok_flag=1 && _verified=0
+            ;;
+        # rp2040_flash reads nothing back; a host MCU is only proven by Klipper connecting.
+        bootsel) flash_bootsel "$name" "$id" && ok_flag=1 && _verified=0 ;;
+        linux) flash_linux "$name" "$id" && ok_flag=1 && _verified=0 ;;
         dfu)
             dfu_params "$cfg"
             local dfu_vidpid="$DFU_VIDPID" dfu_mem="$DFU_MEM" dfu_addr="$DFU_ADDR"
@@ -1664,7 +1724,8 @@ cmd_flash() {
                 flash_dfu "$name" "$dfu_vidpid" "$dfu_serial" "${dfu_alt:-0}" "${dfu_addr:-0x08000000}" ||
                     _dfu_rc=$?
                 [ "$_dfu_rc" -eq 0 ] && ok_flag=1
-                [ "$_dfu_rc" -eq 3 ] && ok_flag=1 && _note=" - readback unverified"
+                [ "$_dfu_rc" -eq 3 ] && ok_flag=1 && _verified=0
+                [ "$_dfu_rc" -eq 4 ] && _dfu_stuck+=("$name")
             else
                 err "[$name] DFU trigger failed - $CAN_INTERFACE unavailable"
                 err "  The board must be powered (24V PSU on) and $CAN_INTERFACE must be up."
@@ -1675,13 +1736,10 @@ cmd_flash() {
         esac
         is_canbus_bridge "$cfg" && _bridge_flashed=true
         if [ "$ok_flag" -eq 1 ]; then
-            flashed+=("$name ($iface)$_note")
-            record_flash "$cfg" "$iface" ok
-            # Baseline for the next run's crystal check (preflight_firmware).
-            is_linux_config "$cfg" ||
-                cp -f "$FW_BUILD_ROOT/$name/.config" "$FW_BUILD_ROOT/$name.flashed.config"
+            FLASH_PENDING+=("$name|$iface|$cfg|$_verified")
         else
             failed+=("$name ($iface)")
+            FLASH_NEEDS_PERSON+=("$name")
             record_flash "$cfg" "$iface" failed
         fi
     done
@@ -1705,14 +1763,25 @@ cmd_flash() {
     sudo systemctl start klipper 2>/dev/null || true
     $_flash_aborted && warn "Flash was interrupted - Klipper has been restarted"
 
-    _summary_box "Flash Summary"
-
+    local _klipper_ready=false
     if [ "$CONTEXT" = "pi" ]; then
         header "Verifying running versions..."
-        verify_klipper_ready
-        write_versions_file >&2
+        verify_klipper_ready && _klipper_ready=true
     fi
+    confirm_flashed
 
+    _summary_box "Flash Summary"
+    [ "$CONTEXT" = "pi" ] && write_versions_file >&2
+
+    # Klipper ready means every configured MCU answers, so nothing waits on a person.
+    if ! $_klipper_ready && [ ${#FLASH_NEEDS_PERSON[@]} -gt 0 ]; then
+        err "Needs someone at the printer: $(printf '[%s] ' "${FLASH_NEEDS_PERSON[@]}")"
+        for name in "${_dfu_stuck[@]}"; do
+            err "[$name] is still in ROM DFU: switch the printer's 24 V supply off now"
+            err "  (some boards drive heater outputs in DFU), then re-run with someone present."
+        done
+        return 4
+    fi
     [ ${#failed[@]} -gt 0 ] && return 1 || return 0
 }
 
@@ -1997,6 +2066,7 @@ main() {
         --release) mode="release" ;;
         --force) FORCE=true ;;
         --allow-comms-change) ALLOW_COMMS_CHANGE=true ;;
+        --allow-undervoltage) ALLOW_UNDERVOLTAGE=true ;;
         --help | -h)
             cat >&2 <<'EOF'
 Blocks Klipper MCU Flasher
@@ -2015,6 +2085,9 @@ OPTIONS:
   --allow-comms-change
             Flash even if the build changes the MCU, clock, CAN or USB settings the
             running firmware reports (the host may lose the MCU; keep physical access)
+  --allow-undervoltage
+            Flash even if the host reports under-voltage now (a brown-out mid-write
+            leaves a board half-written)
 
 CONFIG FILES:
   mcu_config/<name>.config - Klipper build config with interface headers:
@@ -2033,9 +2106,14 @@ ENVIRONMENT:
   FW_BUILD_ROOT      out-of-tree build dir, default ~/.cache/blocks-flash
 
 EXIT CODES:
-  0   Success (or nothing to flash); --versions: all Klipper MCUs current
-  1   One or more MCUs failed to flash; --versions: Moonraker unreachable
+  0   Every flashed MCU runs the host's Klipper version (or nothing to flash);
+      --versions: all Klipper MCUs current
+  1   Not flashed or failed, but Klipper reaches ready (every MCU answers; a
+      board failing its checks flashes nothing at all); --versions: Moonraker
+      unreachable
   2   --versions: one or more MCUs need a flash
+  4   A board failed mid-flash and Klipper is not ready: someone must be at the
+      printer (a board left in ROM DFU: switch the 24 V supply off)
 
 NOTE: Ctrl-C and Ctrl-Z are blocked during active flash operations to
       prevent firmware corruption. The script finishes the current step
