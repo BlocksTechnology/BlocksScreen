@@ -79,7 +79,11 @@ def test_install_hash_changes_with_a_listed_file(tmp_path: Path) -> None:
 
 
 def _wait(
-    tmp_path: Path, replies: list[str], cap: int = 1800, prints: list[str] | None = None
+    tmp_path: Path,
+    replies: list[str],
+    cap: int = 1800,
+    prints: list[str] | None = None,
+    out: list[str] | None = None,
 ) -> tuple[int, int]:
     # curl replays one reply per call per endpoint ("fail" = unreachable); sleep is a no-op.
     feed = tmp_path / "replies"
@@ -104,6 +108,8 @@ def _wait(
     conf = tmp_path / "moonraker.conf"
     conf.write_text("[server]\nport: 7125\n")
     res = _run(tmp_path, f'bs_wait_moonraker_idle "{conf}" {cap}')
+    if out is not None:
+        out.append(res.stdout)
     return res.returncode, len(count.read_text().splitlines())
 
 
@@ -125,7 +131,9 @@ def test_wait_gives_up_at_the_cap(tmp_path: Path) -> None:
 def test_wait_holds_uncapped_while_printing_or_paused(tmp_path: Path) -> None:
     # Print time does not count against the cap: 5 print polls, then one idle update poll.
     prints = ["printing", "paused", "printing", "paused", "printing", "standby"]
-    assert _wait(tmp_path, ["false"], cap=0, prints=prints) == (0, 1)
+    out: list[str] = []
+    assert _wait(tmp_path, ["false"], cap=0, prints=prints, out=out) == (0, 1)
+    assert out[0].count("deferred until it ends") == 1
 
 
 def test_wait_cap_zero_never_blocks_on_a_moonraker_update(tmp_path: Path) -> None:
