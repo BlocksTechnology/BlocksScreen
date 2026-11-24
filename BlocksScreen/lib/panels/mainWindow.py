@@ -381,6 +381,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._device_restart_pending = False
         # Restart waits until the print-finished screen closes.
         self._finish_screen_hold = False
+        # hideEvent also fires when an ancestor hides; nothing hides MainWindow at runtime.
         self.cancelpage.hidden.connect(self._release_finish_screen_hold)
         # Reprint sends SDCARD_RESET_FILE first; its standby must not restart Klipper under the new job.
         self._reprint_hold = QtCore.QTimer(self)
