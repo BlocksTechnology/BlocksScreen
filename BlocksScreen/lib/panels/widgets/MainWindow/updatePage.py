@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import subprocess  # nosec B404
 import typing
 from types import MappingProxyType
 
@@ -13,7 +14,18 @@ from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
-from updater.models import PRINTER_BUSY, ComponentStatus
+from updater.executor import SYSTEMCTL
+from updater.models import (
+    DEPLOY_FLAG,
+    DEPLOY_HOLD_CAP_S,
+    DEPLOY_LIVE_STATES,
+    DEPLOY_PATH_UNIT,
+    CLOCK_UNSYNCED,
+    DISK_FULL,
+    DEPLOY_UNITS,
+    PRINTER_BUSY,
+    ComponentStatus,
+)
 
 _log = logging.getLogger(__name__)
 _DESCRIBE_SUFFIX = re.compile(r"-(\d+)-g[0-9a-f]+$")
@@ -63,6 +75,9 @@ class UpdatePage(QtWidgets.QWidget):
         {1: "updating packages", 2: "upgrading packages"}
     )
 
+    # Same states the daemon's klipper_printing() and bs_wait_moonraker_idle wait on.
+    _PRINT_ACTIVE: typing.ClassVar[frozenset[str]] = frozenset({"printing", "paused"})
+
     def __init__(self) -> None:
         super().__init__()
         self._chevron_right: QtGui.QPixmap = QtGui.QPixmap()
@@ -87,6 +102,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._overlay_shown: bool = False
         self._restart_pending: bool = False
         self._provisioning: bool = False
+        self._committed: bool = False
         self._elapsed_time_seconds: int = 0
         self._elapsed_timer: QtCore.QTimer = QtCore.QTimer(self)
         self._elapsed_timer.setSingleShot(False)
@@ -105,7 +121,18 @@ class UpdatePage(QtWidgets.QWidget):
         self._stale_overlay_timer.setSingleShot(True)
         self._stale_overlay_timer.setInterval(60000)
         self._stale_overlay_timer.timeout.connect(self._dismiss_stale_overlay)
+        # Pre-hold daemons (Release-2.0) report busy=False while install-updater still runs.
+        self._deploy_hold: bool = False
+        self._capped_deploy: int | None = None
+        self._deploy_poll_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._deploy_poll_timer.setInterval(1000)
+        self._deploy_poll_timer.timeout.connect(self._poll_deploy_flag)
+        self._deploy_cap_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._deploy_cap_timer.setSingleShot(True)
+        self._deploy_cap_timer.setInterval(int(DEPLOY_HOLD_CAP_S * 1000))
+        self._deploy_cap_timer.timeout.connect(self._on_deploy_cap)
         self._update_confirm_popup: BasePopup | None = None
+        self._disk_full_popup: BasePopup | None = None
         self.show_loading(True)
 
     def _request_status_debounced(self) -> None:
@@ -176,6 +203,8 @@ class UpdatePage(QtWidgets.QWidget):
 
     def _version_string(self, status: ComponentStatus) -> str:
         if status.error:
+            if status.error.startswith(CLOCK_UNSYNCED):
+                return "clock not synchronized"
             return "status error"
         if status.kind in ("system", "apt"):
             return "updates available"
@@ -357,7 +386,9 @@ class UpdatePage(QtWidgets.QWidget):
         self._update_avail = _update_avail
         if not self._busy:
             self.show_loading(False)
-            if self._post_update_status_pending and not self._restart_pending:
+            if self.hold_for_deploy():
+                _log.debug("status_ready: skipping loadscreen dismiss (deploy running)")
+            elif self._post_update_status_pending and not self._restart_pending:
                 _log.debug("status_ready: emitting call_load_panel(False)")
                 self.call_load_panel.emit(False, "", False)
                 self._post_update_status_pending = False
@@ -388,17 +419,21 @@ class UpdatePage(QtWidgets.QWidget):
             self._elapsed_time_label.show()
             self._progress_label.setText("")
             self._progress_label.show()
-            # The daemon ignores cancel() while installing a component.
-            self._cancel_btn.setVisible(not self._provisioning)
+            # The daemon ignores cancel() while installing a component or once committed.
+            self._cancel_btn.setVisible(not (self._provisioning or self._committed))
         else:
             self._provisioning = False
+            # Also clears a commit whose False signal a daemon restart never sent.
+            self._committed = False
             self._elapsed_timer.stop()
             self._busy_timeout_timer.stop()
             self._elapsed_time_label.hide()
             self._progress_label.hide()
             self._cancel_btn.hide()
             self.update_all_btn.setEnabled(True)
-            if self._restart_pending:
+            if self.hold_for_deploy():
+                _log.debug("busy=False: install-updater still running, overlay held")
+            elif self._restart_pending:
                 # Keep the overlay up: SIGTERM is imminent, MainWindow would flash.
                 self._restart_grace_timer.start()
             elif self._overlay_shown:
@@ -417,6 +452,14 @@ class UpdatePage(QtWidgets.QWidget):
             # Still busy after the clone: the daemon holds it for install-updater.
             self._show_finishing_overlay()
 
+    def handle_committed_changed(self, committed: bool) -> None:
+        """Daemon-declared: past the commit point cancel is ignored, so hide the button."""
+        self._committed = committed
+        if committed:
+            self._cancel_btn.hide()
+        elif self._busy and not self._provisioning:
+            self._cancel_btn.show()
+
     def _show_provisioning_overlay(self) -> None:
         self._overlay_shown = True
         self.call_load_panel.emit(True, "Missing component, installing ...", False)
@@ -430,6 +473,96 @@ class UpdatePage(QtWidgets.QWidget):
         """Daemon left mid-busy to restart: keep the overlay until the new one reports."""
         self._cancel_btn.hide()
         self._show_finishing_overlay()
+
+    @staticmethod
+    def _deploy_stamp() -> int | None:
+        """Flag mtime while a deploy is pending; same test as the daemon's deploy_pending()."""
+        if not DEPLOY_PATH_UNIT.exists():
+            return None
+        try:
+            return DEPLOY_FLAG.stat().st_mtime_ns
+        except OSError:
+            return None
+
+    @staticmethod
+    def _deploy_units_live() -> bool:
+        """Same unit test as the daemon's deploy_running(): a dead path unit never clears the flag."""
+        try:
+            out = subprocess.run(  # nosec B603
+                [SYSTEMCTL, "show", *DEPLOY_UNITS, "-p", "ActiveState", "--value"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=True,
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            # Unknown state falls back to the flag, like the daemon; the cap still bounds it.
+            return True
+        return not DEPLOY_LIVE_STATES.isdisjoint(out.split())
+
+    def hold_for_deploy(self) -> bool:
+        """Lock the screen while install-updater runs, whatever the daemon says about busy."""
+        if self._deploy_hold:
+            self._show_finishing_overlay()
+            return True
+        stamp = self._deploy_stamp()
+        if self._busy or stamp is None or stamp == self._capped_deploy:
+            return False
+        if self._printing_state in self._PRINT_ACTIVE:
+            self._release_deploy_for_print(stamp)
+            return False
+        if not self._deploy_units_live():
+            _log.warning("deploy flag set but its units are dead - not holding")
+            self._capped_deploy = stamp
+            return False
+        _log.info(
+            "deploy flag set - holding the overlay until install-updater finishes"
+        )
+        self._deploy_hold = True
+        self._stale_overlay_timer.stop()
+        self._deploy_poll_timer.start()
+        self._deploy_cap_timer.start()
+        self._show_finishing_overlay()
+        return True
+
+    def _poll_deploy_flag(self) -> None:
+        stamp = self._deploy_stamp()
+        if stamp is None:
+            _log.info("deploy flag cleared - waiting for the restarted updater")
+            self._end_deploy_hold()
+        elif self._printing_state in self._PRINT_ACTIVE:
+            self._release_deploy_for_print(stamp)
+
+    def _release_deploy_for_print(self, stamp: int) -> None:
+        """install-updater waits the print out; an overlay over it would hide Pause."""
+        _log.info("deploy waits for the print - releasing the overlay")
+        self._capped_deploy = stamp
+        self._show_toast("Finishing update after the print", success=True)
+        if not self._deploy_hold:
+            return
+        self._deploy_hold = False
+        self._deploy_poll_timer.stop()
+        self._deploy_cap_timer.stop()
+        if not self._busy:
+            self._overlay_shown = False
+            self.call_load_panel.emit(False, "", False)
+
+    def _on_deploy_cap(self) -> None:
+        _log.warning(
+            "install-updater still running after %.0fs - releasing the overlay",
+            DEPLOY_HOLD_CAP_S,
+        )
+        self._capped_deploy = self._deploy_stamp()
+        self._end_deploy_hold()
+
+    def _end_deploy_hold(self) -> None:
+        """install-updater restarts the daemon last: ride that restart on the grace timer."""
+        self._deploy_hold = False
+        self._deploy_poll_timer.stop()
+        self._deploy_cap_timer.stop()
+        if not self._busy:
+            self._restart_pending = True
+            self._restart_grace_timer.start()
 
     def _dismiss_stale_overlay(self) -> None:
         """Drop the overlay if the post-update status never arrived."""
@@ -526,7 +659,28 @@ class UpdatePage(QtWidgets.QWidget):
         if reason == PRINTER_BUSY:
             self._show_toast("Printer is busy or not responding. Try again later.")
             return
+        if reason.startswith(DISK_FULL):
+            self._show_disk_full(reason)
+            return
         self._show_toast(f"{name} update failed: {reason}. Tap refresh to retry.")
+
+    def _show_disk_full(self, reason: str) -> None:
+        """Open one popup that stays until tapped; the daemon sends it once per component."""
+        if self._disk_full_popup is not None and self._disk_full_popup.isVisible():
+            return
+        if self._disk_full_popup is not None:
+            self._disk_full_popup.deleteLater()
+        detail = reason.partition(":")[2].strip()
+        popup = BasePopup(self, floating=True)
+        popup.set_message(
+            "Update canceled: storage is full"
+            + (f" ({detail})" if detail else "")
+            + ".\nDelete some print files, then tap Update again."
+        )
+        popup.confirm_button_text("OK")
+        popup.cancel_button.hide()
+        self._disk_full_popup = popup
+        popup.open()
 
     def handle_update_rejected(self) -> None:
         """Daemon refused the request (already busy): drop the optimistic overlay and toast."""
@@ -565,6 +719,10 @@ class UpdatePage(QtWidgets.QWidget):
         )
         self.update_all_btn.setEnabled(False)
         self.reload_btn.setEnabled(True)
+        # MainWindow just dropped the overlay; re-lock if this exit is the deploy's restart.
+        if not self.hold_for_deploy() and self._restart_pending:
+            self._restart_grace_timer.start()
+            self._show_finishing_overlay()
 
     def show_loading(self, loading: bool = False) -> None:
         """Toggle between the spinner overlay and the scrollable component list."""

@@ -285,6 +285,36 @@ RULES: tuple[MessageRule, ...] = (
         hint="Replace the empty spool",
         severity=Severity.ERROR,
     ),
+    # Happy Hare v3 mmu.py load/unload failure texts; pick-up first, it nests in a load.
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("couldn't pick up filament at gate"),
+        display="Filament Not Picked Up",
+        hint="Feed the filament into the gate, then load again",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("unload sequence failed"),
+        display="Filament Unload Failed",
+        hint="Check the filament path, then unload again",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("load sequence failed"),
+        display="Filament Load Failed",
+        hint="Check the filament path, then load again",
+        severity=Severity.ERROR,
+    ),
+    # Klipper's TOOL= range check: the file calls a tool past the last gate.
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re(r"\btool must have maximum of \d+"),
+        display="Tool Not Available",
+        hint="The file uses more tools than this printer has, slice it again",
+        severity=Severity.ERROR,
+    ),
     # Same clog/tangle word Happy Hare reports and Mainsail's FlowGuard meter shows.
     MessageRule(
         source=MessageSource.GCODE_ERROR,
@@ -486,6 +516,21 @@ RULES: tuple[MessageRule, ...] = (
         severity=Severity.ERROR,
     ),
     # ── Gcode errors — general ─────────────────────────────────────────────────
+    # PRINT_START/SDCARD_PRINT_FILE tails only: RESUME also says "Machine is unloaded".
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re("please load the machine|before starting a print"),
+        display="Print Not Started",
+        hint="Load filament, then start the print again",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("before resuming"),
+        display="Print Not Resumed",
+        hint="Load filament, then resume the print",
+        severity=Severity.ERROR,
+    ),
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("filament runout"),
@@ -525,18 +570,28 @@ RULES: tuple[MessageRule, ...] = (
         display="Position Unreachable",
         severity=Severity.ERROR,
     ),
+    # E-stop halts the MCU; only FIRMWARE_RESTART clears it (Klipper G-Codes.md).
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("emergency button"),
         display="Emergency Stop",
-        hint="Clear E-stop and restart Klipper",
+        hint="Release E-stop, then press Firmware Restart",
         severity=Severity.ERROR,
     ),
+    # Moonraker printer.emergency_stop: the Mainsail/Fluidd/KlipperScreen E-stop.
     MessageRule(
         source=MessageSource.GCODE_ERROR,
         matcher=_sub("webhooks request"),
-        display="Shutdown via Webhook",
-        hint="Restart Klipper",
+        display="Emergency Stop",
+        hint="Press Firmware Restart",
+        severity=Severity.ERROR,
+    ),
+    # Klipper gcode.py cmd_M112, from a macro or console: no button to release.
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("due to m112 command"),
+        display="Emergency Stop",
+        hint="Press Firmware Restart",
         severity=Severity.ERROR,
     ),
     MessageRule(
@@ -659,12 +714,31 @@ IGNORED_RULE = MessageRule(
 _IGNORED: tuple[re.Pattern, ...] = (
     re.compile(r"REMOVED log_path=", re.I),
     re.compile(r"Alert: Automatically heating extruder to gatemap temp", re.I),
+    # Happy Hare Spoolman calls made before Moonraker loads mmu_server.
+    re.compile(r"Remote method 'spoolman_\w+' not registered", re.I),
     # add more patterns as needed,
 )
 
 _INDEX: dict[MessageSource, tuple[MessageRule, ...]] = {
     src: tuple(r for r in RULES if r.source is src) for src in MessageSource
 }
+
+# Marks errors BlocksScreen echoes to the console; it already showed them on screen.
+CONSOLE_ECHO_PREFIX = "BlocksScreen: "
+
+_MACRO_ERROR_RE = re.compile(
+    r"Error evaluating 'gcode_macro ([^:]+):gcode'.*?CommandError:?\s*(.*)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def macro_error_text(text: str) -> str:
+    """Shorten a Klipper macro error to the reason its macro raised."""
+    m = _MACRO_ERROR_RE.search(text)
+    if m is None:
+        return text
+    reason = m.group(2).strip()
+    return reason or f"macro failed: {m.group(1)}"
 
 
 def match_message(source: MessageSource, text: str) -> MessageRule | None:

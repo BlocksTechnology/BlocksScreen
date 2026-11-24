@@ -89,6 +89,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._displayed_layer = 0
         self._last_z = 0.0
         self._filament_used = 0.0
+        self._filament_peak = 0.0
         self._file_position = 0.0
         self._raw_progress = 0.0
         self._gcode_start_byte = 0
@@ -96,6 +97,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._layer_frozen = False
         self._awaiting_resume = False
         self._resume_baseline = 0.0
+        self._first_layer_reached = False
+        self._start_line_pos: float | None = None
         self._setup_ui()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -229,15 +232,20 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._reported_layer = None
         self._layer_frozen = False
         self._awaiting_resume = False
+        # Clearing the resume lock here must not strand a tap-disabled button.
+        self.pause_printing_btn.setEnabled(True)
         self._resume_baseline = 0.0
         self._displayed_layer = 0
         self._last_z = 0.0
         self._filament_used = 0.0
+        self._filament_peak = 0.0
         self._file_position = 0.0
         self._raw_progress = 0.0
         self._gcode_start_byte = 0
         self._gcode_end_byte = 0
         self._print_duration = 0.0
+        self._first_layer_reached = False
+        self._start_line_pos = None
         self.layer_display_button.setText("0")
         self.layer_display_button.secondary_text = "?"
         self.print_time_display_button.setText("?")
@@ -300,13 +308,16 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._awaiting_resume = False
             event_state = "pause"
         elif lstate == "printing":
-            self._layer_frozen = False
+            # Resume reheats at park Z: keep the pause hold until the file advances.
+            self._layer_frozen = self._internal_print_status == "paused"
             self.pause_printing_btn.setText("Pause")
             self.pause_printing_btn.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
             )
             if self._internal_print_status != "printing":
                 self._awaiting_resume = True
+                if self._internal_print_status != "paused":
+                    self._filament_peak = 0.0  # fresh start or reconnect, not a resume
                 self._resume_baseline = self._file_position
             elif not self._awaiting_resume:
                 self.pause_printing_btn.setEnabled(True)
@@ -338,9 +349,13 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._current_file_name = ""
             self._layer_frozen = False
             self._awaiting_resume = False
+            self.pause_printing_btn.setEnabled(True)
             self._last_z = 0.0
             self._filament_used = 0.0
+            self._filament_peak = 0.0
             self._print_duration = 0.0
+            self._first_layer_reached = False
+            self._start_line_pos = None
             self.file_metadata = None
         # Send Event on Print state
         event_class_name = "Print" + event_state.capitalize()
@@ -401,7 +416,9 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self._print_duration = value
             elif "filament_used" in field:
                 self._filament_used = value
-                if value > 0:
+                # Only new material redraws: pause retract/unretract at park Z must not.
+                if value > self._filament_peak:
+                    self._filament_peak = value
                     self._refresh_layer_display()
             elif self.isVisible() and "total_duration" in field:
                 _time = estimate_print_time(int(value))
@@ -452,10 +469,18 @@ class JobStatusWidget(QtWidgets.QWidget):
         layer_height = float(meta.get("layer_height", 0) or 0)
         if layer_height <= 0:
             return self._displayed_layer
+        first_layer_height = float(meta.get("first_layer_height", 0) or 0)
+        if not self._first_layer_reached:
+            # First extrusion (MMU load, KAMP purge) is inside PRINT_START; file_position moves when it returns.
+            if self._start_line_pos is None:
+                self._start_line_pos = self._file_position
+            if self._file_position <= self._start_line_pos:
+                return self._displayed_layer
+            self._first_layer_reached = True
         return calculate_current_layer(
             z_position=self._last_z,
             layer_height=layer_height,
-            first_layer_height=float(meta.get("first_layer_height", 0) or 0),
+            first_layer_height=first_layer_height,
             max_layers=self._max_layers(),
         )
 
@@ -492,6 +517,8 @@ class JobStatusWidget(QtWidgets.QWidget):
             return  # is_active and other fields have nothing to render
         if self._awaiting_resume and self._file_position > self._resume_baseline:
             self._awaiting_resume = False
+            # No repaint here: Z may still be the park height, next extrusion redraws.
+            self._layer_frozen = False
             self.pause_printing_btn.setEnabled(True)
         if self.isVisible():
             self.printing_progress_bar.set_progress(self._compute_progress())

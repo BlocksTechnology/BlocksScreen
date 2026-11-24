@@ -42,6 +42,7 @@ def _daemon_apt_argvs() -> list[list[str]]:
         _apt_cmd("autoremove"),
         _apt_cmd("fix-broken"),
         _apt_cmd("dselect-upgrade"),
+        _apt_cmd("clean"),
     ]
 
 
@@ -134,6 +135,7 @@ class TestWrapperValidation:
             ["upgrade", "vim", "-oAPT::Update::Pre-Invoke::=x"],
             ["update", "extra"],  # fixed verbs take no args
             ["autoremove", "extra"],
+            ["clean", "extra"],
             ["set-selections", "extra"],
         ],
     )
@@ -144,3 +146,8 @@ class TestWrapperValidation:
         # Passes validation, then fails at apt (no root): anything but exit 2.
         res = self._run("upgrade", "libstdc++6", "python3.11-dev")
         assert res.returncode != 2
+
+
+def test_clock_heal_argv_matches_a_rule():
+    argv = [executor.SYSTEMCTL, "start", executor.CLOCK_SYNC_UNIT]
+    assert " ".join(argv) in _expanded_rules()

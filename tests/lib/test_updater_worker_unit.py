@@ -41,6 +41,8 @@ def _make_worker():
     w._last_busy = False
     w._last_provisioning = False
     w._provisioning_signals = 0
+    w._last_committed = False
+    w._committed_signals = 0
     w._daemon_owner = ""
     w._owner_task = None
     w._escalated = False
@@ -642,6 +644,34 @@ class TestReplayBusy:
         worker._last_busy = worker._last_provisioning = True
         worker.replay_busy()
         assert order == ["prov=True", "busy=True"]
+
+
+class TestCommitted:
+    def test_replays_committed_before_busy(self, worker):
+        order: list[str] = []
+        worker.committed_changed.connect(lambda v: order.append(f"commit={v}"))
+        worker.busy_changed.connect(lambda v: order.append(f"busy={v}"))
+        worker._last_busy = worker._last_committed = True
+        worker.replay_busy()
+        assert order == ["commit=True", "busy=True"]
+
+    @pytest.mark.asyncio
+    async def test_old_daemon_without_method_is_not_committed(self, worker):
+        import sdbus
+
+        worker._proxy.get_committed = AsyncMock(
+            side_effect=sdbus.SdBusBaseError("unknown method")
+        )
+        await worker._poll_committed(True)
+        assert worker._last_committed is False
+
+    @pytest.mark.asyncio
+    async def test_poll_seeds_only_while_busy(self, worker):
+        worker._proxy.get_committed = AsyncMock(return_value=True)
+        await worker._poll_committed(False)
+        assert worker._last_committed is False
+        await worker._poll_committed(True)
+        assert worker._last_committed is True
 
 
 class TestGetProvisioning:

@@ -77,6 +77,7 @@ fi
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- scripts/install-updater.sh scripts/bs-apt-helper.sh \
         scripts/BlocksScreen-updater.service scripts/BlocksScreen-bootstrap.service \
+        scripts/BlocksScreen-clock.service scripts/BlocksScreen-clock.timer \
         scripts/com.blockscreen.Updater.conf scripts/com.blockscreen.Updater.service \
         scripts/requirements-pip.txt \
         2>/dev/null; then

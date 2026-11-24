@@ -1,0 +1,9 @@
+[Unit]
+Description=BlocksScreen clock fallback timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target

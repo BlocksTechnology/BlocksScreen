@@ -1,7 +1,7 @@
 # CI pipeline (mirrors .github/workflows/dev-ci.yml), installed on top of requirements.txt.
 # Exact pins so a green `make check` locally means a green CI run.
 ruff==0.15.7
-pylint==4.0.5
+pylint==4.0.10
 pytest==9.1.1
 pytest-cov==7.0.0
 pytest-timeout==2.4.0

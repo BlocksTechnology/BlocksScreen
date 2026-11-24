@@ -10,7 +10,7 @@ import re
 import shutil  # nosec
 import subprocess  # nosec B404
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
 from devices.discovery.serial_devices import SerialScanner
@@ -24,8 +24,17 @@ DETECTION_CACHE: pathlib.Path = HOME / ".rf50_config.json"
 VARIABLES_FILE: pathlib.Path = KLIPPER_CONFIG_DIR / "variables.cfg"
 PRINTER_CONFIG: pathlib.Path = KLIPPER_CONFIG_DIR / "printer.cfg"
 SV_CONFIG_MARKER = "#*# <---------------------- SAVE_CONFIG ---------------------->"
+_CFG_COMMENT_R = re.compile(r"[#;].*$")
+_CFG_FIELD_R = re.compile(r"[^A-Za-z0-9_].*$")
 # Copied only when missing; bs_migrate_moonraker_conf and Mainsail own it after that.
 SEED_ONLY_FILES: frozenset[str] = frozenset({"moonraker.conf"})
+# Klipper configfile.py cmd_SAVE_CONFIG renames printer.cfg to these and never prunes.
+_SAVE_CONFIG_BACKUP_R = re.compile(r"printer-([0-9]{8}_[0-9]{6})\.cfg")
+SAVE_CONFIG_BACKUPS_KEPT = 10
+# No RTC cell: fake-hwclock restores a clock up to 1 h old, DST end repeats 1 h.
+SAVE_CONFIG_STAMP_SLACK = timedelta(hours=2)
+# timesyncd touches this on every NTP sync (systemd-timesyncd(8)); /run clears on boot.
+_CLOCK_SYNCED_FLAG = pathlib.Path("/run/systemd/timesync/synchronized")
 
 _logger = logging.getLogger(__name__)
 
@@ -38,6 +47,17 @@ def _opt_line(opt: str, val: str) -> str:
 def _timestamp() -> str:
     """Local time in ISO 8601 basic format: no colons, safe over SMB and scp."""
     return datetime.now().strftime("%Y%m%dT%H%M%S")
+
+
+def _save_config_backup_stamp(name: str) -> datetime | None:
+    """Local-time stamp Klipper put in a SAVE_CONFIG backup name, None if not one."""
+    match = _SAVE_CONFIG_BACKUP_R.fullmatch(name)
+    if match is None:
+        return None
+    try:
+        return datetime.strptime(match.group(1), "%Y%m%d_%H%M%S")
+    except ValueError:
+        return None
 
 
 def is_git_repo(path: pathlib.Path) -> bool:
@@ -483,13 +503,61 @@ class ConfigManager:
                 keys[m.group(1)] = m.group(2).strip()
         return keys
 
+    def _save_config_fields(self, save_lines: list[str]) -> dict[str, set[str]]:
+        """Map each SAVE_CONFIG section to its field names, as Klipper's autosave does."""
+        fields: dict[str, set[str]] = {}
+        section = None
+        for line in save_lines:
+            if not line.startswith("#*# "):
+                continue
+            pruned = _CFG_COMMENT_R.sub("", line[4:]).rstrip()
+            if not pruned or pruned[0].isspace():
+                continue
+            if pruned[0] == "[":
+                section = pruned[1:-1].strip()
+                continue
+            field = _CFG_FIELD_R.sub("", pruned).lower()
+            if section is not None and field:
+                fields.setdefault(section, set()).add(field)
+        return fields
+
+    def _strip_duplicates(
+        self, lines: list[str], saved: dict[str, set[str]]
+    ) -> list[str]:
+        """Comment out fields SAVE_CONFIG owns; port of Klipper's _strip_duplicates."""
+        out = []
+        section = ""
+        is_dup_field = False
+        for line in lines:
+            pruned = _CFG_COMMENT_R.sub("", line).rstrip()
+            if not pruned:
+                out.append(line)
+                continue
+            if pruned[0].isspace():
+                out.append("#" + line if is_dup_field else line)
+                continue
+            is_dup_field = False
+            if pruned[0] == "[":
+                section = pruned[1:-1].strip()
+                out.append(line)
+                continue
+            if (field := _CFG_FIELD_R.sub("", pruned).lower()) in saved.get(
+                section, ()
+            ):
+                # A stale saved block on a field box silently overrides the repo value.
+                _logger.info("SAVE_CONFIG overrides [%s] %s", section, field)
+                is_dup_field = True
+                line = "#" + line
+            out.append(line)
+        return out
+
     def merge_cfg(
         self,
         src_file: pathlib.Path,
         target_file: pathlib.Path,
         marker="",
     ) -> bool:
-        """Merges two configuration files together"""
+        """Merge the repo cfg into the local one; SAVE_CONFIG-owned keys stay local."""
         try:
             _sfl = src_file.read_text(encoding="utf-8")
             _tfl = target_file.read_text(encoding="utf-8")
@@ -579,12 +647,29 @@ class ConfigManager:
                             if name is not None and name not in tgt_sc_map:
                                 merged_save_lines.extend(block)
 
+                        # Autosave wins as after Klipper's SAVE_CONFIG; owned keys need a migration
+                        merged_header_lines = self._strip_duplicates(
+                            merged_header_lines,
+                            self._save_config_fields(merged_save_lines),
+                        )
                         merged = "".join(merged_header_lines) + "".join(
                             merged_save_lines
                         )
 
+                    elif marker in _sfl:
+                        # Target has no block yet: the source's still owns its keys
+                        sfl_lines = _sfl.splitlines(keepends=True)
+                        src_idx = next(
+                            i for i, line in enumerate(sfl_lines) if marker in line
+                        )
+                        src_save = sfl_lines[src_idx:]
+                        merged = "".join(
+                            self._strip_duplicates(
+                                sfl_lines[:src_idx], self._save_config_fields(src_save)
+                            )
+                            + src_save
+                        )
                     else:
-                        # Target has no SAVE_CONFIG block yet — use source as-is
                         merged = _sfl
 
                 else:
@@ -864,6 +949,44 @@ class ConfigManager:
         _logger.warning("No beacon device found via serial scan")
         return config_text
 
+    def _prune_save_config_backups(self, now: datetime | None = None) -> None:
+        """Delete printer.cfg backups stamped well before the newest few kept."""
+        horizon = (now or datetime.now()) + SAVE_CONFIG_STAMP_SLACK
+        try:
+            backups = sorted(
+                (stamp, p)
+                for p in self.config_dir.iterdir()
+                if (stamp := _save_config_backup_stamp(p.name)) is not None
+                and p.is_file()
+                and not p.is_symlink()
+            )
+        except OSError as e:
+            _logger.warning("Cannot list SAVE_CONFIG backups: %s", e)
+            return
+        if backups and backups[-1][0] > horizon:
+            if not _CLOCK_SYNCED_FLAG.exists():
+                # Clock lost (offline) or stamps from a bad clock: either may be wrong.
+                _logger.warning(
+                    "Skipping SAVE_CONFIG backup prune: %s is ahead of the unsynced "
+                    "clock",
+                    backups[-1][1].name,
+                )
+                return
+            # The NTP clock is right, so these stamps are bogus: keep, do not count.
+            backups = [(stamp, p) for stamp, p in backups if stamp <= horizon]
+        if len(backups) <= SAVE_CONFIG_BACKUPS_KEPT:
+            return
+        # A newer save can carry an earlier stamp, so spare stamps near the cutoff.
+        cutoff = backups[-SAVE_CONFIG_BACKUPS_KEPT][0] - SAVE_CONFIG_STAMP_SLACK
+        for stamp, old in backups[:-SAVE_CONFIG_BACKUPS_KEPT]:
+            if stamp >= cutoff:
+                continue
+            try:
+                old.unlink()
+                _logger.info("Removed old SAVE_CONFIG backup %s", old.name)
+            except OSError as e:
+                _logger.warning("Cannot remove SAVE_CONFIG backup %s: %s", old.name, e)
+
     def sync(self) -> None:
         """Synchronizes configuration repo with the machines configuration"""
         # Every step only writes on a difference, so none is gated.
@@ -879,3 +1002,5 @@ class ConfigManager:
             self._cpy_cfg_files()
         except Exception as e:
             _logger.error("Caught exception during sync: %s", e)
+        # Outside the try: a failed repo sync must not let backups pile up.
+        self._prune_save_config_backups()
