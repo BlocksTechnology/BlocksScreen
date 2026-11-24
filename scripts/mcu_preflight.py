@@ -5,6 +5,7 @@ image: vector table, link address and size of a built image (ARM Cortex-M layout
 pair: a Katapult build must share chip, clock, CAN pins and app address with Klipper.
 comms: constants of the new klipper.dict versus the running MCU's `mcu_constants`.
 flashed: clock Kconfig of the new build versus the last successfully flashed one.
+combine-bin / combine-uf2: Katapult plus app as one ROM bootloader image; uf2 prints pages.
 
 Exit codes: 0 pass, 1 problems found (printed to stderr), 3 the MCU never connected
 (no baseline), 4 the check itself could not run, 5 Moonraker gave no answer to compare.
@@ -28,6 +29,12 @@ _KCONFIG_RE = re.compile(r"^(CONFIG_\w+)=(.*)$")
 # Resolved STM32 CAN pin choice; the MMENU/CMENU symbols are only the menu prompt.
 _STM32_CAN_PINS_RE = re.compile(r"^CONFIG_STM32_CANBUS_P\w+$")
 _RP2040_BASE = 0x10000000
+_RP2040_SECTOR = 0x1000
+_UF2_BLOCK = 512
+_UF2_PAGE = 256
+_UF2_MAGIC = (0x0A324655, 0x9E5D5157, 0x0AB16F30)
+_UF2_NOT_MAIN_FLASH = 0x1
+_UF2_FAMILY_PRESENT = 0x2000
 _STM32_APP_START_RE = re.compile(r"^CONFIG_STM32_APP_START_([0-9A-Fa-f]+)$")
 # Constants that decide whether the host still reaches the MCU after the flash.
 COMMS_KEYS = (
@@ -123,6 +130,76 @@ def image_problems(
     return problems
 
 
+def combine_bin(katapult: bytes, app: bytes, boot_addr: int, app_addr: int) -> bytes:
+    """Katapult and app as one image written at `boot_addr`, 0xFF (erased) between."""
+    gap = app_addr - boot_addr
+    if gap <= 0:
+        raise ValueError(f"app 0x{app_addr:x} is not above Katapult 0x{boot_addr:x}")
+    if len(katapult) > gap:
+        raise ValueError(f"Katapult is {len(katapult)} bytes, overlaps the app")
+    return katapult + b"\xff" * (gap - len(katapult)) + app
+
+
+def _uf2_blocks(data: bytes) -> list[bytearray]:
+    if not data or len(data) % _UF2_BLOCK:
+        raise ValueError(f"UF2 size {len(data)} is not a multiple of {_UF2_BLOCK}")
+    blocks = []
+    for off in range(0, len(data), _UF2_BLOCK):
+        block = bytearray(data[off : off + _UF2_BLOCK])
+        start0, start1 = struct.unpack_from("<II", block)
+        (end,) = struct.unpack_from("<I", block, _UF2_BLOCK - 4)
+        if (start0, start1, end) != _UF2_MAGIC:
+            raise ValueError(f"UF2 block {off // _UF2_BLOCK} has bad magic")
+        blocks.append(block)
+    return blocks
+
+
+def combine_uf2(katapult_uf2: bytes, app: bytes, app_addr: int) -> tuple[bytes, int]:
+    """Katapult UF2 plus the app as UF2 pages at `app_addr`; returns (image, pages).
+
+    Block renumbering follows Katapult scripts/uf2_append_boot_signature.py `renumerate`.
+    """
+    if app_addr % _RP2040_SECTOR:
+        raise ValueError(f"app 0x{app_addr:x} is not 4 KiB sector aligned")
+    if not app:
+        raise ValueError("app image is empty")
+    blocks = _uf2_blocks(katapult_uf2)
+    flags, _, _, _, _, family = struct.unpack_from("<IIIIII", blocks[0], 8)
+    for block in blocks:
+        bflags, target, size, _, _, bfamily = struct.unpack_from("<IIIIII", block, 8)
+        # rp2040_flash skips any other block, so the expected page count would lie.
+        if (
+            (bflags, bfamily, size) != (flags, family, _UF2_PAGE)
+            or not (flags & _UF2_FAMILY_PRESENT)
+            or flags & _UF2_NOT_MAIN_FLASH
+        ):
+            raise ValueError(f"Katapult block at 0x{target:x} is not a main flash page")
+        if target + size > app_addr:
+            raise ValueError(f"Katapult page 0x{target:x} overlaps the app")
+    for off in range(0, len(app), _UF2_PAGE):
+        page = app[off : off + _UF2_PAGE].ljust(_UF2_PAGE, b"\xff")
+        block = bytearray(_UF2_BLOCK)
+        struct.pack_into(
+            "<IIIIIIII",
+            block,
+            0,
+            _UF2_MAGIC[0],
+            _UF2_MAGIC[1],
+            flags,
+            app_addr + off,
+            _UF2_PAGE,
+            0,
+            0,
+            family,
+        )
+        block[32 : 32 + _UF2_PAGE] = page
+        struct.pack_into("<I", block, _UF2_BLOCK - 4, _UF2_MAGIC[2])
+        blocks.append(block)
+    for number, block in enumerate(blocks):
+        struct.pack_into("<II", block, 20, number, len(blocks))
+    return b"".join(blocks), len(blocks)
+
+
 def _launch_addr(katapult: dict[str, str]) -> int | None:
     # Unresolved stm32 configs carry only the choice; map it as katapult src/stm32/Kconfig.
     launch = _addr(katapult, "CONFIG_LAUNCH_APP_ADDRESS")
@@ -206,7 +283,30 @@ def _build_parser() -> argparse.ArgumentParser:
     comms.add_argument("--dict", type=Path, required=True)
     comms.add_argument("--section", required=True)
     comms.add_argument("--url", default="http://localhost:7125")
+    for name in ("combine-bin", "combine-uf2"):
+        combine = sub.add_parser(name)
+        combine.add_argument("--katapult", type=Path, required=True)
+        combine.add_argument("--app", type=Path, required=True)
+        combine.add_argument("--app-addr", type=lambda v: int(v, 0), required=True)
+        combine.add_argument("--out", type=Path, required=True)
+        if name == "combine-bin":
+            combine.add_argument("--boot-addr", type=lambda v: int(v, 0), required=True)
     return parser
+
+
+def _combine(args: argparse.Namespace) -> list[str]:
+    katapult, app = args.katapult.read_bytes(), args.app.read_bytes()
+    try:
+        if args.cmd == "combine-bin":
+            image = combine_bin(katapult, app, args.boot_addr, args.app_addr)
+        else:
+            image, pages = combine_uf2(katapult, app, args.app_addr)
+    except ValueError as exc:
+        return [str(exc)]
+    args.out.write_bytes(image)
+    if args.cmd == "combine-uf2":
+        sys.stdout.write(f"{pages}\n")
+    return []
 
 
 class NoBaselineError(Exception):
@@ -214,6 +314,8 @@ class NoBaselineError(Exception):
 
 
 def _run(args: argparse.Namespace) -> list[str] | None:
+    if args.cmd.startswith("combine-"):
+        return _combine(args)
     if args.cmd == "image":
         return image_problems(
             read_kconfig(args.config), args.image.read_bytes(), args.at, args.bootloader

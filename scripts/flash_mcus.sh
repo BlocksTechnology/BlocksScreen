@@ -511,25 +511,31 @@ _install_dfu_udev_rule() {
     fi
 }
 
+# rp2040_flash exits 0 with no device and with a file it cannot parse, so success also
+# needs the expected page count and the reboot line (klipper lib/rp2040_flash/main.c).
 flash_bootsel() {
-    local name="$1" vid_pid="$2"
-    info "Flashing [$name] via BOOTSEL (FLASH_DEVICE=$vid_pid)..."
-    # Use a temp file - rp2040_flash may emit null bytes that corrupt bash
-    # variables ($() truncates at \0), making grep on the variable unreliable.
-    local _tmp
-    _tmp=$(mktemp)
-    make -C "$KLIPPER_DIR" "${FW_MAKE_ARGS[@]}" flash FLASH_DEVICE="$vid_pid" >"$_tmp" 2>&1
-    local make_rc=$?
-    cat "$_tmp" | _indent
-    # rp2040_flash exits 0 even when no device is found; detect via output.
-    # "Loaded UF2 image with 0 pages" appears on both success and failure - ignore it.
-    if [ "$make_rc" -ne 0 ] ||
-        grep -qi "No rp2040 in BOOTSEL mode was found" "$_tmp"; then
-        rm -f "$_tmp"
+    local name="$1" vid_pid="$2" uf2="$3" want="${4:-}" count rc=0
+    local log="${uf2%.uf2}.flash-log.txt"
+    count=$(lsusb -d "$vid_pid" 2>/dev/null | grep -c .)
+    if [ "$count" -gt 1 ]; then
+        err "[$name] $count boards in BOOTSEL ($vid_pid) - cannot tell which one is [$name]"
+        err "  Leave only [$name] in BOOTSEL, then re-run."
+        return 1
+    fi
+    [ -n "$want" ] || want=$(($(stat -c %s "$uf2") / 512))
+    info "Flashing [$name] via BOOTSEL ($vid_pid, $want pages)..."
+    # A log file, not $(...): rp2040_flash may print NUL bytes that bash drops.
+    sudo "$KLIPPER_DIR/lib/rp2040_flash/rp2040_flash" "$uf2" >"$log" 2>&1 || rc=$?
+    _indent <"$log"
+    if [ "$rc" -ne 0 ] || grep -qi "No rp2040 in BOOTSEL mode was found" "$log"; then
         err "[$name] BOOTSEL flash failed (device not found or disconnected)"
         return 1
     fi
-    rm -f "$_tmp"
+    if ! grep -q "^Loaded UF2 image with $want pages" "$log" ||
+        ! grep -q "^Rebooting device" "$log"; then
+        err "[$name] BOOTSEL flash did not write the expected $want pages"
+        return 1
+    fi
     ok "[$name] flashed via BOOTSEL"
     return 0
 }
@@ -843,6 +849,11 @@ use_build() {
     FW_MAKE_ARGS=("KCONFIG_CONFIG=$dir/.config" "OUT=$FW_OUT")
     FW_BIN="${FW_OUT}klipper.bin"
     is_linux_config "$cfg" && FW_BIN="${FW_OUT}klipper.elf"
+    # rp2040 builds only klipper.uf2 without a bootloader (klipper src/rp2040/Makefile).
+    local kc="$dir/.config"
+    [ -f "$kc" ] || kc="$cfg"
+    grep -q '^CONFIG_MACH_RPXXXX=y' "$kc" &&
+        ! grep -q '^CONFIG_RPXXXX_HAVE_BOOTLOADER=y' "$kc" && FW_BIN="${FW_OUT}klipper.uf2"
     return 0
 }
 
@@ -932,6 +943,91 @@ build_katapult_firmware() {
         return 1
     fi
     ok "Katapult built"
+}
+
+# Hex value of <key> in a Kconfig file, empty when absent.
+kconfig_value() { grep -oP "^$2=\K0x[0-9a-fA-F]+" "$1" 2>/dev/null || true; }
+
+# A board in its ROM bootloader whose app sits behind Katapult needs both in one write:
+# the ROM jumps to the boot address, so an app-only write leaves it unbootable.
+needs_rom_full() {
+    local iface="$1" built_cfg="$2" boot app
+    case "$iface" in
+    bootsel) grep -q '^CONFIG_RPXXXX_HAVE_BOOTLOADER=y' "$built_cfg" ;;
+    dfu)
+        boot=$(kconfig_value "$built_cfg" CONFIG_FLASH_BOOT_ADDRESS)
+        app=$(kconfig_value "$built_cfg" CONFIG_FLASH_APPLICATION_ADDRESS)
+        [ -n "$boot" ] && [ -n "$app" ] && [ "$((boot))" -ne "$((app))" ]
+        ;;
+    *) return 1 ;;
+    esac
+}
+
+# Build Katapult and join it with the Klipper build into ${FW_OUT}klipper.full.{bin,uf2}
+# (.uf2 also writes its page count to klipper.full.pages); leaves the Klipper build active.
+prepare_rom_full() {
+    local name="$1" iface="$2" cfg="$3"
+    local katapult_cfg="$MCU_CONFIG_DIR/${name}.katapult.config"
+    local kat="$FW_BUILD_ROOT/$name.katapult" app_cfg="$FW_BUILD_ROOT/$name/.config"
+    if [ ! -f "$katapult_cfg" ]; then
+        err "[$name] app sits behind Katapult but $katapult_cfg is missing - not flashing"
+        return 1
+    fi
+    local rc=0
+    build_katapult_firmware "$name" "$katapult_cfg" || rc=1
+    use_build "$name" "$cfg"
+    [ "$rc" -eq 0 ] || return 1
+    local app_addr boot_addr pages
+    app_addr=$(kconfig_value "$app_cfg" CONFIG_FLASH_APPLICATION_ADDRESS)
+    if [ "$iface" = "dfu" ]; then
+        boot_addr=$(kconfig_value "$kat/.config" CONFIG_FLASH_BOOT_ADDRESS)
+        python3 "$PREFLIGHT_PY" image --config "$kat/.config" --image "$kat/out/katapult.bin" \
+            --at "$boot_addr" --bootloader &&
+            python3 "$PREFLIGHT_PY" combine-bin --katapult "$kat/out/katapult.bin" \
+                --app "$FW_BIN" --boot-addr "$boot_addr" --app-addr "$app_addr" \
+                --out "${FW_OUT}klipper.full.bin" || {
+            err "[$name] Katapult + Klipper image could not be built safely - not flashing"
+            return 1
+        }
+        ok "[$name] Katapult + Klipper image built for $boot_addr"
+        return 0
+    fi
+    pages=$(python3 "$PREFLIGHT_PY" combine-uf2 --katapult "$kat/out/katapult.uf2" \
+        --app "$FW_BIN" --app-addr "$app_addr" --out "${FW_OUT}klipper.full.uf2") || {
+        err "[$name] Katapult + Klipper UF2 could not be built safely - not flashing"
+        return 1
+    }
+    echo "$pages" >"${FW_OUT}klipper.full.pages"
+    ok "[$name] Katapult + Klipper UF2 built ($pages pages)"
+}
+
+# Klipper's own `make flash` builds this on demand; build it before Klipper is stopped.
+build_rp2040_flash() {
+    [ -x "$KLIPPER_DIR/lib/rp2040_flash/rp2040_flash" ] && return 0
+    info "Building rp2040_flash..."
+    make -C "$KLIPPER_DIR/lib/rp2040_flash" rp2040_flash 2>&1 | _indent
+    [ "${PIPESTATUS[0]}" -eq 0 ] && return 0
+    err "rp2040_flash build failed (libusb-1.0-0-dev missing?)"
+    return 1
+}
+
+# Everything a ROM bootloader write needs, made before Klipper stops; no-op otherwise.
+prepare_rom_write() {
+    local name="$1" iface="$2" id="$3" cfg="$4" entry other_name other_iface other_id
+    if [ "$iface" = "bootsel" ]; then
+        # BOOTSEL rows match by vid:pid only, so two configs would race for one device.
+        for entry in "${to_flash[@]}"; do
+            IFS='|' read -r other_name other_iface other_id _ _ _ <<<"$entry"
+            if [ "$other_iface" = "bootsel" ] && [ "$other_id" = "$id" ] &&
+                [ "$other_name" != "$name" ]; then
+                err "[$name] and [$other_name] both match BOOTSEL $id - flash one by name"
+                return 1
+            fi
+        done
+        build_rp2040_flash || return 1
+    fi
+    needs_rom_full "$iface" "$FW_BUILD_ROOT/$name/.config" || return 0
+    prepare_rom_full "$name" "$iface" "$cfg"
 }
 
 # Wait up to $timeout s for one Katapult node; a bus-wide query makes every node answer at once.
@@ -1529,10 +1625,13 @@ cmd_flash() {
             continue
         fi
 
-        # Version check (skip BOOTSEL - no readable version; always flash)
-        # When user explicitly selected MCUs (FLASH_NAMES non-empty), honour the
-        # selection and flash even if already up to date - same as --force.
-        if ! $FORCE && [ ${#FLASH_NAMES[@]} -eq 0 ] && [ "$iface" != "bootsel" ] && versions_match "$fw_ver" "$SRC_VERSION"; then
+        # Version check, never for a board sitting in its ROM bootloader (BOOTSEL or a
+        # present DFU device): it runs no firmware, whatever version was last reported.
+        # Named MCUs (FLASH_NAMES non-empty) are flashed even if up to date, as --force.
+        local _in_rom=false
+        [ "$iface" = "bootsel" ] && _in_rom=true
+        [ "$iface" = "dfu" ] && [ -n "$id" ] && _in_rom=true
+        if ! $FORCE && [ ${#FLASH_NAMES[@]} -eq 0 ] && ! $_in_rom && versions_match "$fw_ver" "$SRC_VERSION"; then
             skip "[$name ($iface)] already up to date - skipping"
             skipped_utd+=("$name ($iface)")
             continue
@@ -1584,7 +1683,8 @@ cmd_flash() {
             build_firmware "$cfg" "$name" "$iface" && _built[$name]=1 || _built[$name]=0
         fi
         use_build "$name" "$cfg"
-        if [ "${_built[$name]}" = 1 ] && preflight_firmware "$name" "$iface" "$cfg"; then
+        if [ "${_built[$name]}" = 1 ] && preflight_firmware "$name" "$iface" "$cfg" &&
+            prepare_rom_write "$name" "$iface" "$id" "$cfg"; then
             _ready+=("$entry")
         else
             failed+=("$name ($iface) - failed its checks, not flashed")
@@ -1692,12 +1792,24 @@ cmd_flash() {
             [ "$_rc" -eq 3 ] && ok_flag=1 && _verified=0
             ;;
         # rp2040_flash reads nothing back; a host MCU is only proven by Klipper connecting.
-        bootsel) flash_bootsel "$name" "$id" && ok_flag=1 && _verified=0 ;;
+        bootsel)
+            if needs_rom_full bootsel "$FW_BUILD_ROOT/$name/.config"; then
+                flash_bootsel "$name" "$id" "${FW_OUT}klipper.full.uf2" \
+                    "$(cat "${FW_OUT}klipper.full.pages")" && ok_flag=1 && _verified=0
+            else
+                flash_bootsel "$name" "$id" "$FW_BIN" && ok_flag=1 && _verified=0
+            fi
+            ;;
         linux) flash_linux "$name" "$id" && ok_flag=1 && _verified=0 ;;
         dfu)
             dfu_params "$cfg"
             local dfu_vidpid="$DFU_VIDPID" dfu_mem="$DFU_MEM" dfu_addr="$DFU_ADDR"
-            local dfu_alt="$DFU_ALT" dfu_mcu_type="$DFU_MCU_TYPE"
+            local dfu_alt="$DFU_ALT" dfu_mcu_type="$DFU_MCU_TYPE" dfu_image="$FW_BIN"
+            if needs_rom_full dfu "$FW_BUILD_ROOT/$name/.config"; then
+                dfu_image="${FW_OUT}klipper.full.bin"
+                dfu_addr=$(kconfig_value "$FW_BUILD_ROOT/$name.katapult/.config" CONFIG_FLASH_BOOT_ADDRESS)
+                info "[$name] writing Katapult + Klipper: the ROM boots from $dfu_addr"
+            fi
             info "[$name] DFU $dfu_vidpid at $dfu_addr"
             warn "  Some boards drive heater outputs while in ROM DFU - stay with the printer."
             local dfu_serial="$id"
@@ -1721,8 +1833,8 @@ cmd_flash() {
             fi
             if [ -n "$dfu_serial" ]; then
                 local _dfu_rc=0
-                flash_dfu "$name" "$dfu_vidpid" "$dfu_serial" "${dfu_alt:-0}" "${dfu_addr:-0x08000000}" ||
-                    _dfu_rc=$?
+                flash_dfu "$name" "$dfu_vidpid" "$dfu_serial" "${dfu_alt:-0}" "${dfu_addr:-0x08000000}" \
+                    "$dfu_image" || _dfu_rc=$?
                 [ "$_dfu_rc" -eq 0 ] && ok_flag=1
                 [ "$_dfu_rc" -eq 3 ] && ok_flag=1 && _verified=0
                 [ "$_dfu_rc" -eq 4 ] && _dfu_stuck+=("$name")

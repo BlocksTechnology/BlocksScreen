@@ -208,6 +208,71 @@ def test_unreachable_moonraker_is_not_a_missing_baseline(tmp_path: Path) -> None
     assert pf.main(argv + ["--url", "http://127.0.0.1:9"]) == 5
 
 
+def test_combine_bin_pads_katapult_up_to_the_app() -> None:
+    image = pf.combine_bin(b"K" * 10, b"APP", 0x8000000, 0x8000010)
+    assert image == b"K" * 10 + b"\xff" * 6 + b"APP"
+    with pytest.raises(ValueError, match="overlaps"):
+        pf.combine_bin(b"K" * 17, b"APP", 0x8000000, 0x8000010)
+    with pytest.raises(ValueError, match="not above"):
+        pf.combine_bin(b"K", b"APP", 0x8000000, 0x8000000)
+
+
+def _uf2_block(target: int, flags: int = 0x2000, family: int = 0xE48BFF56) -> bytes:
+    head = struct.pack(
+        "<IIIIIIII", 0x0A324655, 0x9E5D5157, flags, target, 256, 7, 9, family
+    )
+    return head + bytes(476) + struct.pack("<I", 0x0AB16F30)
+
+
+def test_combine_uf2_appends_app_pages_and_renumbers() -> None:
+    katapult = _uf2_block(0x10000000) + _uf2_block(0x10000100)
+    image, pages = pf.combine_uf2(katapult, b"\x01" * 300, 0x10004000)
+    assert pages == 4 and len(image) == 4 * 512
+    for number in range(4):
+        block = image[number * 512 : (number + 1) * 512]
+        flags, _, size, no, total, family = struct.unpack_from("<IIIIII", block, 8)
+        assert (flags, size, no, total, family) == (0x2000, 256, number, 4, 0xE48BFF56)
+        assert struct.unpack_from("<I", block, 508) == (0x0AB16F30,)
+    assert struct.unpack_from("<I", image, 3 * 512 + 12) == (0x10004100,)
+    tail = image[3 * 512 + 32 : 3 * 512 + 32 + 256]
+    assert tail == b"\x01" * 44 + b"\xff" * 212
+
+
+@pytest.mark.parametrize(
+    ("katapult", "app_addr", "match"),
+    [
+        (_uf2_block(0x10003F00), 0x10003F00, "aligned"),
+        (_uf2_block(0x10004000), 0x10004000, "overlaps"),
+        (_uf2_block(0x10000000)[:-1], 0x10004000, "multiple"),
+        (b"\x00" * 512, 0x10004000, "magic"),
+        (_uf2_block(0x10000000) + _uf2_block(0x10000100, family=1), 0x10004000, "main"),
+        (_uf2_block(0x10000000, flags=0x2001), 0x10004000, "main"),
+    ],
+)
+def test_combine_uf2_refuses_unsafe_input(
+    katapult: bytes, app_addr: int, match: str
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        pf.combine_uf2(katapult, b"\x01", app_addr)
+
+
+def test_combine_cli_prints_pages_and_refuses_overlap(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "k.uf2").write_bytes(_uf2_block(0x10000000))
+    (tmp_path / "k.bin").write_bytes(b"K" * 0x3000)
+    (tmp_path / "app.bin").write_bytes(b"\x01" * 512)
+    out = tmp_path / "out"
+    common = ["--app", str(tmp_path / "app.bin"), "--out", str(out)]
+    uf2 = ["combine-uf2", "--katapult", str(tmp_path / "k.uf2"), "--app-addr"]
+    assert pf.main(uf2 + ["0x10004000"] + common) == 0
+    assert capsys.readouterr().out == "3\n" and out.stat().st_size == 3 * 512
+    out.unlink()
+    binary = ["combine-bin", "--katapult", str(tmp_path / "k.bin"), "--boot-addr"]
+    assert pf.main(binary + ["0x8000000", "--app-addr", "0x8002000"] + common) == 1
+    assert not out.exists()
+
+
 # dfu-util stub: logs calls; the device leaves the --list after :leave unless STUCK=1,
 # GONE=1 drops it from the list at once, LIST=fail makes --list itself error out.
 # -U writes the image back (READBACK=bad corrupts it, READBACK=fail errors out).
@@ -332,7 +397,9 @@ build_firmware() { return 0; }
 use_build() { :; }
 preflight_firmware() { [[ " ${BAD:-} " != *" $1 "* ]]; }
 flash_can() { echo "flash_can $1" >>"$LOG"; [ -n "${CAN_OK:-}" ]; }
-flash_dfu() { echo "flash_dfu $1" >>"$LOG"; return "${DFU_RC:-0}"; }
+flash_dfu() { echo "flash_dfu $1" >>"$LOG"; echo "dfu_write $5 ${6##*/}" >>"$LOG"; return "${DFU_RC:-0}"; }
+build_katapult_firmware() { :; }
+MCU_CONFIG_DIR=${MCU_DIR:-$MCU_CONFIG_DIR}
 probe_can_mcu() { [[ " ${IN_KATAPULT:-} " == *" $1 "* ]] && echo "stm32g0b1|" || echo "|"; }
 _summary_box() {
     printf 'failed: %s\n' "${failed[@]}" >>"$LOG"
@@ -354,9 +421,9 @@ query_moonraker_versions() {
 }
 verify_klipper_ready() { [ -n "${READY:-}" ]; }
 write_versions_file() { :; }
-CONTEXT=${CTX:-local} FORCE=true FLASH_ORDER_LOCKED=false FLASH_NAMES=() SRC_VERSION=v1
+CONTEXT=${CTX:-local} FORCE=${FORCE_FLAG:-true} FLASH_ORDER_LOCKED=false FLASH_NAMES=() SRC_VERSION=v1
 ALLOW_UNDERVOLTAGE=${ALLOW_UV:-false}
-DISCOVERED=("toolhead|can|aaa|$TH_CFG||true" "octopus|dfu|SER|$BRIDGE_CFG||true")
+DISCOVERED=("toolhead|can|aaa|$TH_CFG|${VER:-}|true" "octopus|dfu|${DFU_ID-SER}|$BRIDGE_CFG|${VER:-}|true")
 """
 
 
@@ -365,7 +432,8 @@ def _run_cmd_flash(tmp_path: Path, **env: str) -> tuple[int, str, list[str]]:
     (tmp_path / "bridge.cfg").write_text("CONFIG_USBCANBUS=y\n")
     for name in ("toolhead", "octopus"):
         (tmp_path / name).mkdir(exist_ok=True)
-        (tmp_path / name / ".config").write_text("CONFIG_X=y\n")
+        if not (tmp_path / name / ".config").exists():
+            (tmp_path / name / ".config").write_text("CONFIG_X=y\n")
     log = tmp_path / "flash.log"
     script = f'. "{_SCRIPTS / "flash_mcus.sh"}"; {_FLASH_STUBS}\ncmd_flash'
     res = subprocess.run(
@@ -464,6 +532,38 @@ def test_failed_can_node_retries_in_katapult_and_skips_bridge(tmp_path: Path) ->
     assert "failed: octopus (dfu) - skipped, CAN node failed" in calls
 
 
+@pytest.mark.parametrize("katapult", [True, False])
+def test_dfu_board_behind_katapult_gets_katapult_and_app(
+    tmp_path: Path, katapult: bool
+) -> None:
+    (tmp_path / "mcu").mkdir()
+    if katapult:
+        (tmp_path / "mcu" / "octopus.katapult.config").write_text("X=y\n")
+    (tmp_path / "octopus.katapult").mkdir()
+    (tmp_path / "octopus.katapult" / ".config").write_text(
+        "CONFIG_FLASH_BOOT_ADDRESS=0x8000000\n"
+    )
+    app_cfg = tmp_path / "octopus" / ".config"
+    app_cfg.parent.mkdir()
+    app_cfg.write_text(
+        "CONFIG_FLASH_BOOT_ADDRESS=0x8000000\nCONFIG_FLASH_APPLICATION_ADDRESS=0x8002000\n"
+    )
+    rc, _, calls = _run_cmd_flash(tmp_path, CAN_OK="1", MCU_DIR=str(tmp_path / "mcu"))
+    if katapult:
+        assert rc == 0 and "dfu_write 0x8000000 klipper.full.bin" in calls
+    else:
+        assert rc == 1 and not any(c.startswith("flash_") for c in calls)
+
+
+@pytest.mark.parametrize(("dfu_id", "flashed"), [("SER", True), ("", False)])
+def test_board_present_in_rom_dfu_is_never_version_skipped(
+    tmp_path: Path, dfu_id: str, flashed: bool
+) -> None:
+    _, _, calls = _run_cmd_flash(tmp_path, FORCE_FLAG="false", VER="v1", DFU_ID=dfu_id)
+    assert "flash_can toolhead" not in calls
+    assert ("flash_dfu octopus" in calls) == flashed
+
+
 def test_vanished_can_node_gets_reset_instructions(tmp_path: Path) -> None:
     _, out, calls = _run_cmd_flash(tmp_path)
     assert calls.count("flash_can toolhead") == 1
@@ -504,3 +604,46 @@ def test_bootloader_uuids_lists_katapult_nodes_only(tmp_path: Path) -> None:
         TOOL=str(tool),
     )
     assert res.stdout.split() == ["aaa"]
+
+
+# Prints what Klipper's lib/rp2040_flash/main.c prints, per $MODE; exits 0 like it does.
+_RP2040_TOOL = """#!/bin/bash
+echo "Loaded UF2 image with ${PAGES:-2} pages" >&2
+[ "${MODE:-}" = absent ] && { echo "No rp2040 in BOOTSEL mode was found" >&2; exit 0; }
+echo "Flashing..." >&2
+[ "${MODE:-}" = noreboot ] || echo "Rebooting device" >&2
+exit 0
+"""
+
+
+@pytest.mark.parametrize(
+    ("env", "ok"),
+    [
+        ({}, True),
+        ({"WANT": "5", "PAGES": "5"}, True),
+        ({"PAGES": "0"}, False),
+        ({"MODE": "absent"}, False),
+        ({"MODE": "noreboot"}, False),
+        ({"DEVICES": "2"}, False),
+    ],
+)
+def test_bootsel_needs_every_page_and_the_reboot(
+    tmp_path: Path, env: dict, ok: bool
+) -> None:
+    tool = tmp_path / "klipper" / "lib" / "rp2040_flash" / "rp2040_flash"
+    tool.parent.mkdir(parents=True)
+    tool.write_text(_RP2040_TOOL)
+    tool.chmod(0o755)
+    uf2 = tmp_path / "klipper.uf2"
+    uf2.write_bytes(bytes(1024))
+    res = _run_snippet(
+        'sudo() { "$@"; }\n'
+        'lsusb() { local i; for ((i = 0; i < ${DEVICES:-1}; i++)); do echo "ID $2"; done; }\n'
+        'flash_bootsel eddy 2e8a:0003 "$UF2" "${WANT:-}"; echo "rc=$?"',
+        HOME=str(tmp_path),
+        UF2=str(uf2),
+        **env,
+    )
+    assert ("rc=0" in res.stdout) == ok
+    if "DEVICES" in env:
+        assert "Loaded UF2" not in res.stdout + res.stderr
