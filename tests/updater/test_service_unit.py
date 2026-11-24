@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import json
 import os
 import subprocess
@@ -3296,6 +3297,100 @@ class TestReconcile:
         ):
             await svc._reconcile_locked()
         assert order == ["hook:{'moonraker.service'}", "moonraker.service"]
+
+
+class TestHealMmuServerLink:
+    """Boot relinks mmu_server when an earlier HH clone ran without its hook (BUG-9)."""
+
+    @staticmethod
+    def _layout(tmp_path: Path, moonraker: bool = True) -> ComponentConfig:
+        hh = tmp_path / "Happy-Hare"
+        (hh / "components").mkdir(parents=True)
+        (hh / "components" / "mmu_server.py").write_text("# mmu_server\n")
+        if moonraker:
+            (tmp_path / "moonraker" / "moonraker" / "components").mkdir(parents=True)
+        return ComponentConfig(name="Happy-Hare", kind="git", path=hh)
+
+    @staticmethod
+    def _dst(tmp_path: Path) -> Path:
+        return tmp_path / "moonraker" / "moonraker" / "components" / "mmu_server.py"
+
+    async def _heal(self, comp: ComponentConfig) -> AsyncMock:
+        svc = UpdateService()
+        svc._components = [comp]
+        with patch.object(UpdateService, "_boot_reclone_hook", AsyncMock()) as hook:
+            await svc._heal_mmu_server_link({"klipper.service"})
+        return hook
+
+    @pytest.mark.asyncio
+    async def test_missing_link_reruns_hook(self, tmp_path):
+        comp = self._layout(tmp_path)
+        hook = await self._heal(comp)
+        hook.assert_awaited_once_with(comp, {"klipper.service"})
+
+    @pytest.mark.asyncio
+    async def test_stale_link_reruns_hook(self, tmp_path):
+        comp = self._layout(tmp_path)
+        self._dst(tmp_path).symlink_to(tmp_path / "old" / "mmu_server.py")
+        hook = await self._heal(comp)
+        hook.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_correct_link_is_left_alone(self, tmp_path):
+        comp = self._layout(tmp_path)
+        assert comp.path is not None
+        self._dst(tmp_path).symlink_to(comp.path / "components" / "mmu_server.py")
+        hook = await self._heal(comp)
+        hook.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_moonraker_or_no_hh_is_skipped(self, tmp_path):
+        hook = await self._heal(self._layout(tmp_path, moonraker=False))
+        hook.assert_not_awaited()
+        missing = ComponentConfig(
+            name="Happy-Hare", kind="git", path=tmp_path / "absent"
+        )
+        hook = await self._heal(missing)
+        hook.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_boot_reconcile_heals_link(self, tmp_path):
+        comp = self._layout(tmp_path)
+        svc = UpdateService()
+        svc._components = [comp]
+        with (
+            patch.object(
+                UpdateService, "_revert_inflight", AsyncMock(return_value=set())
+            ),
+            patch.object(
+                UpdateService, "_boot_repair_component", AsyncMock(return_value=False)
+            ),
+            patch.object(UpdateService, "_reconcile_self_heal_state", AsyncMock()),
+            patch.object(UpdateService, "_restart_reverted", AsyncMock()),
+            patch.object(UpdateService, "_boot_reclone_hook", AsyncMock()) as hook,
+        ):
+            await svc._reconcile_locked()
+        hook.assert_awaited_once_with(comp, set())
+
+    @pytest.mark.asyncio
+    async def test_real_hook_relinks(self, tmp_path, monkeypatch):
+        """The shipped hook links on the empty-tree prev and defers the restart."""
+        comp = self._layout(tmp_path)
+        assert comp.path is not None
+        svc = UpdateService()
+        svc._components = [comp]
+        # hermetic_home rebases repo paths under $HOME, the hooks dir included.
+        hooks = Path(__file__).resolve().parents[2] / "updater" / "hooks"
+        executor = importlib.import_module("updater.executor")
+        monkeypatch.setattr(executor, "_HOOKS_DIR", hooks)
+        with (
+            patch("updater.service.git_get_hash", AsyncMock(return_value="a" * 40)),
+            patch("updater.service.klipper_printing", AsyncMock(return_value=False)),
+        ):
+            await svc._heal_mmu_server_link({"moonraker.service"})
+        dst = self._dst(tmp_path)
+        assert dst.is_symlink()
+        assert dst.readlink() == comp.path / "components" / "mmu_server.py"
 
 
 class TestWriteStateDurability:
