@@ -3428,6 +3428,21 @@ class TestRollbackVerifiesRestart:
         cb.on_rollback.assert_called_once_with("klipper", False)
 
 
+class _PeakFetch:
+    """git_fetch stand-in recording how many fetches overlap."""
+
+    def __init__(self) -> None:
+        self.active = 0
+        self.peak = 0
+
+    async def __call__(self, _path: Path) -> tuple[bool, str]:
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        await asyncio.sleep(0.01)
+        self.active -= 1
+        return True, ""
+
+
 class TestPreflightFetch:
     """update_all fetches up-front; an offline repo is dropped, the rest continue."""
 
@@ -3481,6 +3496,42 @@ class TestPreflightFetch:
             offline = await svc._preflight_fetch([comp])
         assert offline == {}
         mock_fetch.assert_not_called()
+
+    _DNS_ERROR = "fatal: unable to access: Could not resolve host: github.com"
+
+    @pytest.mark.asyncio
+    async def test_recent_network_failure_is_reused_as_offline(self, tmp_path):
+        """The press's status check just failed: report offline without a refetch."""
+        comp = self._git(tmp_path, "klipper")
+        with patch("updater.service.git_fetch") as mock_fetch:
+            svc = UpdateService()
+            svc._components = [comp]
+            svc._record_fetch_result("klipper", time.monotonic(), self._DNS_ERROR)
+            offline = await svc._preflight_fetch([comp])
+        assert offline == {"klipper": self._DNS_ERROR}
+        mock_fetch.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_stale_network_failure_is_refetched(self, tmp_path):
+        comp = self._git(tmp_path, "klipper")
+        with patch("updater.service.git_fetch", return_value=(True, "")) as mock_fetch:
+            svc = UpdateService()
+            svc._components = [comp]
+            svc._fetch_failures["klipper"] = (time.monotonic() - 60, self._DNS_ERROR)
+            offline = await svc._preflight_fetch([comp])
+        assert offline == {}
+        mock_fetch.assert_called_once()
+        assert "klipper" not in svc._fetch_failures
+
+    @pytest.mark.asyncio
+    async def test_repos_are_fetched_concurrently(self, tmp_path):
+        comps = [self._git(tmp_path, n) for n in ("klipper", "moonraker", "crowsnest")]
+        probe = _PeakFetch()
+        with patch("updater.service.git_fetch", new=probe):
+            svc = UpdateService()
+            svc._components = comps
+            assert await svc._preflight_fetch(comps) == {}
+        assert probe.peak == len(comps)
 
     @pytest.mark.asyncio
     async def test_update_all_drops_only_offline_components(self, tmp_path):
