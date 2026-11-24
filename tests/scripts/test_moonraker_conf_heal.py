@@ -153,13 +153,14 @@ def test_marker_patch_writes_durably(tmp_path: Path) -> None:
 
 def test_bak_restore_logs_the_lines_it_drops(tmp_path: Path) -> None:
     conf = _conf(tmp_path)
-    edited = _GOOD.replace(_MARK, "\n[power printer]\ntype: gpio\n")
+    edited = _GOOD.replace(_MARK, "\n\n[power printer]\ntype: gpio\n")
     conf.write_bytes(edited.encode() + b"\0" * 64)
     Path(f"{conf}.bak").write_text(_GOOD)
     out, _ = _migrate(conf)
     assert conf.read_text() == _GOOD
     assert "not in .bak, dropped: [power printer]" in out
     assert "not in .bak, dropped: type: gpio" in out
+    assert not any(line.endswith("dropped: ") for line in out.splitlines())
 
 
 def test_failed_replace_stops_without_leaking_the_temp(tmp_path: Path) -> None:

@@ -139,7 +139,7 @@ bs_heal_moonraker_conf() {
         bs_moonraker_conf_sane "$tmp" || continue
         dropped=""
         [ "$src" = "${conf}.bak" ] && dropped=$(tr -d '\000' <"$conf" | diff "$tmp" - |
-            awk -v p="[$tag] moonraker.conf: not in .bak, dropped: " '/^> / { print p substr($0, 3); if (++n == 20) exit }')
+            awk -v p="[$tag] moonraker.conf: not in .bak, dropped: " '/^> .*[^[:space:]]/ { print p substr($0, 3); if (++n == 20) exit }')
         # Stop on a failed rename: every source would fail the same way.
         if ! _bs_replace_file "$tmp" "$conf"; then
             echo "[$tag] moonraker.conf: torn by a power cut, restore from $src failed"
