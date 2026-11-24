@@ -984,8 +984,15 @@ class TestMMUServerMissing:
             (("provisioning", True), ("provisioning", False)),
             (("status", _HH_PENDING), ("status", _HH_CLONED)),
             (("busy", True), ("unavailable", None)),
+            (("status", _HH_PENDING), ("unavailable", None)),
         ],
-        ids=["busy", "provisioning", "hh-not-installed", "daemon-lost"],
+        ids=[
+            "busy",
+            "provisioning",
+            "hh-not-installed",
+            "daemon-lost",
+            "daemon-lost-hh",
+        ],
     )
     def test_updater_holds_warning_until_done(
         self, manager, qtbot, hold, release

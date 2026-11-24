@@ -427,9 +427,10 @@ class AMUManager(QtCore.QObject):
 
     @QtCore.pyqtSlot(name="on-updater-unavailable")
     def on_updater_unavailable(self) -> None:
-        """Drop the busy hold when the daemon is gone; reconnect re-sends its state."""
+        """Drop every updater hold when the daemon is gone; reconnect re-sends its state."""
         self._updater_busy = False
         self._updater_provisioning = False
+        self._hh_install_pending = False
         self._check_mmu_server()
 
     @QtCore.pyqtSlot(str, name="on-updater-status")
