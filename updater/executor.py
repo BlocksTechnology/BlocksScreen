@@ -146,8 +146,13 @@ async def _run(
         return False, f"timed out after {timeout}s"
     except asyncio.CancelledError:
         # SIGKILL skips git's lockfile cleanup and strands .git/index.lock.
-        if not await _reap(proc, signal.SIGTERM, 2.0):
-            await _reap(proc, signal.SIGKILL, 2.0)
+        try:
+            if not await _reap(proc, signal.SIGTERM, 2.0):
+                await _reap(proc, signal.SIGKILL, 2.0)
+        finally:
+            # A second cancel during the grace wait must not leave the group alive.
+            if proc.returncode is None:
+                _kill_proc_group(proc, signal.SIGKILL)
         raise
 
 
