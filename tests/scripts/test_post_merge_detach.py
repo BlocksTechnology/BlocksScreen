@@ -51,20 +51,46 @@ def test_moonraker_cgroup_detection(tmp_path: Path, line: str, inside: bool) -> 
     assert (res.returncode == 0) is inside
 
 
-def test_install_hash_covers_post_merge_trigger_set(tmp_path: Path) -> None:
-    # The stamp and the diff trigger must agree, or a changed file installs one way but not the other.
-    body = _FN.read_text().split("bs_updater_install_hash() {", 1)[1].split("\n}", 1)[0]
-    hashed = set(re.findall(r"[\w.-]+\.(?:sh|service|timer|conf|txt)\b", body))
+def _triggers(tmp_path: Path) -> list[str]:
+    res = _run(tmp_path, 'printf "%s\\n" "${BS_UPDATER_INSTALL_TRIGGERS[@]}"')
+    return res.stdout.split()
+
+
+def _grep_hits(regex: str, line: str) -> bool:
+    res = subprocess.run(
+        ["grep", "-E", regex], input=line + "\n", text=True, capture_output=True
+    )
+    return res.returncode == 0
+
+
+def test_post_merge_trigger_regex_matches_exactly_the_array(tmp_path: Path) -> None:
+    # post-merge derives its diff regex from the same array the stamp hash covers.
     merge = (_SCRIPTS / "post-merge").read_text()
-    trigger = merge[: merge.index("Updater install files changed")].rsplit(
-        "if echo", 1
-    )[1]
-    listed = {
-        m.replace("\\.", ".") for m in re.findall(r"\^scripts/([^$]+)\$", trigger)
-    }
-    assert hashed == listed
-    base = _run(tmp_path, f'bs_updater_install_hash "{_SCRIPTS}"').stdout.strip()
+    assert "bs_updater_install_trigger_regex" in merge
+    assert "\\.service$" not in merge
+    triggers = _triggers(tmp_path)
+    assert len(triggers) == len(set(triggers)) >= 9
+    regex = _run(tmp_path, "bs_updater_install_trigger_regex").stdout.strip()
+    for name in triggers:
+        assert _grep_hits(regex, f"scripts/{name}"), name
+        decoys = [name + "x", "x" + name, name.replace(".", "_"), f"other/{name}"]
+        for decoy in decoys:
+            assert not _grep_hits(regex, f"scripts/{decoy}"), decoy
+
+
+def test_install_hash_covers_every_trigger(tmp_path: Path) -> None:
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    triggers = _triggers(tmp_path)
+    for name in triggers:
+        (scripts / name).write_text("a\n")
+    base = _run(tmp_path, f'bs_updater_install_hash "{scripts}"').stdout.strip()
     assert re.fullmatch(r"[0-9a-f]{32}", base)
+    for name in triggers:
+        (scripts / name).write_text("b\n")
+        changed = _run(tmp_path, f'bs_updater_install_hash "{scripts}"').stdout.strip()
+        assert changed != base, name
+        (scripts / name).write_text("a\n")
 
 
 def test_install_hash_changes_with_a_listed_file(tmp_path: Path) -> None:
@@ -174,6 +200,24 @@ def test_code_hash_matches_the_daemon(tmp_path: Path) -> None:
 
     pkg = _SCRIPTS.parent / "updater"
     res = _run(tmp_path, f'bs_updater_code_hash "{_SCRIPTS.parent}"')
+    assert res.stdout.strip() == code_hash(pkg)
+
+
+def test_code_hash_parity_with_odd_filenames(tmp_path: Path) -> None:
+    # A divergence from the daemon's hash means a restart loop, so cover spaces and case.
+    from updater.__main__ import code_hash
+
+    pkg = tmp_path / "repo" / "updater"
+    pkg.mkdir(parents=True)
+    for name, body in {
+        "__main__.py": "a\n",
+        "my mod.py": "space\n",
+        "my.py": "dot\n",
+        "Zed.py": "upper\n",
+        "components.yaml": "k: v\n",
+    }.items():
+        (pkg / name).write_text(body)
+    res = _run(tmp_path, f'bs_updater_code_hash "{pkg.parent}"')
     assert res.stdout.strip() == code_hash(pkg)
 
 

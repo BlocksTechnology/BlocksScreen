@@ -196,13 +196,27 @@ bs_in_moonraker_cgroup() {
     grep -q '/moonraker\.service$' "${1:-/proc/self/cgroup}" 2>/dev/null
 }
 
-# Hash of post-merge's install trigger files, stamped by install-updater.sh. $1 = scripts dir.
+# Files under scripts/ whose change owes an install-updater.sh run: the one list behind the stamp hash and post-merge's diff regex.
+BS_UPDATER_INSTALL_TRIGGERS=(
+    install-updater.sh bs-apt-helper.sh
+    BlocksScreen-updater.service BlocksScreen-bootstrap.service
+    BlocksScreen-clock.service BlocksScreen-clock.timer
+    com.blockscreen.Updater.conf com.blockscreen.Updater.service
+    requirements-pip.txt
+)
+
+# Hash of the install trigger files, stamped by install-updater.sh. $1 = scripts dir.
 bs_updater_install_hash() {
-    (cd "$1" 2>/dev/null && md5sum install-updater.sh bs-apt-helper.sh \
-        BlocksScreen-updater.service BlocksScreen-bootstrap.service \
-        BlocksScreen-clock.service BlocksScreen-clock.timer \
-        com.blockscreen.Updater.conf com.blockscreen.Updater.service \
-        requirements-pip.txt 2>/dev/null) | md5sum | cut -d' ' -f1
+    (cd "$1" 2>/dev/null && md5sum "${BS_UPDATER_INSTALL_TRIGGERS[@]}" 2>/dev/null) | md5sum | cut -d' ' -f1
+}
+
+# grep -E regex matching the `git diff --name-only` lines of the install trigger files.
+bs_updater_install_trigger_regex() {
+    local f out=""
+    for f in "${BS_UPDATER_INSTALL_TRIGGERS[@]}"; do
+        out+="${out:+|}^scripts/${f//./\\.}\$"
+    done
+    printf '%s\n' "$out"
 }
 
 # True while an update batch or the deploy unit may run install-updater.sh.
@@ -217,7 +231,7 @@ bs_updater_install_busy() {
 # Twin of updater.__main__.code_hash: updater/*.py + components.yaml, C-sorted. $1 = BS_PATH.
 bs_updater_code_hash() {
     local f
-    for f in $(printf '%s\n' "$1"/updater/*.py "$1/updater/components.yaml" | LC_ALL=C sort); do
+    printf '%s\n' "$1"/updater/*.py "$1/updater/components.yaml" | LC_ALL=C sort | while IFS= read -r f; do
         cat -- "$f" 2>/dev/null || true
     done | sha256sum | cut -d' ' -f1
 }
@@ -243,6 +257,7 @@ bs_wait_moonraker_idle() {
     url="http://127.0.0.1:$(sed -n '/^\[server\]/,/^\[/ s/^port:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$1" 2>/dev/null | head -n1)"
     [ "$url" = "http://127.0.0.1:" ] && url="${url}7125"
     while :; do
+        # A print or pause (even overnight) keeps bootstrap waiting here, holding its flock, on purpose.
         # Captured, not piped to grep -q: under pipefail curl's SIGPIPE reads as idle.
         status=$(curl -fsm 5 "$url/printer/objects/query?print_stats=state" 2>/dev/null) || status=""
         case "$status" in *'"state": "printing"'* | *'"state":"printing"'* | *'"state": "paused"'* | *'"state":"paused"'*)

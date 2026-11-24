@@ -41,13 +41,10 @@ def test_systemd_service_exists_and_user_matches() -> None:
 
 def test_install_triggers_agree_and_cover_bus_files() -> None:
     # Only install-updater.sh deploys these: a file missing from a trigger never ships.
-    merge = (_SCRIPTS / "post-merge").read_text()
-    regex = re.search(r"Updater install files changed", merge)
-    assert regex
-    line = merge[: regex.start()].rsplit("if echo", 1)[1]
-    merge_set = {
-        m.replace("\\.", ".") for m in re.findall(r"\^(scripts/[^$]+)\$", line)
-    }
+    common = (_SCRIPTS / "bs-common.sh").read_text()
+    array = re.search(r"BS_UPDATER_INSTALL_TRIGGERS=\(([^)]*)\)", common)
+    assert array
+    merge_set = {f"scripts/{name}" for name in array.group(1).split()}
     hook = (_ROOT / "updater" / "hooks" / "BlocksScreen.sh").read_text()
     block = hook[: hook.index("install files changed")].rsplit("diff --quiet", 1)[1]
     hook_set = set(re.findall(r"scripts/[\w.-]+", block))
