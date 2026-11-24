@@ -24,6 +24,7 @@ from lib.panels.filamentTab import FilamentTab
 from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
+from lib.panels.widgets.PrintTab.jobStatusPage import JobStatusWidget
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.MainWindow.cancelPage import CancelPage
@@ -920,8 +921,7 @@ class MainWindow(QtWidgets.QMainWindow):
             was_active = self._is_job_active()
             self._print_state = value
             self._print_state_known = True
-            # Same states as jobStatusPage: a cancelled job opens no finished screen.
-            if value in ("complete", "error"):
+            if value in JobStatusWidget.FINISH_SCREEN_STATES:
                 self._finish_screen_hold = self._finish_screen_hold or was_active
             else:
                 # Standby = finished screen dismissed (SDCARD_RESET_FILE) or Klipper restarted.
