@@ -96,6 +96,14 @@ class TestMakeCleanEnv:
         assert "LANGUAGE" not in result
 
 
+def _read_or_empty(path: Path) -> str:
+    """File text, or "" while git has it unlinked mid-checkout."""
+    try:
+        return path.read_text()
+    except OSError:
+        return ""
+
+
 class TestRun:
     @pytest.mark.asyncio
     async def test_success_returns_stdout(self, tmp_path):
@@ -240,10 +248,12 @@ class TestRun:
         task = asyncio.create_task(
             _run([GIT, "read-tree", "--reset", "-u", trees[1]], timeout=60.0, cwd=repo)
         )
+        first = repo / "d" / "f0"
         deadline = time.monotonic() + 30.0
-        while not lock.exists():
+        # git opens index.lock before arming its signal cleanup; cancel once it writes the worktree.
+        while not (lock.exists() and _read_or_empty(first) == "b0\n"):
             assert not task.done(), "read-tree finished before the cancel"
-            assert time.monotonic() < deadline, "index.lock never appeared"
+            assert time.monotonic() < deadline, "read-tree never started writing"
             await asyncio.sleep(0.0005)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
@@ -1377,7 +1387,8 @@ class TestGitShowFile:
 
 class TestCheckAptStatus:
     @pytest.mark.asyncio
-    async def test_success(self):
+    async def test_success(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))  # writes the apt cache under ~/.cache
         proc = _make_proc(0, b"", b"")
         with patch(
             "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc

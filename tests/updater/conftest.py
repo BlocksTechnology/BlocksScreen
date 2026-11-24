@@ -5,7 +5,9 @@ withouth a real D-Bus session bus.
 """
 
 import asyncio
+import importlib
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -32,6 +34,34 @@ def mock_sdbus():
             mp.delitem(sys.modules, key, raising=False)
         mp.setitem(sys.modules, "sdbus", mock)
         yield mock
+
+
+def _rebase(value, real: Path, home: Path):
+    """Map a path (or tuple of paths) under the real home onto the test home."""
+    if isinstance(value, tuple):
+        return tuple(_rebase(v, real, home) for v in value)
+    if isinstance(value, Path) and value.is_relative_to(real):
+        return home / value.relative_to(real)
+    return value
+
+
+@pytest.fixture(autouse=True)
+def hermetic_home(tmp_path, monkeypatch):
+    """Import-time home paths and the lock dir point at tmp, never the real ~/.cache."""
+    # mock_sdbus re-imports the package, so the cached submodule is not its attribute.
+    locking = importlib.import_module("updater.locking")
+    real, home = Path.home(), tmp_path / "home"
+    run = home / ".cache" / "blockscreen"
+    run.mkdir(parents=True)
+    monkeypatch.setattr(locking, "_runtime_dir", lambda: run)
+    for name, mod in list(sys.modules.items()):
+        if name != "updater" and not name.startswith("updater."):
+            continue
+        for attr, value in list(vars(mod).items()):
+            rebased = _rebase(value, real, home)
+            if rebased is not value:
+                monkeypatch.setattr(mod, attr, rebased)
+    return home
 
 
 @pytest.fixture(autouse=True)
