@@ -11,7 +11,7 @@ _SRC = pathlib.Path(__file__).resolve().parents[2] / "BlocksScreen"
 
 # A GIL deadlock or qFatal is only observable from outside the process.
 _CHILD = """
-import importlib.util, pathlib, sys, types
+import gc, importlib.util, pathlib, sys, types
 from PyQt6 import QtCore, sip
 
 src = pathlib.Path(sys.argv[1])
@@ -50,7 +50,11 @@ if sys.argv[2] == "self":
 else:
     QtCore.QThread.msleep(200)
     mon.close()
+    assert not sip.ispyowned(mon), "detached monitor still Python-owned"
+    assert mon in mod._DETACHED
     sip.delete(owner)  # as USBManager.close() does
+    del mon
+    gc.collect()
 sum(range(10**6))
 sys.stdout.write("alive\\n")
 sys.stdout.flush()

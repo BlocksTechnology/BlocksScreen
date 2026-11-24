@@ -25,7 +25,9 @@ from .udisks2_dbus_async import (
 UDisks2_service: str = "org.freedesktop.UDisks2"
 UDisks2_obj_path: str = "org/freedesktop/UDisks2"
 AlreadyMountedException = "org.freedesktop.UDisks2.Error.AlreadyMounted"
-_STOP_WAIT_MS = 5000
+_STOP_WAIT_MS = 15000
+# Detached monitors live to process exit; the ref keeps sip from ever collecting them.
+_DETACHED: list[QtCore.QThread] = []
 
 _T = typing.TypeVar(name="_T")
 
@@ -253,6 +255,7 @@ class UDisksDBusAsync(QtCore.QThread):
         """Orphan a monitor that will not stop, since deleting a running QThread aborts."""
         self.setParent(None)
         sip.transferto(self, None)
+        _DETACHED.append(self)
 
     async def monitor_dbus(self) -> None:
         """Schedule coroutines for UDisks2 signals `interfaces_added`, `interfaces_removed`
