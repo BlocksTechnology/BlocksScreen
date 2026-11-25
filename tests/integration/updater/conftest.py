@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import yaml
 
+# Deliberately unmarked: pytest.ini's `-m "not integration"` would drop this suite from CI.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REMOTE_BASE = "https://git.test/"
 
@@ -377,11 +378,12 @@ def _rebase(value: object, real: Path, home: Path) -> object:
     return value
 
 
-def _closed_port() -> int:
-    """A local port nothing listens on, so Moonraker calls fail fast as on an offline box."""
+@pytest.fixture
+def closed_port():
+    """Bound but never listening, so connects are refused and no other process can take it mid-test."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+        yield s.getsockname()[1]
 
 
 def _patch(mp: pytest.MonkeyPatch, g: dict, **values: object) -> None:
@@ -392,7 +394,7 @@ def _patch(mp: pytest.MonkeyPatch, g: dict, **values: object) -> None:
 
 
 @pytest.fixture
-def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
+def harness(tmp_path, monkeypatch, mock_sdbus, closed_port) -> Harness:
     """Isolated device with every updater path and root tool redirected."""
     import updater.dbus_service as dbus_mod
 
@@ -490,7 +492,7 @@ def harness(tmp_path, monkeypatch, mock_sdbus) -> Harness:
         (root / "no-klippy.sock", *printing_fn.__defaults__[1:]),
     )
     # A dev Moonraker on :7125 would otherwise answer the post-update sync.
-    _patch(monkeypatch, exec_g, MOONRAKER_PORT=_closed_port())
+    _patch(monkeypatch, exec_g, MOONRAKER_PORT=closed_port)
     _patch(monkeypatch, lock_g, _runtime_dir=lambda: h.run_dir)
     _patch(
         monkeypatch,
