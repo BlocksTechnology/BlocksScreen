@@ -16,11 +16,48 @@ _as_owner() {
 }
 _git() { _as_owner git -C "$BS_PATH" "$@"; }
 
+# Branch an emptied HEAD named: the reflog's last checkout, else the only local branch.
+_lost_head_branch() {
+    local b
+    b=$(grep -aoE 'checkout: moving from [^ ]+ to [^ ]+$' "$BS_PATH/.git/logs/HEAD" 2>/dev/null | tail -n1)
+    b=${b##* to }
+    if [[ -z "$b" ]]; then
+        b=$({
+            (cd "$BS_PATH/.git/refs/heads" 2>/dev/null && find . -type f | sed 's|^\./||')
+            sed -n 's|^[0-9a-f]* refs/heads/||p' "$BS_PATH/.git/packed-refs" 2>/dev/null
+        } | sort -u)
+        [[ "$(wc -l <<<"$b")" == 1 ]] || return 1
+    fi
+    [[ -f "$BS_PATH/.git/refs/heads/$b" ]] ||
+        awk -v r="refs/heads/$b" '$2 == r { f = 1 } END { exit !f }' "$BS_PATH/.git/packed-refs" 2>/dev/null ||
+        return 1
+    git check-ref-format --branch "$b" >/dev/null 2>&1 && printf '%s' "$b"
+}
+
+# git reads an empty HEAD as "not a git repository", which would fail every step below.
+if ! grep -qE '^(ref: refs/heads/.+|[0-9a-f]{40,64})$' "$BS_PATH/.git/HEAD" 2>/dev/null; then
+    if _b=$(_lost_head_branch); then
+        printf 'ref: refs/heads/%s\n' "$_b" | _as_owner tee "$BS_PATH/.git/HEAD" >/dev/null
+        sync -f "$BS_PATH/.git"
+        echo "$_tag HEAD damaged, pointed it back at $_b"
+    else
+        echo "$_tag HEAD damaged and its branch unknown, leaving recovery to the updater"
+        exit 0
+    fi
+fi
+
 # Read before pruning: once an empty loose branch ref is gone, git falls back to an older packed-refs entry.
 _head_ref=$(sed -n 's/^ref: //p' "$BS_PATH/.git/HEAD" 2>/dev/null)
 _branch=${_head_ref#refs/heads/}
 _ref_lost=0
 [[ -n "$_head_ref" && -f "$BS_PATH/.git/$_head_ref" && ! -s "$BS_PATH/.git/$_head_ref" ]] && _ref_lost=1
+# The commit the tree was on, to tell a reset from a rollback; a lost ref keeps it only in its reflog.
+if [[ "$_ref_lost" == 1 ]]; then
+    _installed=$(grep -aoE '^[0-9a-f]{40,64} [0-9a-f]{40,64} ' "$BS_PATH/.git/logs/$_head_ref" 2>/dev/null |
+        tail -n1 | cut -d' ' -f2)
+else
+    _installed=$(_git rev-parse -q --verify HEAD 2>/dev/null)
+fi
 
 # Nothing else has started yet, so any lock is stale; an empty ref aborts every fetch.
 rm -f "$BS_PATH/.git/index.lock"
@@ -50,11 +87,16 @@ _restore() {
 
 # Resets to the first target that works, so one damaged target does not end the recovery.
 _reset_chain() {
-    local good
+    local good was=${_installed:0:8}
     find "$BS_PATH/.git/objects" -type f -empty -delete 2>/dev/null
     good=$(tr -d '[:space:]' 2>/dev/null <"$HOME_DIR/.cache/blockscreen/last_good_commit")
     if [[ -n "$good" ]] && _git cat-file -e "$good^{tree}" 2>/dev/null && _git reset -q --hard "$good"; then
-        echo "$_tag reset to last good ${good:0:8}"
+        if [[ "$good" == "$_installed" ]]; then
+            echo "$_tag reset to last good ${good:0:8}"
+        else
+            # A cut right after a pull lands here before the new commit is blessed; Update re-applies it.
+            echo "$_tag rolled back to last good ${good:0:8} from ${was:-an unknown commit}"
+        fi
         return 0
     fi
     # Moonraker's soft recovery resets to the local remote ref without fetching; the network is rarely up yet.

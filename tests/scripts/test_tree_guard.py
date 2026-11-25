@@ -252,3 +252,51 @@ def test_post_merge_syncs_the_tree_on_a_moonraker_pull(tmp_path: Path) -> None:
     assert res.returncode == 0, res.stderr
     assert "under moonraker" in res.stdout
     assert log.read_text().split() == ["-f", str(tmp_path / "repo")]
+
+
+def test_post_pull_cut_logs_the_rollback(repo, tmp_path, env):
+    v1, v2 = _commit_v2(repo, env)
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").strip()
+    (repo / ".git/refs/heads" / branch).write_bytes(b"")  # cut before v2 was blessed
+    _last_good(tmp_path / "home", v1)
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert f"rolled back to last good {v1[:8]} from {v2[:8]}" in res.stdout
+    assert _git(repo, "rev-parse", "HEAD").strip() == v1
+
+
+def test_reset_to_the_installed_commit_is_not_a_rollback(repo, tmp_path, env):
+    head = _git(repo, "rev-parse", "HEAD").strip()
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").strip()
+    (repo / ".git/refs/heads" / branch).write_bytes(b"")
+    _last_good(tmp_path / "home", head)
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert f"reset to last good {head[:8]}" in res.stdout
+    assert "rolled back" not in res.stdout
+
+
+@pytest.mark.parametrize("switched", [False, True])
+def test_emptied_head_is_pointed_back_at_its_branch(repo, tmp_path, env, switched):
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").strip()
+    if switched:  # two branches: only the reflog's last checkout names the right one
+        _git(repo, "checkout", "-qb", "other")
+        branch = "other"
+    (repo / ".git/HEAD").write_bytes(b"")
+    (repo / "scripts/start.sh").write_text("")
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert _git(repo, "symbolic-ref", "--short", "HEAD").strip() == branch
+    assert (repo / "scripts/start.sh").read_text() == _FILES["scripts/start.sh"]
+    assert _git(repo, "status", "--porcelain") == ""
+
+
+def test_emptied_head_with_an_unknown_branch_is_left_alone(repo, tmp_path, env):
+    _git(repo, "branch", "other")  # two branches, no checkout in the reflog
+    index = (repo / ".git/index").read_bytes()
+    (repo / ".git/HEAD").write_bytes(b"")
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert "branch unknown" in res.stdout
+    assert (repo / ".git/HEAD").read_bytes() == b""
+    assert (repo / ".git/index").read_bytes() == index
