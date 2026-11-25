@@ -1542,6 +1542,17 @@ cmd_list_json() {
         "$mcu_array"
 }
 
+# Exit-4 steps, repeated at the end of the run so they are not lost mid-log.
+_recovery_steps() {
+    printf '%s\n' \
+        "To recover, with someone at the printer:" \
+        "  1. Switch the printer off and on: each board boots whatever is in its flash." \
+        "  2. Re-run this script: a board that answers again is flashed normally." \
+        "  3. CAN board still missing: double-press its reset to enter Katapult, then re-run." \
+        "  4. STM32 still missing: hold BOOT0, press RESET, release BOOT0, re-run with --force." \
+        "  5. RP2040 still missing: hold BOOTSEL, press RESET, release BOOTSEL, re-run with --force."
+}
+
 _summary_box() {
     local title="$1"
     echo "" >&2
@@ -1892,6 +1903,7 @@ cmd_flash() {
             err "[$name] is still in ROM DFU: switch the printer's 24 V supply off now"
             err "  (some boards drive heater outputs in DFU), then re-run with someone present."
         done
+        _recovery_steps | while IFS= read -r _line; do warn "$_line"; done
         return 4
     fi
     [ ${#failed[@]} -gt 0 ] && return 1 || return 0
@@ -2141,6 +2153,8 @@ cmd_tui() {
         [ ${#skipped_utd[@]} -gt 0 ] && result_body+="  ${CYAN}[->] Up to date${RESET}  : ${skipped_utd[*]}\n"
         [ ${#skipped_missing[@]} -gt 0 ] && result_body+="  ${YELLOW}[!!] Not found${RESET}   : ${skipped_missing[*]}\n"
         [ ${#failed[@]} -gt 0 ] && result_body+="  ${RED}[XX] Failed${RESET}      : ${failed[*]}\n"
+
+        [ "$flash_rc" -eq 4 ] && result_body+="\n${YELLOW}$(_recovery_steps | sed 's/^/  /')${RESET}\n"
 
         local result_title
         if [ "$flash_rc" -eq 0 ]; then

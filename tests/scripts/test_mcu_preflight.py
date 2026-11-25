@@ -517,6 +517,7 @@ def test_board_left_in_dfu_needs_the_24v_cut(tmp_path: Path) -> None:
     rc, out, _ = _run_cmd_flash(tmp_path, CAN_OK="1", DFU_RC="4")
     assert rc == 4
     assert "switch the printer's 24 V supply off" in out
+    assert out.rindex("hold BOOT0, press RESET") > out.rindex("Needs someone")
 
 
 def test_failed_write_with_klipper_ready_needs_no_person(tmp_path: Path) -> None:
