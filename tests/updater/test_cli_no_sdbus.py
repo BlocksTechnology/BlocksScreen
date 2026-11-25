@@ -104,3 +104,44 @@ class TestWatchdogPingInterval:
 
         monkeypatch.setenv("WATCHDOG_USEC", "not-a-number")
         assert _watchdog_ping_interval() == 15.0
+
+
+class TestYamlProbe:
+    """An idle daemon leaves once a fresh interpreter imports a repaired PyYAML."""
+
+    def test_fresh_interpreter_with_yaml_reports_repaired(self):
+        from updater.__main__ import _yaml_repaired
+
+        assert asyncio.run(_yaml_repaired()) is True
+
+    def test_failing_interpreter_reports_broken(self):
+        from updater.__main__ import _yaml_repaired
+
+        assert asyncio.run(_yaml_repaired("/bin/false")) is False
+
+    def _serve(self, monkeypatch, yaml_broken, results):
+        from updater import __main__ as cli
+
+        calls = []
+
+        async def fake_probe():
+            calls.append(1)
+            return results[len(calls) - 1]
+
+        async def run():
+            stop = asyncio.Event()
+            asyncio.get_running_loop().call_later(0.5, stop.set)
+            await cli._serve(stop, 0.01, yaml_broken)
+            return stop.is_set()
+
+        monkeypatch.setattr(cli, "_YAML_PROBE_S", 0.0)
+        monkeypatch.setattr(cli, "_yaml_repaired", fake_probe)
+        return asyncio.run(run()), calls
+
+    def test_serve_returns_on_repair_before_stop(self, monkeypatch):
+        stopped, calls = self._serve(monkeypatch, True, [False, False, True])
+        assert (stopped, len(calls)) == (False, 3)
+
+    def test_serve_without_broken_yaml_never_probes(self, monkeypatch):
+        stopped, calls = self._serve(monkeypatch, False, [])
+        assert (stopped, calls) == (True, [])

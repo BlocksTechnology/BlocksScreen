@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2329 # the component heal is reached only through the EXIT trap
 # Boot guard: restores tracked files a power cut left empty, before any unit runs from the tree.
 # Installed outside the tree by install-updater.sh: an in-tree healer can be emptied by the same cut.
 # Usage: bs-tree-guard.sh BS_PATH HOME_DIR. Always exits 0, a failed heal must not block boot.
@@ -7,13 +8,79 @@ set -uo pipefail
 BS_PATH="${1:?usage: bs-tree-guard.sh BS_PATH HOME_DIR}"
 HOME_DIR="${2:?usage: bs-tree-guard.sh BS_PATH HOME_DIR}"
 _tag="[bs-tree-guard]"
+
+# Root-run git would leave root-owned files the updater cannot rewrite; $1 is the tree's owner.
+_as_user() {
+    local user=$1
+    shift
+    if [[ "$(id -u)" == 0 && "$user" != root ]]; then runuser -u "$user" -- "$@"; else "$@"; fi
+}
+
+# Regular files in REPO that are empty on disk but not in HEAD, one per line.
+_broken_paths() {
+    local repo=$1 user=$2 meta path
+    while IFS=$'\t' read -r -d '' meta path; do
+        [[ "$meta" == 100* && "${meta##* }" != 0 ]] || continue
+        [[ -f "$repo/$path" && ! -s "$repo/$path" ]] && printf '%s\n' "$path"
+    done < <(_as_user "$user" git -C "$repo" ls-tree -r -l -z --full-tree HEAD)
+}
+
+# Git trees of the other components, read like load_components: bundled list, user override, home only.
+_component_repos() {
+    local p home bs
+    home=$(realpath -m -- "$HOME_DIR")
+    bs=$(realpath -m -- "$BS_PATH")
+    sed -n 's/^[[:space:]-]*path:[[:space:]]*//p' "$BS_PATH/updater/components.yaml" \
+        "$HOME_DIR/printer_data/config/blockscreen_updater.yaml" 2>/dev/null |
+        sed "s/[[:space:]]*#.*//; s/^[\"']//; s/[\"']$//" | sort -u |
+        while IFS= read -r p; do
+            [[ "$p" == \~/* ]] && p="$HOME_DIR/${p#\~/}"
+            p=$(realpath -e -- "$p" 2>/dev/null) || continue
+            [[ "$p" == "$home"/* && "$p" != "$bs" && -d "$p/.git" ]] && printf '%s\n' "$p"
+        done
+}
+
+# Offline heal only: an unreadable HEAD needs the updater's boot repair (network, prev_hash).
+_heal_component() {
+    local repo=$1 user head_ref broken tag
+    tag="$_tag $(basename "$repo"):"
+    user=$(stat -c %U "$repo")
+    rm -f "$repo/.git/index.lock"
+    find "$repo/.git" -maxdepth 1 -type f -name '*_HEAD' -empty -delete 2>/dev/null
+    head_ref=$(sed -n 's/^ref: //p' "$repo/.git/HEAD" 2>/dev/null)
+    # The head ref is kept: once gone, git silently falls back to an older packed-refs commit.
+    find "$repo/.git/refs" -type f -empty ! -path "$repo/.git/$head_ref" -delete 2>/dev/null
+    if [[ -n "$head_ref" && -f "$repo/.git/$head_ref" && ! -s "$repo/.git/$head_ref" ]] \
+        || ! _as_user "$user" git -C "$repo" cat-file -e 'HEAD^{tree}' 2>/dev/null; then
+        echo "$tag HEAD unreadable, left to the updater's boot repair"
+        return 0
+    fi
+    if ! _as_user "$user" git -C "$repo" ls-files >/dev/null 2>&1; then
+        echo "$tag index unreadable, rebuilding"
+        rm -f "$repo/.git/index"
+        _as_user "$user" git -C "$repo" reset -q 2>/dev/null
+    fi
+    broken=$(_broken_paths "$repo" "$user")
+    [[ -n "$broken" ]] || return 0
+    if _as_user "$user" git -C "$repo" --literal-pathspecs checkout HEAD --pathspec-from-file=- <<<"$broken" 2>/dev/null; then
+        sync -f "$repo"
+        echo "$tag $(wc -l <<<"$broken") empty tracked files restored from HEAD"
+    else
+        echo "$tag $(wc -l <<<"$broken") empty tracked files, restore failed, needs an Update or a reclone"
+    fi
+}
+
+_heal_components() {
+    local repo
+    while IFS= read -r repo; do _heal_component "$repo"; done < <(_component_repos)
+}
+# Runs on every exit below, so the list is read after the BlocksScreen heal restored components.yaml.
+trap _heal_components EXIT
+
 [[ -d "$BS_PATH/.git" ]] || exit 0
 
 _owner=$(stat -c %U "$BS_PATH")
-# Root-run git would leave root-owned files the updater cannot rewrite.
-_as_owner() {
-    if [[ "$(id -u)" == 0 && "$_owner" != root ]]; then runuser -u "$_owner" -- "$@"; else "$@"; fi
-}
+_as_owner() { _as_user "$_owner" "$@"; }
 _git() { _as_owner git -C "$BS_PATH" "$@"; }
 
 # Local branch names, loose and packed; read by hand since git refuses a repo with an empty HEAD.
@@ -91,15 +158,6 @@ if ! _git ls-files >/dev/null 2>&1; then
     _git reset -q 2>/dev/null
 fi
 
-# Regular files that are empty on disk but not in HEAD, one per line.
-_broken_paths() {
-    local meta path
-    while IFS=$'\t' read -r -d '' meta path; do
-        [[ "$meta" == 100* && "${meta##* }" != 0 ]] || continue
-        [[ -f "$BS_PATH/$path" && ! -s "$BS_PATH/$path" ]] && printf '%s\n' "$path"
-    done < <(_git ls-tree -r -l -z --full-tree HEAD)
-}
-
 # Literal pathspecs: a tracked name with glob characters must not match other files.
 _restore() {
     _git --literal-pathspecs checkout HEAD --pathspec-from-file=- <<<"$1"
@@ -140,7 +198,7 @@ if [[ "$_ref_lost" == 1 ]] || ! _git cat-file -e 'HEAD^{tree}' 2>/dev/null; then
     echo "$_tag HEAD unreadable, pruning empty objects"
     _reset_chain && healed=1
 else
-    _broken=$(_broken_paths)
+    _broken=$(_broken_paths "$BS_PATH" "$_owner")
     # Units, the installer and its sources live in scripts/; other files need no redeploy.
     grep -q '^scripts/' <<<"$_broken" || full=0
     if [[ -n "$_broken" ]]; then

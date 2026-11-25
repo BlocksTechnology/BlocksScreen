@@ -220,9 +220,76 @@ def test_emptied_orig_head_is_removed_so_the_next_pull_works(repo, tmp_path, env
     assert not _flag(tmp_path / "home").exists()
 
 
-def test_unit_ordered_before_moonraker():
+def test_unit_ordered_before_moonraker_and_klipper():
     unit = _SCRIPT.with_name("BlocksScreen-tree-guard.service").read_text()
-    assert "Before=moonraker.service" in unit
+    assert "Before=moonraker.service klipper.service" in unit
+
+
+def _component(home: Path, name: str, env: dict[str, str]) -> Path:
+    """A committed component tree under home with one module and one local-edit file."""
+    comp = home / name
+    comp.mkdir(parents=True)
+    (comp / "klippy.py").write_text("print('klippy')\n")
+    (comp / "printer.cfg").write_text("[printer]\n")
+    for args in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "init"]):
+        subprocess.run(["git", "-C", str(comp), *args], check=True, env=env)
+    return comp
+
+
+def test_restores_emptied_files_in_component_trees(repo, tmp_path, env):
+    home = tmp_path / "home"
+    klipper = _component(home, "klipper", env)
+    moonraker = _component(home, "moonraker", env)
+    (repo / "updater").mkdir()
+    (repo / "updater/components.yaml").write_text(
+        f"components:\n  - name: klipper\n    path: ~/klipper\n"
+        f"  - name: bs\n    path: {repo}\n  - name: gone\n    path: ~/gone\n"
+    )
+    override = home / "printer_data/config/blockscreen_updater.yaml"
+    override.parent.mkdir(parents=True)
+    override.write_text(f'components:\n  - path: "{moonraker}"  # pinned\n')
+    for comp in (klipper, moonraker):
+        (comp / "klippy.py").write_text("")
+        (comp / ".git/index.lock").write_text("")
+    (klipper / "printer.cfg").write_text("[printer]\nlocal: 1\n")
+    res = _run(repo, home, env)
+    assert res.returncode == 0, res.stderr
+    for comp in (klipper, moonraker):
+        assert (comp / "klippy.py").read_text() == "print('klippy')\n"
+        assert not (comp / ".git/index.lock").exists()
+    assert (klipper / "printer.cfg").read_text() == "[printer]\nlocal: 1\n"
+    assert "klipper: 1 empty tracked files restored" in res.stdout
+    # Component heals redeploy nothing: their services start after the guard anyway.
+    assert not (tmp_path / "systemctl.log").exists()
+
+
+def test_component_with_unreadable_head_is_left_to_the_updater(repo, tmp_path, env):
+    home = tmp_path / "home"
+    klipper = _component(home, "klipper", env)
+    override = home / "printer_data/config/blockscreen_updater.yaml"
+    override.parent.mkdir(parents=True)
+    override.write_text("components:\n  - path: ~/klipper\n")
+    branch = _git(klipper, "symbolic-ref", "HEAD").strip()
+    (klipper / ".git" / branch).write_text("")
+    (klipper / "klippy.py").write_text("")
+    res = _run(repo, home, env)
+    assert res.returncode == 0, res.stderr
+    assert "klipper: HEAD unreadable, left to the updater's boot repair" in res.stdout
+    # The empty head ref stays, so git cannot fall back to an older packed commit.
+    assert (klipper / ".git" / branch).exists()
+    assert (klipper / "klippy.py").read_text() == ""
+
+
+def test_component_outside_home_is_ignored(repo, tmp_path, env):
+    home = tmp_path / "home"
+    outside = _component(tmp_path, "outside", env)
+    override = home / "printer_data/config/blockscreen_updater.yaml"
+    override.parent.mkdir(parents=True)
+    override.write_text(f"components:\n  - path: {outside}\n")
+    (outside / "klippy.py").write_text("")
+    res = _run(repo, home, env)
+    assert res.returncode == 0, res.stderr
+    assert (outside / "klippy.py").read_text() == ""
 
 
 def test_post_merge_syncs_the_tree_on_a_moonraker_pull(tmp_path: Path) -> None:

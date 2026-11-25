@@ -4,7 +4,8 @@ After=local-fs.target
 Before=BlocksScreen-xorg.service BlocksScreen.service BlocksScreen-updater.service
 Before=BlocksScreen-deploy.service BlocksScreen-bootstrap.service BlocksScreen-clock.service
 # Delays Moonraker up to 60 s only when HEAD is unreadable and the guard fetches.
-Before=moonraker.service
+# Component trees (Klipper, Moonraker, ...) are restored before their services import them.
+Before=moonraker.service klipper.service crowsnest.service Spoolman.service
 
 [Service]
 Type=oneshot
