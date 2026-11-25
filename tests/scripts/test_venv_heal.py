@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import types
 from pathlib import Path
@@ -200,13 +201,13 @@ def test_low_disk_defers_the_reinstall_and_keeps_the_dist(
     dist_info = _dist(site, "foo", "1.0", {"foo/__init__.py": b"x" * (2 << 20)})
     (site / "foo/__init__.py").write_bytes(b"")
     calls = _fake_pip(monkeypatch, heal, rc=0)
-    monkeypatch.setattr(heal, "_free_mb", lambda: heal._MIN_FREE_MB + 1)
+    monkeypatch.setattr(heal, "_free_mb", lambda: heal._min_free_mb() + 1)
     assert heal.heal() == 1
     assert calls == []  # 2 MB to reinstall on top of the margin: no download
     assert dist_info.exists()
     assert heal._read_pending() == ["foo==1.0"]
 
-    monkeypatch.setattr(heal, "_free_mb", lambda: heal._MIN_FREE_MB + 2)
+    monkeypatch.setattr(heal, "_free_mb", lambda: heal._min_free_mb() + 2)
     assert heal.heal() == 1
     assert [c[3] for c in calls] == ["wheel", "install"]
     assert not heal._pending_file().exists()
@@ -332,16 +333,14 @@ def test_crash_exits_3_not_healed(
 def test_free_space_margin_matches_the_updater(heal: types.ModuleType) -> None:
     from updater.models import MIN_FREE_MB
 
-    assert heal._MIN_FREE_MB == MIN_FREE_MB
+    assert heal._min_free_mb() == MIN_FREE_MB  # read from the tree, never a copy
 
 
-def test_lost_record_is_sized_from_the_fetched_wheels(
-    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    site = heal._site_packages()
-    dist_info = _dist(site, "foo", "1.0", {"foo/__init__.py": b"x = 1\n"})
-    (dist_info / "RECORD").write_bytes(b"")  # estimate before download: 0 MB
-    calls = _fake_pip(monkeypatch, heal, rc=0)
+def _fake_pip_wheel(
+    monkeypatch: pytest.MonkeyPatch, heal: types.ModuleType, mb: int
+) -> list[list[str]]:
+    """Stub pip; `pip wheel` fetches a foo wheel that unpacks to MB MiB."""
+    calls: list[list[str]] = []
 
     def run(argv, **_kw):
         calls.append(argv)
@@ -349,15 +348,50 @@ def test_lost_record_is_sized_from_the_fetched_wheels(
             wheels = Path(argv[argv.index("--wheel-dir") + 1])
             wheels.mkdir()
             with heal.zipfile.ZipFile(wheels / "foo-1.0-py3-none-any.whl", "w") as zf:
-                zf.writestr("foo/big.bin", b"\0" * (3 << 20))
+                zf.writestr("foo/big.bin", b"\0" * (mb << 20))
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(heal, "subprocess", types.SimpleNamespace(run=run))
-    monkeypatch.setattr(heal, "_free_mb", lambda: heal._MIN_FREE_MB + 2)
+    monkeypatch.setattr(heal, "_pip_works", lambda: True)
+    return calls
+
+
+def test_lost_record_is_fetched_once_until_its_measured_size_is_free(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = heal._site_packages()
+    dist_info = _dist(site, "foo", "1.0", {"foo/__init__.py": b"x = 1\n"})
+    (dist_info / "RECORD").write_bytes(b"")  # estimate before download: 0 MB
+    calls = _fake_pip_wheel(monkeypatch, heal, mb=3)
+    monkeypatch.setattr(heal, "_free_mb", lambda: heal._min_free_mb() + 2)
     assert heal.heal() == 1
     assert [c[3] for c in calls] == ["wheel"]  # 3 MB unpacked: no install
     assert dist_info.exists()
     assert heal._read_pending() == ["foo==1.0"]
+
+    assert heal.heal() == 2
+    assert [c[3] for c in calls] == ["wheel"]  # same disk: no second download
+
+    monkeypatch.setattr(heal, "_free_mb", lambda: heal._min_free_mb() + 3)
+    assert heal.heal() == 1
+    assert [c[3] for c in calls] == ["wheel", "wheel", "install"]
+    assert not heal._pending_file().exists()
+    assert not heal._cost_file().exists()
+
+
+def test_space_the_damaged_dist_frees_counts_toward_the_install(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = heal._site_packages()
+    files = {"foo/__init__.py": b"x = 1\n", "foo/big.bin": os.urandom(3 << 20)}
+    _dist(site, "foo", "1.0", files)
+    (site / "foo/__init__.py").write_bytes(b"")
+    calls = _fake_pip_wheel(monkeypatch, heal, mb=4)
+    monkeypatch.setattr(heal, "_free_mb", lambda: heal._min_free_mb() + 3)
+    assert heal.heal() == 1
+    # 4 MB unpacked fits once the 3 MB the old copy holds is removed.
+    assert [c[3] for c in calls] == ["wheel", "install"]
+    assert not heal._pending_file().exists()
 
 
 def test_pip_repair_queues_the_pip_it_replaced(

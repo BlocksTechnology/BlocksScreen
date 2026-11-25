@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import shutil
+import stat
 import subprocess  # nosec B404 - argv lists of sys.executable only
 import sys
 import zipfile
@@ -20,8 +21,6 @@ _CFG_HOME = re.compile(r"^home\s*=\s*\S", re.M)
 _CFG_ISOLATED = re.compile(r"^include-system-site-packages\s*=\s*false\s*$", re.M)
 # pip's AdjacentTempDirectory rollback names for `pip/` and `pip-X.dist-info` (`~ip`, `~-p-X.dist-info`).
 _PIP_STASH = re.compile(r"^~[-~.=%0-9]*(?:pip|ip|p)(?:-[^-]+\.dist-info)?$")
-# Mirrors updater.models.MIN_FREE_MB: below it a write can leave truncated files.
-_MIN_FREE_MB = 200
 
 
 def _site_packages() -> Path:
@@ -96,18 +95,24 @@ def _pip_works() -> bool:
     )
 
 
-def _uninstall(dist_info: Path) -> None:
-    """Remove a dist's RECORD-listed files, then its dist-info, like `pip uninstall`."""
+def _record_paths(dist_info: Path) -> list[Path]:
+    """RECORD-listed paths inside the venv; none when RECORD is unreadable."""
     site = dist_info.parent
     prefix = os.path.normpath(sys.prefix) + os.sep
-    dirs: set[Path] = set()
     try:
         rows = list(csv.reader((dist_info / "RECORD").read_text("utf-8").splitlines()))
     except (OSError, UnicodeDecodeError):
-        rows = []
-    for row in rows:
-        path = Path(os.path.normpath(site / row[0])) if row else None
-        if path is None or not str(path).startswith(prefix) or path.is_dir():
+        return []
+    paths = (Path(os.path.normpath(site / row[0])) for row in rows if row)
+    return [p for p in paths if str(p).startswith(prefix)]
+
+
+def _uninstall(dist_info: Path) -> None:
+    """Remove a dist's RECORD-listed files, then its dist-info, like `pip uninstall`."""
+    site = dist_info.parent
+    dirs: set[Path] = set()
+    for path in _record_paths(dist_info):
+        if path.is_dir():
             continue
         try:
             path.unlink(missing_ok=True)
@@ -280,6 +285,7 @@ def heal() -> int:
             _LOG.warning("reinstall of %s deferred to the next run", " ".join(pending))
             return rc or 2
         _pending_file().unlink(missing_ok=True)
+        _cost_file().unlink(missing_ok=True)
         _LOG.info("reinstalled %s", " ".join(pending))
         rc = 1
     return rc
@@ -295,6 +301,32 @@ def _free_mb() -> int:
     return shutil.disk_usage(sys.prefix).free >> 20
 
 
+def _min_free_mb() -> int:
+    """updater.models.MIN_FREE_MB, loaded by path: `import updater` would run the whole package."""
+    path = Path(__file__).resolve().parents[1] / "updater" / "models.py"
+    spec = importlib.util.spec_from_file_location("bs_updater_models", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
+    mod = importlib.util.module_from_spec(spec)
+    # dataclass looks its module up in sys.modules.
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod.MIN_FREE_MB
+
+
+def _cost_file() -> Path:
+    """Measured MiB a deferred reinstall consumes, so a tight disk does not refetch every start."""
+    return Path(sys.prefix, ".blockscreen-venv-reinstall-mb")
+
+
+def _stored_cost_mb() -> int:
+    """Cost a previous run measured; 0 when none."""
+    try:
+        return int(_cost_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+
+
 def _installed_mb(dist_infos: list[Path]) -> int:
     """RECORD-listed size of these dists in MiB; an unreadable RECORD counts as 0."""
     total = 0
@@ -305,6 +337,20 @@ def _installed_mb(dist_infos: list[Path]) -> int:
             continue
         rows = csv.reader(text.splitlines())
         total += sum(int(r[2]) for r in rows if len(r) >= 3 and r[2].isdigit())
+    return total >> 20
+
+
+def _freed_mb(dist_infos: list[Path]) -> int:
+    """MiB removing these dists gives back; allocated blocks, since a cut leaves files shorter than RECORD."""
+    paths = {p for d in dist_infos for p in (*_record_paths(d), *d.glob("*"))}
+    total = 0
+    for path in paths:
+        try:
+            st = path.lstat()
+        except OSError:
+            continue
+        if stat.S_ISREG(st.st_mode):
+            total += st.st_blocks * 512
     return total >> 20
 
 
@@ -321,9 +367,11 @@ def _reinstall(pending: list[str], deferred: list[Path]) -> bool:
     """Fetch every wheel first, then remove the damaged dists and install offline."""
     wheels = _wheel_dir()
     shutil.rmtree(wheels, ignore_errors=True)
+    margin = _min_free_mb()
+    freed = _freed_mb(deferred)
     # Wheels plus reinstalled files (PyQt6 + Qt6 alone >100 MB) must not eat the margin a full disk truncates in.
-    need = _MIN_FREE_MB + _installed_mb(deferred)
-    free = _free_mb()
+    need = margin + max(_installed_mb(deferred), _stored_cost_mb())
+    start = free = _free_mb()
     if free < need:
         _LOG.error("%d MB free, %d MB needed - reinstall deferred", free, need)
         return False
@@ -353,12 +401,16 @@ def _reinstall(pending: list[str], deferred: list[Path]) -> bool:
             return False
         # The RECORD estimate counts a dist whose RECORD was lost as 0 MB; the wheels give the real size.
         try:
-            need = _MIN_FREE_MB + _wheels_mb(wheels)
+            need = margin + _wheels_mb(wheels) - freed
         except (OSError, zipfile.BadZipFile):
             return False
         free = _free_mb()
         if free < need:
             _LOG.error("%d MB free, %d MB needed - reinstall deferred", free, need)
+            # The next run waits for download plus install space instead of fetching again.
+            _cost_file().write_text(
+                f"{start - free + need - margin}\n", encoding="utf-8"
+            )
             return False
         # A working pip skips a dist-info with no valid METADATA and cannot uninstall one without RECORD.
         for dist_info in deferred:
