@@ -17,6 +17,9 @@ _own() { [ "$(id -u)" = "0" ] && chown "$_BSENV_USER" "$1" 2>/dev/null || true; 
 # shellcheck source=/dev/null
 if [ -f "$SCRIPT_PATH/bs-common.sh" ]; then . "$SCRIPT_PATH/bs-common.sh"; fi
 
+# Runs inside every pull, Moonraker's too: sync the new tree before anything acts on it.
+sync -f "$BS_PATH" || true
+
 # Under Moonraker its update owns deps and the restart; bs-bootstrap does the rest (BUG-10).
 if bs_in_moonraker_cgroup; then
     echo "[post-merge] under moonraker - bs-bootstrap finishes this update after the restart"
@@ -33,10 +36,23 @@ REQS_HASH=$(md5sum "$REQS" | cut -d' ' -f1)
 SENTINEL="$BSENV/.blockscreen-reqs-hash"
 ATTEMPT="$BSENV/.blockscreen-reqs-attempt"
 REINSTALL=""
+# pip's exit 0 is no proof (a truncated pip is a silent no-op); flush first so the sentinel never outlives the files.
+_reqs_verified() {
+    sync -f "$BSENV" || return 1
+    _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" --pins "$REQS"
+}
 # Shared with bs-bootstrap and install-updater.sh; released before step 3, which runs install-updater.sh.
 # Busy = skip pip, not wait: the updater kills this hook at HOOK_TIMEOUT (600s); bs-bootstrap retries next boot.
 _VENV_LOCKED=0
 { exec 201<"$BSENV" && flock -w 60 201 && _VENV_LOCKED=1; } || echo "[post-merge] venv lock not acquired (busy 60s or no venv) - skipping pip"
+# RECORD-based scan: catches truncated pip/uv that the import probes never touch, repairs pip offline.
+# Exit 1 = damaged dists reinstalled (re-verify the set); 2 = reinstall pending offline, retried by the helper itself.
+_heal_rc=0
+if [ "$_VENV_LOCKED" = 1 ]; then _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" || _heal_rc=$?; fi
+if [ "$_heal_rc" = 1 ]; then
+    echo "[post-merge] truncated package healed - re-verifying the pinned set"
+    rm -f "$SENTINEL" "$ATTEMPT" 2>/dev/null || true
+fi
 # A truncated package (interrupted pip, power cut) still imports and yields only its dunders.
 if [ "$_VENV_LOCKED" = 1 ] && ! _as_blocks "$BSENV/bin/python3.11" -c "import yaml as _m; assert len(dir(_m)) > 15" >/dev/null 2>&1; then
     echo "[post-merge] PyYAML missing or broken - repairing before the pinned set"
@@ -59,7 +75,7 @@ if [ "$_VENV_LOCKED" = 1 ] && { [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" !
         --only-binary :all: \
         --no-binary sdbus,sdbus-networkmanager \
         --upgrade-strategy=only-if-needed \
-        -r "$REQS"; then
+        -r "$REQS" && _reqs_verified; then
         echo "$REQS_HASH" >"$SENTINEL"
         _own "$SENTINEL"
         rm -f "$ATTEMPT" 2>/dev/null || true

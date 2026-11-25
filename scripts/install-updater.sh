@@ -24,6 +24,8 @@ BS_PATH=$(dirname "$SCRIPT_PATH")
 _BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
+# The tree may come from a checkout no one synced; a power cut before writeback empties its files.
+sync -f "$BS_PATH" || true
 # shellcheck source=/dev/null
 . "$SCRIPT_PATH/bs-common.sh"
 _MOONRAKER_CONF="$_BSENV_HOME/printer_data/config/moonraker.conf"
@@ -52,6 +54,12 @@ _apt_installed() {
 _reqs_current() {
     [[ -n "$1" && ! -e "$2/.blockscreen-reqs-attempt" &&
         "$(cat "$2/.blockscreen-reqs-hash" 2>/dev/null)" == "$1" ]]
+}
+
+# pip's exit 0 is no proof (a truncated pip is a silent no-op); flush first so the sentinel never outlives the files.
+_reqs_verified() {
+    sync -f "$BSENV" || return 1
+    _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" --pins "$BS_PATH/scripts/requirements.txt"
 }
 
 echo_info "Installing D-Bus policy ..."
@@ -256,6 +264,17 @@ for _unit in BlocksScreen-clock.service BlocksScreen-clock.timer; do
         sudo systemctl link --no-reload "$SCRIPT_PATH/$_unit"
     fi
 done
+echo_info "Installing BlocksScreen-tree-guard service ..."
+# Outside the tree and a regular unit file: a power cut that empties the tree cannot empty its healer.
+sudo mkdir -p /usr/local/lib/blocksscreen
+_install_atomic 0755 "$SCRIPT_PATH/bs-tree-guard.sh" /usr/local/lib/blocksscreen/bs-tree-guard.sh
+GUARD_SVC=$(cat "$SCRIPT_PATH/BlocksScreen-tree-guard.service")
+GUARD_SVC=${GUARD_SVC//BS_DIR/$BS_PATH}
+GUARD_SVC=${GUARD_SVC//BS_PRIMARY_HOME/$_BSENV_HOME}
+echo "$GUARD_SVC" | sudo tee /etc/systemd/system/.BlocksScreen-tree-guard.service.new >/dev/null
+sudo mv -Tf /etc/systemd/system/.BlocksScreen-tree-guard.service.new /etc/systemd/system/BlocksScreen-tree-guard.service
+sudo systemctl enable --no-reload BlocksScreen-tree-guard.service
+
 # One reload for all units; each implicit reload costs ~0.3 s on a Pi.
 sudo systemctl daemon-reload
 sudo systemctl enable --now --no-reload BlocksScreen-deploy.path
@@ -291,6 +310,13 @@ fi
 if $_venv_locked; then
     sudo find "$BSENV"/lib/python3*/site-packages -maxdepth 1 -type d -name '~?*' -exec rm -rf {} + 2>/dev/null || true
 fi
+# RECORD-based scan: a truncated pip is a silent no-op that every pip call below would report as success.
+_heal_rc=0
+if $_venv_locked; then _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" || _heal_rc=$?; fi
+if [[ "$_heal_rc" == 1 ]]; then
+    echo_warn "Venv had truncated packages; re-verifying the pinned requirements"
+    sudo rm -f "$BSENV/.blockscreen-reqs-hash" 2>/dev/null || true
+fi
 # Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
 _pip_pin=$(grep -m1 '^pip==' "$BS_PATH/scripts/requirements-pip.txt" 2>/dev/null | cut -d= -f3 || true)
 if [[ -n "$_pip_pin" ]] && compgen -G "$BSENV/lib/python3*/site-packages/pip-$_pip_pin.dist-info" >/dev/null; then
@@ -315,7 +341,7 @@ if _reqs_current "$_reqs_hash" "$BSENV"; then
     echo_ok "Python requirements unchanged since their last install"
 elif _as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \
-    -r "$BS_PATH/scripts/requirements.txt"; then
+    -r "$BS_PATH/scripts/requirements.txt" && _reqs_verified; then
     if [[ -n "$_reqs_hash" ]]; then
         echo "$_reqs_hash" | sudo tee "$_REQS_SENTINEL" >/dev/null
         sudo chown "$_BSENV_USER" "$_REQS_SENTINEL" 2>/dev/null || true
@@ -334,7 +360,8 @@ _UV_PIN=0.12.24
 _uv_ver=$(_as_blocks "$BSENV/bin/uv" --version 2>/dev/null || true)
 if [[ "$_uv_ver" == "uv $_UV_PIN" || "$_uv_ver" == "uv $_UV_PIN "* ]]; then
     echo_ok "uv $_UV_PIN already installed"
-elif _as_blocks "$BSENV/bin/pip" install --quiet --force-reinstall --no-deps "uv==$_UV_PIN"; then
+elif _as_blocks "$BSENV/bin/pip" install --quiet --force-reinstall --no-deps "uv==$_UV_PIN" &&
+    [[ "$(_as_blocks "$BSENV/bin/uv" --version 2>/dev/null || true)" == "uv $_UV_PIN"* ]]; then
     echo_ok "uv ready"
 else
     echo_warn "uv install FAILED; Spoolman provisioning fails until it is installed"
@@ -390,6 +417,8 @@ if [[ -d "$_DD_REPO/.git" ]]; then
 fi
 
 # Stamp last: bs-bootstrap and post-merge re-run this script until it is written.
+# Persist the guard and units first: a stamp that outlives them skips the reinstall.
+sync -f "$BS_PATH" || true
 _stamp=$(bs_updater_install_hash "$SCRIPT_PATH")
 if echo "$_stamp" | sudo tee "$BSENV/.blockscreen-updater-hash.new" >/dev/null \
     && sudo chown "$_BSENV_USER" "$BSENV/.blockscreen-updater-hash.new" \
@@ -404,6 +433,8 @@ fi
 # self-update added and touch the deploy flag again; restarting earlier could
 # let that happen mid-run, and BlocksScreen-deploy.service's ExecStartPost would
 # then delete the flag and drop the follow-up setup.
+# Same root filesystem: persists the units and the guard installed above.
+sync -f "$BS_PATH" || true
 sudo systemctl --no-block restart BlocksScreen-updater.service || true
 echo_ok "BlocksScreen-updater restart queued"
 
