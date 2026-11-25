@@ -6,6 +6,7 @@ import logging
 import os
 import signal
 import socket
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -95,15 +96,54 @@ async def _run_daemon() -> None:
     stop_event = asyncio.Event()
     loop.add_signal_handler(signal.SIGTERM, stop_event.set)
     loop.add_signal_handler(signal.SIGINT, stop_event.set)
-    ping_interval = _watchdog_ping_interval()
+    await _serve(stop_event, _watchdog_ping_interval(), service.yaml_broken)
+    _log.info("updater daemon shutting down")
+    await service.shutdown()
+
+
+# How often an idle daemon checks whether a venv heal repaired PyYAML.
+_YAML_PROBE_S = 60.0
+
+
+async def _yaml_repaired(python: str = sys.executable) -> bool:
+    """Return True when a fresh interpreter imports a working PyYAML."""
+    # A fresh process, since the truncated module stays cached in this one's sys.modules.
+    proc = await asyncio.create_subprocess_exec(
+        python,
+        "-I",
+        "-c",
+        "import yaml; yaml.safe_load, yaml.YAMLError",
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    try:
+        return await asyncio.wait_for(proc.wait(), timeout=10.0) == 0
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return False
+
+
+async def _serve(
+    stop_event: asyncio.Event, ping_interval: float, yaml_broken: bool
+) -> None:
+    """Ping the watchdog until stopped, or until PyYAML heals so Restart=always reloads components."""
+    loop = asyncio.get_running_loop()
+    next_probe = loop.time() + _YAML_PROBE_S
     while not stop_event.is_set():
         _sd_notify("WATCHDOG=1")
+        if yaml_broken and loop.time() >= next_probe:
+            if await _yaml_repaired():
+                logging.getLogger("updater").warning(
+                    "PyYAML repaired - restarting to load components"
+                )
+                return
+            next_probe = loop.time() + _YAML_PROBE_S
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=ping_interval)
         except asyncio.TimeoutError:
             pass
-    _log.info("updater daemon shutting down")
-    await service.shutdown()
 
 
 def _watchdog_ping_interval() -> float:

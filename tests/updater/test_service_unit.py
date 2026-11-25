@@ -104,6 +104,19 @@ class TestBackoff:
         assert not svc.has_fetch_failures()
 
 
+class TestYamlBrokenFlag:
+    """The daemon's PyYAML probe flag is the state at load, never a later re-check."""
+
+    @pytest.mark.parametrize(("module", "broken"), [(None, True), (object(), False)])
+    def test_flag_taken_before_load(self, module, broken):
+        # A heal that lands between the check and the load must still leave the probe on.
+        with (
+            patch("updater.service.import_yaml", return_value=module),
+            patch("updater.service.load_components", return_value=([], 3600.0)),
+        ):
+            assert UpdateService().yaml_broken is broken
+
+
 class TestHistoryLog:
     def test_history_appends_jsonl_entry(self, tmp_path: Path):
         """OBS-1: _history appends one JSON line per event with the given fields."""
