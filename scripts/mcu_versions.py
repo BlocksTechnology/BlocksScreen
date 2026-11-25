@@ -151,6 +151,9 @@ def merge_report(state: dict, live: dict, source_version: str) -> dict:
         entry["connected"] = False
     for section, data in live["mcus"].items():
         entry = state["mcus"].setdefault(section, {})
+        if not data["version"]:
+            # Klippy has not identified it yet (not ready): keep the last known state.
+            continue
         klipper = is_klipper_version(data["version"])
         entry.update(
             connected=True,
@@ -186,7 +189,8 @@ def format_table(state: dict) -> str:
     for section in sorted(state["mcus"]):
         entry = state["mcus"][section]
         if not entry.get("connected"):
-            status = "not connected"
+            klippy = state.get("klippy_state") or "ready"
+            status = "not connected" if klippy == "ready" else f"klippy {klippy}"
         elif not entry.get("klipper"):
             status = "not Klipper, skipped"
         elif entry.get("needs_flash"):

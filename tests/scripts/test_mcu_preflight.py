@@ -451,9 +451,10 @@ query_moonraker_versions() {
 }
 verify_klipper_ready() { [ -n "${READY:-}" ]; }
 write_versions_file() { :; }
-CONTEXT=${CTX:-local} FORCE=${FORCE_FLAG:-true} FLASH_ORDER_LOCKED=false FLASH_NAMES=() SRC_VERSION=v1
+CONTEXT=${CTX:-local} FORCE=${FORCE_FLAG:-true} FLASH_ORDER_LOCKED=false SRC_VERSION=v1
+FLASH_NAMES=(${NAMES:-})
 ALLOW_UNDERVOLTAGE=${ALLOW_UV:-false}
-DISCOVERED=("toolhead|can|aaa|$TH_CFG|${VER:-}|true" "octopus|dfu|${DFU_ID-SER}|$BRIDGE_CFG|${VER:-}|true")
+DISCOVERED=("toolhead|can|aaa|$TH_CFG|${VER:-}|${TH_FOUND:-true}" "octopus|dfu|${DFU_ID-SER}|$BRIDGE_CFG|${VER:-}|true")
 """
 
 
@@ -489,7 +490,7 @@ def test_failed_preflight_never_stops_klipper(tmp_path: Path) -> None:
     rc, _, calls = _run_cmd_flash(tmp_path, BAD="toolhead octopus")
     assert rc == 1
     assert not any("systemctl stop" in c or c.startswith("flash_") for c in calls)
-    assert calls.count("record_flash failed") == 2
+    assert not any(c.startswith("record_flash") for c in calls)  # nothing was written
 
 
 def test_one_failed_preflight_flashes_nothing(tmp_path: Path) -> None:
@@ -499,7 +500,6 @@ def test_one_failed_preflight_flashes_nothing(tmp_path: Path) -> None:
     assert (
         "failed: octopus (dfu) - not flashed, another board failed its checks" in calls
     )
-    assert calls.count("record_flash failed") == 1
 
 
 @pytest.mark.parametrize("allow", ["false", "true"])
@@ -561,6 +561,24 @@ def test_failed_can_node_retries_in_katapult_and_skips_bridge(tmp_path: Path) ->
     assert calls.count("flash_can toolhead") == 2
     assert "flash_dfu octopus" not in calls
     assert "failed: octopus (dfu) - skipped, CAN node failed" in calls
+    assert (
+        calls.count("record_flash failed") == 1
+    )  # the toolhead only, never written bridge
+
+
+@pytest.mark.parametrize(
+    ("names", "found", "rc"),
+    [("toolhead", "false", 1), ("nosuch", "true", 1), ("", "false", 0)],
+    ids=["named undetected", "unknown name", "flash-all skips undetected"],
+)
+def test_named_board_not_found_fails_the_run(
+    tmp_path: Path, names: str, found: str, rc: int
+) -> None:
+    got, _, calls = _run_cmd_flash(
+        tmp_path, NAMES=names, TH_FOUND=found, VER="v1", FORCE_FLAG="false", DFU_ID=""
+    )
+    assert got == rc
+    assert not any(c.startswith("flash_") for c in calls)
 
 
 @pytest.mark.parametrize("katapult", [True, False])

@@ -340,7 +340,7 @@ write_versions_file() {
         --state-file "$MCU_VERSIONS_FILE" "$@" || true
 }
 
-# Append a flash result to the versions file, keyed by klipper_section.
+# Append a flash result to the versions file, keyed by klipper_section; only for a board written to.
 record_flash() {
     local cfg="$1" iface="$2" result="$3" section
     section=$(config_meta "$cfg" klipper_section)
@@ -1583,6 +1583,9 @@ check_host_power() {
     return 0
 }
 
+# A board named on --flash and not found fails the run; --flash-all only skips it.
+_named_missing() { [ ${#FLASH_NAMES[@]} -gt 0 ] && [ ${#skipped_missing[@]} -gt 0 ]; }
+
 # Returns 0 if the config file is a USB-CAN bridge firmware (must flash last).
 is_canbus_bridge() { grep -q "^CONFIG_USBCANBUS=y" "$1"; }
 
@@ -1611,7 +1614,7 @@ cmd_flash() {
     if [ ${#FLASH_NAMES[@]} -gt 0 ]; then
         local -a _remaining=("${DISCOVERED[@]}")
         for req in "${FLASH_NAMES[@]}"; do
-            local _idx=0
+            local _idx=0 _found=false
             for entry in "${_remaining[@]}"; do
                 local _n
                 IFS='|' read -r _n _ _ _ _ _ <<<"$entry"
@@ -1619,10 +1622,15 @@ cmd_flash() {
                     iterate_list+=("$entry")
                     unset '_remaining[$_idx]'
                     _remaining=("${_remaining[@]}")
+                    _found=true
                     break
                 fi
                 ((_idx++))
             done
+            if ! $_found; then
+                warn "[$req] no MCU config by that name - skipping"
+                skipped_missing+=("$req")
+            fi
         done
     else
         iterate_list=("${DISCOVERED[@]}")
@@ -1655,6 +1663,7 @@ cmd_flash() {
     if [ ${#to_flash[@]} -eq 0 ]; then
         _summary_box "Nothing to flash"
         save_uuid_cache
+        _named_missing && return 1
         return 0
     fi
 
@@ -1700,7 +1709,6 @@ cmd_flash() {
             _ready+=("$entry")
         else
             failed+=("$name ($iface) - failed its checks, not flashed")
-            record_flash "$cfg" "$iface" failed
             _refused=true
         fi
     done
@@ -1745,14 +1753,12 @@ cmd_flash() {
         IFS='|' read -r name iface id cfg fw_ver detected <<<"$entry"
         if $_flash_aborted; then
             failed+=("$name ($iface) - interrupted")
-            record_flash "$cfg" "$iface" failed
             continue
         fi
         # A failed CAN node is only reachable for a retry through the bridge it sits behind.
         if $_can_failed && ! $FLASH_ORDER_LOCKED && is_canbus_bridge "$cfg"; then
             warn "[$name] skipped: a CAN node behind this bridge failed - fix it first"
             failed+=("$name ($iface) - skipped, CAN node failed")
-            record_flash "$cfg" "$iface" failed
             continue
         fi
         ((_flash_idx++))
@@ -1907,7 +1913,7 @@ cmd_flash() {
         _recovery_steps | while IFS= read -r _line; do warn "$_line"; done
         return 4
     fi
-    [ ${#failed[@]} -gt 0 ] && return 1 || return 0
+    { [ ${#failed[@]} -gt 0 ] || _named_missing; } && return 1 || return 0
 }
 
 # Build checklist args from DISCOVERED[].

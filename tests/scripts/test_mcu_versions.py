@@ -90,6 +90,26 @@ def test_merge_keeps_history_and_marks_gone_mcus() -> None:
     assert state["mcus"]["mcu old"]["connected"] is False
 
 
+def test_unidentified_mcu_keeps_its_last_known_state() -> None:
+    known = {"version": SRC, "chip": "stm32g0b1xx"}
+    live = {"host_version": SRC, "klippy_state": "ready", "mcus": {"mcu th": known}}
+    state = mv.merge_report({"mcus": {}}, live, "")
+    live = {
+        **live,
+        "klippy_state": "error",
+        "mcus": {"mcu th": {"version": "", "chip": ""}},
+    }
+    state = mv.merge_report(state, live, "")
+    entry = state["mcus"]["mcu th"]
+    assert (entry["klipper"], entry["running_version"], entry["connected"]) == (
+        True,
+        SRC,
+        False,
+    )
+    assert "klippy error" in mv.format_table(state)
+    assert "not Klipper" not in mv.format_table(state)
+
+
 _ROUTES = {
     "/printer/info": {"state": "ready", "software_version": SRC},
     "/printer/objects/list": {"objects": ["mcu", "mcu pi", "toolhead"]},
