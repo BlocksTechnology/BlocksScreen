@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ctypes
 import functools
 import http.client
 import json
@@ -165,6 +166,34 @@ async def _run(
             if proc.returncode is None:
                 _kill_proc_group(proc, signal.SIGKILL)
         raise
+
+
+def _sync_fs(path: Path) -> None:
+    """Flush only the filesystem holding path; os.sync would also stall on print uploads."""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            if ctypes.CDLL(None, use_errno=True).syncfs(fd) == 0:
+                return
+        finally:
+            os.close(fd)
+    except (OSError, AttributeError):
+        pass
+    os.sync()
+
+
+async def _run_durable(
+    cmd: Sequence[str | Path],
+    *,
+    timeout: float,
+    cwd: Path | None = None,
+    sync_path: Path | None = None,
+) -> tuple[bool, str]:
+    """_run, then flush to disk on success: git writes the worktree without fsync."""
+    ok, out = await _run(cmd, cwd=cwd, timeout=timeout)
+    if ok:
+        await asyncio.to_thread(_sync_fs, sync_path or cwd or Path("/"))
+    return ok, out
 
 
 def _validate_git_ref(ref: str) -> bool:
@@ -467,7 +496,7 @@ async def git_pull(path: Path | None) -> tuple[bool, str]:
     """Fast-forward pull for the repo at path."""
     if path is None:
         return (False, "path does not exist")
-    return await _run([GIT, "pull", "--ff-only"], cwd=path, timeout=60.0)
+    return await _run_durable([GIT, "pull", "--ff-only"], cwd=path, timeout=60.0)
 
 
 _GIT_URL_RE = re.compile(r"^https://[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
@@ -487,7 +516,7 @@ async def git_clone(
     if branch:
         cmd += ["--branch", branch]
     cmd += [url, str(path)]
-    return await _run(cmd, timeout=300.0)
+    return await _run_durable(cmd, timeout=300.0, sync_path=path)
 
 
 async def git_remote_reachable(url: str, timeout: float = 15.0) -> bool:
@@ -506,11 +535,12 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
         return (False, "prev_hash does not exist")
     if not _validate_git_ref(prev_hash):
         return (False, f"invalid git ref: {prev_hash!r}")
-    ok, err = await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
+    reset = [GIT, "reset", "--hard", prev_hash]
+    ok, err = await _run_durable(reset, cwd=path, timeout=60.0)
     if ok:
         return (ok, err)
     if "index.lock" in err and _clear_stale_git_index_lock(path):
-        return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
+        return await _run_durable(reset, cwd=path, timeout=60.0)
     return (ok, err)
 
 
@@ -914,7 +944,7 @@ async def git_checkout(
 
     cmd = [GIT, "checkout", "-f", branch] if force else [GIT, "checkout", branch]
     # A timeout SIGTERM half-writes the tree: be generous on slow SD.
-    return await _run(cmd, cwd=path, timeout=60.0)
+    return await _run_durable(cmd, cwd=path, timeout=60.0)
 
 
 def _read_apt_cache(

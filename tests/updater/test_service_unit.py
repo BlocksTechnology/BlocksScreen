@@ -2785,6 +2785,15 @@ class TestRunFollowup:
         assert await svc.run_followup() == (False, False)
         assert not svc._followup_path.exists()
 
+    @pytest.mark.parametrize("prev", ["c" * 40, None])
+    def test_empty_marker_falls_back_to_state_base(self, svc, tmp_path, prev):
+        svc._followup_path.write_text("")
+        svc._state_path = tmp_path / "state.json"
+        state = {"BlocksScreen": {"prev_hash": prev}} if prev else {}
+        svc._state_path.write_text(json.dumps(state))
+        assert svc._read_followup() == (prev or "", 0)
+        assert svc._followup_path.exists() == bool(prev)
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("cause", ["printing", "deploy", "lock"])
     async def test_defers_and_keeps_marker(self, svc, env, printing, cause):

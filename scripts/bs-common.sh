@@ -342,7 +342,7 @@ BS_UPDATER_INSTALL_TRIGGERS=(
     BlocksScreen-updater.service BlocksScreen-bootstrap.service
     BlocksScreen-clock.service BlocksScreen-clock.timer
     com.blockscreen.Updater.conf com.blockscreen.Updater.service
-    requirements-pip.txt
+    requirements-pip.txt bs-tree-guard.sh BlocksScreen-tree-guard.service
 )
 
 # Hash of the install trigger files, stamped by install-updater.sh. $1 = scripts dir.
@@ -471,7 +471,8 @@ bs_sync_service_files() {
     local src_dir="$1" tag="${2:-bs-common}" need_reload=false
     _bs_sync_one() {
         local src="$1" dst="$2"
-        [ -f "$src" ] || return 0
+        # An empty source is a torn checkout: installing it would disable the unit.
+        [ -s "$src" ] || return 0
         if ! diff -q "$dst" "$src" >/dev/null 2>&1; then
             # Atomic install: a truncated BlocksScreen.service unit cannot self-heal.
             sudo cp "$src" "${dst}.new" && sudo mv -Tf "${dst}.new" "$dst" \

@@ -24,6 +24,7 @@ from updater.executor import (
     moonraker_repo_hashes,
     _clear_stale_git_index_lock,
     _is_head_readable,
+    _sync_fs,
     _make_clean_env,
     _repair_corrupt_head,
     _remove_broken_loose_ref,
@@ -1852,6 +1853,35 @@ class TestStaleIndexLockHandling:
             ok, _msg = await git_reset_to_hash(Path("/x"), "abc123")
         assert ok is True
         mock_clear.assert_called_once_with(Path("/x"))
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("rc", [0, 1])
+    async def test_git_reset_to_hash_syncs_only_on_success(self, rc):
+        proc = _make_proc(rc, b"", b"fatal: bad revision")
+        with (
+            patch("updater.executor._sync_fs") as mock_sync,
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=proc,
+            ),
+        ):
+            ok, _msg = await git_reset_to_hash(Path("/x"), "abc123")
+        assert ok is (rc == 0)
+        assert mock_sync.call_count == (1 if rc == 0 else 0)
+
+    def test_sync_fs_uses_syncfs_then_falls_back_to_os_sync(self, tmp_path):
+        libc = MagicMock()
+        libc.syncfs.return_value = 0
+        with (
+            patch("updater.executor.ctypes.CDLL", return_value=libc),
+            patch("updater.executor.os.sync") as mock_sync,
+        ):
+            _sync_fs(tmp_path)
+            mock_sync.assert_not_called()
+            libc.syncfs.return_value = -1
+            _sync_fs(tmp_path)
+            mock_sync.assert_called_once()
 
 
 class TestCorruptHeadHandling:
