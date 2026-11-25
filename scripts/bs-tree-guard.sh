@@ -16,21 +16,40 @@ _as_owner() {
 }
 _git() { _as_owner git -C "$BS_PATH" "$@"; }
 
-# Branch an emptied HEAD named: the reflog's last checkout, else the only local branch.
+# Local branch names, loose and packed; read by hand since git refuses a repo with an empty HEAD.
+_local_branches() {
+    {
+        (cd "$BS_PATH/.git/refs/heads" 2>/dev/null && find . -type f | sed 's|^\./||')
+        sed -n 's|^[0-9a-f]* refs/heads/||p' "$BS_PATH/.git/packed-refs" 2>/dev/null
+    } | sort -u
+}
+
+_branch_tip() {
+    if [[ -f "$BS_PATH/.git/refs/heads/$1" ]]; then
+        tr -d '[:space:]' <"$BS_PATH/.git/refs/heads/$1"
+    else
+        awk -v r="refs/heads/$1" '$2 == r { print $1 }' "$BS_PATH/.git/packed-refs" 2>/dev/null
+    fi
+}
+
+# Branch an emptied HEAD named: the reflog's last checkout, the only local branch, or the one branch at HEAD's last tip.
 _lost_head_branch() {
-    local b
+    local b branches tip
+    branches=$(_local_branches)
     b=$(grep -aoE 'checkout: moving from [^ ]+ to [^ ]+$' "$BS_PATH/.git/logs/HEAD" 2>/dev/null | tail -n1)
     b=${b##* to }
-    if [[ -z "$b" ]]; then
-        b=$({
-            (cd "$BS_PATH/.git/refs/heads" 2>/dev/null && find . -type f | sed 's|^\./||')
-            sed -n 's|^[0-9a-f]* refs/heads/||p' "$BS_PATH/.git/packed-refs" 2>/dev/null
-        } | sort -u)
-        [[ "$(wc -l <<<"$b")" == 1 ]] || return 1
+    # A checkout to a commit or tag names no local branch, so it falls through.
+    if [[ -z "$b" ]] || ! grep -qxF -- "$b" <<<"$branches"; then
+        b=""
+        [[ -n "$branches" && "$(wc -l <<<"$branches")" == 1 ]] && b=$branches
     fi
-    [[ -f "$BS_PATH/.git/refs/heads/$b" ]] ||
-        awk -v r="refs/heads/$b" '$2 == r { f = 1 } END { exit !f }' "$BS_PATH/.git/packed-refs" 2>/dev/null ||
-        return 1
+    if [[ -z "$b" ]]; then
+        tip=$(grep -aoE '^[0-9a-f]{40,64} [0-9a-f]{40,64} ' "$BS_PATH/.git/logs/HEAD" 2>/dev/null |
+            tail -n1 | cut -d' ' -f2)
+        [[ -n "$tip" ]] || return 1
+        b=$(while IFS= read -r x; do [[ "$(_branch_tip "$x")" == "$tip" ]] && printf '%s\n' "$x"; done <<<"$branches")
+        [[ -n "$b" && "$(wc -l <<<"$b")" == 1 ]] || return 1
+    fi
     git check-ref-format --branch "$b" >/dev/null 2>&1 && printf '%s' "$b"
 }
 
@@ -41,7 +60,8 @@ if ! grep -qE '^(ref: refs/heads/.+|[0-9a-f]{40,64})$' "$BS_PATH/.git/HEAD" 2>/d
         sync -f "$BS_PATH/.git"
         echo "$_tag HEAD damaged, pointed it back at $_b"
     else
-        echo "$_tag HEAD damaged and its branch unknown, leaving recovery to the updater"
+        # The updater never repairs HEAD, so the journal line must say what a person has to do.
+        echo "$_tag HEAD damaged and its branch unknown, needs a manual fix: echo 'ref: refs/heads/<branch>' > $BS_PATH/.git/HEAD"
         exit 0
     fi
 fi

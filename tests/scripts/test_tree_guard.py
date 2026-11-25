@@ -297,6 +297,26 @@ def test_emptied_head_with_an_unknown_branch_is_left_alone(repo, tmp_path, env):
     (repo / ".git/HEAD").write_bytes(b"")
     res = _run(repo, tmp_path / "home", env)
     assert res.returncode == 0, res.stderr
-    assert "branch unknown" in res.stdout
+    assert "branch unknown, needs a manual fix" in res.stdout
     assert (repo / ".git/HEAD").read_bytes() == b""
     assert (repo / ".git/index").read_bytes() == index
+
+
+def test_emptied_head_after_a_detached_checkout_uses_the_only_branch(repo, tmp_path, env):
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").strip()
+    _git(repo, "checkout", "-q", "--detach", "HEAD")
+    (repo / ".git/HEAD").write_bytes(b"")
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert f"pointed it back at {branch}" in res.stdout
+
+
+def test_emptied_head_with_two_branches_uses_the_one_at_the_last_tip(repo, tmp_path, env):
+    _git(repo, "branch", "other")
+    _, new = _commit_v2(repo, env)
+    branch = _git(repo, "symbolic-ref", "--short", "HEAD").strip()
+    _git(repo, "checkout", "-q", "--detach", new)  # last checkout names a commit, not a branch
+    (repo / ".git/HEAD").write_bytes(b"")
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert _git(repo, "symbolic-ref", "--short", "HEAD").strip() == branch
