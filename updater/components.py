@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from types import ModuleType
 
 from .models import ComponentConfig, ComponentStatus
 
@@ -302,17 +303,25 @@ def _build_configs(raw_components: list[dict]) -> list[ComponentConfig]:
     return configs
 
 
-def load_components(
-    bundled_text: str | None = None,
-) -> tuple[list[ComponentConfig], float]:
-    """Load/validate components from bundled YAML (or bundled_text) merged with the user override."""
+def import_yaml() -> ModuleType | None:
+    """Return the PyYAML module, or None when it is missing or truncated."""
     try:
         import yaml  # noqa: PLC0415
 
         # A truncated install (power cut mid-pip) imports but exposes only dunders.
         _ = (yaml.safe_load, yaml.YAMLError)
     except (ImportError, AttributeError):
-        logger.exception("PyYAML missing or broken; updater idle until venv repair")
+        return None
+    return yaml
+
+
+def load_components(
+    bundled_text: str | None = None,
+) -> tuple[list[ComponentConfig], float]:
+    """Load/validate components from bundled YAML (or bundled_text) merged with the user override."""
+    yaml = import_yaml()
+    if yaml is None:
+        logger.error("PyYAML missing or broken; updater idle until venv repair")
         return [], 1440 * 60.0
 
     bundled_data = _load_bundled_yaml(yaml, bundled_text)

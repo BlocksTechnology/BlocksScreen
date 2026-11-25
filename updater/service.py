@@ -15,7 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, TypeGuard
 
-from updater.components import load_components
+from updater.components import import_yaml, load_components
 from updater.executor import (
     _GIT_SHA_RE,
     HOOK_TIMEOUT,
@@ -283,6 +283,8 @@ class UpdateService:
 
     def __init__(self, callback: ProgressCallback | None = None) -> None:
         """Load components and initialize locks, caches, and self-heal tracking."""
+        # Checked before loading: a missing PyYAML is not cached, so a later re-check could pass with 0 components.
+        self.yaml_broken = import_yaml() is None
         self._components, self.poll_interval = load_components()
         self._git_lock = Lock()
         self._state_lock = Lock()
