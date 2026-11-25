@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import types
 from pathlib import Path
 
@@ -326,3 +327,55 @@ def test_crash_exits_3_not_healed(
     monkeypatch.setattr(heal, "heal", lambda: 1 // 0)
     monkeypatch.setattr(heal.sys, "argv", ["bs-venv-heal.py"])
     assert heal.main() == 3
+
+
+def test_free_space_margin_matches_the_updater(heal: types.ModuleType) -> None:
+    from updater.models import MIN_FREE_MB
+
+    assert heal._MIN_FREE_MB == MIN_FREE_MB
+
+
+def test_lost_record_is_sized_from_the_fetched_wheels(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = heal._site_packages()
+    dist_info = _dist(site, "foo", "1.0", {"foo/__init__.py": b"x = 1\n"})
+    (dist_info / "RECORD").write_bytes(b"")  # estimate before download: 0 MB
+    calls = _fake_pip(monkeypatch, heal, rc=0)
+
+    def run(argv, **_kw):
+        calls.append(argv)
+        if argv[3] == "wheel":
+            wheels = Path(argv[argv.index("--wheel-dir") + 1])
+            wheels.mkdir()
+            with heal.zipfile.ZipFile(wheels / "foo-1.0-py3-none-any.whl", "w") as zf:
+                zf.writestr("foo/big.bin", b"\0" * (3 << 20))
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(heal, "subprocess", types.SimpleNamespace(run=run))
+    monkeypatch.setattr(heal, "_free_mb", lambda: heal._MIN_FREE_MB + 2)
+    assert heal.heal() == 1
+    assert [c[3] for c in calls] == ["wheel"]  # 3 MB unpacked: no install
+    assert dist_info.exists()
+    assert heal._read_pending() == ["foo==1.0"]
+
+
+def test_pip_repair_queues_the_pip_it_replaced(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = heal._site_packages()
+    # A cut kept only RECORD's first rows, so the emptied files look intact.
+    _dist(site, "pip", "26.2.1", {"pip/__init__.py": b"v = 26\n"})
+    calls = _fake_pip(monkeypatch, heal, rc=0)
+    monkeypatch.setattr(heal, "_pip_works", lambda: False)
+
+    def repair(site: Path) -> bool:
+        shutil.rmtree(site / "pip-26.2.1.dist-info")
+        (site / "pip-23.0.1.dist-info").mkdir()
+        monkeypatch.setattr(heal, "_pip_works", lambda: True)
+        return True
+
+    monkeypatch.setattr(heal, "_repair_pip", repair)
+    assert heal.heal() == 1
+    assert calls[-1][3] == "install" and calls[-1][-1] == "pip==26.2.1"
+    assert not heal._pending_file().exists()

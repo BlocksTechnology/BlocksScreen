@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess  # nosec B404 - argv lists of sys.executable only
 import sys
+import zipfile
 from pathlib import Path
 
 _LOG = logging.getLogger("bs-venv-heal")
@@ -123,6 +124,17 @@ def _uninstall(dist_info: Path) -> None:
             d.rmdir()
         except OSError:
             pass
+
+
+def _pip_version(site: Path) -> str:
+    """Installed pip version from its dist-info dir name, which a cut cannot truncate; "" if none."""
+    names = [d.name for d in site.glob("pip-*.dist-info")]
+    versions = [n[len("pip-") : -len(".dist-info")] for n in names]
+    return max(versions, key=_version_key, default="")
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(p) for p in re.findall(r"\d+", version))
 
 
 def _repair_pip(site: Path) -> bool:
@@ -248,10 +260,21 @@ def heal() -> int:
         _write_pending(pending)
     if not _pip_works():
         _LOG.warning("pip unusable - reinstalling it from the bundled wheel")
+        prior = _pip_version(site)
         if not _repair_pip(site):
             _LOG.error("pip repair failed")
             return 2
         rc = 1
+        # A half-written RECORD can hide the damage, so bring back the pip that was installed.
+        req = f"pip=={prior}"
+        if (
+            prior
+            and _PIN.match(req)
+            and req not in pending
+            and _pip_version(site) != prior
+        ):
+            pending.append(req)
+            _write_pending(pending)
     if pending:
         if not _reinstall(pending, deferred):
             _LOG.warning("reinstall of %s deferred to the next run", " ".join(pending))
@@ -282,6 +305,15 @@ def _installed_mb(dist_infos: list[Path]) -> int:
             continue
         rows = csv.reader(text.splitlines())
         total += sum(int(r[2]) for r in rows if len(r) >= 3 and r[2].isdigit())
+    return total >> 20
+
+
+def _wheels_mb(wheels: Path) -> int:
+    """Unpacked size of the fetched wheels in MiB, exact even when a cut emptied the old RECORD."""
+    total = 0
+    for whl in wheels.glob("*.whl"):
+        with zipfile.ZipFile(whl) as zf:
+            total += sum(i.file_size for i in zf.infolist())
     return total >> 20
 
 
@@ -318,6 +350,15 @@ def _reinstall(pending: list[str], deferred: list[Path]) -> bool:
             check=False,
         )
         if res.returncode != 0:
+            return False
+        # The RECORD estimate counts a dist whose RECORD was lost as 0 MB; the wheels give the real size.
+        try:
+            need = _MIN_FREE_MB + _wheels_mb(wheels)
+        except (OSError, zipfile.BadZipFile):
+            return False
+        free = _free_mb()
+        if free < need:
+            _LOG.error("%d MB free, %d MB needed - reinstall deferred", free, need)
             return False
         # A working pip skips a dist-info with no valid METADATA and cannot uninstall one without RECORD.
         for dist_info in deferred:
