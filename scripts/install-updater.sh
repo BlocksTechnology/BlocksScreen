@@ -56,6 +56,12 @@ _reqs_current() {
         "$(cat "$2/.blockscreen-reqs-hash" 2>/dev/null)" == "$1" ]]
 }
 
+# pip's exit 0 is no proof (a truncated pip is a silent no-op); flush first so the sentinel never outlives the files.
+_reqs_verified() {
+    sync -f "$BSENV" || return 1
+    _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" --pins "$BS_PATH/scripts/requirements.txt"
+}
+
 echo_info "Installing D-Bus policy ..."
 _install_atomic 0644 "$SCRIPT_PATH/com.blockscreen.Updater.conf" /etc/dbus-1/system.d/com.blockscreen.Updater.conf
 sudo systemctl reload dbus || true
@@ -304,6 +310,13 @@ fi
 if $_venv_locked; then
     sudo find "$BSENV"/lib/python3*/site-packages -maxdepth 1 -type d -name '~?*' -exec rm -rf {} + 2>/dev/null || true
 fi
+# RECORD-based scan: a truncated pip is a silent no-op that every pip call below would report as success.
+_heal_rc=0
+if $_venv_locked; then _as_blocks "$BSENV/bin/python3.11" -I "$SCRIPT_PATH/bs-venv-heal.py" || _heal_rc=$?; fi
+if [[ "$_heal_rc" == 1 ]]; then
+    echo_warn "Venv had truncated packages; re-verifying the pinned requirements"
+    sudo rm -f "$BSENV/.blockscreen-reqs-hash" 2>/dev/null || true
+fi
 # Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
 _pip_pin=$(grep -m1 '^pip==' "$BS_PATH/scripts/requirements-pip.txt" 2>/dev/null | cut -d= -f3 || true)
 if [[ -n "$_pip_pin" ]] && compgen -G "$BSENV/lib/python3*/site-packages/pip-$_pip_pin.dist-info" >/dev/null; then
@@ -328,7 +341,7 @@ if _reqs_current "$_reqs_hash" "$BSENV"; then
     echo_ok "Python requirements unchanged since their last install"
 elif _as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \
-    -r "$BS_PATH/scripts/requirements.txt"; then
+    -r "$BS_PATH/scripts/requirements.txt" && _reqs_verified; then
     if [[ -n "$_reqs_hash" ]]; then
         echo "$_reqs_hash" | sudo tee "$_REQS_SENTINEL" >/dev/null
         sudo chown "$_BSENV_USER" "$_REQS_SENTINEL" 2>/dev/null || true
@@ -347,7 +360,8 @@ _UV_PIN=0.12.24
 _uv_ver=$(_as_blocks "$BSENV/bin/uv" --version 2>/dev/null || true)
 if [[ "$_uv_ver" == "uv $_UV_PIN" || "$_uv_ver" == "uv $_UV_PIN "* ]]; then
     echo_ok "uv $_UV_PIN already installed"
-elif _as_blocks "$BSENV/bin/pip" install --quiet --force-reinstall --no-deps "uv==$_UV_PIN"; then
+elif _as_blocks "$BSENV/bin/pip" install --quiet --force-reinstall --no-deps "uv==$_UV_PIN" &&
+    [[ "$(_as_blocks "$BSENV/bin/uv" --version 2>/dev/null || true)" == "uv $_UV_PIN"* ]]; then
     echo_ok "uv ready"
 else
     echo_warn "uv install FAILED; Spoolman provisioning fails until it is installed"
