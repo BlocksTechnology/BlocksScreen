@@ -268,6 +268,7 @@ def running_constants(base_url: str, section: str, timeout: float = 5.0) -> dict
 
 def can_node_bitrates(base_url: str, bridge: str, timeout: float = 5.0) -> dict:
     """Running CANBUS_FREQUENCY of every connected MCU section except the bridge."""
+    # Assumes one CAN bus: every node reporting a bitrate sits behind this bridge.
     objects = moonraker_get(base_url, "/printer/objects/list", timeout)["objects"]
     sections = [o for o in objects if o.split(" ")[0] == "mcu" and o != bridge]
     if not sections:
@@ -355,12 +356,17 @@ def _run(args: argparse.Namespace) -> list[str] | None:
         return flashed_problems(read_kconfig(args.new), read_kconfig(args.flashed))
     new = json.loads(args.dict.read_text()).get("config", {})
     bridge = args.config is not None and str(new.get("CANBUS_BRIDGE")) == "1"
+    errors = (OSError, ValueError, KeyError, TypeError, AttributeError)
     try:
         running = running_constants(args.url, args.section)
-        nodes = can_node_bitrates(args.url, args.section) if bridge else {}
-    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+    except errors as exc:
         msg = f"Moonraker gave no constants for [{args.section}]: {exc}"
         raise NoBaselineError(msg) from exc
+    try:
+        nodes = can_node_bitrates(args.url, args.section) if bridge else {}
+    except errors as exc:
+        msg = f"Moonraker gave no constants for the CAN nodes behind [{args.section}]"
+        raise NoBaselineError(f"{msg}: {exc}") from exc
     if not running:
         _LOG.warning("no running baseline for [%s]: never connected", args.section)
         return None

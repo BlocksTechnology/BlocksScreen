@@ -231,6 +231,24 @@ def test_bridge_bitrate_must_match_its_can_nodes(
     assert pf.main(argv + ["--config", str(config)]) == rc
 
 
+def test_failed_can_node_query_names_the_nodes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def _fail(*_args: object) -> dict:
+        raise OSError("timed out")
+
+    running = {"MCU": "stm32h723xx", "CANBUS_BRIDGE": 1}
+    monkeypatch.setattr(pf, "running_constants", lambda *_a: running)
+    monkeypatch.setattr(pf, "can_node_bitrates", _fail)
+    dict_file = tmp_path / "klipper.dict"
+    dict_file.write_text(json.dumps({"config": running}))
+    config = tmp_path / ".config"
+    config.write_text("CONFIG_CANBUS_FREQUENCY=1000000\n")
+    argv = ["comms", "--dict", str(dict_file), "--section", "mcu"]
+    assert pf.main(argv + ["--config", str(config)]) == 5
+    assert "CAN nodes behind [mcu]" in caplog.text
+
+
 def test_bridge_bitrate_problem_names_the_node() -> None:
     nodes = {"mcu Toolhead": 1000000, "mcu eddy": 500000}
     assert pf.bridge_bitrate_problems("500000", nodes) == [

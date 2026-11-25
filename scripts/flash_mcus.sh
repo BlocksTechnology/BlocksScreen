@@ -2242,8 +2242,9 @@ EXIT CODES:
   0   Every flashed MCU runs the host's Klipper version (or nothing to flash);
       --versions: all Klipper MCUs current
   1   Not flashed or failed, but Klipper reaches ready (every MCU answers; a
-      board failing its checks flashes nothing at all); --versions: Moonraker
-      unreachable
+      board failing its checks flashes nothing at all); a board named on
+      --flash has no config or is not detected; setup error or another flash
+      running; --versions: Moonraker unreachable
   2   --versions: one or more MCUs need a flash
   4   A board failed mid-flash and Klipper is not ready: someone must be at the
       printer (a board left in ROM DFU: switch the 24 V supply off)
