@@ -19,6 +19,8 @@ _CFG_HOME = re.compile(r"^home\s*=\s*\S", re.M)
 _CFG_ISOLATED = re.compile(r"^include-system-site-packages\s*=\s*false\s*$", re.M)
 # pip's AdjacentTempDirectory rollback names for `pip/` and `pip-X.dist-info` (`~ip`, `~-p-X.dist-info`).
 _PIP_STASH = re.compile(r"^~[-~.=%0-9]*(?:pip|ip|p)(?:-[^-]+\.dist-info)?$")
+# Mirrors updater.models.MIN_FREE_MB: below it a write can leave truncated files.
+_MIN_FREE_MB = 200
 
 
 def _site_packages() -> Path:
@@ -252,7 +254,7 @@ def heal() -> int:
         rc = 1
     if pending:
         if not _reinstall(pending, deferred):
-            _LOG.warning("reinstall of %s deferred (offline?)", " ".join(pending))
+            _LOG.warning("reinstall of %s deferred to the next run", " ".join(pending))
             return rc or 2
         _pending_file().unlink(missing_ok=True)
         _LOG.info("reinstalled %s", " ".join(pending))
@@ -265,10 +267,34 @@ def _wheel_dir() -> Path:
     return Path(sys.prefix, ".blockscreen-heal-wheels")
 
 
+def _free_mb() -> int:
+    """Free MiB on the venv's filesystem."""
+    return shutil.disk_usage(sys.prefix).free >> 20
+
+
+def _installed_mb(dist_infos: list[Path]) -> int:
+    """RECORD-listed size of these dists in MiB; an unreadable RECORD counts as 0."""
+    total = 0
+    for dist_info in dist_infos:
+        try:
+            text = (dist_info / "RECORD").read_text("utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        rows = csv.reader(text.splitlines())
+        total += sum(int(r[2]) for r in rows if len(r) >= 3 and r[2].isdigit())
+    return total >> 20
+
+
 def _reinstall(pending: list[str], deferred: list[Path]) -> bool:
     """Fetch every wheel first, then remove the damaged dists and install offline."""
     wheels = _wheel_dir()
     shutil.rmtree(wheels, ignore_errors=True)
+    # Wheels plus reinstalled files (PyQt6 + Qt6 alone >100 MB) must not eat the margin a full disk truncates in.
+    need = _MIN_FREE_MB + _installed_mb(deferred)
+    free = _free_mb()
+    if free < need:
+        _LOG.error("%d MB free, %d MB needed - reinstall deferred", free, need)
+        return False
     try:
         res = subprocess.run(  # nosec B603 - pending lines all match _PIN
             [

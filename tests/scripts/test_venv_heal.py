@@ -21,6 +21,7 @@ def heal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> types.ModuleType:
     spec.loader.exec_module(mod)
     venv = tmp_path / "venv"
     monkeypatch.setattr(mod.sys, "prefix", str(venv))
+    monkeypatch.setattr(mod, "_free_mb", lambda: 10**6)  # host disk must not decide
     mod._site_packages().mkdir(parents=True)
     (venv / "bin").mkdir()
     (venv / "pyvenv.cfg").write_text(_CFG)
@@ -189,6 +190,25 @@ def test_damaged_dist_is_removed_only_after_its_wheel_is_fetched(
     assert heal.heal() == 1
     assert seen == [("wheel", True), ("install", False)]
     assert not heal._wheel_dir().exists()
+
+
+def test_low_disk_defers_the_reinstall_and_keeps_the_dist(
+    heal: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = heal._site_packages()
+    dist_info = _dist(site, "foo", "1.0", {"foo/__init__.py": b"x" * (2 << 20)})
+    (site / "foo/__init__.py").write_bytes(b"")
+    calls = _fake_pip(monkeypatch, heal, rc=0)
+    monkeypatch.setattr(heal, "_free_mb", lambda: heal._MIN_FREE_MB + 1)
+    assert heal.heal() == 1
+    assert calls == []  # 2 MB to reinstall on top of the margin: no download
+    assert dist_info.exists()
+    assert heal._read_pending() == ["foo==1.0"]
+
+    monkeypatch.setattr(heal, "_free_mb", lambda: heal._MIN_FREE_MB + 2)
+    assert heal.heal() == 1
+    assert [c[3] for c in calls] == ["wheel", "install"]
+    assert not heal._pending_file().exists()
 
 
 def test_pip_repair_needs_ensurepip_before_deleting_pip(
