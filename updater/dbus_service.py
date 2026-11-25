@@ -173,6 +173,11 @@ class UpdaterInterface(
             self._followup_hold = True
             self._spawn(self._release_hold_if_printing(), name="followup_hold_print")
 
+    @property
+    def yaml_broken(self) -> bool:
+        """True when PyYAML was broken as the components loaded."""
+        return self._svc.yaml_broken
+
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
         task = asyncio.get_running_loop().create_task(coro, name=name)

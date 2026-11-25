@@ -26,6 +26,7 @@ _broken_paths() {
 }
 
 # Git trees of the other components, read like load_components: bundled list, user override, home only.
+# The user override is editable by the user, so paths must resolve under home and git runs as each tree's owner.
 _component_repos() {
     local p home bs
     home=$(realpath -m -- "$HOME_DIR")

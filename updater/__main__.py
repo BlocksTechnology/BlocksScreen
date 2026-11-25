@@ -10,7 +10,6 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
-from updater.components import import_yaml
 from updater.locking import code_hash_path, process_lock
 from updater.models import ComponentStatus
 from updater.service import LoggingCallback, UpdateService
@@ -97,7 +96,7 @@ async def _run_daemon() -> None:
     stop_event = asyncio.Event()
     loop.add_signal_handler(signal.SIGTERM, stop_event.set)
     loop.add_signal_handler(signal.SIGINT, stop_event.set)
-    await _serve(stop_event, _watchdog_ping_interval(), import_yaml() is None)
+    await _serve(stop_event, _watchdog_ping_interval(), service.yaml_broken)
     _log.info("updater daemon shutting down")
     await service.shutdown()
 

@@ -3,7 +3,7 @@ Description=BlocksScreen worktree integrity check
 After=local-fs.target
 Before=BlocksScreen-xorg.service BlocksScreen.service BlocksScreen-updater.service
 Before=BlocksScreen-deploy.service BlocksScreen-bootstrap.service BlocksScreen-clock.service
-# Delays Moonraker up to 60 s only when HEAD is unreadable and the guard fetches.
+# Delays these services up to 60 s only when BlocksScreen's HEAD is unreadable and the guard fetches.
 # Component trees (Klipper, Moonraker, ...) are restored before their services import them.
 Before=moonraker.service klipper.service crowsnest.service Spoolman.service
 
