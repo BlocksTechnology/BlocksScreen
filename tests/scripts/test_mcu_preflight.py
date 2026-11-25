@@ -208,6 +208,36 @@ def test_unreachable_moonraker_is_not_a_missing_baseline(tmp_path: Path) -> None
     assert pf.main(argv + ["--url", "http://127.0.0.1:9"]) == 5
 
 
+@pytest.mark.parametrize(
+    ("new_bitrate", "bridge", "rc"),
+    [("1000000", 1, 0), ("500000", 1, 1), ("500000", None, 0)],
+)
+def test_bridge_bitrate_must_match_its_can_nodes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    new_bitrate: str,
+    bridge: int | None,
+    rc: int,
+) -> None:
+    # The bridge exports no CANBUS_FREQUENCY: T1 on .151 passed a 1M -> 500k bridge build.
+    running = {"MCU": "stm32h723xx", "CANBUS_BRIDGE": bridge}
+    monkeypatch.setattr(pf, "running_constants", lambda *_a: running)
+    monkeypatch.setattr(pf, "can_node_bitrates", lambda *_a: {"mcu Toolhead": 1000000})
+    dict_file = tmp_path / "klipper.dict"
+    dict_file.write_text(json.dumps({"config": running}))
+    config = tmp_path / ".config"
+    config.write_text(f"CONFIG_CANBUS_FREQUENCY={new_bitrate}\n")
+    argv = ["comms", "--dict", str(dict_file), "--section", "mcu"]
+    assert pf.main(argv + ["--config", str(config)]) == rc
+
+
+def test_bridge_bitrate_problem_names_the_node() -> None:
+    nodes = {"mcu Toolhead": 1000000, "mcu eddy": 500000}
+    assert pf.bridge_bitrate_problems("500000", nodes) == [
+        "CANBUS_FREQUENCY: [mcu Toolhead] runs 1000000, new bridge build 500000"
+    ]
+
+
 def test_combine_bin_pads_katapult_up_to_the_app() -> None:
     image = pf.combine_bin(b"K" * 10, b"APP", 0x8000000, 0x8000010)
     assert image == b"K" * 10 + b"\xff" * 6 + b"APP"
@@ -605,6 +635,30 @@ def test_bootloader_uuids_lists_katapult_nodes_only(tmp_path: Path) -> None:
         TOOL=str(tool),
     )
     assert res.stdout.split() == ["aaa"]
+
+
+_DISCOVER_STUBS = """
+CONTEXT=pi KATAPULT_OK=true SRC_VERSION=v1 MCU_CONFIG_DIR="$CFG"
+ensure_klipper_running() { :; }; query_moonraker_versions() { return 1; }
+scan_dfu_devices() { :; }; ensure_can_up() { :; }; find_dfu_device() { :; }
+bootloader_uuids() { [ "$STATE" = katapult ] && echo aaa; }
+probe_can_mcu() { echo "stm32g0b1xx|"; }
+klipper_can_query() { [ "$STATE" = klipper ] && echo "aaa|Klipper"; }
+UUID_CACHE_MAP=([stm32g0b1]=aaa)
+discover >/dev/null 2>&1; printf '%s\\n' "${DISCOVERED[@]}"
+"""
+
+
+@pytest.mark.parametrize("state", ["katapult", "klipper"])
+def test_can_node_is_matched_in_katapult_and_in_klipper(
+    tmp_path: Path, state: str
+) -> None:
+    # Katapult names the chip stm32g0b1xx: a node left there by a failed flash must still match.
+    (tmp_path / "ebb.config").write_text(
+        "# mcu_type: stm32g0b1\n# klipper_section: mcu Toolhead\n# katapult_dfu: 0483:df11\n"
+    )
+    res = _run_snippet(_DISCOVER_STUBS, CFG=str(tmp_path), STATE=state)
+    assert res.stdout.startswith("ebb|can|aaa|"), res.stdout + res.stderr
 
 
 # Prints what Klipper's lib/rp2040_flash/main.c prints, per $MODE; exits 0 like it does.

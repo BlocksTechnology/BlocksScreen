@@ -3,7 +3,8 @@
 
 image: vector table, link address and size of a built image (ARM Cortex-M layout).
 pair: a Katapult build must share chip, clock, CAN pins and app address with Klipper.
-comms: constants of the new klipper.dict versus the running MCU's `mcu_constants`.
+comms: constants of the new klipper.dict versus the running MCU's `mcu_constants`;
+    a bridge build's CAN bitrate (`--config`) versus the CAN nodes it carries.
 flashed: clock Kconfig of the new build versus the last successfully flashed one.
 combine-bin / combine-uf2: Katapult plus app as one ROM bootloader image; uf2 prints pages.
 
@@ -265,6 +266,33 @@ def running_constants(base_url: str, section: str, timeout: float = 5.0) -> dict
     return (status["status"].get(section) or {}).get("mcu_constants") or {}
 
 
+def can_node_bitrates(base_url: str, bridge: str, timeout: float = 5.0) -> dict:
+    """Running CANBUS_FREQUENCY of every connected MCU section except the bridge."""
+    objects = moonraker_get(base_url, "/printer/objects/list", timeout)["objects"]
+    sections = [o for o in objects if o.split(" ")[0] == "mcu" and o != bridge]
+    if not sections:
+        return {}
+    query = "&".join(f"{urllib.parse.quote(s)}=mcu_constants" for s in sections)
+    status = moonraker_get(base_url, f"/printer/objects/query?{query}", timeout)
+    bitrates = {}
+    for section in sections:
+        constants = (status["status"].get(section) or {}).get("mcu_constants") or {}
+        if "CANBUS_FREQUENCY" in constants:
+            bitrates[section] = constants["CANBUS_FREQUENCY"]
+    return bitrates
+
+
+def bridge_bitrate_problems(new_bitrate: str | None, nodes: dict) -> list[str]:
+    """CAN nodes whose running bitrate the new bridge build would no longer match."""
+    # A USB-CAN bridge exports no CANBUS_FREQUENCY, so its nodes are the only baseline.
+    return [
+        f"CANBUS_FREQUENCY: [{section}] runs {bitrate}, "
+        f"new bridge build {new_bitrate or 'absent'}"
+        for section, bitrate in sorted(nodes.items())
+        if str(bitrate) != str(new_bitrate)
+    ]
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Pre-flash firmware checks.")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -283,6 +311,7 @@ def _build_parser() -> argparse.ArgumentParser:
     comms.add_argument("--dict", type=Path, required=True)
     comms.add_argument("--section", required=True)
     comms.add_argument("--url", default="http://localhost:7125")
+    comms.add_argument("--config", type=Path)
     for name in ("combine-bin", "combine-uf2"):
         combine = sub.add_parser(name)
         combine.add_argument("--katapult", type=Path, required=True)
@@ -324,15 +353,24 @@ def _run(args: argparse.Namespace) -> list[str] | None:
         return pair_problems(read_kconfig(args.klipper), read_kconfig(args.katapult))
     if args.cmd == "flashed":
         return flashed_problems(read_kconfig(args.new), read_kconfig(args.flashed))
+    new = json.loads(args.dict.read_text()).get("config", {})
+    bridge = args.config is not None and str(new.get("CANBUS_BRIDGE")) == "1"
     try:
         running = running_constants(args.url, args.section)
+        nodes = can_node_bitrates(args.url, args.section) if bridge else {}
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         msg = f"Moonraker gave no constants for [{args.section}]: {exc}"
         raise NoBaselineError(msg) from exc
     if not running:
         _LOG.warning("no running baseline for [%s]: never connected", args.section)
         return None
-    return comms_problems(json.loads(args.dict.read_text()).get("config", {}), running)
+    problems = comms_problems(new, running)
+    if bridge:
+        if not nodes:
+            _LOG.warning("no CAN node connected: [%s] bitrate unchecked", args.section)
+        bitrate = read_kconfig(args.config).get("CONFIG_CANBUS_FREQUENCY")
+        problems += bridge_bitrate_problems(bitrate, nodes)
+    return problems
 
 
 def main(argv: list[str] | None = None) -> int:

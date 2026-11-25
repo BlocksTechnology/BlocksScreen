@@ -903,7 +903,7 @@ preflight_firmware() {
     if [ "$CONTEXT" = "pi" ] && [ -n "$section" ]; then
         local comms_rc=0
         python3 "$PREFLIGHT_PY" comms --dict "${FW_OUT}klipper.dict" --section "$section" \
-            --url "$MOONRAKER_URL" || comms_rc=$?
+            --config "$FW_BUILD_ROOT/$name/.config" --url "$MOONRAKER_URL" || comms_rc=$?
         case "$comms_rc" in
         0) ;;
         3) warn "[$name] no running firmware to compare - comms settings unchecked" ;;
@@ -1324,8 +1324,9 @@ discover() {
         fi # ensure_can_up
     fi
 
+    # Katapult reports the chip as stm32g0b1xx, configs and the cache say stm32g0b1.
     for _u in "${!uuid_to_mcu[@]}"; do
-        _mcu_type_to_uuid["${uuid_to_mcu[$_u]}"]="$_u"
+        _mcu_type_to_uuid["${uuid_to_mcu[$_u]%xx}"]="$_u"
     done
 
     header "Matching configs to detected devices..."
@@ -1398,7 +1399,7 @@ discover() {
 
         # CAN lookup via pre-built reverse map.
         if [ -n "$can_mcu_type" ] && [ "$CONTEXT" = "pi" ]; then
-            local matched_uuid="${_mcu_type_to_uuid[$can_mcu_type]:-}"
+            local matched_uuid="${_mcu_type_to_uuid[${can_mcu_type%xx}]:-}"
             if [ -n "$matched_uuid" ]; then
                 local _fwv="${uuid_to_version[$matched_uuid]:-$moonraker_ver}"
                 DISCOVERED+=("$name|can|$matched_uuid|$cfg|$_fwv|true")
