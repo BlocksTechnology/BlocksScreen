@@ -1415,7 +1415,7 @@ discover() {
         fi
 
         # DFU triggerable - no physical DFU device present yet, but UUID is cached
-        # so we can trigger it via CAN at flash time (or the user can use BOOT0+RESET).
+        # so we can trigger it via CAN at flash time (or the user can fit the BOOT0 jumper and press RESET).
         if [ -n "$dfu_vidpid" ] && ! $added &&
             [ -n "$can_mcu_type" ] && [ -n "${UUID_CACHE_MAP[$can_mcu_type]:-}" ] &&
             [ "$CONTEXT" = "pi" ]; then
@@ -1423,7 +1423,7 @@ discover() {
             if $CAN_AVAILABLE; then
                 info "[$name] DFU-triggerable via CAN (UUID: ${UUID_CACHE_MAP[$can_mcu_type]})"
             else
-                info "[$name] DFU-triggerable (UUID cached; CAN not up - will try at flash time or hold BOOT0+RESET)"
+                info "[$name] DFU-triggerable (UUID cached; CAN not up - will try at flash time or fit the BOOT0 jumper and press RESET)"
             fi
             added=true
         fi
@@ -1549,7 +1549,7 @@ _recovery_steps() {
         "  1. Switch the printer off and on: each board boots whatever is in its flash." \
         "  2. Re-run this script: a board that answers again is flashed normally." \
         "  3. CAN board still missing: double-press its reset to enter Katapult, then re-run." \
-        "  4. STM32 still missing: hold BOOT0, press RESET, release BOOT0, re-run with --force." \
+        "  4. STM32 still missing: fit the BOOT0 jumper, press RESET, remove the jumper (DFU stays up), re-run with --force." \
         "  5. RP2040 still missing: hold BOOTSEL, press RESET, release BOOTSEL, re-run with --force."
 }
 
@@ -1853,7 +1853,7 @@ cmd_flash() {
                 err "[$name] DFU trigger failed - $CAN_INTERFACE unavailable"
                 err "  The board must be powered (24V PSU on) and $CAN_INTERFACE must be up."
                 err "  Option 1: power on the printer, then re-run this script."
-                err "  Option 2: hold BOOT0 on the board, press RESET, release BOOT0, then re-run with --force."
+                err "  Option 2: fit the BOOT0 jumper, press RESET, remove the jumper (DFU stays up), then re-run with --force."
             fi
             ;;
         esac
