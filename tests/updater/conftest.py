@@ -54,6 +54,8 @@ def hermetic_home(tmp_path, monkeypatch):
     run = home / ".cache" / "blockscreen"
     run.mkdir(parents=True)
     monkeypatch.setattr(locking, "_runtime_dir", lambda: run)
+    # Components expand ~ at load time; under the real HOME update tests reset ~/klipper.
+    monkeypatch.setenv("HOME", str(home))
     for name, mod in list(sys.modules.items()):
         if name != "updater" and not name.startswith("updater."):
             continue

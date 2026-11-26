@@ -387,3 +387,25 @@ def test_emptied_head_with_two_branches_uses_the_one_at_the_last_tip(repo, tmp_p
     res = _run(repo, tmp_path / "home", env)
     assert res.returncode == 0, res.stderr
     assert _git(repo, "symbolic-ref", "--short", "HEAD").strip() == branch
+
+
+def test_foreign_owned_git_entries_are_chowned_to_the_tree_owner(tmp_path, env):
+    repo = tmp_path / "BlocksScreen"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=env)
+    bindir = Path(env["PATH"].split(":", 1)[0])
+    log = tmp_path / "chown.log"
+    # Root run with a tree owned by "nobody": every .git entry reads as foreign-owned.
+    stubs = {
+        "id": "echo 0\n",
+        "stat": 'case "$2" in %U) echo nobody;; *) echo nobody:nogroup;; esac\n',
+        "chown": f'echo "$*" >> {log}\n',
+        "runuser": 'shift 3; exec "$@"\n',
+    }
+    for name, body in stubs.items():
+        (bindir / name).write_text(f"#!/bin/sh\n{body}")
+        (bindir / name).chmod(0o755)
+    res = _run(repo, tmp_path / "home", env)
+    assert res.returncode == 0, res.stderr
+    assert "not owned by nobody, chowned" in res.stdout
+    assert log.read_text().startswith("-h nobody:nogroup ")
+    assert str(repo / ".git" / "HEAD") in log.read_text()
