@@ -1,3 +1,4 @@
+raise SystemExit("g3 crash")
 import logging
 import os
 import shlex
