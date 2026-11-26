@@ -6,6 +6,7 @@ import asyncio
 import dataclasses
 import json
 import logging
+import secrets
 import time
 from collections.abc import Awaitable, Callable
 from functools import partial
@@ -32,6 +33,11 @@ _DEPLOY_POLL_S = 1.0
 _MOONRAKER_SYNC_RETRY_S = 60.0
 # A print can refuse it for hours; the next periodic check is up to a day away.
 _MOONRAKER_SYNC_RETRY_MAX_S = 600.0
+_FORWARD_HEAL_BASE_S = 1800.0
+_FORWARD_HEAL_JITTER_S = 300
+_OWED_REVERT_BASE_S = 60.0
+_OWED_REVERT_MAX_S = 3600.0
+_UI_COMPONENT = "BlocksScreen"
 
 
 def _boot_delay_s() -> float:
@@ -161,7 +167,8 @@ class UpdaterInterface(
         self._spawn(self._svc.background_prime_nrestarts(), name="boot_prime_nrestarts")
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
         self._spawn(self._svc.supervise_ui(), name="supervise_ui")
-        self._spawn(self._svc.forward_heal_ui(), name="forward_heal_ui")
+        self._spawn(self._forward_heal_loop(), name="forward_heal")
+        self._spawn(self._owed_revert_loop(), name="owed_revert")
         # install-updater restarts us before its run ends: resume the hold.
         # Silent: not exported yet, clients read it via get_busy on connect.
         if self._svc.deploy_pending():
@@ -535,6 +542,57 @@ class UpdaterInterface(
             if ran or not self._provisioning:
                 self._set_busy(busy=False)
         return ran
+
+    async def _forward_heal_loop(self) -> None:
+        """While the UI ladder is in fallback, re-check its branch and update onto a fix."""
+        while True:
+            await asyncio.sleep(
+                _FORWARD_HEAL_BASE_S + secrets.randbelow(_FORWARD_HEAL_JITTER_S + 1)
+            )
+            try:
+                await self._forward_heal_pass()
+            except Exception as exc:  # noqa: BLE001
+                _log.debug("forward heal pass failed: %s", exc)
+
+    async def _forward_heal_pass(self) -> None:
+        """One heal attempt, holding busy and the locks exactly like a press."""
+        if self._busy or self._provisioning:
+            return
+        # Serialise the fetch with Moonraker refreshes of the same repo.
+        async with self._git_guard:
+            tip = await self._svc.forward_heal_target()
+        if not tip or self._busy or self._provisioning:
+            return
+        self._set_busy(busy=True)
+        await self._run_with_lock(
+            partial(self._svc.forward_heal, tip), "forward_heal", _UI_COMPONENT
+        )
+
+    async def _owed_revert_loop(self) -> None:
+        """Retry a revert a failed rollback left owed, backing off while it keeps failing."""
+        delay = _OWED_REVERT_BASE_S
+        while True:
+            await asyncio.sleep(delay)
+            try:
+                owed = await self._owed_revert_pass()
+            except Exception as exc:  # noqa: BLE001
+                _log.error("owed revert pass failed: %s", exc, exc_info=True)
+                owed = True
+            delay = min(delay * 2, _OWED_REVERT_MAX_S) if owed else _OWED_REVERT_BASE_S
+
+    async def _owed_revert_pass(self) -> bool:
+        """One retry under busy and the git guard; True if it ran and the revert is still owed."""
+        if not self._svc.revert_owed():
+            return False
+        # Checked before busy: an overlay over a live print hides Pause.
+        if self._busy or self._provisioning or await klipper_printing(unanswered=True):
+            return False
+        self._set_busy(busy=True)
+        try:
+            async with self._git_guard:
+                return await self._svc.retry_owed_revert()
+        finally:
+            self._set_busy(busy=False)
 
     async def _run_update_all(self) -> None:
         """Update dirty components; no background apt if a restart may SIGKILL dpkg."""

@@ -1,7 +1,8 @@
 import asyncio
+import os
 import time
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -17,6 +18,12 @@ def _isolate_state(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(
         updater_service, "_FAULT_MARKER_PATH", state_dir / "selfheal_fault.json"
     )
+
+
+@pytest.fixture
+def no_head(monkeypatch):
+    """The first crash-loop rung reads HEAD; keep it off the real install tree."""
+    monkeypatch.setattr(updater_service, "git_get_hash", AsyncMock(return_value=""))
 
 
 class TestStateFields:
@@ -62,6 +69,36 @@ class TestStateFields:
         assert ok
         assert svc._state_path.exists()
         assert svc._read_state() == data
+
+    def test_failed_write_leaves_no_temp(self, tmp_path: Path):
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state" / "state.json"
+        with patch.object(Path, "replace", side_effect=OSError("EIO")):
+            assert svc._write_state({"a": {}}) is False
+        assert list(svc._state_path.parent.iterdir()) == []
+
+    def test_sweep_removes_only_stale_temps(self, tmp_path: Path):
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._inflight_path = tmp_path / "inflight.json"
+        old = tmp_path / ".updater_state_old"
+        fresh = tmp_path / ".updater_inflight_fresh"
+        old.write_text("{")
+        fresh.write_text("{")
+        stale = time.time() - updater_service._STALE_TEMP_S - 60
+        os.utime(old, (stale, stale))
+        svc._sweep_stale_temps()
+        assert not old.exists() and fresh.exists()
+
+    @pytest.mark.parametrize("raw", [b"", b"\x00" * 64, b'{"a": {', b"[1]"])
+    def test_corrupt_state_kept_once_and_defaults(self, tmp_path: Path, raw, caplog):
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._state_path.write_bytes(raw)
+        assert svc._read_state() == {}
+        assert svc._read_state() == {}
+        assert (tmp_path / "state.json.corrupt").read_bytes() == raw
+        assert sum("corrupt" in r.message for r in caplog.records) == 1
 
 
 class TestBlessHealthy:
@@ -133,6 +170,33 @@ class TestBlessHealthy:
             state_after = svc._read_state()
             assert state_after["BlocksScreen"]["golden"] == "c" * 40
             assert state_after["BlocksScreen"]["last_good"] == "a" * 40
+
+        asyncio.run(run_test())
+
+    def test_golden_advances_after_repeated_blesses(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": {"golden": "c" * 40}})
+            goldens = []
+            with patch("updater.service.get_service_nrestarts", return_value=0):
+                for h in ["a", "b", "b", "a", "a", "a"]:
+                    await svc.bless_healthy("BlocksScreen", h * 40)
+                    goldens.append(svc._read_state()["BlocksScreen"]["golden"][0])
+            assert goldens == ["c", "c", "c", "c", "c", "a"]
+
+        asyncio.run(run_test())
+
+    def test_bless_forgets_only_its_own_bad_commit(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._bad_commit_path.write_text("b" * 40 + "\n")
+            with patch("updater.service.get_service_nrestarts", return_value=0):
+                await svc.bless_healthy("BlocksScreen", "a" * 40)
+                assert svc._read_bad_commit() == "b" * 40
+                await svc.bless_healthy("BlocksScreen", "b" * 40)
+            assert svc._read_bad_commit() == ""
 
         asyncio.run(run_test())
 
@@ -310,6 +374,43 @@ class TestReconcileWithNewFields:
         asyncio.run(run_test())
 
 
+class TestStaleDaemonFlag:
+    @pytest.mark.parametrize(
+        ("loaded", "flagged"), [("old", True), ("disk", False), ("", False)]
+    )
+    def test_flags_restart_only_when_loaded_code_differs(
+        self, tmp_path: Path, monkeypatch, loaded: str, flagged: bool
+    ):
+        hash_file = tmp_path / "updater-code-hash"
+        sentinel = tmp_path / "updater-restart-needed"
+        hash_file.write_text(loaded + "\n")
+        monkeypatch.setattr(updater_service, "code_hash_path", lambda: hash_file)
+        monkeypatch.setattr(updater_service, "restart_sentinel_path", lambda: sentinel)
+        monkeypatch.setattr(updater_service, "code_hash", lambda: "disk")
+        UpdateService()._flag_stale_daemon()
+        assert sentinel.exists() is flagged
+        if flagged:
+            assert sentinel.read_text() == "code\n"
+
+    def test_missing_hash_file_is_a_no_op(self, tmp_path: Path, monkeypatch):
+        sentinel = tmp_path / "updater-restart-needed"
+        monkeypatch.setattr(
+            updater_service, "code_hash_path", lambda: tmp_path / "absent"
+        )
+        monkeypatch.setattr(updater_service, "restart_sentinel_path", lambda: sentinel)
+        UpdateService()._flag_stale_daemon()
+        assert not sentinel.exists()
+
+    def test_reconcile_applies_the_flagged_restart(self, tmp_path: Path, monkeypatch):
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        applied = AsyncMock()
+        monkeypatch.setattr(svc, "_reconcile_locked", AsyncMock())
+        monkeypatch.setattr(svc, "_apply_deferred_restart", applied)
+        assert asyncio.run(svc.reconcile())
+        applied.assert_awaited_once()
+
+
 class TestNRestartsTracking:
     def test_nrestarts_sample_ring_init_on_daemon_start(self):
         svc = UpdateService()
@@ -479,10 +580,11 @@ class TestRecoveryLadder:
 
         asyncio.run(run_test())
 
-    def test_rung2_forward_heals_to_origin_main_ref(self, tmp_path: Path):
+    def test_rung2_heals_to_own_branch_ref(self, tmp_path: Path):
         async def run_test():
             svc = UpdateService()
             svc._state_path = tmp_path / "state.json"
+            ui = next(c for c in svc._components if c.name == "BlocksScreen")
             svc._write_state({"BlocksScreen": {"prev_hash": "old", "fast_attempt": 1}})
             with (
                 patch("updater.service.git_fetch") as m_fetch,
@@ -502,7 +604,7 @@ class TestRecoveryLadder:
                 len(m_fetch.call_args[0]) == 1
             )  # path only, no bad "origin" positional
             # Reset to the resolved SHA, never the movable ref name.
-            assert m_ref.call_args[0][1] == "origin/main"
+            assert m_ref.call_args[0][1] == f"origin/{ui.branch}"
             assert m_reset.call_args[0][1] == "b" * 40
             state_after = svc._read_state()
             assert state_after["BlocksScreen"]["last_failed_remote"] == "b" * 40
@@ -533,6 +635,29 @@ class TestRecoveryLadder:
 
         asyncio.run(run_test())
 
+    @pytest.mark.parametrize("why", ["bad", "pinned"])
+    def test_rung2_skips_crashed_tip_and_pins(self, tmp_path: Path, why: str):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": {"fast_attempt": 1}})
+            ui = next(c for c in svc._components if c.name == "BlocksScreen")
+            if why == "bad":
+                svc._bad_commit_path.write_text("b" * 40 + "\n")
+            else:
+                ui.version = "c" * 40
+            with (
+                patch("updater.service.git_fetch", return_value=(True, "")),
+                patch("updater.service.git_ref_hash", return_value="b" * 40),
+                patch("updater.service.git_tree_has_path", return_value=True),
+                patch("updater.service.git_reset_to_hash") as m_reset,
+            ):
+                ok = await svc.run_recovery_rung("BlocksScreen", 2)
+            assert not ok
+            m_reset.assert_not_called()
+
+        asyncio.run(run_test())
+
     def test_rung2_offline_fetch_does_not_reset(self, tmp_path: Path):
         async def run_test():
             svc = UpdateService()
@@ -551,6 +676,7 @@ class TestRecoveryLadder:
 
 
 class TestSupervisor:
+    @pytest.mark.usefixtures("no_head")
     def test_handle_crash_loop_runs_next_rung(self, tmp_path, monkeypatch):
         monkeypatch.setattr(updater_service, "_RECOVERY_SETTLE_S", 0)
 
@@ -566,6 +692,36 @@ class TestSupervisor:
                 m_rung.return_value = True
                 await svc._handle_crash_loop(12)
             m_rung.assert_called_once_with("BlocksScreen", 1)
+
+        asyncio.run(run_test())
+
+    @pytest.mark.parametrize(
+        ("head", "recorded"), [("b" * 40, True), ("a" * 40, False)]
+    )
+    def test_first_rung_records_unblessed_head(self, tmp_path, head, recorded):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": {"last_good": "a" * 40}})
+            with (
+                patch("updater.service._RECOVERY_SETTLE_S", 0),
+                patch("updater.service.get_service_nrestarts", return_value=0),
+                patch("updater.service.git_get_hash", return_value=head),
+                patch.object(svc, "run_recovery_rung", return_value=True),
+            ):
+                await svc._handle_crash_loop(6)
+            assert svc._read_bad_commit() == (head if recorded else "")
+
+        asyncio.run(run_test())
+
+    def test_crash_loop_waits_for_forward_heal_update(self, tmp_path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._forward_healing = True
+            with patch.object(svc, "run_recovery_rung") as m_rung:
+                await svc._handle_crash_loop(6)
+            m_rung.assert_not_called()
 
         asyncio.run(run_test())
 
@@ -588,109 +744,72 @@ class TestSupervisor:
 
 
 class TestForwardHeal:
-    def test_forward_heal_waits_while_printing(self, tmp_path, printing):
-        async def run_test():
-            svc = UpdateService()
-            svc._state_path = tmp_path / "state.json"
-            svc._write_state({"BlocksScreen": {"prev_hash": "old", "fast_attempt": 3}})
-            printing.return_value = True
-            with patch("updater.service.git_fetch") as m_fetch:
-                ok = await svc._forward_heal_once()
-            assert not ok
-            m_fetch.assert_not_called()
+    def _svc(self, tmp_path: Path, **comp: object) -> UpdateService:
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._write_state({"BlocksScreen": {"fast_attempt": 3} | comp})
+        return svc
 
-        asyncio.run(run_test())
+    def _target(self, svc: UpdateService, tip: str = "c" * 40) -> str:
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", return_value=tip),
+            patch("updater.service.git_tree_has_path", return_value=True),
+        ):
+            return asyncio.run(svc.forward_heal_target())
 
-    def test_forward_heal_skips_when_not_in_fallback(self, tmp_path):
-        async def run_test():
-            svc = UpdateService()
-            svc._state_path = tmp_path / "state.json"
-            svc._write_state({"BlocksScreen": {"prev_hash": "old", "fast_attempt": 0}})
-            with patch("updater.service.git_fetch") as m_fetch:
-                ok = await svc._forward_heal_once()
-            assert not ok
-            m_fetch.assert_not_called()
+    def test_new_tip_is_a_target(self, tmp_path):
+        assert self._target(self._svc(tmp_path)) == "c" * 40
 
-        asyncio.run(run_test())
+    def test_waits_while_printing(self, tmp_path, printing):
+        printing.return_value = True
+        assert self._target(self._svc(tmp_path)) == ""
 
-    def test_forward_heal_skips_already_failed_tip(self, tmp_path):
-        async def run_test():
-            svc = UpdateService()
-            svc._state_path = tmp_path / "state.json"
-            svc._write_state(
-                {
-                    "BlocksScreen": {
-                        "prev_hash": "old",
-                        "fast_attempt": 3,
-                        "last_failed_remote": "b" * 40,
-                    }
-                }
-            )
-            with (
-                patch("updater.service.git_fetch") as m_fetch,
-                patch("updater.service.git_ref_hash") as m_ref,
-                patch("updater.service.git_reset_to_hash") as m_reset,
-            ):
-                m_fetch.return_value = (True, "")
-                m_ref.return_value = "b" * 40
-                ok = await svc._forward_heal_once()
-            assert not ok
-            m_reset.assert_not_called()
+    def test_skips_when_not_in_fallback(self, tmp_path):
+        assert self._target(self._svc(tmp_path, fast_attempt=1)) == ""
 
-        asyncio.run(run_test())
+    def test_skips_already_attempted_tip(self, tmp_path):
+        assert self._target(self._svc(tmp_path, last_failed_remote="c" * 40)) == ""
 
-    def test_forward_heal_upgrades_on_new_tip(self, tmp_path):
-        async def run_test():
-            svc = UpdateService()
-            svc._state_path = tmp_path / "state.json"
-            svc._write_state(
-                {
-                    "BlocksScreen": {
-                        "prev_hash": "old",
-                        "fast_attempt": 3,
-                        "last_failed_remote": "b" * 40,
-                    }
-                }
-            )
-            with (
-                patch("updater.service.git_fetch") as m_fetch,
-                patch("updater.service.git_ref_hash") as m_ref,
-                patch("updater.service.git_reset_to_hash") as m_reset,
-                patch("updater.service.git_tree_has_path", return_value=True) as m_tree,
-                patch("updater.service.get_service_nrestarts") as m_nr,
-                patch.object(svc, "_restart_ui_service") as m_restart,
-            ):
-                m_fetch.return_value = (True, "")
-                m_ref.return_value = "c" * 40
-                m_reset.return_value = (True, "")
-                m_nr.return_value = 0
-                m_restart.return_value = True
-                ok = await svc._forward_heal_once()
-            assert ok
-            # Guard and reset both use the resolved SHA: a fetch in between cannot swap the tree.
-            assert m_tree.call_args[0][1] == "c" * 40
-            assert m_reset.call_args[0][1] == "c" * 40
-            state_after = svc._read_state()
-            assert state_after["BlocksScreen"]["fast_attempt"] == 0
-            assert state_after["BlocksScreen"]["last_failed_remote"] == "c" * 40
+    def test_skips_crash_looped_tip(self, tmp_path):
+        svc = self._svc(tmp_path)
+        svc._bad_commit_path.write_text("c" * 40 + "\n")
+        assert self._target(svc) == ""
 
-        asyncio.run(run_test())
+    def test_skips_pinned_version(self, tmp_path):
+        svc = self._svc(tmp_path)
+        next(c for c in svc._components if c.name == "BlocksScreen").version = "d" * 40
+        assert self._target(svc) == ""
 
-    def test_forward_heal_offline_skips(self, tmp_path):
-        async def run_test():
-            svc = UpdateService()
-            svc._state_path = tmp_path / "state.json"
-            svc._write_state({"BlocksScreen": {"prev_hash": "old", "fast_attempt": 3}})
-            with (
-                patch("updater.service.git_fetch") as m_fetch,
-                patch("updater.service.git_reset_to_hash") as m_reset,
-            ):
-                m_fetch.return_value = (False, "network")
-                ok = await svc._forward_heal_once()
-            assert not ok
-            m_reset.assert_not_called()
+    def test_offline_skips(self, tmp_path):
+        svc = self._svc(tmp_path)
+        with patch("updater.service.git_fetch", return_value=(False, "network")):
+            assert asyncio.run(svc.forward_heal_target()) == ""
 
-        asyncio.run(run_test())
+    @pytest.mark.parametrize("ok", [True, False])
+    def test_heal_runs_the_update_path(self, tmp_path, ok):
+        svc = self._svc(tmp_path)
+        seen: list[bool] = []
+
+        async def update(_name: str) -> bool:
+            seen.append(svc._forward_healing)
+            return ok
+
+        with (
+            patch.object(svc, "update_component", side_effect=update),
+            patch("updater.service.get_service_nrestarts", return_value=0),
+        ):
+            assert asyncio.run(svc.forward_heal("c" * 40)) is ok
+        after = svc._read_state()["BlocksScreen"]
+        assert seen == [True] and not svc._forward_healing
+        assert after["last_failed_remote"] == "c" * 40
+        assert after["fast_attempt"] == (0 if ok else 3)
+
+    def test_heal_skipped_once_blessed(self, tmp_path):
+        svc = self._svc(tmp_path, fast_attempt=0)
+        with patch.object(svc, "update_component") as m_update:
+            assert not asyncio.run(svc.forward_heal("c" * 40))
+        m_update.assert_not_called()
 
 
 class TestNRestartsReader:
@@ -774,40 +893,22 @@ class TestStateConcurrency:
         async def run_test():
             svc = UpdateService()
             svc._state_path = tmp_path / "state.json"
-            svc._write_state(
-                {
-                    "BlocksScreen": {
-                        "last_good": "a" * 40,
-                        "golden": "a" * 40,
-                        "fast_attempt": 2,
-                    }
-                }
-            )
-            entered = asyncio.Event()
-            release = asyncio.Event()
-
-            async def slow_reset(_path, _ref):
-                entered.set()
-                await release.wait()
-                return (True, "")
-
+            svc._write_state({"BlocksScreen": {"golden": "a" * 40, "fast_attempt": 2}})
             new_hash = "b" * 40
-            with (
-                patch("updater.service.git_fetch", return_value=(True, "")),
-                patch("updater.service.git_ref_hash", return_value="c" * 40),
-                patch("updater.service.git_tree_has_path", return_value=True),
-                patch("updater.service.git_reset_to_hash", side_effect=slow_reset),
-                patch("updater.service.get_service_nrestarts", return_value=0),
-                patch.object(svc, "_restart_ui_service", return_value=True),
-            ):
-                heal = asyncio.create_task(svc._forward_heal_once())
-                await entered.wait()
+
+            async def update(_name: str) -> bool:
                 await svc.bless_healthy("BlocksScreen", new_hash)
-                release.set()
-                await heal
+                return True
+
+            with (
+                patch.object(svc, "update_component", side_effect=update),
+                patch("updater.service.get_service_nrestarts", return_value=0),
+            ):
+                await svc.forward_heal("c" * 40)
 
             after = svc._read_state()["BlocksScreen"]
             assert after["last_good"] == new_hash
+            assert after["last_failed_remote"] == "c" * 40
 
         asyncio.run(run_test())
 
@@ -829,6 +930,7 @@ class TestCorruptionHardening:
 
         asyncio.run(run_test())
 
+    @pytest.mark.usefixtures("no_head")
     def test_handle_crash_loop_tolerates_non_dict_entry(self, tmp_path: Path):
         async def run_test():
             svc = UpdateService()
@@ -870,6 +972,7 @@ class TestCorruptionHardening:
 
         asyncio.run(run_test())
 
+    @pytest.mark.usefixtures("no_head")
     def test_handle_crash_loop_tolerates_non_int_fast_attempt(self, tmp_path: Path):
         async def run_test():
             svc = UpdateService()
@@ -952,6 +1055,7 @@ class TestDiskFullRecovery:
 
         asyncio.run(run_test())
 
+    @pytest.mark.usefixtures("no_head")
     def test_space_ok_purges_then_runs_rung(self, tmp_path, disk, monkeypatch):
         monkeypatch.setattr(updater_service, "_RECOVERY_SETTLE_S", 0)
 

@@ -173,6 +173,19 @@ class TestHistoryLog:
         assert sum(1 for _ in hist.open()) == _HISTORY_KEEP_LINES
         assert hist.stat().st_size < _HISTORY_MAX_BYTES
 
+    def test_trim_drops_torn_lines(self, tmp_path: Path):
+        """OBS-14: NUL runs and torn lines mid-file do not survive a trim."""
+        hist = tmp_path / "history.jsonl"
+        good = '{"x":"' + "y" * 80 + '"}\n'
+        hist.write_bytes(
+            (good * 14000).encode() + b"\0" * 4096 + b'\n{"ev\n' + good.encode()
+        )
+        svc = UpdateService()
+        svc._history_path = hist
+        svc._trim_history()
+        lines = hist.read_text().splitlines()
+        assert lines and all(json.loads(ln) == json.loads(good) for ln in lines)
+
 
 class TestCheckStatus:
     @pytest.mark.asyncio
@@ -3938,6 +3951,52 @@ class TestInflightRollback:
         assert svc._read_inflight() == {"klipper": "a" * 40}  # kept for retry
         assert reverted == set()
 
+    def _owed(self, tmp_path: Path) -> UpdateService:
+        """A booted service whose last rollback failed and left the marker behind."""
+        svc = UpdateService()
+        svc._components = [
+            ComponentConfig(
+                name="BlocksScreen",
+                kind="git",
+                path=tmp_path,
+                service=updater_service._UI_SERVICE,
+            )
+        ]
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._write_inflight({"BlocksScreen": "a" * 40})
+        svc._reconciled = True
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_owed_revert_retried_and_ui_restarted(self, tmp_path):
+        svc = self._owed(tmp_path)
+        with (
+            patch("updater.service.git_get_hash", return_value="b" * 40),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+            patch(
+                "updater.service.restart_service_noblock", return_value=(True, "")
+            ) as mock_rs,
+            patch.object(svc, "_apply_deferred_restart", AsyncMock()),
+        ):
+            assert await svc.retry_owed_revert() is False
+        mock_rs.assert_awaited_once_with(updater_service._UI_SERVICE)
+        assert not svc._inflight_path.exists()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("blocker", ["lock", "printing", "boot"])
+    async def test_owed_revert_waits(self, tmp_path, printing, blocker):
+        svc = self._owed(tmp_path)
+        svc._reconciled = blocker != "boot"
+        printing.return_value = blocker == "printing"
+        lock = nullcontext(blocker != "lock")
+        with (
+            patch("updater.service.process_lock", lambda: lock),
+            patch("updater.service.git_reset_to_hash") as mock_reset,
+        ):
+            assert await svc.retry_owed_revert() is (blocker != "boot")
+        mock_reset.assert_not_called()
+        assert svc._read_inflight() == {"BlocksScreen": "a" * 40}
+
 
 class TestPingWhile:
     @pytest.mark.asyncio
@@ -4471,6 +4530,23 @@ class TestUpdaterDowngradeGuard:
         mock_checkout.assert_not_called()  # never switched onto the brick
 
     @pytest.mark.asyncio
+    async def test_stage_refuses_crash_looped_target(self, tmp_path):
+        comp = self._bs(tmp_path)
+        svc = UpdateService(callback=MagicMock())
+        svc._components = [comp]
+        svc._state_path = tmp_path / "state.json"
+        svc._bad_commit_path.write_text("a" * 40 + "\n")
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            patch("updater.service.git_tree_has_path", return_value=True),
+            patch("updater.service.git_checkout") as mock_checkout,
+        ):
+            ok, reason = await svc._stage_component(comp)
+        assert (ok, reason) == (False, updater_service._REFUSE_BAD_COMMIT)
+        mock_checkout.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_stage_allows_target_with_updater(self, tmp_path):
         comp = self._bs(tmp_path)
         svc = UpdateService(callback=MagicMock())
@@ -4538,6 +4614,9 @@ class TestUpdaterDowngradeGuard:
         mock_reset.assert_not_called()  # nothing moved: no rollback
         assert not (tmp_path / "inflight.json").exists()
         assert "refusing" in cb.on_error.call_args[0][1]
+        events = [json.loads(ln) for ln in svc._history_path.read_text().splitlines()]
+        assert [e["event"] for e in events] == ["update_start", "update_aborted"]
+        assert "refusing" in events[1]["reason"]
 
     @pytest.mark.asyncio
     async def test_batch_drops_host_keeps_others(self, tmp_path):
@@ -4779,6 +4858,24 @@ class TestDiskFull:
             await svc.update_all()
         disk.reclaim.assert_awaited_once()
         m_batch.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_inode_exhaustion_refuses(self, tmp_path, disk):
+        """GAP-7: free MB but no free inodes is still a full disk."""
+        disk.inodes.return_value = 500.0
+        cb = MagicMock()
+        svc = UpdateService(callback=cb)
+        svc._components = self._comps(tmp_path)
+        assert await svc._ensure_disk_space(svc._components) is False
+        disk.reclaim.assert_awaited_once()
+        reason = cb.on_error.call_args[0][1]
+        assert reason.startswith(DISK_FULL) and "file slots" in reason
+
+    def test_inodes_unbounded_without_inode_table(self):
+        st = MagicMock(f_files=0, f_favail=0)
+        executor = importlib.import_module("updater.executor")
+        with patch.object(executor.os, "statvfs", return_value=st):
+            assert executor.free_disk_inodes(Path("/")) == float("inf")
 
     @pytest.mark.asyncio
     async def test_single_component_update_is_gated(self, tmp_path, disk):

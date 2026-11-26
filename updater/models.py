@@ -20,6 +20,8 @@ CLOCK_UNSYNCED = "system clock not synchronized"
 DISK_FULL = "disk full"
 # Below this an update or a recovery reset could truncate files mid-write.
 MIN_FREE_MB = 200
+# ext4 can run out of inodes with MBs left; a git checkout or pip install needs thousands.
+MIN_FREE_INODES = 10_000
 
 
 @dataclass
