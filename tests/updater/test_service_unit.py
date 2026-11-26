@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 import updater.service as updater_service
+from updater.executor import APT_NOT_RUN, APT_REFUSED
 from updater.models import CLOCK_UNSYNCED, DISK_FULL, ComponentConfig, ComponentStatus
 from updater.service import LoggingCallback, UpdateService
 
@@ -900,6 +901,57 @@ class TestAptUpdate:
         cb.on_error.assert_called_once_with("system", "cancelled")
         cb.on_component_done.assert_called_once_with("system", False)
         cb.on_rollback.assert_not_called()
+
+    @staticmethod
+    def _apt_steps(stack: ExitStack, upgrade: tuple[bool, str]) -> MagicMock:
+        """Patch every apt step onto one parent mock so call order is visible."""
+        steps = MagicMock()
+        for name, ret in (
+            ("apt_update", (True, "")),
+            ("apt_preflight", (True, "")),
+            ("_apt_snapshot_packages", (True, "/tmp/snap")),
+            ("apt_upgrade", upgrade),
+            ("_apt_get_fix_broken", (True, "")),
+            ("_apt_restore_packages", (True, "")),
+            ("apt_autoremove", (True, "")),
+            ("apt_autoclean", (True, "")),
+        ):
+            mock = stack.enter_context(
+                patch(f"updater.service.{name}", AsyncMock(return_value=ret))
+            )
+            steps.attach_mock(mock, name)
+        return steps
+
+    @pytest.mark.asyncio
+    async def test_preflight_before_snapshot_and_cleanup_after(self):
+        with ExitStack() as stack:
+            steps = self._apt_steps(stack, (True, ""))
+            assert await UpdateService().update_component("system") is True
+        assert [c[0] for c in steps.mock_calls] == [
+            "apt_update",
+            "apt_preflight",
+            "_apt_snapshot_packages",
+            "apt_upgrade",
+            "apt_autoremove",
+            "apt_autoclean",
+        ]
+
+    @pytest.mark.parametrize(
+        ("err", "repaired"),
+        [
+            (f"{APT_REFUSED}upgrade would install excluded linux-image-rpi-v8", False),
+            (f"{APT_NOT_RUN}download failed: E: Failed to fetch", False),
+            ("E: Sub-process /usr/bin/dpkg returned an error code (1)", True),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_repair_only_after_dpkg_ran(self, err, repaired):
+        # Nothing was installed on a refusal or failed download: no repair to run.
+        with ExitStack() as stack:
+            steps = self._apt_steps(stack, (False, err))
+            assert await UpdateService().update_component("system") is False
+        assert steps._apt_get_fix_broken.await_count == repaired
+        assert steps._apt_restore_packages.await_count == repaired
 
 
 class TestUpdateAll:
@@ -2029,6 +2081,29 @@ class TestInstallDependencies:
         install_cmd = mock_run.call_args_list[1][0][0]
         assert install_cmd[0] == venv_pip
         assert "-r" in install_cmd
+
+    @pytest.mark.parametrize(
+        ("failure", "retried"),
+        [("ERROR: THESE PACKAGES DO NOT MATCH THE HASHES", True), ("timed out", False)],
+    )
+    @pytest.mark.asyncio
+    async def test_retries_without_cache_unless_timed_out(
+        self, tmp_path, failure, retried
+    ):
+        # A power cut can leave a truncated wheel in the pip cache.
+        (tmp_path / "requirements.txt").write_text("requests\n")
+        component = ComponentConfig(name="mycomp", kind="git", path=tmp_path)
+        run = AsyncMock(side_effect=[(True, ""), (False, failure), (True, "")])
+        with (
+            patch(
+                "updater.service._resolve_component_pip",
+                return_value=str(tmp_path / "env" / "bin" / "pip"),
+            ),
+            patch("updater.service._run", run),
+        ):
+            ok, _ = await UpdateService()._install_dependencies(component)
+        assert ok is retried
+        assert ("--no-cache-dir" in run.call_args.args[0]) is retried
 
 
 class TestCorruptionDuringUpdate:
@@ -4273,6 +4348,25 @@ class TestBackgroundAptUpgrade:
         with patch("updater.service.apt_update", AsyncMock()) as mock_update:
             await UpdateService().background_apt_upgrade()
         mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_failed_preflight_skips_upgrade(self, apt_host):
+        apt_host.preflight.return_value = (False, f"{APT_REFUSED}non-bookworm")
+        with (
+            patch("updater.service.apt_update", return_value=(True, "")),
+            patch("updater.service.apt_upgrade", AsyncMock()) as mock_up,
+        ):
+            await UpdateService().background_apt_upgrade()
+        mock_up.assert_not_called()
+
+
+class TestBootDpkgHeal:
+    @pytest.mark.parametrize("busy", [False, True])
+    @pytest.mark.asyncio
+    async def test_heals_unless_printing(self, apt_host, printing, busy):
+        printing.return_value = busy
+        await UpdateService().heal_dpkg_at_boot()
+        assert apt_host.heal.await_count == (not busy)
 
 
 class TestReviewHardeningFixes:

@@ -22,11 +22,13 @@ _HEALTH_URL_RE = re.compile(
 _SERVICE_BANNED = set("/\\;&|$`") | {" ", "\t"}
 OVERRIDE_PATH = Path("~/printer_data/config/blockscreen_updater.yaml").expanduser()
 
-# Unioned into every apt component: a kernel/firmware bump bricks a no-SSH Pi.
+# Unioned into every apt component and apt-mark held: a kernel/firmware bump bricks a no-SSH Pi.
 _KERNEL_FIRMWARE_EXCLUDES: tuple[str, ...] = (
-    "^linux-image",
-    "^linux-headers",
-    "^raspberrypi-",
+    "^linux-",
+    # The archive keyring must stay upgradable or a key rotation unsigns the repo.
+    "^raspberrypi-(?!archive-keyring)",
+    "^raspi-firmware",
+    "^rpi-eeprom",
     "^firmware-",
 )
 

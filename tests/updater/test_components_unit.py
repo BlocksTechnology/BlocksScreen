@@ -100,9 +100,10 @@ class TestLoadComponents:
             components, _ = load_components()
         apt = next(c for c in components if c.kind == "apt")
         assert apt.apt_exclude == (
-            "^linux-image",
-            "^linux-headers",
-            "^raspberrypi-",
+            "^linux-",
+            "^raspberrypi-(?!archive-keyring)",
+            "^raspi-firmware",
+            "^rpi-eeprom",
             "^firmware-",
         )
 
@@ -117,7 +118,7 @@ class TestLoadComponents:
         ):
             components, _ = load_components()
         apt = next(c for c in components if c.kind == "apt")
-        for pat in ("^linux-image", "^linux-headers", "^raspberrypi-", "^firmware-"):
+        for pat in ("^linux-", "^raspi-firmware", "^rpi-eeprom", "^firmware-"):
             assert pat in apt.apt_exclude
 
     def _safe_stat_mock(self):

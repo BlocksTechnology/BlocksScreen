@@ -38,8 +38,13 @@ def _daemon_apt_argvs() -> list[list[str]]:
     """The sudo apt argvs the daemon builds (mirrors executor call sites)."""
     return [
         _apt_cmd("update"),
+        _apt_cmd("download", ["vim", "curl"]),
         _apt_cmd("upgrade", ["vim", "curl"]),
+        _apt_cmd("hold", ["linux-image-rpi-v8"]),
         _apt_cmd("autoremove"),
+        _apt_cmd("autoclean"),
+        _apt_cmd("clear-lists"),
+        _apt_cmd("configure"),
         _apt_cmd("fix-broken"),
         _apt_cmd("dselect-upgrade"),
         _apt_cmd("clean"),
@@ -133,9 +138,14 @@ class TestWrapperValidation:
             ["upgrade", "--reinstall"],
             ["upgrade", "vim;rm"],  # shell metachars
             ["upgrade", "vim", "-oAPT::Update::Pre-Invoke::=x"],
+            ["download"],
+            ["hold", "-x"],
             ["update", "extra"],  # fixed verbs take no args
             ["autoremove", "extra"],
+            ["autoclean", "extra"],
             ["clean", "extra"],
+            ["clear-lists", "extra"],
+            ["configure", "extra"],
             ["set-selections", "extra"],
         ],
     )

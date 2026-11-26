@@ -18,6 +18,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
+from updater.components import _KERNEL_FIRMWARE_EXCLUDES
 from updater.locking import restart_sentinel_path
 from updater.models import CLOCK_UNSYNCED, ComponentStatus
 
@@ -31,12 +32,24 @@ HOOK_TIMEOUT = 600.0
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
 APT = "/usr/bin/apt"
+APT_GET = "/usr/bin/apt-get"
 APT_MARK = "/usr/bin/apt-mark"
 SUDO = "/usr/bin/sudo"
 SYSTEMCTL = "/usr/bin/systemctl"
 DPKG = "/usr/bin/dpkg"
+DPKG_QUERY = "/usr/bin/dpkg-query"
 # Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
 APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
+# Error prefixes for an upgrade that installed nothing, so repair and rollback are skipped.
+APT_REFUSED = "refused: "  # a guard tripped; retrying cannot help
+APT_NOT_RUN = "not run: "  # simulate or download failed; may clear on retry
+# Fleet stays on bookworm; third-party repos may use any codename (e.g. "stable").
+_DEBIAN_CODENAMES = frozenset(
+    {"stretch", "buster", "bullseye", "trixie", "forky", "duke", "sid"}
+)
+_APT_LISTS = Path("/var/lib/apt/lists")
+# Non-empty after dpkg was killed mid-run; apt refuses to run until configure -a.
+_DPKG_UPDATES = Path("/var/lib/dpkg/updates")
 KLIPPY_SOCK = Path("~/printer_data/comms/klippy.sock").expanduser()
 # print_stats states that count as a running print; updatePage._PRINT_ACTIVE must match.
 PRINT_ACTIVE_STATES = frozenset({"printing", "paused"})
@@ -134,7 +147,7 @@ def _make_clean_env() -> dict[str, str]:
 async def _run(
     cmd: Sequence[str | Path],
     *,
-    timeout: float,
+    timeout: float | None,
     cwd: Path | None = None,
     env: dict[str, str] | None = None,
 ) -> tuple[bool, str]:
@@ -558,6 +571,21 @@ _clock_heal = {"last": float("-inf"), "healed": 0}
 # gnutls (Debian git) reports a bad certificate date as a generic verify failure.
 _GIT_TLS_SIGNATURES = ("certificate verification failed", "ssl certificate problem")
 _APT_CLOCK_SIGNATURES = ("is expired", "is not valid yet")
+_APT_CORRUPT_LISTS = (
+    "problem with mergelist",
+    "unable to parse package file",
+    "package cache file is corrupted",
+    "could not be parsed or opened",
+)
+# Failures scoped to one source; apt still refreshed the rest.
+_APT_SOURCE_ERRORS = (
+    "is not signed",
+    "no_pubkey",
+    "expkeysig",
+    "does not have a release file",
+)
+_APT_BYSRC = ("-o", "APT::Get::Upgrade-By-Source-Package=false")
+_APT_INST_RE = re.compile(r"^Inst (\S+)", re.MULTILINE)
 # Matches MIN_STEP_S in bs-clock-sync.sh (test_step_threshold_matches_marker_jump).
 _CLOCK_MARKER_JUMP_S = 120
 
@@ -1106,9 +1134,106 @@ async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
         return False, None
 
 
+async def dpkg_interrupted() -> bool:
+    """True when dpkg was killed mid-run or audit reports half-configured packages."""
+    try:
+        if any(_DPKG_UPDATES.iterdir()):
+            return True
+    except OSError:
+        pass
+    ok, out = await _run([DPKG, "--audit"], timeout=30.0)
+    return not ok or bool(out.strip())
+
+
+async def heal_dpkg() -> tuple[bool, str]:
+    """Finish an interrupted dpkg run; a no-op when the package db is clean."""
+    if not await dpkg_interrupted():
+        return True, "dpkg clean"
+    logger.warning("dpkg was interrupted; running dpkg --configure -a")
+    # dpkg runs as root, so a timeout kill would only orphan it (EPERM).
+    return await _run(_apt_cmd("configure"), timeout=None, env=_apt_env())
+
+
+async def hold_kernel_firmware() -> None:
+    """apt-mark hold installed kernel/firmware packages so no apt path can upgrade them."""
+    ok, out = await _run(
+        [DPKG_QUERY, "-W", "-f=${db:Status-Want} ${db:Status-Status} ${Package}\n"],
+        timeout=30.0,
+    )
+    if not ok:
+        logger.warning("hold: dpkg-query failed: %s", out.strip()[:200])
+        return
+    rows = (line.split() for line in out.splitlines())
+    installed = [
+        r[2]
+        for r in rows
+        if len(r) == 3
+        and r[:2] == ["install", "installed"]
+        and _PACKAGE_NAME_RE.match(r[2])
+    ]
+    kept = set(_apply_exclude_patterns(installed, _KERNEL_FIRMWARE_EXCLUDES))
+    pkgs = [p for p in installed if p not in kept]
+    if not pkgs:
+        return
+    ok, out = await _run(_apt_cmd("hold", pkgs), timeout=60.0, env=_apt_env())
+    if ok:
+        logger.info("held %d kernel/firmware packages", len(pkgs))
+    else:
+        logger.warning("hold failed: %s", out.strip()[:200])
+
+
+def _release_codename(path: Path) -> str:
+    """Codename field of a Release/InRelease file, or '' when absent or unreadable."""
+    try:
+        with path.open(encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if line.startswith("Codename:"):
+                    return line.partition(":")[2].strip()
+    except OSError:
+        pass
+    return ""
+
+
+def foreign_apt_sources() -> list[str]:
+    """List files whose codename is a Debian release other than the fleet's."""
+    try:
+        files = sorted(
+            p
+            for p in _APT_LISTS.iterdir()
+            if p.name.endswith(("_Release", "_InRelease"))
+        )
+    except OSError:
+        return []
+    foreign = []
+    for path in files:
+        code = _release_codename(path)
+        # trixie-security counts as trixie; flat repos carry no codename.
+        if code.partition("-")[0] in _DEBIAN_CODENAMES:
+            foreign.append(f"{path.name} ({code})")
+    return foreign
+
+
+async def apt_preflight() -> tuple[bool, str]:
+    """Heal dpkg, hold kernel/firmware, refuse foreign suites; runs before the snapshot."""
+    ok, out = await heal_dpkg()
+    if not ok:
+        return False, f"dpkg --configure -a failed: {out}"
+    await hold_kernel_firmware()
+    foreign = await asyncio.to_thread(foreign_apt_sources)
+    if foreign:
+        return (
+            False,
+            f"{APT_REFUSED}non-bookworm Debian sources: {', '.join(foreign)}",
+        )
+    return True, ""
+
+
 async def _apt_get_fix_broken() -> tuple[bool, str]:
-    """Run apt-get -f install -y to unbreak package state."""
-    return await _run(_apt_cmd("fix-broken"), timeout=120.0, env=_apt_env())
+    """Finish any interrupted dpkg run, then apt-get -f install -y."""
+    ok, out = await heal_dpkg()
+    if not ok:
+        logger.warning("dpkg --configure -a failed: %s", out.strip()[:200])
+    return await _run(_apt_cmd("fix-broken"), timeout=None, env=_apt_env())
 
 
 async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
@@ -1142,7 +1267,7 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         msg = stderr.decode(errors="replace")
         logger.error("dpkg --set-selections failed: %s", msg)
         return False, msg
-    return await _run(_apt_cmd("dselect-upgrade"), timeout=120.0, env=_apt_env())
+    return await _run(_apt_cmd("dselect-upgrade"), timeout=None, env=_apt_env())
 
 
 def classify_apt_error(err: str) -> str:
@@ -1153,6 +1278,8 @@ def classify_apt_error(err: str) -> str:
         "command not found" in lowered or "no such file" in lowered
     ):
         return "transient"
+    if err.startswith(APT_REFUSED):
+        return "permanent"
     permanent = (
         "command not found",
         "no such file or directory",
@@ -1163,31 +1290,84 @@ def classify_apt_error(err: str) -> str:
     return "permanent" if any(p in lowered for p in permanent) else "transient"
 
 
-async def apt_update() -> tuple[bool, str]:
-    """Refresh package lists; retry once after a clock heal on a Release date error."""
+def _apt_errors(out: str) -> list[str]:
+    """The E: lines of apt output, lowercased."""
+    return [ln.lower() for ln in out.splitlines() if ln.startswith("E:")]
+
+
+async def _apt_update_once() -> tuple[bool, str]:
+    """apt-get update, retried once after a clock heal on a Release date error."""
     return await _retry_after_clock_heal(
         functools.partial(_run, _apt_cmd("update"), timeout=120.0, env=_apt_env()),
         _APT_CLOCK_SIGNATURES,
     )
 
 
+async def apt_update() -> tuple[bool, str]:
+    """Refresh package lists; rebuild corrupt lists once and tolerate per-source failures."""
+    ok, out = await _apt_update_once()
+    if not ok and any(k in out.lower() for k in _APT_CORRUPT_LISTS):
+        logger.warning("apt lists corrupt; clearing and refetching")
+        cleared, why = await _run(_apt_cmd("clear-lists"), timeout=60.0)
+        if not cleared:
+            return False, why
+        ok, out = await _apt_update_once()
+    errors = _apt_errors(out)
+    # One broken third-party repo must not block every other source's upgrades.
+    if (
+        not ok
+        and errors
+        and all(any(k in e for k in _APT_SOURCE_ERRORS) for e in errors)
+    ):
+        logger.warning("apt update: skipping failed sources: %s", out.strip()[:300])
+        return True, out
+    return ok, out
+
+
+async def _simulate_upgrade(
+    pkgs: list[str], exclude: tuple[str, ...]
+) -> tuple[bool, str]:
+    """Dry-run the upgrade unprivileged; refuse when it would touch an excluded package."""
+    ok, out = await _run(
+        [APT_GET, "-s", *_APT_BYSRC, "install", "--only-upgrade", *pkgs],
+        timeout=120.0,
+        env=_apt_env(),
+    )
+    if not ok:
+        return False, f"{APT_NOT_RUN}simulate failed: {out}"
+    inst = sorted({m.group(1) for m in _APT_INST_RE.finditer(out)})
+    pulled = sorted(set(inst) - set(_apply_exclude_patterns(inst, exclude)))
+    if pulled:
+        return False, f"{APT_REFUSED}upgrade would install excluded {', '.join(pulled)}"
+    return True, ""
+
+
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
-    """Run apt-get upgrade via an explicit package list to limit blast radius."""
+    """Upgrade an explicit package list: simulate, download, then install without a cap."""
     ok, pkgs = await _list_upgradable_packages()
     if not ok:
-        return False, "failed to list upgradable packages"
-
+        return False, f"{APT_NOT_RUN}failed to list upgradable packages"
     pkgs = _apply_exclude_patterns(pkgs, exclude)
-
     if not pkgs:
         return True, "no packages to upgrade"
-
-    return await _run(_apt_cmd("upgrade", pkgs), timeout=300.0, env=_apt_env())
+    ok, out = await _simulate_upgrade(pkgs, exclude)
+    if not ok:
+        return False, out
+    # Only the network step is capped: a killed download costs nothing, a killed dpkg breaks the db.
+    ok, out = await _run(_apt_cmd("download", pkgs), timeout=900.0, env=_apt_env())
+    if not ok:
+        return False, f"{APT_NOT_RUN}download failed: {out}"
+    return await _run(_apt_cmd("upgrade", pkgs), timeout=None, env=_apt_env())
 
 
 async def apt_autoremove() -> tuple[bool, str]:
     """Run apt-get autoremove -y to remove orphaned packages after an upgrade."""
-    return await _run(_apt_cmd("autoremove"), timeout=120.0, env=_apt_env())
+    return await _run(_apt_cmd("autoremove"), timeout=None, env=_apt_env())
+
+
+async def apt_autoclean() -> tuple[bool, str]:
+    """Drop downloaded .debs no longer in any list, so the archive cannot grow forever."""
+    return await _run(_apt_cmd("autoclean"), timeout=120.0, env=_apt_env())
 
 
 async def run_hook(

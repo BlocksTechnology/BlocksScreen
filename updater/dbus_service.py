@@ -162,6 +162,7 @@ class UpdaterInterface(
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
         self._spawn(self._svc.supervise_ui(), name="supervise_ui")
         self._spawn(self._svc.forward_heal_ui(), name="forward_heal_ui")
+        self._spawn(self._svc.heal_dpkg_at_boot(), name="boot_dpkg_heal")
         # install-updater restarts us before its run ends: resume the hold.
         # Silent: not exported yet, clients read it via get_busy on connect.
         if self._svc.deploy_pending():
