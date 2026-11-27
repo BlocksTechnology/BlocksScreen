@@ -3041,7 +3041,7 @@ class TestReclone:
         )
 
     @staticmethod
-    def _fake_clone(url, dest, branch):
+    def _fake_clone(url, dest, branch, filter_spec=""):
         Path(dest).mkdir()
         (Path(dest) / ".git").mkdir()
         (Path(dest) / "fresh").write_text("y")
@@ -4087,6 +4087,7 @@ class TestInflightClearedOnEarlyReturn:
             patch("updater.service.git_get_current_branch", return_value="master"),
             patch("updater.service.git_checkout", return_value=(True, "")),
             patch("updater.service.git_reset_to_hash", side_effect=fake_reset),
+            patch("updater.service.git_has_corruption", return_value=False),
             patch("updater.service.restart_service", return_value=(True, "")),
             patch("updater.service.wait_for_service_active", return_value=True),
             patch(
@@ -4415,7 +4416,7 @@ class TestReviewHardeningFixes:
         svc = UpdateService()
         svc._component_pip_cache[str(comp.path)] = "/stale/.venv/bin/pip"
 
-        async def fake_clone(url, dest, branch):
+        async def fake_clone(url, dest, branch, filter_spec=""):
             Path(dest).mkdir()
             (Path(dest) / ".git").mkdir()
             return (True, "")
@@ -4788,3 +4789,143 @@ class TestDiskFull:
             svc._components = self._comps(tmp_path)
             assert await svc.update_component("BlocksScreen") is False
         m_git.assert_not_called()
+
+
+class TestGitSelfHeal:
+    """BUG-15/16/17, GAP-9, OBS-7, OBS-18: git faults heal inside the press or boot."""
+
+    _CORRUPT = "error: inflate: data stream error (incorrect header check)"
+
+    def _comp(self, tmp_path: Path, **kw) -> ComponentConfig:
+        path = tmp_path / "klipper"
+        path.mkdir()
+        return ComponentConfig(
+            name="klipper", kind="git", path=path, branch="master", **kw
+        )
+
+    def _svc(self, tmp_path: Path, comp: ComponentConfig) -> UpdateService:
+        svc = UpdateService()
+        svc._components = [comp]
+        svc._history_path = tmp_path / "history.jsonl"
+        return svc
+
+    def _events(self, svc: UpdateService) -> list[tuple[str, str]]:
+        lines = svc._history_path.read_text().splitlines()
+        return [(e["event"], e.get("detail", "")) for e in map(json.loads, lines)]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("repair", "reclone", "ok", "events"),
+        [
+            ((True, "repaired"), False, True, [("repair", "repaired")]),
+            ((False, "still corrupt"), True, True, [("repair", "recloned")]),
+            ((False, "still corrupt"), False, False, []),
+            ((False, f"{DISK_FULL}: no room"), True, False, []),
+        ],
+    )
+    async def test_corrupt_op_repairs_or_reclones_then_retries(
+        self, tmp_path, repair, reclone, ok, events
+    ):
+        comp = self._comp(tmp_path)
+        svc = self._svc(tmp_path, comp)
+        op = AsyncMock(side_effect=[(False, self._CORRUPT), (True, "")])
+        with (
+            patch("updater.service.git_has_corruption", AsyncMock(return_value=True)),
+            patch("updater.service.git_repair", AsyncMock(return_value=repair)) as rep,
+            patch.object(
+                svc, "_reclone_component", AsyncMock(return_value=reclone)
+            ) as rec,
+        ):
+            res, _ = await svc._git_op_with_repair(comp, op)
+        assert res is ok
+        # A full card skips the reclone, which needs the same room.
+        recloned = not repair[0] and not repair[1].startswith(DISK_FULL)
+        assert rec.await_count == int(recloned)
+        assert op.await_count == (2 if ok else 1)
+        rep.assert_awaited_once_with(comp.path, "master", hint=self._CORRUPT)
+        assert (self._events(svc) if events else []) == events
+
+    @pytest.mark.asyncio
+    async def test_non_corrupt_failure_is_returned_untouched(self, tmp_path):
+        comp = self._comp(tmp_path)
+        svc = self._svc(tmp_path, comp)
+        op = AsyncMock(return_value=(False, "would be overwritten by checkout"))
+        with (
+            patch("updater.service.git_has_corruption", AsyncMock(return_value=False)),
+            patch("updater.service.git_repair", AsyncMock()) as rep,
+        ):
+            assert await svc._git_op_with_repair(comp, op) == (
+                False,
+                "would be overwritten by checkout",
+            )
+        rep.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_hard_mode_backs_up_edits_before_checkout_and_reset(self, tmp_path):
+        comp = self._comp(tmp_path, reset_mode="hard")
+        svc = self._svc(tmp_path, comp)
+        order = MagicMock()
+        with (
+            patch("updater.service.git_stash_backup", AsyncMock(return_value="")) as b,
+            patch(
+                "updater.service.git_checkout", AsyncMock(return_value=(True, ""))
+            ) as co,
+            patch(
+                "updater.service.git_reset_to_hash", AsyncMock(return_value=(True, ""))
+            ) as rs,
+        ):
+            order.attach_mock(b, "backup")
+            order.attach_mock(co, "checkout")
+            order.attach_mock(rs, "reset")
+            assert await svc._stage_apply_ref(comp, "a" * 40) == (True, "")
+        assert [c[0] for c in order.mock_calls] == ["backup", "checkout", "reset"]
+        co.assert_awaited_once_with(comp.path, "master", force=True)
+
+    @pytest.mark.asyncio
+    async def test_boot_fixes_garbage_head_offline_without_fetch(self, tmp_path):
+        comp = self._comp(tmp_path)
+        svc = self._svc(tmp_path, comp)
+        with (
+            patch(
+                "updater.service.git_get_hash", AsyncMock(side_effect=["", "a" * 40])
+            ),
+            patch("updater.service.repair_git_files", return_value=["HEAD"]),
+            patch("updater.service.git_repair", AsyncMock()) as rep,
+        ):
+            assert await svc._boot_repair_component(comp) is False
+        rep.assert_not_awaited()
+        assert self._events(svc) == [("repair", "HEAD")]
+
+    @pytest.mark.asyncio
+    async def test_boot_revert_repairs_metadata_before_reading_head(self, tmp_path):
+        comp = self._comp(tmp_path)
+        svc = self._svc(tmp_path, comp)
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._write_inflight({"klipper": "a" * 40})
+        with (
+            patch("updater.service.repair_git_files", return_value=["ref"]) as fix,
+            patch("updater.service.git_get_hash", AsyncMock(return_value="a" * 40)),
+            patch("updater.service.git_reset_to_hash", AsyncMock()) as rs,
+        ):
+            assert await svc._revert_inflight() == set()
+        fix.assert_called_once_with(comp.path, "master")
+        rs.assert_not_awaited()
+        assert svc._read_inflight() == {}
+
+    @pytest.mark.asyncio
+    async def test_reclone_keeps_the_partial_clone_filter(self, tmp_path):
+        comp = self._comp(tmp_path, url="https://github.com/test/klipper")
+        svc = self._svc(tmp_path, comp)
+        with (
+            patch(
+                "updater.service.git_partial_filter",
+                AsyncMock(return_value="blob:none"),
+            ),
+            patch(
+                "updater.service.git_clone", AsyncMock(return_value=(True, ""))
+            ) as clone,
+        ):
+            assert await svc._reclone_into_tmp(comp, tmp_path / "tmp") is True
+        clone.assert_awaited_once_with(
+            comp.url, tmp_path / "tmp", "master", "blob:none"
+        )

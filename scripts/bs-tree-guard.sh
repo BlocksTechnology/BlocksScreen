@@ -41,11 +41,21 @@ _component_repos() {
         done
 }
 
+# A root-run git (sudo git pull) leaves .git entries the updater, running as the owner, cannot write.
+_fix_git_owner() {
+    local repo=$1 owner n
+    [[ "$(id -u)" == 0 ]] || return 0
+    owner=$(stat -c %U:%G "$repo")
+    n=$(find "$repo/.git" ! -user "${owner%%:*}" -print -exec chown -h "$owner" {} + 2>/dev/null | wc -l)
+    [[ "$n" == 0 ]] || echo "$_tag $(basename "$repo"): $n .git entries not owned by ${owner%%:*}, chowned"
+}
+
 # Offline heal only: an unreadable HEAD needs the updater's boot repair (network, prev_hash).
 _heal_component() {
     local repo=$1 user head_ref broken tag
     tag="$_tag $(basename "$repo"):"
     user=$(stat -c %U "$repo")
+    _fix_git_owner "$repo"
     rm -f "$repo/.git/index.lock"
     find "$repo/.git" -maxdepth 1 -type f -name '*_HEAD' -empty -delete 2>/dev/null
     head_ref=$(sed -n 's/^ref: //p' "$repo/.git/HEAD" 2>/dev/null)
@@ -81,6 +91,7 @@ trap _heal_components EXIT
 [[ -d "$BS_PATH/.git" ]] || exit 0
 
 _owner=$(stat -c %U "$BS_PATH")
+_fix_git_owner "$BS_PATH"
 _as_owner() { _as_user "$_owner" "$@"; }
 _git() { _as_owner git -C "$BS_PATH" "$@"; }
 
@@ -128,7 +139,7 @@ if ! grep -qE '^(ref: refs/heads/.+|[0-9a-f]{40,64})$' "$BS_PATH/.git/HEAD" 2>/d
         sync -f "$BS_PATH/.git"
         echo "$_tag HEAD damaged, pointed it back at $_b"
     else
-        # The updater never repairs HEAD, so the journal line must say what a person has to do.
+        # The updater retries with the configured branch; if that fails too, a person must act.
         echo "$_tag HEAD damaged and its branch unknown, needs a manual fix: echo 'ref: refs/heads/<branch>' > $BS_PATH/.git/HEAD"
         exit 0
     fi

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import functools
 import json
 import logging
 import os
@@ -11,7 +12,7 @@ import shutil
 import tempfile
 import time
 from asyncio import Lock
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Protocol, TypeGuard
 
@@ -46,12 +47,14 @@ from updater.executor import (
     git_get_hash,
     git_has_corruption,
     git_is_network_error,
+    git_partial_filter,
     git_pull,
     git_ref_hash,
     git_remote_reachable,
     git_repair,
     git_reset_to_hash,
     git_show_file,
+    git_stash_backup,
     git_tree_has_path,
     git_untracked_paths,
     is_git_repo,
@@ -61,6 +64,7 @@ from updater.executor import (
     moonraker_repo_hashes,
     purge_pycache,
     reclaim_disk,
+    repair_git_files,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -1882,6 +1886,7 @@ class UpdateService:
                 self._log.error("reconcile: %s in-flight prev_hash invalid", name)
                 continue
             async with self._git_lock:
+                await self._repair_git_files(comp)
                 if await git_get_hash(comp.path) == prev_hash:
                     continue
                 rok, _ = await git_reset_to_hash(comp.path, prev_hash)
@@ -1935,6 +1940,9 @@ class UpdateService:
             if await git_get_hash(c.path) != "":
                 return False
             self._log.warning("reconcile: %s HEAD unreadable - repairing", c.name)
+            # Offline first: a garbage HEAD or packed-refs needs no network.
+            if await self._repair_git_files(c) and await git_get_hash(c.path) != "":
+                return False
             ok, msg = await git_repair(c.path, c.branch)
             if ok and await git_get_hash(c.path) != "":
                 self._history("boot_repair", c.name, detail=msg[:80])
@@ -2162,6 +2170,46 @@ class UpdateService:
         self._cb("on_component_done", name, False)
         return False
 
+    async def _repair_git_files(self, component: ComponentConfig) -> list[str]:
+        """Offline git metadata repair with a history entry when something was fixed."""
+        fixed = await asyncio.to_thread(
+            repair_git_files, component.path, component.branch
+        )
+        if fixed:
+            self._history("repair", component.name, detail="+".join(fixed))
+        return fixed
+
+    async def _repair_or_reclone(self, component: ComponentConfig, hint: str) -> bool:
+        """Repair a corrupt repo, else reclone it; True if it is usable again."""
+        if component.path is None:
+            return False
+        rok, rmsg = await git_repair(component.path, component.branch, hint=hint)
+        if not rok and rmsg.startswith(DISK_FULL):
+            # A reclone needs the same room, so it would only fill the card.
+            self._log.error("%s: repair refused: %s", component.name, rmsg)
+            return False
+        if not rok:
+            self._log.warning("%s: repair failed (%s), recloning", component.name, rmsg)
+            if not await self._reclone_component(component):
+                return False
+            rmsg = "recloned"
+        self._history("repair", component.name, detail=rmsg[:80])
+        return True
+
+    async def _git_op_with_repair(
+        self,
+        component: ComponentConfig,
+        op: Callable[[], Awaitable[tuple[bool, str]]],
+    ) -> tuple[bool, str]:
+        """Run a git op; on object corruption repair or reclone once, then retry."""
+        ok, err = await op()
+        if ok or not await git_has_corruption(component.path, hint=err):
+            return (ok, err)
+        self._log.warning("%s: corrupt repo mid-update, repairing", component.name)
+        if not await self._repair_or_reclone(component, err):
+            return (ok, err)
+        return await op()
+
     def _history(self, event: str, name: str, **fields: object) -> None:
         """Append one event to the persistent update-history log (OBS-1)."""
         entry = {
@@ -2369,7 +2417,9 @@ class UpdateService:
         if not component.url:
             return False
         self._log.warning("%s: recloning from %s", component.name, component.url)
-        ok, err = await git_clone(component.url, tmp, component.branch)
+        # Keep a partial clone partial: a full reclone may not fit the SD card.
+        filter_spec = await git_partial_filter(component.path)
+        ok, err = await git_clone(component.url, tmp, component.branch, filter_spec)
         if not ok:
             await asyncio.to_thread(shutil.rmtree, tmp, ignore_errors=True)
             self._log.error("%s: reclone clone failed: %s", component.name, err)
@@ -2467,12 +2517,7 @@ class UpdateService:
                         return (False, CLOCK_UNSYNCED)
                     return (False, "network")
                 self._log.warning("%s: corrupt repo, repairing", component.name)
-                rok, rmsg = await git_repair(component.path)
-                if rok:
-                    self._history("repair", component.name, detail=rmsg[:80])
-                elif await self._reclone_component(component):
-                    self._history("repair", component.name, detail="recloned")
-                else:
+                if not await self._repair_or_reclone(component, error):
                     return (False, "corrupt")
         return None
 
@@ -2502,16 +2547,26 @@ class UpdateService:
         """Checkout target branch, then hard-reset to the guarded tip / version-pin / soft-pull."""
         if component.path is None:
             return (False, "path not found")
+        hard = component.reset_mode == "hard"
+        if hard:
+            # checkout -f and reset --hard both discard tracked edits: keep them as a stash.
+            await git_stash_backup(component.path)
         if component.branch:
-            force = component.reset_mode == "hard"
-            ok, err = await git_checkout(component.path, component.branch, force=force)
+            ok, err = await self._git_op_with_repair(
+                component,
+                functools.partial(
+                    git_checkout, component.path, component.branch, force=hard
+                ),
+            )
             if not ok:
                 self._log.error("%s: git_checkout failed: %s", component.name, err)
                 return (False, "branch")
 
-        if component.reset_mode == "hard":
+        if hard:
             ok, err = (
-                await git_reset_to_hash(component.path, tip)
+                await self._git_op_with_repair(
+                    component, functools.partial(git_reset_to_hash, component.path, tip)
+                )
                 if tip
                 else (False, "remote tip unresolved")
             )
@@ -2522,7 +2577,10 @@ class UpdateService:
                 return (False, "reset")
 
         if component.version:
-            ok, err = await git_reset_to_hash(component.path, component.version)
+            ok, err = await self._git_op_with_repair(
+                component,
+                functools.partial(git_reset_to_hash, component.path, component.version),
+            )
             if not ok:
                 self._log.error("%s: version pin failed: %s", component.name, err)
                 return (False, "version")
@@ -2601,6 +2659,7 @@ class UpdateService:
             return self._cb_error_done(
                 component.name, "not a git repository - reinstall required"
             )
+        await self._repair_git_files(component)
         return None
 
     async def _prepare_rollback_point(
