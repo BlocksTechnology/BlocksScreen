@@ -18,6 +18,8 @@ from typing import Protocol, TypeGuard
 from updater.components import import_yaml, load_components
 from updater.executor import (
     _GIT_SHA_RE,
+    APT_NOT_RUN,
+    APT_REFUSED,
     HOOK_TIMEOUT,
     PIP,
     SYSTEMCTL,
@@ -28,7 +30,9 @@ from updater.executor import (
     _assert_https_remote,
     _resolve_component_pip,
     _run,
+    apt_autoclean,
     apt_autoremove,
+    apt_preflight,
     apt_update,
     apt_upgrade,
     check_apt_status,
@@ -54,6 +58,7 @@ from updater.executor import (
     git_show_file,
     git_tree_has_path,
     git_untracked_paths,
+    heal_dpkg,
     is_git_repo,
     is_service_active,
     klipper_printing,
@@ -2117,10 +2122,16 @@ class UpdateService:
             return (False, "world-writable permissions")
 
         await _run([pip_path, "install", "--upgrade", "pip", "--quiet"], timeout=120.0)
+        cmd = [pip_path, "install", "-r", str(req), "--quiet"]
         # One aarch64 source build (no wheel) can exceed 120s on a Pi.
-        return await _run(
-            [pip_path, "install", "-r", str(req), "--quiet"], timeout=600.0
+        ok, out = await _run(cmd, timeout=600.0)
+        if ok or out.startswith("timed out"):
+            return ok, out
+        # A power cut can leave a truncated wheel in the cache that fails every install.
+        self._log.warning(
+            "%s: pip install failed, retrying without cache", component.name
         )
+        return await _run([*cmd, "--no-cache-dir"], timeout=600.0)
 
     async def _ping_while(
         self, coro, name: str, step: int, total: int, interval: float = 60.0
@@ -2807,6 +2818,14 @@ class UpdateService:
             self._apt_list_time = time.monotonic()
             self._cb("on_step", component.name, 1, 2)
 
+            # Before the snapshot: restoring it must keep the kernel holds.
+            ok, err = await apt_preflight()
+            if not ok:
+                self._log.error("apt preflight failed: %s", err)
+                self._apt_failed(err)
+                _apt_cache.unlink(missing_ok=True)
+                return self._cb_error_done(component.name, "upgrade")
+
             snapshot_ok, snapshot_path = await _apt_snapshot_packages()
             if snapshot_ok:
                 self._log.debug("apt package snapshot created: %s", snapshot_path)
@@ -2818,6 +2837,8 @@ class UpdateService:
                 self._log.error("apt_upgrade failed: %s", err)
                 self._apt_failed(err)
                 _apt_cache.unlink(missing_ok=True)
+                if err.startswith((APT_REFUSED, APT_NOT_RUN)):
+                    return self._cb_error_done(component.name, "upgrade")
                 rollback_ok, rollback_err = await _apt_get_fix_broken()
                 if rollback_ok:
                     self._log.info("apt-get -f install succeeded; state may be fixed")
@@ -2838,11 +2859,7 @@ class UpdateService:
                 return self._cb_error_done(component.name, "upgrade")
             self._cb("on_step", component.name, 2, 2)
 
-            autoremove_ok, autoremove_err = await apt_autoremove()
-            if not autoremove_ok:
-                self._log.warning(
-                    "apt autoremove failed (non-fatal): %s", autoremove_err
-                )
+            await self._apt_cleanup()
 
             self._cb("on_component_done", component.name, True)
             _apt_cache.unlink(missing_ok=True)
@@ -2979,6 +2996,11 @@ class UpdateService:
             self._apt_failed(err)
             return
         self._apt_list_time = time.monotonic()
+        ok, err = await apt_preflight()
+        if not ok:
+            self._log.warning("background apt preflight failed: %s", err)
+            self._apt_failed(err)
+            return
         # A silent kernel/firmware bump is exactly the brick the excludes prevent.
         exclude = tuple(
             pat for c in self._components if c.kind == "apt" for pat in c.apt_exclude
@@ -2992,11 +3014,27 @@ class UpdateService:
         # The sweep upgraded: drop the count cache or the UI keeps showing pending.
         _APT_STATUS_CACHE.unlink(missing_ok=True)
         self._log.info("background apt upgrade: packages done")
-        autoremove_ok, autoremove_err = await apt_autoremove()
-        if not autoremove_ok:
-            self._log.warning(
-                "background apt autoremove failed (non-fatal): %s", autoremove_err
-            )
+        await self._apt_cleanup()
+
+    async def _apt_cleanup(self) -> None:
+        """Autoremove orphans and autoclean stale .debs after an upgrade; both non-fatal."""
+        for what, step in (
+            ("autoremove", apt_autoremove),
+            ("autoclean", apt_autoclean),
+        ):
+            ok, err = await step()
+            if not ok:
+                self._log.warning("apt %s failed (non-fatal): %s", what, err)
+
+    async def heal_dpkg_at_boot(self) -> None:
+        """Finish a dpkg run a power cut interrupted, so the next upgrade is not refused."""
+        async with self._apt_lock:
+            if await klipper_printing():
+                self._log.info("boot dpkg heal skipped: printer is printing")
+                return
+            ok, out = await heal_dpkg()
+            if not ok:
+                self._log.error("boot dpkg heal failed: %s", out)
 
     def _cb(self, method: str, *args: object) -> None:
         """Dispatch a callback method; log and continue on any exception."""

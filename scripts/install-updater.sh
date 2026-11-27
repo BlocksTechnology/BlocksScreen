@@ -317,12 +317,16 @@ if [[ "$_heal_rc" == 1 ]]; then
     echo_warn "Venv had truncated packages; re-verifying the pinned requirements"
     sudo rm -f "$BSENV/.blockscreen-reqs-hash" 2>/dev/null || true
 fi
+# A power cut can leave a truncated wheel in the pip cache that fails every install.
+_pip_install() {
+    _as_blocks "$BSENV/bin/pip" install "$@" || _as_blocks "$BSENV/bin/pip" install --no-cache-dir "$@"
+}
 # Pinned so every box runs the pip CI tested; best-effort, the venv's stock pip installs the pins too.
 _pip_pin=$(grep -m1 '^pip==' "$BS_PATH/scripts/requirements-pip.txt" 2>/dev/null | cut -d= -f3 || true)
 if [[ -n "$_pip_pin" ]] && compgen -G "$BSENV/lib/python3*/site-packages/pip-$_pip_pin.dist-info" >/dev/null; then
     echo_ok "pip $_pip_pin already installed"
 else
-    _as_blocks "$BSENV/bin/pip" install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||
+    _pip_install --quiet -r "$BS_PATH/scripts/requirements-pip.txt" ||
         echo_warn "Pinned pip install FAILED; continuing with the venv's current pip"
 fi
 if ! _apt_installed libsystemd-dev python3-dev; then
@@ -339,7 +343,7 @@ _reqs_hash=$(md5sum "$BS_PATH/scripts/requirements.txt" 2>/dev/null | cut -d' ' 
 # A failure must not abort setup, but it must be visible: a silent one hid the typing==3.7.4.3 break.
 if _reqs_current "$_reqs_hash" "$BSENV"; then
     echo_ok "Python requirements unchanged since their last install"
-elif _as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
+elif _pip_install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \
     -r "$BS_PATH/scripts/requirements.txt" && _reqs_verified; then
     if [[ -n "$_reqs_hash" ]]; then
@@ -360,7 +364,7 @@ _UV_PIN=0.12.24
 _uv_ver=$(_as_blocks "$BSENV/bin/uv" --version 2>/dev/null || true)
 if [[ "$_uv_ver" == "uv $_UV_PIN" || "$_uv_ver" == "uv $_UV_PIN "* ]]; then
     echo_ok "uv $_UV_PIN already installed"
-elif _as_blocks "$BSENV/bin/pip" install --quiet --force-reinstall --no-deps "uv==$_UV_PIN" &&
+elif _pip_install --quiet --force-reinstall --no-deps "uv==$_UV_PIN" &&
     [[ "$(_as_blocks "$BSENV/bin/uv" --version 2>/dev/null || true)" == "uv $_UV_PIN"* ]]; then
     echo_ok "uv ready"
 else

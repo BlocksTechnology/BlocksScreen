@@ -114,6 +114,21 @@ def disk():
         yield MagicMock(free=free, reclaim=reclaim, purge=purge)
 
 
+@pytest.fixture(autouse=True)
+def apt_host(tmp_path, monkeypatch):
+    """Host dpkg/apt state never leaks in; the service's preflight and cleanup pass."""
+    executor = importlib.import_module("updater.executor")
+    monkeypatch.setattr(executor, "_DPKG_UPDATES", tmp_path / "dpkg-updates")
+    monkeypatch.setattr(executor, "_APT_LISTS", tmp_path / "apt-lists")
+    ok = (True, "")
+    with (
+        patch("updater.service.apt_preflight", AsyncMock(return_value=ok)) as pre,
+        patch("updater.service.apt_autoclean", AsyncMock(return_value=ok)) as clean,
+        patch("updater.service.heal_dpkg", AsyncMock(return_value=ok)) as heal,
+    ):
+        yield MagicMock(preflight=pre, autoclean=clean, heal=heal)
+
+
 @pytest.fixture
 def svc():
     """UpdaterDbusService with mocked UpdateService and signals."""

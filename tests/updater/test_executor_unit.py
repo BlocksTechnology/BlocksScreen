@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import os
 import shutil
@@ -18,7 +19,10 @@ import pytest
 
 from updater.models import CLOCK_UNSYNCED
 from updater.executor import (
+    APT_NOT_RUN,
+    APT_REFUSED,
     GIT,
+    apt_preflight,
     _moonraker_call,
     moonraker_refresh_repo,
     moonraker_repo_hashes,
@@ -54,6 +58,9 @@ from updater.executor import (
     git_prune_extra_remotes,
     git_untracked_paths,
     enable_service,
+    foreign_apt_sources,
+    heal_dpkg,
+    hold_kernel_firmware,
     _clock_heal,
     clock_verified,
     explain_fetch_error,
@@ -286,6 +293,19 @@ class TestRun:
         )
         assert ok is False
         assert "timed out" in msg
+
+    @pytest.mark.asyncio
+    async def test_uncapped_step_logs_while_running_and_stops_after(
+        self, tmp_path, caplog
+    ):
+        with patch("updater.executor._UNCAPPED_LOG_S", 0.1):
+            ok, _ = await _run(["/bin/sleep", "0.35"], timeout=None, cwd=tmp_path)
+            logged = caplog.text.count("still running")
+            await asyncio.sleep(0.3)
+        assert ok is True
+        assert logged >= 2
+        # The watcher is cancelled with the step, so nothing logs after it ends.
+        assert caplog.text.count("still running") == logged
 
 
 class TestGitClone:
@@ -1136,6 +1156,44 @@ class TestAptUpdate:
         assert ok is False
         assert "network error" in out
 
+    @pytest.mark.asyncio
+    async def test_corrupt_lists_cleared_and_refetched(self):
+        run = AsyncMock(
+            side_effect=[
+                (False, "E: Problem with MergeList /var/lib/apt/lists/x_Packages\n"),
+                (True, ""),
+                (True, "Hit:1 http://archive\n"),
+            ]
+        )
+        with patch("updater.executor._run", run):
+            ok, _ = await apt_update()
+        assert ok is True
+        assert [c.args[0][2] for c in run.call_args_list] == [
+            "update",
+            "clear-lists",
+            "update",
+        ]
+
+    @pytest.mark.parametrize(
+        ("err", "want"),
+        [
+            ("E: The repository 'https://x bookworm Release' is not signed.\n", True),
+            (
+                "E: The repository 'https://x Release' does not have a Release file.\n",
+                True,
+            ),
+            (
+                "E: The repository 'https://x Release' is not signed.\nE: dpkg lock\n",
+                False,
+            ),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_only_per_source_errors_are_tolerated(self, err, want):
+        with patch("updater.executor._run", AsyncMock(return_value=(False, err))):
+            ok, _ = await apt_update()
+        assert ok is want
+
 
 class TestAptUpgrade:
     @pytest.mark.asyncio
@@ -1168,22 +1226,40 @@ class TestAptUpgrade:
         assert "dpkg error" in out
 
     @pytest.mark.asyncio
-    async def test_unattended_hardening_options_present(self):
-        # The hardening options moved into the root-owned wrapper: assert the
-        # argv routes through it and the wrapper still carries the options.
-        proc = _make_proc(0, b"", b"")
-        exec_mock = AsyncMock(return_value=proc)
+    async def test_simulates_then_downloads_then_installs_uncapped(self):
+        sim = "Inst pkg1 [1.0] (1.1 Debian:12.13/oldstable [arm64])\n"
+        run = AsyncMock(side_effect=[(True, sim), (True, ""), (True, "")])
         with (
             patch(
                 "updater.executor._list_upgradable_packages",
                 return_value=(True, ["pkg1"]),
             ),
-            patch("asyncio.create_subprocess_exec", exec_mock),
+            patch("updater.executor._run", run),
         ):
-            await apt_upgrade()
-        argv = [str(a) for a in exec_mock.call_args[0]]
-        assert argv[1] == "/usr/local/sbin/bs-apt-helper"
-        assert argv[2:] == ["upgrade", "pkg1"]
+            ok, _ = await apt_upgrade(exclude=("^linux-",))
+        assert ok is True
+        simulate, download, install = run.call_args_list
+        # Unprivileged dry run with the same by-source opt the wrapper sets.
+        assert simulate.args[0] == [
+            "/usr/bin/apt-get",
+            "-s",
+            "-o",
+            "APT::Get::Upgrade-By-Source-Package=false",
+            "install",
+            "--only-upgrade",
+            "pkg1",
+        ]
+        assert download.args[0][1:] == [
+            "/usr/local/sbin/bs-apt-helper",
+            "download",
+            "pkg1",
+        ]
+        assert install.args[0][1:] == [
+            "/usr/local/sbin/bs-apt-helper",
+            "upgrade",
+            "pkg1",
+        ]
+        assert install.kwargs["timeout"] is None  # a killed dpkg breaks the db
         wrapper = (
             Path(__file__).resolve().parents[2] / "scripts" / "bs-apt-helper.sh"
         ).read_text()
@@ -1191,6 +1267,34 @@ class TestAptUpgrade:
         assert "--force-confold" in wrapper  # no conffile prompt
         assert "DEBIAN_FRONTEND=noninteractive" in wrapper
         assert "NEEDRESTART_MODE=a" in wrapper
+        assert "APT::Get::Upgrade-By-Source-Package=false" in wrapper
+
+    @pytest.mark.parametrize(
+        ("results", "prefix", "calls"),
+        [
+            # libc-dev upgrade dragging in the kernel meta (BUG-14).
+            (
+                [(True, "Inst linux-image-rpi-v8 [1] (2 RPi:stable [arm64])\n")],
+                APT_REFUSED,
+                1,
+            ),
+            ([(True, ""), (False, "E: Failed to fetch")], APT_NOT_RUN, 2),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_stops_before_install(self, results, prefix, calls):
+        run = AsyncMock(side_effect=results)
+        with (
+            patch(
+                "updater.executor._list_upgradable_packages",
+                return_value=(True, ["linux-libc-dev"]),
+            ),
+            patch("updater.executor._run", run),
+        ):
+            ok, out = await apt_upgrade(exclude=("^linux-image",))
+        assert ok is False
+        assert out.startswith(prefix)
+        assert run.await_count == calls
 
     @pytest.mark.asyncio
     async def test_list_failure(self):
@@ -1209,6 +1313,101 @@ class TestAptUpgrade:
             ok, out = await apt_upgrade()
         assert ok is True
         assert "no packages" in out
+
+
+class TestAptPreflight:
+    def test_foreign_codename_listed(self, tmp_path, monkeypatch):
+        lists = tmp_path / "lists"
+        lists.mkdir()
+        for name, body in {
+            "deb_InRelease": "-----BEGIN PGP SIGNED MESSAGE-----\n\nCodename: bookworm\n",
+            "sec_InRelease": "Codename: bookworm-security\n",
+            "flat_Release": "Origin: flat\n",
+            "new_Release": "Codename: trixie\n",
+            "new-sec_InRelease": "Codename: trixie-security\n",
+            "vendor_InRelease": "Codename: stable\n",
+            "new_Packages": "Codename: trixie\n",
+        }.items():
+            (lists / name).write_text(body)
+        monkeypatch.setattr(
+            importlib.import_module("updater.executor"), "_APT_LISTS", lists
+        )
+        assert foreign_apt_sources() == [
+            "new-sec_InRelease (trixie-security)",
+            "new_Release (trixie)",
+        ]
+
+    @pytest.mark.parametrize(
+        ("pending", "audit", "healed"),
+        [
+            (True, (True, ""), True),
+            (False, (True, "pkg half-configured\n"), True),
+            (False, (True, ""), False),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_heal_dpkg_configures_only_when_interrupted(
+        self, tmp_path, monkeypatch, pending, audit, healed
+    ):
+        updates = tmp_path / "updates"
+        updates.mkdir()
+        if pending:
+            (updates / "0001").write_text("")
+        monkeypatch.setattr(
+            importlib.import_module("updater.executor"), "_DPKG_UPDATES", updates
+        )
+        run = AsyncMock(side_effect=[audit, (True, "")])
+        with patch("updater.executor._run", run):
+            ok, _ = await heal_dpkg()
+        assert ok is True
+        argvs = [c.args[0] for c in run.call_args_list]
+        assert (
+            argvs[-1][1:] == ["/usr/local/sbin/bs-apt-helper", "configure"]
+        ) is healed
+
+    @pytest.mark.asyncio
+    async def test_holds_only_unheld_installed_kernel_firmware(self):
+        query = (
+            "install installed linux-image-rpi-v8\n"
+            "hold installed linux-headers-rpi-v8\n"
+            "install installed bash\n"
+            "deinstall config-files firmware-brcm80211\n"
+            "install installed raspi-firmware\n"
+            "install installed raspberrypi-archive-keyring\n"
+        )
+        run = AsyncMock(side_effect=[(True, query), (True, "")])
+        with patch("updater.executor._run", run):
+            await hold_kernel_firmware()
+        assert run.call_args.args[0][1:] == [
+            "/usr/local/sbin/bs-apt-helper",
+            "hold",
+            "linux-image-rpi-v8",
+            "raspi-firmware",
+        ]
+
+    @pytest.mark.parametrize(
+        ("healed", "foreign", "ok", "held"),
+        [
+            ((False, "E: lock"), [], False, False),
+            ((True, ""), ["new_Release (trixie)"], False, True),
+            ((True, ""), [], True, True),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_preflight_heals_then_holds_then_refuses_foreign(
+        self, healed, foreign, ok, held
+    ):
+        hold = AsyncMock()
+        with (
+            patch("updater.executor.heal_dpkg", AsyncMock(return_value=healed)),
+            patch("updater.executor.hold_kernel_firmware", hold),
+            patch("updater.executor.foreign_apt_sources", return_value=foreign),
+        ):
+            got, why = await apt_preflight()
+        assert got is ok
+        assert hold.await_count == held
+        # A foreign suite is a refusal, so the press reports it without a dpkg repair.
+        assert why.startswith(APT_REFUSED) is bool(foreign)
 
 
 class TestRestartService:
@@ -1770,6 +1969,7 @@ class TestClassifyAptError:
             "sudo: a password is required",
             "Permission denied",
             "user is not allowed to execute",
+            f"{APT_REFUSED}upgrade would install excluded linux-image-rpi-v8",
         ],
     )
     def test_permanent(self, err):
