@@ -22,6 +22,7 @@ from updater.executor import (
     APT_NOT_RUN,
     APT_REFUSED,
     GIT,
+    apt_preflight,
     _moonraker_call,
     moonraker_refresh_repo,
     moonraker_repo_hashes,
@@ -292,6 +293,19 @@ class TestRun:
         )
         assert ok is False
         assert "timed out" in msg
+
+    @pytest.mark.asyncio
+    async def test_uncapped_step_logs_while_running_and_stops_after(
+        self, tmp_path, caplog
+    ):
+        with patch("updater.executor._UNCAPPED_LOG_S", 0.1):
+            ok, _ = await _run(["/bin/sleep", "0.35"], timeout=None, cwd=tmp_path)
+            logged = caplog.text.count("still running")
+            await asyncio.sleep(0.3)
+        assert ok is True
+        assert logged >= 2
+        # The watcher is cancelled with the step, so nothing logs after it ends.
+        assert caplog.text.count("still running") == logged
 
 
 class TestGitClone:
@@ -1370,6 +1384,30 @@ class TestAptPreflight:
             "linux-image-rpi-v8",
             "raspi-firmware",
         ]
+
+    @pytest.mark.parametrize(
+        ("healed", "foreign", "ok", "held"),
+        [
+            ((False, "E: lock"), [], False, False),
+            ((True, ""), ["new_Release (trixie)"], False, True),
+            ((True, ""), [], True, True),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_preflight_heals_then_holds_then_refuses_foreign(
+        self, healed, foreign, ok, held
+    ):
+        hold = AsyncMock()
+        with (
+            patch("updater.executor.heal_dpkg", AsyncMock(return_value=healed)),
+            patch("updater.executor.hold_kernel_firmware", hold),
+            patch("updater.executor.foreign_apt_sources", return_value=foreign),
+        ):
+            got, why = await apt_preflight()
+        assert got is ok
+        assert hold.await_count == held
+        # A foreign suite is a refusal, so the press reports it without a dpkg repair.
+        assert why.startswith(APT_REFUSED) is bool(foreign)
 
 
 class TestRestartService:

@@ -953,6 +953,17 @@ class TestAptUpdate:
         assert steps._apt_get_fix_broken.await_count == repaired
         assert steps._apt_restore_packages.await_count == repaired
 
+    @pytest.mark.asyncio
+    async def test_failed_preflight_stops_before_snapshot(self):
+        cb = MagicMock()
+        with ExitStack() as stack:
+            steps = self._apt_steps(stack, (True, ""))
+            steps.apt_preflight.return_value = (False, f"{APT_REFUSED}non-bookworm")
+            assert await UpdateService(callback=cb).update_component("system") is False
+        cb.on_error.assert_called_once_with("system", "upgrade")
+        cb.on_rollback.assert_not_called()
+        assert [c[0] for c in steps.mock_calls] == ["apt_update", "apt_preflight"]
+
 
 class TestUpdateAll:
     """update_all partitions: apt independent, existing git as one atomic batch."""

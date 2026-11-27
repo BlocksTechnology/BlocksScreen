@@ -43,6 +43,8 @@ APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
 # Error prefixes for an upgrade that installed nothing, so repair and rollback are skipped.
 APT_REFUSED = "refused: "  # a guard tripped; retrying cannot help
 APT_NOT_RUN = "not run: "  # simulate or download failed; may clear on retry
+# Uncapped dpkg steps log this often, so a hung one shows in the journal.
+_UNCAPPED_LOG_S = 600.0
 # Fleet stays on bookworm; third-party repos may use any codename (e.g. "stable").
 _DEBIAN_CODENAMES = frozenset(
     {"stretch", "buster", "bullseye", "trixie", "forky", "duke", "sid"}
@@ -144,6 +146,16 @@ def _make_clean_env() -> dict[str, str]:
     return env
 
 
+async def _log_while_running(cmd: Sequence[str | Path]) -> None:
+    """Warn every _UNCAPPED_LOG_S while an uncapped step runs; cancelled when it ends."""
+    what = " ".join(str(c) for c in cmd[1:3])  # helper + verb
+    started = time.monotonic()
+    while True:
+        await asyncio.sleep(_UNCAPPED_LOG_S)
+        mins = (time.monotonic() - started) / 60
+        logger.warning("%s still running after %.0f min", what, mins)
+
+
 async def _run(
     cmd: Sequence[str | Path],
     *,
@@ -160,6 +172,7 @@ async def _run(
         stderr=asyncio.subprocess.PIPE,
         start_new_session=True,
     )
+    watch = asyncio.ensure_future(_log_while_running(cmd)) if timeout is None else None
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         if proc.returncode == 0:
@@ -179,6 +192,9 @@ async def _run(
             if proc.returncode is None:
                 _kill_proc_group(proc, signal.SIGKILL)
         raise
+    finally:
+        if watch is not None:
+            watch.cancel()
 
 
 def _sync_fs(path: Path) -> None:
@@ -1177,7 +1193,10 @@ async def hold_kernel_firmware() -> None:
         return
     ok, out = await _run(_apt_cmd("hold", pkgs), timeout=60.0, env=_apt_env())
     if ok:
-        logger.info("held %d kernel/firmware packages", len(pkgs))
+        logger.info(
+            "held %d kernel/firmware packages (undo one: sudo apt-mark unhold <pkg>)",
+            len(pkgs),
+        )
     else:
         logger.warning("hold failed: %s", out.strip()[:200])
 
