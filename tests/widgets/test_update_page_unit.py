@@ -103,6 +103,9 @@ def _make_status(**overrides: Any) -> ComponentStatus:
     return ComponentStatus(**defaults)
 
 
+_NET_ERR = "fatal: unable to access 'https://github.com/x/': Could not resolve host: github.com"
+
+
 class TestNeedsUpdate:
     def test_commits_behind(self, page):
         assert page._needs_update(_make_status(commits_behind=1)) is True
@@ -114,6 +117,14 @@ class TestNeedsUpdate:
         # An errored git repo (e.g. a corrupt repo) is now updatable: pressing
         # the one Update button heals it via the update flow.
         assert page._needs_update(_make_status(error="boom")) is True
+
+    def test_unreachable_git_not_updatable(self, page):
+        # Offline is not an update: the daemon refuses the press as a network error.
+        assert page._needs_update(_make_status(error=_NET_ERR)) is False
+
+    def test_clock_error_stays_updatable(self, page):
+        s = _make_status(error=f"{CLOCK_UNSYNCED}: {_NET_ERR}")
+        assert page._needs_update(s) is True
 
     def test_errored_apt_not_updatable(self, page):
         s = _make_status(kind="apt", error="boom")
@@ -162,6 +173,7 @@ class TestVersionString:
         [
             (f"{CLOCK_UNSYNCED}: fatal", "clock not synchronized"),
             ("fatal", "status error"),
+            (_NET_ERR, "server unreachable"),
         ],
     )
     def test_error_label(self, page, error, label):
@@ -197,6 +209,25 @@ class TestBuildCards:
         page.build_cards()
         label = page._cards_layout.addWidget.call_args[0][0]
         assert label.text() == "Reboot the printer to finish the update"
+
+    @pytest.mark.parametrize(
+        ("other", "text"),
+        [
+            (
+                _make_status(error=_NET_ERR),
+                "Update server unreachable\nCheck the network and tap refresh",
+            ),
+            (
+                _make_status(kind="apt", error="apt status check failed"),
+                "Status check failed for 2 components\nTap refresh to retry",
+            ),
+        ],
+    )
+    def test_offline_rows_explain_instead_of_offering_update(self, page, other, text):
+        page._statuses = {"klipper": _make_status(error=_NET_ERR), "other": other}
+        page.build_cards()
+        page.update_all_btn.setVisible.assert_called_with(False)
+        assert page._cards_layout.addWidget.call_args[0][0].text() == text
 
     def test_no_statuses_hides_update_all_btn(self, page):
         page._statuses = {}

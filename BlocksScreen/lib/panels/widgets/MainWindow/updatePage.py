@@ -14,7 +14,7 @@ from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
-from updater.executor import SYSTEMCTL
+from updater.executor import SYSTEMCTL, git_is_network_error
 from updater.models import (
     APT_COOLING_DOWN,
     DEPLOY_FLAG,
@@ -199,13 +199,25 @@ class UpdatePage(QtWidgets.QWidget):
             or status.has_local_changes
             or status.branch_mismatch
             or status.needs_install
-            or (status.error is not None and status.kind != "apt")
+            or (
+                status.error is not None
+                and status.kind != "apt"
+                and not self._unreachable(status)
+            )
         )
+
+    @staticmethod
+    def _unreachable(status: ComponentStatus) -> bool:
+        """Fetch failed on the network: the daemon refuses it as offline, so no update."""
+        error = status.error or ""
+        return not error.startswith(CLOCK_UNSYNCED) and git_is_network_error(error)
 
     def _version_string(self, status: ComponentStatus) -> str:
         if status.error:
             if status.error.startswith(CLOCK_UNSYNCED):
                 return "clock not synchronized"
+            if self._unreachable(status):
+                return "server unreachable"
             return "status error"
         if status.kind in ("system", "apt"):
             return "updates available"
@@ -254,6 +266,8 @@ class UpdatePage(QtWidgets.QWidget):
         if not updatable:
             if not self._statuses:
                 text = "No update information available\nTap refresh to retry"
+            elif errored and all(self._unreachable(s) for s in errored.values()):
+                text = "Update server unreachable\nCheck the network and tap refresh"
             elif errored:
                 text = (
                     f"Status check failed for {len(errored)} "

@@ -35,8 +35,9 @@ _STALE_JOB_GRACE_MS: int = 5000
 _MMU_SERVER_GRACE_MS: int = 300_000
 _HH_COMPONENT: str = "Happy-Hare"
 _MMU_SERVER_MISSING_MSG: str = (
-    "Spoolman sync unavailable: Moonraker did not load the Happy Hare component.\n"
-    "Spool usage is not being recorded. Contact support@blockstec.com."
+    "Spool tracking is unavailable: Moonraker could not load the Happy Hare module.\n"
+    "Filament usage is not being recorded.\n"
+    "Contact Support: support@blockstec.com"
 )
 _WARNING_PRIORITY: int = 2
 
