@@ -2184,6 +2184,10 @@ class UpdateService:
         if component.path is None:
             return False
         rok, rmsg = await git_repair(component.path, component.branch, hint=hint)
+        if not rok and rmsg.startswith(DISK_FULL):
+            # A reclone needs the same room, so it would only fill the card.
+            self._log.error("%s: repair refused: %s", component.name, rmsg)
+            return False
         if not rok:
             self._log.warning("%s: repair failed (%s), recloning", component.name, rmsg)
             if not await self._reclone_component(component):
@@ -2546,9 +2550,7 @@ class UpdateService:
         hard = component.reset_mode == "hard"
         if hard:
             # checkout -f and reset --hard both discard tracked edits: keep them as a stash.
-            await git_stash_backup(
-                component.path, f"updater backup {time.strftime('%F %T')}"
-            )
+            await git_stash_backup(component.path)
         if component.branch:
             ok, err = await self._git_op_with_repair(
                 component,

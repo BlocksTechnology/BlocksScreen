@@ -16,13 +16,18 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-from updater.models import CLOCK_UNSYNCED
+from updater.models import CLOCK_UNSYNCED, DISK_FULL
 from updater.executor import (
     GIT,
     _moonraker_call,
     moonraker_refresh_repo,
     moonraker_repo_hashes,
-    _clear_stale_git_locks,
+    _clear_named_git_locks,
+    _git_repair_after_quarantine,
+    _git_locked_write,
+    _prune_stash_backups,
+    _retry_past_stale_locks,
+    _room_for_refetch,
     _git_status_preflight,
     _rebuild_unreadable_index,
     repair_git_files,
@@ -1795,42 +1800,37 @@ class TestClassifyAptError:
         assert classify_apt_error(err) == "transient"
 
 
-class TestStaleIndexLockHandling:
-    @pytest.mark.asyncio
-    async def test_clear_stale_git_index_lock_removes_old_lock(self, tmp_path):
+def _lock_err(lock: Path) -> str:
+    return f"fatal: Unable to create '{lock}': File exists."
 
+
+class TestStaleIndexLockHandling:
+    def test_clear_stale_git_index_lock_removes_old_lock(self, tmp_path):
         lock_path = tmp_path / ".git" / "index.lock"
         lock_path.parent.mkdir(parents=True)
-        lock_path.write_text("")
         lock_path.touch()
-
-        st = lock_path.stat()
-        os.utime(lock_path, (st.st_atime, time.time() - 30))
-        assert _clear_stale_git_locks(tmp_path) is True
+        _age(lock_path, 30)
+        assert _clear_named_git_locks(tmp_path, _lock_err(lock_path)) is True
         assert not lock_path.exists()
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(("skew", "cleared"), [(3600, True), (5, False)])
-    async def test_future_lock_after_clock_step_back(self, tmp_path, skew, cleared):
+    def test_future_lock_after_clock_step_back(self, tmp_path, skew, cleared):
         lock_path = tmp_path / ".git" / "index.lock"
         lock_path.parent.mkdir(parents=True)
         lock_path.touch()
         os.utime(lock_path, (time.time(), time.time() + skew))
-        assert _clear_stale_git_locks(tmp_path) is cleared
+        assert _clear_named_git_locks(tmp_path, _lock_err(lock_path)) is cleared
         assert lock_path.exists() is not cleared
 
-    @pytest.mark.asyncio
-    async def test_clear_stale_git_index_lock_preserves_fresh_lock(self, tmp_path):
+    def test_clear_stale_git_index_lock_preserves_fresh_lock(self, tmp_path):
         lock_path = tmp_path / ".git" / "index.lock"
         lock_path.parent.mkdir(parents=True)
-        lock_path.write_text("")
-        assert _clear_stale_git_locks(tmp_path) is False
+        lock_path.touch()
+        assert _clear_named_git_locks(tmp_path, _lock_err(lock_path)) is False
         assert lock_path.exists()
 
-    @pytest.mark.asyncio
-    async def test_clear_stale_git_index_lock_no_lock(self, tmp_path):
-
-        assert _clear_stale_git_locks(tmp_path) is True
+    def test_error_naming_no_lock_clears_nothing(self, tmp_path):
+        assert _clear_named_git_locks(tmp_path, "fatal: bad object HEAD") is False
 
     @pytest.mark.asyncio
     async def test_git_reset_to_hash_clears_lock_on_index_lock_error(self):
@@ -1846,7 +1846,7 @@ class TestStaleIndexLockHandling:
 
         with (
             patch(
-                "updater.executor._clear_stale_git_locks", return_value=True
+                "updater.executor._clear_named_git_locks", return_value=True
             ) as mock_clear,
             patch(
                 "asyncio.create_subprocess_exec",
@@ -1856,7 +1856,7 @@ class TestStaleIndexLockHandling:
         ):
             ok, _msg = await git_reset_to_hash(Path("/x"), "abc123")
         assert ok is True
-        mock_clear.assert_called_once_with(Path("/x"))
+        mock_clear.assert_called_once_with(Path("/x"), "error: index.lock blocked git")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("rc", [0, 1])
@@ -2204,17 +2204,75 @@ def _age(path: Path, seconds: float) -> None:
 class TestOfflineGitMetadataRepair:
     """BUG-16, BUG-17, GAP-9: power-cut metadata git refuses, fixed without network."""
 
-    def test_clears_every_stale_lock_but_keeps_a_fresh_one(self, tmp_path):
+    def test_only_the_named_stale_lock_is_removed(self, tmp_path):
         git_dir = _bare_git_dir(tmp_path)
-        stale = [git_dir / "HEAD.lock", git_dir / "refs" / "heads" / "main.lock"]
-        fresh = git_dir / "packed-refs.lock"
-        for lock in [*stale, fresh]:
+        named = git_dir / "refs" / "heads" / "main.lock"
+        other = git_dir / "HEAD.lock"
+        for lock in (named, other):
             lock.touch()
-        for lock in stale:
             _age(lock, 60)
-        assert _clear_stale_git_locks(tmp_path) is False
-        assert not any(lock.exists() for lock in stale)
-        assert fresh.exists()
+        assert _clear_named_git_locks(tmp_path, f"cannot lock ref: {_lock_err(named)}")
+        assert not named.exists()
+        assert other.exists()
+
+    def test_lock_outside_git_dir_is_ignored(self, tmp_path):
+        _bare_git_dir(tmp_path)
+        outside = tmp_path / "work.lock"
+        outside.touch()
+        _age(outside, 60)
+        assert _clear_named_git_locks(tmp_path, _lock_err(outside)) is False
+        assert outside.exists()
+
+    def test_live_git_process_keeps_an_old_lock(self, tmp_path):
+        lock = _bare_git_dir(tmp_path) / "index.lock"
+        lock.touch()
+        _age(lock, 60)
+        with patch("updater.executor._git_running_in", return_value=True):
+            assert _clear_named_git_locks(tmp_path, _lock_err(lock)) is False
+        assert lock.exists()
+
+    @pytest.mark.asyncio
+    async def test_each_stranded_lock_is_cleared_in_turn_up_to_a_bound(self, tmp_path):
+        git_dir = _bare_git_dir(tmp_path)
+        locks = [git_dir / "index.lock", git_dir / "HEAD.lock"]
+        for lock in locks:
+            lock.touch()
+            _age(lock, 60)
+        # Git names one lock per failure, so each retry uncovers the next one.
+        fails = [(False, _lock_err(lock)) for lock in locks]
+        run = AsyncMock(side_effect=[*fails, (True, "")])
+        ok, _ = await _retry_past_stale_locks(run, ["git"], tmp_path, 1.0)
+        assert ok is True
+        assert run.await_count == 3
+        assert not any(lock.exists() for lock in locks)
+        stuck = AsyncMock(return_value=(False, _lock_err(locks[0])))
+        ok, _ = await _retry_past_stale_locks(stuck, ["git"], tmp_path, 1.0)
+        assert ok is False
+        assert stuck.await_count == 5
+
+    @pytest.mark.parametrize(("age", "written"), [(60, True), (0, False)])
+    def test_locked_write_takes_over_only_a_stale_lock(self, tmp_path, age, written):
+        git_dir = _bare_git_dir(tmp_path)
+        head = git_dir / "HEAD"
+        lock = git_dir / "HEAD.lock"
+        lock.touch()
+        _age(lock, age)
+        assert _git_locked_write(git_dir, head, b"ref: refs/heads/dev\n") is written
+        assert (head.read_text() == "ref: refs/heads/dev\n") is written
+        assert lock.exists() is not written
+
+    def test_locked_write_failure_drops_its_lock_and_keeps_the_file(self, tmp_path):
+        git_dir = _bare_git_dir(tmp_path)
+        head = git_dir / "HEAD"
+        before = head.read_bytes()
+        with (
+            patch("updater.executor.os.fsync", side_effect=OSError(28, "ENOSPC")),
+            pytest.raises(OSError),
+        ):
+            _git_locked_write(git_dir, head, b"ref: refs/heads/dev\n")
+        # A lock left behind would block every later git command in the repo.
+        assert not (git_dir / "HEAD.lock").exists()
+        assert head.read_bytes() == before
 
     @pytest.mark.parametrize(
         ("text", "kept"),
@@ -2358,12 +2416,38 @@ class TestHintedRepair:
         run = AsyncMock(side_effect=[(False, busy), (True, "")])
         with (
             patch("updater.executor._run", run),
-            patch("updater.executor._clear_stale_git_locks", return_value=True),
+            patch("updater.executor._clear_named_git_locks", return_value=True),
         ):
             ok, _ = await git_fetch(tmp_path, prune_remotes=False, refetch=True)
         assert ok is True
         assert run.await_count == 2
         assert run.await_args.args[0][:3] == [GIT, "fetch", "--refetch"]
+        assert all(c.kwargs["timeout"] == 600.0 for c in run.await_args_list)
+
+    def test_refetch_needs_min_free_plus_the_pack_size(self, tmp_path):
+        pack_dir = tmp_path / ".git" / "objects" / "pack"
+        pack_dir.mkdir(parents=True)
+        (pack_dir / "p.pack").write_bytes(b"\0" * 1_048_576 * 2)
+        with patch("updater.executor.free_disk_mb", return_value=201.0):
+            assert _room_for_refetch(tmp_path) is False
+        with patch("updater.executor.free_disk_mb", return_value=203.0):
+            assert _room_for_refetch(tmp_path) is True
+
+    @pytest.mark.asyncio
+    async def test_repair_refuses_a_refetch_that_would_fill_the_disk(self, tmp_path):
+        fetch = AsyncMock()
+        with (
+            patch(
+                "updater.executor._quarantine_corrupt_objects",
+                AsyncMock(return_value=1),
+            ),
+            patch("updater.executor._room_for_refetch", return_value=False),
+            patch("updater.executor.git_fetch", fetch),
+        ):
+            ok, msg = await _git_repair_after_quarantine(tmp_path, None, 0)
+        assert ok is False
+        assert msg.startswith(DISK_FULL)
+        fetch.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_checkout_retries_once_past_a_stale_head_lock(self, tmp_path):
@@ -2376,12 +2460,12 @@ class TestHintedRepair:
             ),
             patch("updater.executor._run_durable", run),
             patch(
-                "updater.executor._clear_stale_git_locks", return_value=True
+                "updater.executor._clear_named_git_locks", return_value=True
             ) as clear,
         ):
             ok, _ = await git_checkout(tmp_path, "dev", force=True)
         assert ok is True
-        clear.assert_called_once_with(tmp_path)
+        clear.assert_called_once_with(tmp_path, busy)
 
 
 class TestCloneFilterAndStatusRemote:
@@ -2435,22 +2519,52 @@ class TestStashBackup:
 
     @pytest.mark.asyncio
     async def test_dirty_tree_is_stored_as_named_stash(self, tmp_path):
-        run = AsyncMock(side_effect=[(True, _SHA_A + "\n"), (True, "")])
+        run = AsyncMock(side_effect=[(True, _SHA_A + "\n"), (True, ""), (True, "")])
         with (
             patch("updater.executor.git_is_dirty", AsyncMock(return_value=True)),
             patch("updater.executor._run", run),
         ):
-            assert await git_stash_backup(tmp_path, "updater backup") == _SHA_A
-        assert run.await_args_list[1].args[0][-4:] == [
-            "store",
-            "-m",
-            "updater backup",
-            _SHA_A,
-        ]
+            assert await git_stash_backup(tmp_path) == _SHA_A
+        store = run.await_args_list[1].args[0]
+        assert store[-4:-2] == ["store", "-m"]
+        assert store[-2].startswith("updater backup ")
+        assert store[-1] == _SHA_A
 
     @pytest.mark.asyncio
     async def test_unreachable_tree_returns_empty_instead_of_raising(self, tmp_path):
         with patch(
             "updater.executor.git_is_dirty", AsyncMock(side_effect=FileNotFoundError)
         ):
-            assert await git_stash_backup(tmp_path / "gone", "x") == ""
+            assert await git_stash_backup(tmp_path / "gone") == ""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "results",
+        [
+            [(False, "fatal: bad")],
+            [(True, "not-a-sha\n")],
+            [(True, _SHA_A), (False, "x")],
+        ],
+    )
+    async def test_failed_create_or_store_returns_empty_and_skips_prune(
+        self, tmp_path, results
+    ):
+        run = AsyncMock(side_effect=results)
+        with (
+            patch("updater.executor.git_is_dirty", AsyncMock(return_value=True)),
+            patch("updater.executor._run", run),
+        ):
+            assert await git_stash_backup(tmp_path) == ""
+        assert run.await_count == len(results)
+
+    @pytest.mark.asyncio
+    async def test_prune_keeps_newest_backups_and_every_user_stash(self, tmp_path):
+        entries = [
+            f"stash@{{{i}}} updater backup 2026-11-{27 - i:02d}" for i in range(7)
+        ]
+        entries.insert(3, "stash@{x} On dev: my work")
+        run = AsyncMock(side_effect=[(True, "\n".join(entries)), *[(True, "")] * 2])
+        with patch("updater.executor._run", run):
+            await _prune_stash_backups(tmp_path)
+        drops = [c.args[0][-1] for c in run.await_args_list[1:]]
+        assert drops == ["stash@{6}", "stash@{5}"]

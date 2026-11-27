@@ -19,7 +19,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 from updater.locking import restart_sentinel_path
-from updater.models import CLOCK_UNSYNCED, ComponentStatus
+from updater.models import CLOCK_UNSYNCED, DISK_FULL, MIN_FREE_MB, ComponentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +55,7 @@ _STALE_LOCK_AGE_THRESHOLD_S = 10.0
 _FUTURE_LOCK_AGE_S = -60.0
 
 
-# Lock files a power cut can strand at the top of .git; refs/**/*.lock are scanned too.
-_GIT_TOP_LOCKS = (
-    "index.lock",
-    "HEAD.lock",
-    "ORIG_HEAD.lock",
-    "FETCH_HEAD.lock",
-    "packed-refs.lock",
-    "config.lock",
-    "shallow.lock",
-)
+_GIT_LOCK_ERR_RE = re.compile(r"Unable to create '([^']+\.lock)': File exists")
 
 
 def _unlink_if_stale(lock_path: Path) -> bool:
@@ -90,24 +81,84 @@ def _unlink_if_stale(lock_path: Path) -> bool:
         return False
 
 
-def _clear_stale_git_locks(path: Path) -> bool:
-    """Remove every stale git lock in the repo; True if no fresh lock remains."""
-    git_dir = path / ".git"
-    locks = [git_dir / name for name in _GIT_TOP_LOCKS]
-    with contextlib.suppress(OSError):
-        locks += list((git_dir / "refs").rglob("*.lock"))
+def _git_running_in(repo: Path) -> bool:
+    """True if a live git process works inside repo (Moonraker runs git there too)."""
+    for proc in Path("/proc").glob("[0-9]*"):
+        # Other users' cwd is unreadable: a root `sudo git` is covered by the age check only.
+        with contextlib.suppress(OSError):
+            if (proc / "comm").read_text().startswith("git") and Path(
+                os.readlink(proc / "cwd")
+            ).is_relative_to(repo):
+                return True
+    return False
+
+
+def _clear_named_git_locks(path: Path, err: str) -> bool:
+    """Remove the stale locks git named in err; True if it named one and all are gone."""
+    git_dir = (path / ".git").resolve()
+    locks = {
+        lock
+        for raw in _GIT_LOCK_ERR_RE.findall(err)
+        if (lock := (path / raw).resolve()).is_relative_to(git_dir)
+    }
+    if not locks:
+        return False
+    if _git_running_in(path.resolve()):
+        logger.warning("git is running in %s, its lock is not stale", path)
+        return False
     # A list, not a generator: every stale lock is removed even after a fresh one.
     return all([_unlink_if_stale(lock) for lock in locks])
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
-    """Replace path with data via fsynced tmp + rename so a cut never leaves it half-written."""
-    tmp = path.with_name(f"{path.name}.bs-tmp")
-    with tmp.open("wb") as fh:
-        fh.write(data)
-        fh.flush()
-        os.fsync(fh.fileno())
-    tmp.replace(path)
+# A cut mid `fetch --atomic` strands one lock per ref, but git names one per failure.
+_GIT_LOCK_RETRIES = 4
+
+
+async def _retry_past_stale_locks(
+    run: Callable[..., Awaitable[tuple[bool, str]]],
+    cmd: list[str],
+    path: Path,
+    timeout: float,
+) -> tuple[bool, str]:
+    """Run cmd, retrying while each failure names a stale lock that could be cleared."""
+    ok, out = await run(cmd, cwd=path, timeout=timeout)
+    for _ in range(_GIT_LOCK_RETRIES):
+        if ok or not _clear_named_git_locks(path, out):
+            break
+        ok, out = await run(cmd, cwd=path, timeout=timeout)
+    return ok, out
+
+
+def _open_git_lock(git_dir: Path, lock: Path) -> int | None:
+    """Create lock exclusively, taking over one a cut stranded; None while git holds it."""
+    try:
+        return os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+    except FileExistsError:
+        if _git_running_in(git_dir.parent.resolve()) or not _unlink_if_stale(lock):
+            logger.warning("%s is held by a git process, repair skipped", lock)
+            return None
+    try:
+        return os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+    except FileExistsError:
+        return None
+
+
+def _git_locked_write(git_dir: Path, path: Path, data: bytes) -> bool:
+    """Replace a git file through git's own <file>.lock; False if git holds the lock."""
+    lock = path.with_name(f"{path.name}.lock")
+    fd = _open_git_lock(git_dir, lock)
+    if fd is None:
+        return False
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        lock.replace(path)
+    except BaseException:
+        lock.unlink(missing_ok=True)
+        raise
+    return True
 
 
 _PACKED_REF_LINE_RE = re.compile(
@@ -139,7 +190,11 @@ def _repair_packed_refs(git_dir: Path) -> bool:
         return False
     backup = git_dir / f"packed-refs.corrupt-{int(time.time())}"
     shutil.copy2(packed, backup)
-    _atomic_write(packed, "".join(f"{ln}\n" for ln in kept).encode())
+    if not _git_locked_write(
+        git_dir, packed, "".join(f"{ln}\n" for ln in kept).encode()
+    ):
+        backup.unlink(missing_ok=True)
+        return False
     logger.warning(
         "repaired packed-refs in %s: dropped %d line(s), original kept as %s",
         git_dir,
@@ -211,7 +266,8 @@ def _restore_head_ref(git_dir: Path) -> bool:
         if not re.fullmatch(r"[0-9a-f]{40}", sha):
             return False
         loose.parent.mkdir(parents=True, exist_ok=True)
-        _atomic_write(loose, f"{sha}\n".encode())
+        if not _git_locked_write(git_dir, loose, f"{sha}\n".encode()):
+            return False
         logger.warning("restored %s in %s from its reflog (%s)", ref, git_dir, sha[:12])
         return True
     return False
@@ -245,7 +301,8 @@ def _repair_head_file(git_dir: Path, branch: str | None = None) -> bool:
     if not target or (parseable and target not in _local_branches(git_dir)):
         logger.error("HEAD unreadable in %s and no branch to point it at", git_dir)
         return False
-    _atomic_write(head, f"ref: refs/heads/{target}\n".encode())
+    if not _git_locked_write(git_dir, head, f"ref: refs/heads/{target}\n".encode()):
+        return False
     logger.warning("rewrote unreadable HEAD in %s to %s", git_dir, target)
     return True
 
@@ -307,6 +364,8 @@ async def _reap(proc, sig: int, grace: float) -> bool:
 # Bytes/s and seconds, as Moonraker's GIT_ENV_VARS (git_deploy.py), whose TIME key has a stray space.
 _GIT_LOW_SPEED_LIMIT = "1000"
 _GIT_LOW_SPEED_TIME = "30"
+# A full-history refetch is tens of MB on Pi Wi-Fi; the low-speed abort still ends a stall.
+_GIT_REFETCH_TIMEOUT_S = 600.0
 
 
 def _make_clean_env() -> dict[str, str]:
@@ -698,17 +757,17 @@ async def _git_fetch_once(
         await git_prune_extra_remotes(path)
     # Not --all: with an extra remote --atomic refuses to run, failing every status fetch.
     cmd = [GIT, "fetch", "--atomic", "--prune", "origin"]
+    timeout = 60.0
     if refetch:
         # Re-downloads every object, replacing ones fsck cannot see as corrupt (git 2.36+).
         cmd.insert(2, "--refetch")
-    ok, out = await _run(cmd, cwd=path, timeout=60.0)
-    if not ok and ".lock': File exists" in out and _clear_stale_git_locks(path):
-        ok, out = await _run(cmd, cwd=path, timeout=60.0)
+        timeout = _GIT_REFETCH_TIMEOUT_S
+    ok, out = await _retry_past_stale_locks(_run, cmd, path, timeout)
     if ok or "reference broken" not in out:
         return (ok, out)
     if not await _prune_broken_refs(path, out):
         return (ok, out)
-    return await _run(cmd, cwd=path, timeout=60.0)
+    return await _run(cmd, cwd=path, timeout=timeout)
 
 
 async def git_pull(path: Path | None) -> tuple[bool, str]:
@@ -764,13 +823,42 @@ async def git_partial_filter(path: Path | None) -> str:
     return out.strip() if ok else ""
 
 
-async def git_stash_backup(path: Path | None, label: str) -> str:
+_STASH_LABEL = "updater backup"
+_STASH_KEEP = 5
+
+
+async def git_stash_backup(path: Path | None) -> str:
     """Save tracked local edits as a stash entry before a hard reset; return its sha."""
+    if path is None:
+        return ""
     try:
-        return await _stash_backup(path, label) if path is not None else ""
+        sha = await _stash_backup(path, f"{_STASH_LABEL} {time.strftime('%F %T')}")
+        if sha:
+            await _prune_stash_backups(path)
+        return sha
     except OSError as exc:  # Best effort: a failed backup must never block the update.
         logger.warning("could not back up local edits in %s: %s", path, exc)
         return ""
+
+
+async def _prune_stash_backups(path: Path) -> None:
+    """Drop all but the newest _STASH_KEEP updater backups; user stashes are never touched."""
+    ok, out = await _run(
+        [GIT, "stash", "list", "--format=%gd %gs"], cwd=path, timeout=30.0
+    )
+    if not ok:
+        return
+    ours = [
+        ref
+        for ref, _, subject in (ln.partition(" ") for ln in out.splitlines())
+        if subject.startswith(_STASH_LABEL)
+    ]
+    # Highest index first: a drop renumbers every entry above it.
+    for ref in reversed(ours[_STASH_KEEP:]):
+        ok, err = await _run([GIT, "stash", "drop", "-q", ref], cwd=path, timeout=30.0)
+        if not ok:
+            logger.warning("could not drop old backup %s in %s: %s", ref, path, err)
+            return
 
 
 async def _stash_backup(path: Path, label: str) -> str:
@@ -815,12 +903,7 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
     if not _validate_git_ref(prev_hash):
         return (False, f"invalid git ref: {prev_hash!r}")
     reset = [GIT, "reset", "--hard", prev_hash]
-    ok, err = await _run_durable(reset, cwd=path, timeout=60.0)
-    if ok:
-        return (ok, err)
-    if ".lock" in err and _clear_stale_git_locks(path):
-        return await _run_durable(reset, cwd=path, timeout=60.0)
-    return (ok, err)
+    return await _retry_past_stale_locks(_run_durable, reset, path, 60.0)
 
 
 # Written by scripts/bs-clock-sync.sh as "<wall s> <boot s>".
@@ -1045,6 +1128,23 @@ async def _git_repair_cleanup_fetch(path: Path) -> tuple[bool, str, int]:
     return (True, "", removed)
 
 
+def _room_for_refetch(path: Path) -> bool:
+    """True if the disk keeps MIN_FREE_MB after a refetch writes a second copy of the packs."""
+    packs = 0
+    with contextlib.suppress(OSError):
+        packs = sum(
+            f.stat().st_size for f in (path / ".git/objects/pack").glob("*.pack")
+        )
+    need_mb = MIN_FREE_MB + packs / 1_048_576
+    free_mb = free_disk_mb(path)
+    if free_mb >= need_mb:
+        return True
+    logger.warning(
+        "refetch of %s skipped: %.0f MB free, %.0f MB needed", path, free_mb, need_mb
+    )
+    return False
+
+
 async def _git_repair_after_quarantine(
     path: Path, branch: str | None, removed: int, hint: str = ""
 ) -> tuple[bool, str]:
@@ -1053,6 +1153,8 @@ async def _git_repair_after_quarantine(
     # A bad packed object needs no quarantine: git skips it once refetch adds a good copy.
     if quarantined == 0 and not hint:
         return (False, "still corrupt after fetch (no quarantinable objects found)")
+    if not await asyncio.to_thread(_room_for_refetch, path):
+        return (False, f"{DISK_FULL}: no room to re-download the history")
     ok, out = await git_fetch(path, prune_remotes=False, refetch=True)
     if not ok:
         return (False, f"fetch after quarantine failed: {out}")
@@ -1070,8 +1172,7 @@ async def git_repair(
     path: Path, branch: str | None = None, hint: str = ""
 ) -> tuple[bool, str]:
     """Fix metadata, prune 0-byte objects, re-fetch, re-verify; hint is the failing op's error."""
-    # Only reached after a git failure, so a lock past the threshold is stranded.
-    _clear_stale_git_locks(path)
+    _clear_named_git_locks(path, hint)
     await asyncio.to_thread(repair_git_files, path, branch)
     await _rebuild_unreadable_index(path)
     ok, msg, removed = await _git_repair_cleanup_fetch(path)
@@ -1233,10 +1334,7 @@ async def git_checkout(
 
     cmd = [GIT, "checkout", "-f", branch] if force else [GIT, "checkout", branch]
     # A timeout SIGTERM half-writes the tree: be generous on slow SD.
-    ok, err = await _run_durable(cmd, cwd=path, timeout=60.0)
-    if not ok and ".lock" in err and _clear_stale_git_locks(path):
-        return await _run_durable(cmd, cwd=path, timeout=60.0)
-    return (ok, err)
+    return await _retry_past_stale_locks(_run_durable, cmd, path, 60.0)
 
 
 def _read_apt_cache(

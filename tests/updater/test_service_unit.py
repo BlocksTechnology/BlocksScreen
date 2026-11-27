@@ -4820,6 +4820,7 @@ class TestGitSelfHeal:
             ((True, "repaired"), False, True, [("repair", "repaired")]),
             ((False, "still corrupt"), True, True, [("repair", "recloned")]),
             ((False, "still corrupt"), False, False, []),
+            ((False, f"{DISK_FULL}: no room"), True, False, []),
         ],
     )
     async def test_corrupt_op_repairs_or_reclones_then_retries(
@@ -4831,10 +4832,15 @@ class TestGitSelfHeal:
         with (
             patch("updater.service.git_has_corruption", AsyncMock(return_value=True)),
             patch("updater.service.git_repair", AsyncMock(return_value=repair)) as rep,
-            patch.object(svc, "_reclone_component", AsyncMock(return_value=reclone)),
+            patch.object(
+                svc, "_reclone_component", AsyncMock(return_value=reclone)
+            ) as rec,
         ):
             res, _ = await svc._git_op_with_repair(comp, op)
         assert res is ok
+        # A full card skips the reclone, which needs the same room.
+        recloned = not repair[0] and not repair[1].startswith(DISK_FULL)
+        assert rec.await_count == int(recloned)
         assert op.await_count == (2 if ok else 1)
         rep.assert_awaited_once_with(comp.path, "master", hint=self._CORRUPT)
         assert (self._events(svc) if events else []) == events
