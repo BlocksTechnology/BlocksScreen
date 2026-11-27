@@ -14,6 +14,8 @@ DEPLOY_UNITS = ("BlocksScreen-deploy.path", "BlocksScreen-deploy.service")
 DEPLOY_LIVE_STATES = frozenset({"active", "activating", "deactivating", "reloading"})
 # error() reason for a run refused while Klipper is printing or not answering.
 PRINTER_BUSY = "printer is busy"
+# error() prefix for a system update refused while the apt breaker is open.
+APT_COOLING_DOWN = "apt cooling down"
 # Error prefix for a TLS failure while the clock is unverified.
 CLOCK_UNSYNCED = "system clock not synchronized"
 # Error prefix for an update refused because reclaiming caches left too little space.
@@ -59,6 +61,8 @@ class ComponentStatus:
     needs_install: bool = False
     branch_mismatch: bool = False
     current_branch: str = ""
+    # apt only: a core package changed since boot and runs on old code until reboot.
+    reboot_required: bool = False
 
     @property
     def needs_update(self) -> bool:

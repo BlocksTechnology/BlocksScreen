@@ -5,6 +5,7 @@ import contextlib
 import dataclasses
 import json
 import logging
+import math
 import os
 import secrets
 import shutil
@@ -60,6 +61,7 @@ from updater.executor import (
     moonraker_refresh_repo,
     moonraker_repo_hashes,
     purge_pycache,
+    reboot_required,
     reclaim_disk,
     restart_service,
     restart_service_noblock,
@@ -75,6 +77,7 @@ from updater.models import DEPLOY_LIVE_STATES as _DEPLOY_LIVE_STATES
 from updater.models import DEPLOY_PATH_UNIT as _DEPLOY_PATH_UNIT
 from updater.models import DEPLOY_UNITS as _DEPLOY_UNITS
 from updater.models import (
+    APT_COOLING_DOWN,
     CLOCK_UNSYNCED,
     DISK_FULL,
     MIN_FREE_MB,
@@ -175,6 +178,10 @@ class _Backoff:
     def cooling_down(self) -> bool:
         """Return True while the last failure's backoff window has not elapsed."""
         return time.monotonic() < self._until
+
+    def remaining(self) -> float:
+        """Seconds left in the current backoff window, 0 when closed."""
+        return max(0.0, self._until - time.monotonic())
 
     def trip(self, *, permanent: bool = False) -> None:
         """Open the breaker: permanent = fixed cooldown, else capped exponential delay + jitter."""
@@ -456,6 +463,9 @@ class UpdateService:
                 status = await check_apt_status(
                     cache_ttl_seconds=0 if force else 86_400, exclude=c.apt_exclude
                 )
+                # An unsynced clock skews boot time and re-flags an upgrade from before it.
+                if await asyncio.to_thread(reboot_required) and await clock_trusted():
+                    status = dataclasses.replace(status, reboot_required=True)
             elif c.path is None or not c.path.exists():
                 if c.install_if_missing and c.url:
                     results[c.name] = ComponentStatus(name=c.name, needs_install=True)
@@ -2788,7 +2798,9 @@ class UpdateService:
     async def _run_apt_update(self, component: ComponentConfig) -> bool:
         """Refresh + upgrade apt packages under the apt lock (system component update path)."""
         async with self._apt_lock:
-            return await self._run_apt_update_locked(component, _APT_STATUS_CACHE)
+            ok = await self._run_apt_update_locked(component, _APT_STATUS_CACHE)
+        self._history("apt_upgrade", component.name, ok=ok)
+        return ok
 
     async def _run_apt_update_locked(
         self, component: ComponentConfig, _apt_cache: Path
@@ -2796,8 +2808,13 @@ class UpdateService:
         """apt refresh, upgrade, and autoremove under the apt lock with snapshot rollback."""
         try:
             if self._apt_backoff.cooling_down():
-                self._log.debug("apt cooling down; skipping update")
-                return self._cb_error_done(component.name, "apt cooling down")
+                wait_min = max(1, math.ceil(self._apt_backoff.remaining() / 60))
+                self._log.info(
+                    "apt cooling down after a failure: %d min left", wait_min
+                )
+                return self._cb_error_done(
+                    component.name, f"{APT_COOLING_DOWN}: {wait_min} min"
+                )
             ok, err = await apt_update()
             if not ok:
                 self._log.error("apt_update failed: %s", err)
@@ -2960,7 +2977,12 @@ class UpdateService:
     async def background_apt_upgrade(self) -> None:
         """Run apt update + upgrade + autoremove silently after every Update click."""
         async with self._apt_lock:
+            listed, cooling = self._apt_list_time, self._apt_backoff.cooling_down()
             await self._background_apt_upgrade_locked()
+            failed = not cooling and self._apt_backoff.cooling_down()
+            # Skips (cooldown, printing, low disk) neither refresh the lists nor trip.
+            if failed or self._apt_list_time != listed:
+                self._history("apt_sweep", "system", ok=not failed)
 
     async def _background_apt_upgrade_locked(self) -> None:
         """Silent apt update, upgrade, and autoremove honoring the apt excludes."""
