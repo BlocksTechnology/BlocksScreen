@@ -557,3 +557,11 @@ def test_shipped_happy_hare_is_pinned_without_service():
     assert hh.service is None
     names = [c.name for c in configs]
     assert names.index("moonraker") < names.index("Happy-Hare")
+
+
+def test_shipped_klipper_url_is_the_fleet_fork():
+    # A reclone or install from upstream would drop the fork's modules and the MCU pin.
+    with patch("updater.components.OVERRIDE_PATH", Path("/nonexistent/override.yaml")):
+        configs, _ = load_components()
+    klipper = next(c for c in configs if c.name == "klipper")
+    assert klipper.url == "https://github.com/BlocksTechnology/klipper"

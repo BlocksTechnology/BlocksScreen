@@ -6,7 +6,8 @@ components:
   - name: klipper
     type: git
     path: ~/klipper
-    url: https://github.com/Klipper3d/klipper
+    # The fleet runs this fork (Beacon, Happy-Hare); upstream needs an MCU reflash.
+    url: https://github.com/BlocksTechnology/klipper
     service: klipper.service
     reset_mode: hard
     branch: master
