@@ -162,10 +162,18 @@ elif [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] \
 elif [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] && [ -n "$_last_good" ] \
    && [ -n "$_cur_head" ] && [ "$_last_good" != "$_cur_head" ]; then
     echo "BlocksScreen: crash loop ($_attempts boots) - rolling back to ${_last_good:0:8}"
+    # Update refuses this commit until its branch moves (BUG-20).
+    printf '%s\n' "$_cur_head" > "$_BOOT_DIR/.crashloop_bad_commit.tmp" 2>/dev/null \
+        && mv -f "$_BOOT_DIR/.crashloop_bad_commit.tmp" "$_BOOT_DIR/crashloop_bad_commit" 2>/dev/null || true
+    _rb_ok=false
     if git -C "$BS_PATH" reset --hard "$_last_good" 2>/dev/null; then
+        _rb_ok=true
         rm -f "$BSENV/.blockscreen-reqs-hash"
         printf '0\n' > "$_BOOT_DIR/boot_attempts" 2>/dev/null || true
     fi
+    printf '{"ts": "%s", "event": "crashloop_rollback", "component": "BlocksScreen", "bad": "%s", "reverted_to": "%s", "ok": %s}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${_cur_head:0:12}" "${_last_good:0:12}" "$_rb_ok" \
+        >> "$_BOOT_DIR/update_history.jsonl" 2>/dev/null || true
 fi
 # -------------------------------------------------------------------------
 

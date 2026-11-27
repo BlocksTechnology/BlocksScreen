@@ -1052,6 +1052,12 @@ def free_disk_mb(path: Path | None = None) -> float:
     return shutil.disk_usage(path or Path.home()).free / 1_048_576
 
 
+def free_disk_inodes(path: Path | None = None) -> float:
+    """Free inodes on path's filesystem; inf where it has no fixed inode table (btrfs)."""
+    st = os.statvfs(path or Path.home())
+    return float("inf") if st.f_files == 0 else float(st.f_favail)
+
+
 async def reclaim_disk(path: Path | None = None) -> float:
     """Drop pip/uv caches and apt's package archive; returns MiB free on path after."""
     before = await asyncio.to_thread(free_disk_mb, path)

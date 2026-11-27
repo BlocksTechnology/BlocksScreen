@@ -72,3 +72,44 @@ def test_saturated_ladder_hands_rollback_back(tmp_path: Path) -> None:
 def test_start_script_consults_helper_before_rolling_back() -> None:
     text = (_SCRIPTS / "BlocksScreen-start.sh").read_text()
     assert text.index("bs_selfheal_engaged") < text.index('reset --hard "$_last_good"')
+
+
+def _git(repo: Path, *args: str) -> str:
+    """Run git in repo with a throwaway identity and no signing."""
+    cmd = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t"]
+    cmd += ["-c", "commit.gpgsign=false", *args]
+    res = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=20)
+    return res.stdout.strip()
+
+
+def test_rollback_records_the_bad_commit(tmp_path: Path) -> None:
+    repo = tmp_path / "BlocksScreen"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    for msg in ("good", "bad"):
+        (repo / "f").write_text(msg)
+        _git(repo, "add", "f")
+        _git(repo, "commit", "-qm", msg)
+    bad = _git(repo, "rev-parse", "HEAD")
+    good = _git(repo, "rev-parse", "HEAD~1")
+    boot = tmp_path / ".cache" / "blockscreen"
+    boot.mkdir(parents=True)
+    (boot / "last_good_commit").write_text(good + "\n")
+    (boot / "boot_attempts").write_text("2\n")
+    text = (_SCRIPTS / "BlocksScreen-start.sh").read_text()
+    start = text.index("# -- Crash-loop auto-rollback")
+    block = text[start : text.index("# ------", start)]
+    # Daemon not healing: the legacy rollback owns this boot.
+    script = "bs_selfheal_engaged() { return 1; }\n" + block
+    env = {
+        **os.environ,
+        "_BSENV_HOME": str(tmp_path),
+        "BS_PATH": str(repo),
+        "BSENV": str(tmp_path / "env"),
+    }
+    subprocess.run(["bash", "-c", script], check=True, env=env, timeout=20)
+    assert _git(repo, "rev-parse", "HEAD") == good
+    assert (boot / "crashloop_bad_commit").read_text().strip() == bad
+    entry = json.loads((boot / "update_history.jsonl").read_text())
+    assert entry["event"] == "crashloop_rollback"
+    assert (entry["bad"], entry["ok"]) == (bad[:12], True)

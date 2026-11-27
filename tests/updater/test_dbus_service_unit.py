@@ -1238,3 +1238,85 @@ class TestMoonrakerSync:
         svc._git_guard.release()
         await task
         svc._svc.check_status.assert_awaited_once()
+
+
+class TestForwardHealPass:
+    @pytest.mark.asyncio
+    async def test_busy_skips_the_branch_check(self, svc):
+        svc._svc.forward_heal_target = AsyncMock(return_value="c" * 40)
+        svc._busy = True
+        await svc._forward_heal_pass()
+        svc._svc.forward_heal_target.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("tip", ["", "c" * 40])
+    async def test_tip_runs_under_the_update_lock(self, svc, tip):
+        svc._svc.forward_heal_target = AsyncMock(return_value=tip)
+        svc._svc.forward_heal = AsyncMock(return_value=True)
+        with patch("updater.dbus_service.process_lock", lambda: nullcontext(True)):
+            await svc._forward_heal_pass()
+        if tip:
+            svc._svc.forward_heal.assert_awaited_once_with(tip)
+        else:
+            svc._svc.forward_heal.assert_not_awaited()
+        assert svc._busy is False
+
+
+class TestOwedRevertPass:
+    @pytest.mark.asyncio
+    async def test_nothing_owed_is_silent(self, svc):
+        svc._svc.revert_owed = MagicMock(return_value=False)
+        svc._svc.retry_owed_revert = AsyncMock()
+        assert await svc._owed_revert_pass() is False
+        svc._svc.retry_owed_revert.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("blocker", ["busy", "printing"])
+    async def test_waits_without_raising_busy(self, svc, blocker):
+        svc._svc.revert_owed = MagicMock(return_value=True)
+        svc._svc.retry_owed_revert = AsyncMock()
+        svc._busy = blocker == "busy"
+        printing = AsyncMock(return_value=blocker == "printing")
+        with patch("updater.dbus_service.klipper_printing", printing):
+            assert await svc._owed_revert_pass() is False
+        svc._svc.retry_owed_revert.assert_not_awaited()
+        svc.busy_changed.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("still_owed", [True, False])
+    async def test_retry_runs_under_busy(self, svc, still_owed):
+        svc._svc.revert_owed = MagicMock(return_value=True)
+        seen: list[bool] = []
+
+        async def retry() -> bool:
+            seen.append(svc._busy)
+            return still_owed
+
+        svc._svc.retry_owed_revert = retry
+        with patch(
+            "updater.dbus_service.klipper_printing", AsyncMock(return_value=False)
+        ):
+            assert await svc._owed_revert_pass() is still_owed
+        assert seen == [True]
+        assert svc._busy is False
+
+    @pytest.mark.asyncio
+    async def test_loop_backs_off_only_while_retries_fail(self, svc):
+        import updater.dbus_service as dbus_mod
+
+        delays: list[float] = []
+
+        async def sleep(delay: float) -> None:
+            delays.append(delay)
+            if len(delays) > 4:
+                raise asyncio.CancelledError
+
+        passes = AsyncMock(side_effect=[True, True, RuntimeError("x"), False])
+        with (
+            patch("updater.dbus_service.asyncio.sleep", sleep),
+            patch.object(svc, "_owed_revert_pass", passes),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await svc._owed_revert_loop()
+        base = dbus_mod._OWED_REVERT_BASE_S
+        assert delays == [base, base * 2, base * 4, base * 8, base]

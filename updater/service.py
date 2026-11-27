@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import functools
 import json
 import logging
 import os
@@ -38,6 +39,7 @@ from updater.executor import (
     enable_service,
     clock_trusted,
     explain_fetch_error,
+    free_disk_inodes,
     free_disk_mb,
     git_checkout,
     git_clone,
@@ -69,7 +71,12 @@ from updater.executor import (
     wait_for_http_ready,
     wait_for_service_active,
 )
-from updater.locking import process_lock, restart_sentinel_path
+from updater.locking import (
+    code_hash,
+    code_hash_path,
+    process_lock,
+    restart_sentinel_path,
+)
 from updater.models import DEPLOY_FLAG as _DEPLOY_FLAG
 from updater.models import DEPLOY_LIVE_STATES as _DEPLOY_LIVE_STATES
 from updater.models import DEPLOY_PATH_UNIT as _DEPLOY_PATH_UNIT
@@ -77,6 +84,7 @@ from updater.models import DEPLOY_UNITS as _DEPLOY_UNITS
 from updater.models import (
     CLOCK_UNSYNCED,
     DISK_FULL,
+    MIN_FREE_INODES,
     MIN_FREE_MB,
     ComponentConfig,
     ComponentStatus,
@@ -93,6 +101,11 @@ _FOLLOWUP_PATH = Path.home() / ".cache" / "blockscreen" / "updater_followup"
 _APT_STATUS_CACHE = Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json"
 _HISTORY_MAX_BYTES = 1_000_000
 _HISTORY_KEEP_LINES = 2000
+_STATE_TMP = ".updater_state_"
+_INFLIGHT_TMP = ".updater_inflight_"
+# Older than any in-progress write; younger temps may belong to a live CLI run.
+_STALE_TEMP_S = 600.0
+_CORRUPT_KEEP_BYTES = 65536
 
 # Failure backoff for network ops (apt and git fetch) so they can't storm-retry.
 _APT_BACKOFF_BASE_S = 30.0
@@ -132,6 +145,20 @@ def _ensure_comp(state: dict, name: str) -> dict:
 def _is_sha(val: object) -> TypeGuard[str]:
     """True only for a syntactically valid git hash (guards corrupt/non-str state)."""
     return isinstance(val, str) and bool(_GIT_SHA_RE.match(val))
+
+
+def _fast_attempt(comp_state: dict) -> int:
+    """The persisted ladder rung, 0 when absent or corrupt."""
+    raw = comp_state.get("fast_attempt", 0)
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
+
+
+def _is_json_obj(line: str) -> bool:
+    """True for one intact JSON object line of the history log."""
+    try:
+        return isinstance(json.loads(line), dict)
+    except ValueError:
+        return False
 
 
 def _move_untracked(src: Path, dst: Path, entries: list[str]) -> list[str]:
@@ -206,12 +233,14 @@ _HH_COMPONENT = "Happy-Hare"
 _RESTART_PENDING_TTL_S = 600.0
 # Absent at the target ref = abort: a Type=notify host without it crash-loops.
 _UPDATER_MARKER = "updater/dbus_service.py"
-# Forward-heal targets the curated stable channel, not the configured branch.
-_HEAL_REMOTE_REF = "origin/main"
+# Healthy starts of one commit before it becomes golden (the rung-3 target).
+_GOLDEN_BLESSES = 3
+_BAD_COMMIT_NAME = "crashloop_bad_commit"
+_REFUSE_BAD_COMMIT = (
+    "refusing a release that crashed on this printer, waiting for a fix"
+)
 # Debounce plus margin so a new build can bless itself first.
 _RECOVERY_SETTLE_S = 90.0
-_FORWARD_HEAL_BASE_S = 1800.0
-_FORWARD_HEAL_JITTER_S = 300.0
 _OFFLINE_PROVISION_TRIES = 6  # ~30 min of 300s polls, for late Wi-Fi
 _FOLLOWUP_TRIES = 3  # counted in the marker, so a crash or reboot mid-try still counts
 
@@ -318,6 +347,7 @@ class UpdateService:
         self._offline_followup_tries = 0
         self._restarted_services: set[str] = set()
         self._committed = False
+        self._forward_healing = False
 
     @property
     def update_committed(self) -> bool:
@@ -602,15 +632,23 @@ class UpdateService:
         return ok
 
     async def _ensure_disk_space(self, components: list[ComponentConfig]) -> bool:
-        """Reclaim caches when space is short; refuse with DISK_FULL if still below MIN_FREE_MB."""
+        """Reclaim caches when space or inodes are short; refuse with DISK_FULL if still short."""
         free_mb = await asyncio.to_thread(free_disk_mb)
-        if free_mb >= MIN_FREE_MB:
+        inodes = await asyncio.to_thread(free_disk_inodes)
+        if free_mb >= MIN_FREE_MB and inodes >= MIN_FREE_INODES:
             return True
-        self._log.warning("update: %.0f MB free, reclaiming caches", free_mb)
+        self._log.warning(
+            "update: %.0f MB, %.0f inodes free, reclaiming caches", free_mb, inodes
+        )
         free_mb = await reclaim_disk()
-        if free_mb >= MIN_FREE_MB:
+        inodes = await asyncio.to_thread(free_disk_inodes)
+        if free_mb >= MIN_FREE_MB and inodes >= MIN_FREE_INODES:
             return True
-        msg = f"{DISK_FULL}: {free_mb:.0f} MB free, {MIN_FREE_MB} MB needed"
+        msg = (
+            f"{DISK_FULL}: {free_mb:.0f} MB free, {MIN_FREE_MB} MB needed"
+            if free_mb < MIN_FREE_MB
+            else f"{DISK_FULL}: {inodes:.0f} file slots free, {MIN_FREE_INODES} needed"
+        )
         self._log.error("update refused: %s", msg)
         for c in components:
             self._cb_error_done(c.name, msg)
@@ -1506,6 +1544,9 @@ class UpdateService:
             return False
         async with self._git_lock:
             self._fetch_times.pop(name, None)
+        if name == _UI_COMPONENT:
+            # The operator overrides the crash-loop verdict, which a config fault can cause.
+            await asyncio.to_thread(self._forget_bad_commit)
         if hard and component.service:
             restart_ok, restart_err = await restart_service(component.service)
             if restart_ok:
@@ -1531,21 +1572,13 @@ class UpdateService:
             self._log.error("bless_healthy: invalid hash format for %s", name)
             return False
         nrestarts_baseline = await get_service_nrestarts(_UI_SERVICE)
-
-        def _apply(state: dict) -> None:
-            """Set last_good, seed golden once, reset the attempt counter and baseline."""
-            comp = _ensure_comp(state, name)
-            comp["last_good"] = hash_val
-            if not _is_sha(comp.get("golden")):
-                comp["golden"] = hash_val
-            comp["fast_attempt"] = 0
-            comp["nrestarts_baseline"] = nrestarts_baseline
-            comp.pop("last_failed_remote", None)
-
-        ok = await self._mutate_state(_apply)
+        ok = await self._mutate_state(
+            functools.partial(self._apply_bless, name, hash_val, nrestarts_baseline)
+        )
         if ok:
             self._nrestarts_samples[name] = []
             await asyncio.to_thread(self._clear_fault_marker)
+            await asyncio.to_thread(self._forget_bad_commit, hash_val)
             self._log.info(
                 "bless_healthy: %s blessed to %s (baseline=%d)",
                 name,
@@ -1553,6 +1586,25 @@ class UpdateService:
                 nrestarts_baseline,
             )
         return ok
+
+    @staticmethod
+    def _apply_bless(name: str, hash_val: str, baseline: int, state: dict) -> None:
+        """Set last_good, advance golden after repeated healthy starts, reset the ladder."""
+        comp = _ensure_comp(state, name)
+        prev = comp.get("bless_count")
+        same = (
+            comp.get("last_good") == hash_val
+            and isinstance(prev, int)
+            and not isinstance(prev, bool)
+        )
+        count = min(prev + 1, _GOLDEN_BLESSES) if same else 1
+        comp["last_good"] = hash_val
+        comp["bless_count"] = count
+        if not _is_sha(comp.get("golden")) or count >= _GOLDEN_BLESSES:
+            comp["golden"] = hash_val
+        comp["fast_attempt"] = 0
+        comp["nrestarts_baseline"] = baseline
+        comp.pop("last_failed_remote", None)
 
     def _check_crash_loop(self, name: str, nrestarts: int) -> bool:
         """Return True if NRestarts rose by >= 5 within the trailing 180s window."""
@@ -1633,30 +1685,27 @@ class UpdateService:
         return False
 
     async def _recovery_rung2(self, component: ComponentConfig, name: str) -> bool:
-        """Recovery rung 2: fetch + reset to the heal remote ref (guarding brick tips)."""
-        self._log.info("recovery rung 2: fetch %s and reset", _HEAL_REMOTE_REF)
-        if not component.path:
+        """Recovery rung 2: fetch + reset to the component's own remote tip (guarded)."""
+        if not component.path or component.version:
+            # A pin is the configured target; leaving it is an Update, not a heal.
+            self._log.warning("recovery rung 2: no path or version pinned, skipping")
             return False
+        ref = await self._stage_remote_ref(component)
+        self._log.info("recovery rung 2: fetch %s and reset", ref)
         async with self._git_lock:
             ok_fetch, _ = await git_fetch(component.path)
             if not ok_fetch:
                 self._log.warning("recovery rung 2: fetch failed (offline?)")
                 return False
-            tip = await git_ref_hash(component.path, _HEAL_REMOTE_REF)
+            tip = await git_ref_hash(component.path, ref)
             if not tip:
-                self._log.warning("recovery rung 2: %s unresolved", _HEAL_REMOTE_REF)
+                self._log.warning("recovery rung 2: %s unresolved", ref)
                 return False
-            if name == _UI_COMPONENT and not await git_tree_has_path(
-                component.path, tip, _UPDATER_MARKER
-            ):
-                self._log.error(
-                    "recovery rung 2: %s lacks the updater package - skipping",
-                    _HEAL_REMOTE_REF,
-                )
+            if await self._heal_tip_refused(component, ref, tip, "recovery rung 2"):
                 return False
             ok_reset, _ = await git_reset_to_hash(component.path, tip)
         if not ok_reset:
-            self._log.error("reset to %s failed", _HEAL_REMOTE_REF)
+            self._log.error("reset to %s failed", ref)
             return False
         # Persist the tip before restart so an unbootable tip is never retried.
         await self._mutate_state(
@@ -1713,13 +1762,14 @@ class UpdateService:
 
     async def _handle_crash_loop(self, nrestarts: int) -> None:
         """Run one recovery rung for the UI, or saturate if the ladder is exhausted."""
-        if await self._disk_blocks_recovery():
+        # The forward-heal update owns the tree and its rollback.
+        if self._forward_healing or await self._disk_blocks_recovery():
             self._rebaseline_samples(_UI_COMPONENT, nrestarts)
             return
-        state = await asyncio.to_thread(self._read_state)
-        raw = state.get(_UI_COMPONENT, {}).get("fast_attempt", 0)
-        current = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
-        attempt = current + 1
+        comp_state = (await asyncio.to_thread(self._read_state)).get(_UI_COMPONENT, {})
+        attempt = _fast_attempt(comp_state) + 1
+        if attempt == 1:
+            await self._record_bad_commit(comp_state.get("last_good"))
         if attempt > 3:
             self._log.error("self-heal: fast recovery saturated; staying on golden")
             self._history("recovery_saturated", _UI_COMPONENT, ok=False)
@@ -1756,74 +1806,105 @@ class UpdateService:
         self._history("recovery_disk_full", _UI_COMPONENT, ok=False)
         return True
 
-    async def forward_heal_ui(self) -> None:
-        """Slowly re-check origin/main and re-attempt an upgrade once a fix ships."""
-        while True:
-            delay = _FORWARD_HEAL_BASE_S + secrets.randbelow(
-                int(_FORWARD_HEAL_JITTER_S) + 1
+    async def _heal_tip_refused(
+        self, component: ComponentConfig, ref: str, tip: str, label: str
+    ) -> bool:
+        """True if a heal must not land on tip: it crash-looped here or lacks the updater."""
+        if component.name != _UI_COMPONENT:
+            return False
+        if tip == await asyncio.to_thread(self._read_bad_commit):
+            self._log.warning(
+                "%s: %s tip %s crash-looped here, skipping", label, ref, tip[:8]
             )
-            await asyncio.sleep(delay)
-            try:
-                await self._forward_heal_once()
-            except Exception as exc:  # noqa: BLE001
-                self._log.debug("forward_heal_ui: %s", exc)
+            return True
+        if not await git_tree_has_path(component.path, tip, _UPDATER_MARKER):
+            self._log.error("%s: %s lacks the updater package, skipping", label, ref)
+            return True
+        return False
 
-    async def _forward_heal_target(
-        self, comp_state: dict
-    ) -> tuple[ComponentConfig, str] | None:
-        """Resolve the new heal tip to upgrade onto, or None if none is safe/available."""
+    async def forward_heal_target(self) -> str:
+        """New UI tip to update onto while the ladder is in fallback, or '' if none is safe."""
+        comp_state = (await asyncio.to_thread(self._read_state)).get(_UI_COMPONENT, {})
+        if _fast_attempt(comp_state) < 2:
+            return ""
         component = next((c for c in self._components if c.name == _UI_COMPONENT), None)
-        if component is None or not component.path:
-            return None
+        if component is None or not component.path or component.version:
+            return ""
+        # Fail closed: a silent Klippy may be mid-print.
+        if await klipper_printing(unanswered=True):
+            return ""
+        ref = await self._stage_remote_ref(component)
         async with self._git_lock:
             ok_fetch, _ = await git_fetch(component.path)
             if not ok_fetch:
-                return None
-            tip = await git_ref_hash(component.path, _HEAL_REMOTE_REF)
+                return ""
+            tip = await git_ref_hash(component.path, ref)
         if not tip or tip == comp_state.get("last_failed_remote"):
-            return None
-        if not await git_tree_has_path(component.path, tip, _UPDATER_MARKER):
-            self._log.warning(
-                "forward-heal: %s lacks the updater package - skipping",
-                _HEAL_REMOTE_REF,
-            )
-            return None
-        return component, tip
+            return ""
+        if await self._heal_tip_refused(component, ref, tip, "forward-heal"):
+            return ""
+        return tip
 
-    async def _forward_heal_once(self) -> bool:
-        """One forward-heal pass: attempt the new origin/main tip if we are in fallback."""
-        state = await asyncio.to_thread(self._read_state)
-        comp_state = state.get(_UI_COMPONENT, {})
-        raw = comp_state.get("fast_attempt", 0)
-        if not (isinstance(raw, int) and not isinstance(raw, bool)) or raw < 2:
+    async def forward_heal(self, tip: str) -> bool:
+        """Update the UI like a press would, so deps, hooks and rollback all run."""
+        comp_state = (await asyncio.to_thread(self._read_state)).get(_UI_COMPONENT, {})
+        if _fast_attempt(comp_state) < 2:
             return False
-        if await klipper_printing():
-            return False
-        target = await self._forward_heal_target(comp_state)
-        if target is None:
-            return False
-        component, tip = target
-        self._log.info(
-            "forward-heal: new %s tip %s, upgrading", _HEAL_REMOTE_REF, tip[:8]
+        self._log.info("forward-heal: new tip %s, updating", tip[:8])
+        self._forward_healing = True
+        try:
+            ok = await self.update_component(_UI_COMPONENT)
+        finally:
+            self._forward_healing = False
+        await self._mutate_state(functools.partial(self._apply_forward_heal, tip, ok))
+        self._rebaseline_samples(
+            _UI_COMPONENT, await get_service_nrestarts(_UI_SERVICE)
         )
-        async with self._git_lock:
-            ok_reset, _ = await git_reset_to_hash(component.path, tip)
-        if not ok_reset:
-            return False
-
-        def _apply(s: dict) -> None:
-            """Reset the attempt counter and record the healed tip."""
-            comp = _ensure_comp(s, _UI_COMPONENT)
-            comp["fast_attempt"] = 0
-            # Reused as "last remote tip attempted": blocks re-healing to the same tip.
-            comp["last_failed_remote"] = tip
-
-        await self._mutate_state(_apply)
-        post = await get_service_nrestarts(_UI_SERVICE)
-        self._rebaseline_samples(_UI_COMPONENT, post)
-        ok = await self._restart_ui_service()
-        self._history("forward_heal", _UI_COMPONENT, ok=ok, reverted_to=tip[:12])
+        self._history("forward_heal", _UI_COMPONENT, ok=ok, target=tip[:12])
         return ok
+
+    @staticmethod
+    def _apply_forward_heal(tip: str, ok: bool, state: dict) -> None:
+        """Record the attempted tip; reset the attempt counter only if the update landed."""
+        comp = _ensure_comp(state, _UI_COMPONENT)
+        comp["last_failed_remote"] = tip
+        if ok:
+            comp["fast_attempt"] = 0
+
+    @property
+    def _bad_commit_path(self) -> Path:
+        """Shared with BlocksScreen-start.sh, which keeps it next to the state file."""
+        return self._state_path.with_name(_BAD_COMMIT_NAME)
+
+    def _read_bad_commit(self) -> str:
+        """Sha of the UI commit that last crash-looped on this printer, or ''."""
+        try:
+            val = self._bad_commit_path.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeDecodeError):
+            return ""
+        return val if _is_sha(val) else ""
+
+    async def _record_bad_commit(self, last_good: object) -> None:
+        """Remember a never-blessed crash-looping UI HEAD so Update refuses it (BUG-20)."""
+        component = next((c for c in self._components if c.name == _UI_COMPONENT), None)
+        if component is None or not component.path:
+            return
+        head = await git_get_hash(component.path)
+        if not _is_sha(head) or head == last_good:
+            return
+        if await asyncio.to_thread(
+            self._atomic_write, self._bad_commit_path, head + "\n", _STATE_TMP
+        ):
+            self._log.warning(
+                "self-heal: %s crash-looped, Update will refuse it", head[:8]
+            )
+            self._history("crashloop_bad", _UI_COMPONENT, bad=head[:12])
+
+    def _forget_bad_commit(self, hash_val: str | None = None) -> None:
+        """Drop the marker if it names hash_val (blessed), or always when None (Recover)."""
+        if hash_val is None or self._read_bad_commit() == hash_val:
+            with contextlib.suppress(OSError):
+                self._bad_commit_path.unlink()
 
     def _write_fault_marker(self, reason: str) -> None:
         """Record that fast recovery saturated so a human/telemetry can see it later."""
@@ -1852,7 +1933,27 @@ class UpdateService:
             if not acquired:
                 return False
             await self.reconcile_if_pending()
+            await self._apply_deferred_restart()
         return True
+
+    def revert_owed(self) -> bool:
+        """True while the in-flight marker exists post-boot: owed revert or any live update."""
+        return self._reconciled and self._inflight_path.exists()
+
+    async def retry_owed_revert(self) -> bool:
+        """Retry a revert a failed rollback left owed; True while one is still owed."""
+        if not self.revert_owed():
+            return False
+        with process_lock() as acquired:
+            # A CLI batch holds the lock and owns its live marker.
+            if not acquired or await klipper_printing(unanswered=True):
+                return True
+            # The UI started on the mixed tree, unlike at boot where it waits on us.
+            reverted = await self._revert_inflight(include_ui=True)
+            await self._restart_reverted(reverted)
+            await asyncio.to_thread(self._flag_stale_daemon)
+            await self._apply_deferred_restart()
+        return self._inflight_path.exists()
 
     async def reconcile_if_pending(self) -> None:
         """Run the boot heal once per process; caller must hold the process lock."""
@@ -1862,7 +1963,7 @@ class UpdateService:
         self._reconciled = True
         await self._reconcile_locked()
 
-    async def _revert_inflight(self) -> set[str]:
+    async def _revert_inflight(self, *, include_ui: bool = False) -> set[str]:
         """Revert power-cut batches; return the services now running undone code."""
         inflight = await asyncio.to_thread(self._read_inflight)
         if not inflight:
@@ -1896,7 +1997,9 @@ class UpdateService:
                     unresolved[name] = prev_hash
                     continue
                 # The UI waits on our lock at start, the rest boots unordered with us.
-                if comp.service and comp.service not in _FIRE_AND_FORGET_SERVICES:
+                if comp.service and (
+                    include_ui or comp.service not in _FIRE_AND_FORGET_SERVICES
+                ):
                     reverted.add(comp.service)
                 if comp.restart_klipper:
                     reverted.add(self._klipper_service())
@@ -2012,10 +2115,29 @@ class UpdateService:
         await self._reconcile_self_heal_state()
         # Last, so one restart covers the revert and any reclone hook that defers to it.
         await self._restart_reverted(reverted)
+        await asyncio.to_thread(self._flag_stale_daemon)
+
+    def _flag_stale_daemon(self) -> None:
+        """Defer a self-restart when the heal changed the updater code this daemon loaded."""
+        try:
+            loaded = code_hash_path().read_text().strip()
+        except (OSError, UnicodeDecodeError):
+            return
+        if not loaded or code_hash() == loaded:
+            return
+        self._log.warning("reconcile: updater code changed on disk, restarting daemon")
+        sentinel = restart_sentinel_path()
+        try:
+            sentinel.parent.mkdir(parents=True, exist_ok=True)
+            with sentinel.open("a") as f:
+                f.write("code\n")
+        except OSError as exc:
+            self._log.warning("reconcile: could not flag daemon restart: %s", exc)
 
     async def _reconcile_self_heal_state(self) -> None:
         """Validate self-heal state fields; drop corrupt hashes, clamp counter."""
         async with self._state_lock:
+            await asyncio.to_thread(self._sweep_stale_temps)
             raw = await asyncio.to_thread(self._read_state_file)
             state = {k: v for k, v in raw.items() if isinstance(v, dict)}
             changed = len(state) != len(raw)
@@ -2196,9 +2318,13 @@ class UpdateService:
         """Cap the on-SD history so a years-running device cannot fill the card."""
         if self._history_path.stat().st_size <= _HISTORY_MAX_BYTES:
             return
-        lines = self._history_path.read_text(encoding="utf-8").splitlines()
+        text = self._history_path.read_text(encoding="utf-8", errors="replace")
+        # Power-cut NUL runs and torn lines are dropped, not carried into the trimmed log.
+        kept = [
+            ln for ln in text.splitlines()[-_HISTORY_KEEP_LINES:] if _is_json_obj(ln)
+        ]
         tmp = self._history_path.with_name(self._history_path.name + ".tmp")
-        tmp.write_text("\n".join(lines[-_HISTORY_KEEP_LINES:]) + "\n", encoding="utf-8")
+        tmp.write_text("".join(ln + "\n" for ln in kept), encoding="utf-8")
         tmp.replace(self._history_path)
 
     def _quarantine_sync(self, path: Path) -> Path | None:
@@ -2481,6 +2607,7 @@ class UpdateService:
     ) -> tuple[bool, str] | None:
         """Pre-checkout guards: dead upstream branch + updater-marker brick guard."""
         if component.branch and not tip:
+            self._log.error("%s: upstream branch %s not found", component.name, ref)
             return (False, f"branch {ref} not found - fix components.yaml")
 
         if component.name == _UI_COMPONENT:
@@ -2494,6 +2621,11 @@ class UpdateService:
                     target,
                 )
                 return (False, "refusing downgrade past updater")
+            if target == await asyncio.to_thread(self._read_bad_commit):
+                self._log.error(
+                    "%s: target %s crash-looped here, refusing", component.name, target
+                )
+                return (False, _REFUSE_BAD_COMMIT)
         return None
 
     async def _stage_apply_ref(
@@ -2653,6 +2785,8 @@ class UpdateService:
                 or "refusing" in stage_reason
             ):
                 await asyncio.to_thread(self._clear_inflight)
+                # Pairs the update_start entry: the tree was never touched.
+                self._history("update_aborted", component.name, reason=stage_reason)
                 return self._cb_error_done(component.name, stage_reason), ""
             await self._rollback(component, prev_hash, stage_reason)
             return False, ""
@@ -2858,13 +2992,40 @@ class UpdateService:
             self._cb("on_component_done", component.name, False)
             raise
 
+    def _load_json_object(self, path: Path) -> dict:
+        """JSON object at path; empty when missing, a corrupt file is kept as evidence first."""
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            return {}
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            return data
+        self._keep_corrupt_copy(path, raw)
+        return {}
+
+    def _keep_corrupt_copy(self, path: Path, raw: bytes) -> None:
+        """Copy a corrupt file to <name>.corrupt and warn, once per distinct content."""
+        kept = raw[:_CORRUPT_KEEP_BYTES]
+        dest = path.with_name(path.name + ".corrupt")
+        with contextlib.suppress(OSError):
+            if dest.read_bytes() == kept:
+                return
+        self._log.warning(
+            "%s corrupt (%d bytes) - using defaults, copy kept in %s",
+            path.name,
+            len(raw),
+            dest.name,
+        )
+        with contextlib.suppress(OSError):
+            dest.write_bytes(kept)
+
     def _read_state_file(self) -> dict:
         """Raw state map; empty on a missing, corrupt or non-object file."""
-        try:
-            data = json.loads(self._state_path.read_text())
-        except (OSError, ValueError):
-            return {}
-        return data if isinstance(data, dict) else {}
+        return self._load_json_object(self._state_path)
 
     def _read_state(self) -> dict:
         """Name -> component-state dicts; boot reconcile persists dropping the rest."""
@@ -2872,35 +3033,15 @@ class UpdateService:
 
     def _read_inflight(self) -> dict[str, str]:
         """Return the in-flight batch marker as a name->prev_hash dict."""
-        try:
-            data = json.loads(self._inflight_path.read_text())
-        except (OSError, ValueError):
-            return {}
-        if not isinstance(data, dict):
-            return {}
+        data = self._load_json_object(self._inflight_path)
         return {k: v for k, v in data.items() if isinstance(k, str) and _is_sha(v)}
 
     def _write_inflight(self, mapping: dict[str, str]) -> bool:
         """Atomically record the in-flight batch's name->prev_hash map (fsync'd)."""
-        try:
-            self._inflight_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                dir=self._inflight_path.parent,
-                delete=False,
-                prefix=".updater_inflight_",
-            ) as f:
-                f.write(json.dumps(mapping))
-                f.flush()
-                os.fsync(f.fileno())
-                temp_path = Path(f.name)
-            temp_path.chmod(0o600)
-            temp_path.replace(self._inflight_path)
-            self._fsync_dir(self._inflight_path.parent)
+        if self._atomic_write(self._inflight_path, json.dumps(mapping), _INFLIGHT_TMP):
             return True
-        except OSError:
-            self._log.error("Failed to write in-flight marker")
-            return False
+        self._log.error("Failed to write in-flight marker")
+        return False
 
     def _clear_inflight(self) -> None:
         """Remove the in-flight marker; the batch reached a terminal outcome."""
@@ -2912,25 +3053,46 @@ class UpdateService:
 
     def _write_state(self, data: dict) -> bool:
         """Atomically write the self-heal state file (temp, fsync, replace)."""
+        if self._atomic_write(self._state_path, json.dumps(data, indent=2), _STATE_TMP):
+            return True
+        self._log.error("Failed to write state file")
+        return False
+
+    def _atomic_write(self, path: Path, text: str, prefix: str) -> bool:
+        """Write text via an fsync'd temp and rename; a failed write leaves no temp."""
+        temp_path: Path | None = None
         try:
-            self._state_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             with tempfile.NamedTemporaryFile(
-                mode="w",
-                dir=self._state_path.parent,
-                delete=False,
-                prefix=".updater_state_",
+                mode="w", dir=path.parent, delete=False, prefix=prefix
             ) as f:
-                f.write(json.dumps(data, indent=2))
+                temp_path = Path(f.name)
+                f.write(text)
                 f.flush()
                 os.fsync(f.fileno())
-                temp_path = Path(f.name)
             temp_path.chmod(0o600)
-            temp_path.replace(self._state_path)
-            self._fsync_dir(self._state_path.parent)
-            return True
+            temp_path.replace(path)
         except OSError:
-            self._log.error("Failed to write state file")
+            if temp_path is not None:
+                with contextlib.suppress(OSError):
+                    temp_path.unlink(missing_ok=True)
             return False
+        self._fsync_dir(path.parent)
+        return True
+
+    def _sweep_stale_temps(self) -> None:
+        """Remove state temps a power cut or kill left mid-write (OBS-15)."""
+        cutoff = time.time() - _STALE_TEMP_S
+        for parent, prefix in (
+            (self._state_path.parent, _STATE_TMP),
+            (self._inflight_path.parent, _INFLIGHT_TMP),
+        ):
+            with contextlib.suppress(OSError):
+                for tmp in parent.glob(prefix + "*"):
+                    with contextlib.suppress(OSError):
+                        if tmp.stat().st_mtime < cutoff:
+                            tmp.unlink()
+                            self._log.info("removed stale temp %s", tmp.name)
 
     async def _mutate_state(self, mutate: Callable[[dict], None]) -> bool:
         """Atomically read-modify-write the state file under the state lock."""

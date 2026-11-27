@@ -1,16 +1,14 @@
 import argparse
 import asyncio
 import contextlib
-import hashlib
 import logging
 import os
 import signal
 import socket
 import sys
 from collections.abc import Iterator
-from pathlib import Path
 
-from updater.locking import code_hash_path, process_lock
+from updater.locking import code_hash, code_hash_path, process_lock
 from updater.models import ComponentStatus
 from updater.service import LoggingCallback, UpdateService
 
@@ -50,16 +48,6 @@ def build_parser() -> argparse.ArgumentParser:
     bles.add_argument("hash", nargs="?", default="")
 
     return parser
-
-
-def code_hash(pkg: Path = Path(__file__).parent) -> str:
-    """Hash the daemon's code like bs_updater_code_hash in bs-common.sh."""
-    names = sorted([p.name for p in pkg.glob("*.py")] + ["components.yaml"])
-    digest = hashlib.sha256()
-    for name in names:
-        with contextlib.suppress(OSError):
-            digest.update((pkg / name).read_bytes())
-    return digest.hexdigest()
 
 
 def _record_code_hash() -> None:

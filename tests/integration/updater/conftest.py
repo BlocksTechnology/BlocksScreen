@@ -504,8 +504,10 @@ def harness(tmp_path, monkeypatch, mock_sdbus, closed_port) -> Harness:
         _SHUTDOWN_DRAIN_S=5.0,
     )
     # Self-heal supervisors poll systemd on minute timers: out of scope here.
-    for method in ("supervise_ui", "forward_heal_ui", "background_prime_nrestarts"):
+    for method in ("supervise_ui", "background_prime_nrestarts"):
         monkeypatch.setattr(dbus_mod.UpdateService, method, AsyncMock())
+    for loop in ("_forward_heal_loop", "_owed_revert_loop"):
+        monkeypatch.setattr(dbus_mod.UpdaterDbusService, loop, AsyncMock())
     # Recorded, not run: the daemon must skip it when its own restart is pending.
     monkeypatch.setattr(dbus_mod.UpdateService, "background_apt_upgrade", h.apt_upgrade)
     return h

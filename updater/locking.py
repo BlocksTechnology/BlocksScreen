@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import hashlib
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -36,6 +37,16 @@ def restart_sentinel_path() -> Path:
 def code_hash_path() -> Path:
     """Return where the daemon records the code it loaded, read by bs-bootstrap."""
     return _runtime_dir() / "updater-code-hash"
+
+
+def code_hash(pkg: Path = Path(__file__).parent) -> str:
+    """Hash the daemon's code like bs_updater_code_hash in bs-common.sh."""
+    names = sorted([p.name for p in pkg.glob("*.py")] + ["components.yaml"])
+    digest = hashlib.sha256()
+    for name in names:
+        with contextlib.suppress(OSError):
+            digest.update((pkg / name).read_bytes())
+    return digest.hexdigest()
 
 
 @contextlib.contextmanager

@@ -6,6 +6,7 @@ import datetime as dt
 import socket
 import os
 import re
+import shlex
 import shutil
 import ssl
 import subprocess
@@ -416,6 +417,26 @@ def test_clock_units_are_wired() -> None:
     for unit in ("BlocksScreen-clock.service", "BlocksScreen-clock.timer"):
         assert f"scripts/{unit}" in hook
         assert unit in triggers.split("BS_UPDATER_INSTALL_TRIGGERS=(", 1)[1]
+
+
+@pytest.mark.parametrize("present", [True, False], ids=["script", "rolled-back"])
+def test_unit_execstart_tolerates_missing_script(tmp_path: Path, present: bool) -> None:
+    """OBS-22: the unit runs the tree script, and exits 0 once a rollback removed it."""
+    unit = (_ROOT / "scripts" / "BlocksScreen-clock.service").read_text()
+    cmd = shlex.split(re.search(r"^ExecStart=(.+)$", unit, re.M)[1])
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    link = tmp_path / "BlocksScreen-clock.service"
+    link.symlink_to(scripts / "BlocksScreen-clock.service")
+    ran = tmp_path / "ran"
+    if present:
+        (scripts / "bs-clock-sync.sh").write_text(f"touch {ran}\n")
+    cmd = [
+        a.replace("/etc/systemd/system/BlocksScreen-clock.service", str(link))
+        for a in cmd
+    ]
+    assert subprocess.run(cmd, check=False, capture_output=True).returncode == 0
+    assert ran.exists() is present
 
 
 def test_timeouts_nest() -> None:
