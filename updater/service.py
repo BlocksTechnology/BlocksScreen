@@ -1544,6 +1544,9 @@ class UpdateService:
             return False
         async with self._git_lock:
             self._fetch_times.pop(name, None)
+        if name == _UI_COMPONENT:
+            # The operator overrides the crash-loop verdict, which a config fault can cause.
+            await asyncio.to_thread(self._forget_bad_commit)
         if hard and component.service:
             restart_ok, restart_err = await restart_service(component.service)
             if restart_ok:
@@ -1897,9 +1900,9 @@ class UpdateService:
             )
             self._history("crashloop_bad", _UI_COMPONENT, bad=head[:12])
 
-    def _forget_bad_commit(self, hash_val: str) -> None:
-        """A blessed commit is not bad: drop the marker if it names it."""
-        if self._read_bad_commit() == hash_val:
+    def _forget_bad_commit(self, hash_val: str | None = None) -> None:
+        """Drop the marker if it names hash_val (blessed), or always when None (Recover)."""
+        if hash_val is None or self._read_bad_commit() == hash_val:
             with contextlib.suppress(OSError):
                 self._bad_commit_path.unlink()
 
@@ -1934,7 +1937,7 @@ class UpdateService:
         return True
 
     def revert_owed(self) -> bool:
-        """True when a failed rollback left the in-flight marker behind after boot."""
+        """True while the in-flight marker exists post-boot: owed revert or any live update."""
         return self._reconciled and self._inflight_path.exists()
 
     async def retry_owed_revert(self) -> bool:

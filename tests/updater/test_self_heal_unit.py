@@ -200,6 +200,23 @@ class TestBlessHealthy:
 
         asyncio.run(run_test())
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("name", "cleared"), [("BlocksScreen", True), ("klipper", False)]
+    )
+    async def test_ui_recover_overrides_the_crash_loop_verdict(
+        self, tmp_path: Path, name: str, cleared: bool
+    ):
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._write_state({name: {"prev_hash": "a" * 40}})
+        svc._bad_commit_path.write_text("b" * 40 + "\n")
+        with patch(
+            "updater.service.git_reset_to_hash", AsyncMock(return_value=(True, ""))
+        ):
+            assert await svc.recover(name) is True
+        assert (svc._read_bad_commit() == "") is cleared
+
     def test_bless_healthy_clears_nrestarts_sample_ring(self, tmp_path: Path):
         async def run_test():
             svc = UpdateService()
@@ -673,6 +690,34 @@ class TestRecoveryLadder:
             m_reset.assert_not_called()
 
         asyncio.run(run_test())
+
+    @pytest.mark.parametrize(
+        ("tip", "has_updater", "reset_ok", "resets"),
+        [("", True, True, 0), ("b" * 40, False, True, 0), ("b" * 40, True, False, 1)],
+    )
+    @pytest.mark.asyncio
+    async def test_rung2_refusal_or_failed_reset_records_no_tip(
+        self, tmp_path: Path, tip, has_updater, reset_ok, resets
+    ):
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._write_state({"BlocksScreen": {"fast_attempt": 1}})
+        reset = AsyncMock(return_value=(reset_ok, ""))
+        with (
+            patch("updater.service.git_fetch", AsyncMock(return_value=(True, ""))),
+            patch("updater.service.git_ref_hash", AsyncMock(return_value=tip)),
+            patch(
+                "updater.service.git_tree_has_path",
+                AsyncMock(return_value=has_updater),
+            ),
+            patch("updater.service.git_reset_to_hash", reset),
+            patch.object(svc, "_restart_ui_service") as m_restart,
+        ):
+            assert await svc.run_recovery_rung("BlocksScreen", 2) is False
+        assert reset.await_count == resets
+        m_restart.assert_not_called()
+        # Only a tip actually landed on may be marked failed, or forward-heal skips a good one.
+        assert "last_failed_remote" not in svc._read_state()["BlocksScreen"]
 
 
 class TestSupervisor:

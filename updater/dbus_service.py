@@ -584,6 +584,7 @@ class UpdaterInterface(
         """One retry under busy and the git guard; True if it ran and the revert is still owed."""
         if not self._svc.revert_owed():
             return False
+        # A live update leaves the marker too; only busy + the process lock keep us off it.
         # Checked before busy: an overlay over a live print hides Pause.
         if self._busy or self._provisioning or await klipper_printing(unanswered=True):
             return False
