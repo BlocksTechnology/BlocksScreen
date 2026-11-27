@@ -1030,6 +1030,62 @@ async def check_apt_status(
     )
 
 
+# Pi OS ships no update-notifier hook, so nothing creates /run/reboot-required for us.
+_REBOOT_REQUIRED_FLAG = Path("/run/reboot-required")
+_DPKG_LOGS = (Path("/var/log/dpkg.log"), Path("/var/log/dpkg.log.1"))
+# Loaded once at boot: a new version only takes effect after a reboot.
+_REBOOT_PACKAGES = frozenset({"raspi-firmware", "libc6", "systemd", "dbus"})
+_REBOOT_PACKAGE_PREFIX = "linux-image-"
+
+
+def _boot_wall_time() -> float:
+    """Wall-clock boot time (btime in /proc/stat)."""
+    for line in Path("/proc/stat").read_text(encoding="ascii").splitlines():
+        if line.startswith("btime "):
+            return float(line.split()[1])
+    raise ValueError("no btime in /proc/stat")
+
+
+def _dpkg_line_needs_reboot(line: str, boot: float) -> bool:
+    """True for an install/upgrade action of a boot-loaded package after boot."""
+    # "<date> <time> install|upgrade <pkg>:<arch> <old> <new>"; status lines also fire on triggers.
+    fields = line.split()
+    if len(fields) < 6 or fields[2] not in ("install", "upgrade"):
+        return False
+    if fields[4] == fields[5]:
+        return False
+    pkg = fields[3].partition(":")[0]
+    if pkg not in _REBOOT_PACKAGES and not pkg.startswith(_REBOOT_PACKAGE_PREFIX):
+        return False
+    try:
+        stamp = time.mktime(
+            time.strptime(f"{fields[0]} {fields[1]}", "%Y-%m-%d %H:%M:%S")
+        )
+    except (ValueError, OverflowError):
+        return False
+    return stamp > boot
+
+
+def reboot_required() -> bool:
+    """True when a kernel, firmware, libc, systemd or dbus upgrade waits for a reboot."""
+    if _REBOOT_REQUIRED_FLAG.exists():
+        return True
+    try:
+        boot = _boot_wall_time()
+    except (OSError, ValueError, IndexError):
+        return False
+    for log in _DPKG_LOGS:
+        try:
+            if log.stat().st_mtime < boot:
+                continue
+            text = log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if any(_dpkg_line_needs_reboot(line, boot) for line in text.splitlines()):
+            return True
+    return False
+
+
 def _apt_env() -> dict[str, str]:
     """Return the apt env: noninteractive, no needrestart prompt (it hangs upgrades)."""
     env = _make_clean_env()

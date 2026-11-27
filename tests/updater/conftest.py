@@ -76,6 +76,13 @@ def printing():
 
 
 @pytest.fixture(autouse=True)
+def reboot_required():
+    """No reboot pending; never reads the host's dpkg.log or /proc/stat."""
+    with patch("updater.service.reboot_required", MagicMock(return_value=False)) as m:
+        yield m
+
+
+@pytest.fixture(autouse=True)
 def apt_lists_partial(tmp_path):
     """Host apt state never leaks in; tests create or touch this path to simulate a refresh."""
     path = tmp_path / "apt-lists-partial"

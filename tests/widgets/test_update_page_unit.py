@@ -5,7 +5,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from updater.models import CLOCK_UNSYNCED, DISK_FULL, PRINTER_BUSY, ComponentStatus
+from updater.models import (
+    APT_COOLING_DOWN,
+    CLOCK_UNSYNCED,
+    DISK_FULL,
+    PRINTER_BUSY,
+    ComponentStatus,
+)
 
 _UP_MOD = "BlocksScreen.lib.panels.widgets.MainWindow.updatePage"
 
@@ -97,6 +103,9 @@ def _make_status(**overrides: Any) -> ComponentStatus:
     return ComponentStatus(**defaults)
 
 
+_NET_ERR = "fatal: unable to access 'https://github.com/x/': Could not resolve host: github.com"
+
+
 class TestNeedsUpdate:
     def test_commits_behind(self, page):
         assert page._needs_update(_make_status(commits_behind=1)) is True
@@ -108,6 +117,14 @@ class TestNeedsUpdate:
         # An errored git repo (e.g. a corrupt repo) is now updatable: pressing
         # the one Update button heals it via the update flow.
         assert page._needs_update(_make_status(error="boom")) is True
+
+    def test_unreachable_git_not_updatable(self, page):
+        # Offline is not an update: the daemon refuses the press as a network error.
+        assert page._needs_update(_make_status(error=_NET_ERR)) is False
+
+    def test_clock_error_stays_updatable(self, page):
+        s = _make_status(error=f"{CLOCK_UNSYNCED}: {_NET_ERR}")
+        assert page._needs_update(s) is True
 
     def test_errored_apt_not_updatable(self, page):
         s = _make_status(kind="apt", error="boom")
@@ -156,6 +173,7 @@ class TestVersionString:
         [
             (f"{CLOCK_UNSYNCED}: fatal", "clock not synchronized"),
             ("fatal", "status error"),
+            (_NET_ERR, "server unreachable"),
         ],
     )
     def test_error_label(self, page, error, label):
@@ -182,6 +200,34 @@ class TestBuildCards:
 
         assert isinstance(args[0], QLabel)
         assert "up to date" in args[0].text().lower()
+
+    def test_pending_reboot_replaces_up_to_date(self, page):
+        page._statuses = {
+            "klipper": _make_status(),
+            "system": _make_status(name="system", kind="apt", reboot_required=True),
+        }
+        page.build_cards()
+        label = page._cards_layout.addWidget.call_args[0][0]
+        assert label.text() == "Reboot the printer to finish the update"
+
+    @pytest.mark.parametrize(
+        ("other", "text"),
+        [
+            (
+                _make_status(error=_NET_ERR),
+                "Update server unreachable\nCheck the network and tap refresh",
+            ),
+            (
+                _make_status(kind="apt", error="apt status check failed"),
+                "Status check failed for 2 components\nTap refresh to retry",
+            ),
+        ],
+    )
+    def test_offline_rows_explain_instead_of_offering_update(self, page, other, text):
+        page._statuses = {"klipper": _make_status(error=_NET_ERR), "other": other}
+        page.build_cards()
+        page.update_all_btn.setVisible.assert_called_with(False)
+        assert page._cards_layout.addWidget.call_args[0][0].text() == text
 
     def test_no_statuses_hides_update_all_btn(self, page):
         page._statuses = {}
@@ -545,6 +591,22 @@ class TestPrinterBusyRefusal:
         assert "print" in msg.lower() and "updater" not in msg.lower()
 
 
+class TestAptCooldownRefusal:
+    @pytest.mark.parametrize(
+        ("reason", "tail"),
+        [
+            (f"{APT_COOLING_DOWN}: 12 min", "Try again in 12 min."),
+            (APT_COOLING_DOWN, "Try again later."),
+        ],
+        ids=["minutes", "bare"],
+    )
+    def test_cooldown_says_when_to_retry(self, page, reason, tail):
+        page._show_toast = MagicMock()
+        page.handle_error_occurred("system", reason)
+        msg = page._show_toast.call_args[0][0]
+        assert msg == f"System updates paused after a failure. {tail}"
+
+
 class TestBadStatusPayload:
     def test_bad_payload_keeps_statuses_and_toasts(self, page):
         page._statuses = {"klipper": ComponentStatus(name="klipper")}
@@ -854,7 +916,11 @@ class TestDiskFullPopup:
             page.handle_error_occurred("system", reason)
             page.handle_error_occurred("BlocksScreen", reason)
         popup_cls.assert_called_once()
-        msg = popup.set_message.call_args[0][0].lower()
-        assert "full" in msg and "delete" in msg
+        msg = popup.set_message.call_args[0][0]
+        assert msg == (
+            "Not enough storage to update.\n"
+            "50 MB free, 200 MB required.\n"
+            "Delete print files and try again."
+        )
         popup.open.assert_called_once()
         page._show_toast.assert_not_called()
